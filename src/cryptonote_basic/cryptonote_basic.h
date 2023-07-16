@@ -89,10 +89,14 @@ namespace cryptonote
     txout_to_tagged_key(const crypto::public_key &_key, const crypto::view_tag &_view_tag) : key(_key), view_tag(_view_tag) { }
     crypto::public_key key;
     crypto::view_tag view_tag; // optimization to reduce scanning time
+    std::string asset_type;
+    uint64_t unlock_time;
 
     BEGIN_SERIALIZE_OBJECT()
       FIELD(key)
       FIELD(view_tag)
+      FIELD(asset_type)
+      FIELD(unlock_time)
     END_SERIALIZE()
   };
 
@@ -140,11 +144,13 @@ namespace cryptonote
     uint64_t amount;
     std::vector<uint64_t> key_offsets;
     crypto::key_image k_image;      // double spending protection
+    std::string asset_type;
 
     BEGIN_SERIALIZE_OBJECT()
       VARINT_FIELD(amount)
       FIELD(key_offsets)
       FIELD(k_image)
+      FIELD(asset_type)
     END_SERIALIZE()
   };
 

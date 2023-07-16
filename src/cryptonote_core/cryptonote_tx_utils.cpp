@@ -158,7 +158,7 @@ namespace cryptonote
         crypto::derive_view_tag(derivation, no, view_tag);
 
       tx_out out;
-      cryptonote::set_tx_out(amount, out_eph_public_key, use_view_tags, view_tag, out);
+      cryptonote::set_tx_out(amount, out_eph_public_key, use_view_tags, view_tag, "" /* asset_type */, 0 /* unlock_time */, out);
 
       tx.vout.push_back(out);
     }
@@ -416,7 +416,7 @@ namespace cryptonote
                                            use_view_tags, view_tag);
 
       tx_out out;
-      cryptonote::set_tx_out(dst_entr.amount, out_eph_public_key, use_view_tags, view_tag, out);
+      cryptonote::set_tx_out(dst_entr.amount, out_eph_public_key, use_view_tags, view_tag, "" /* asset_type */, 0 /* unlock_time */, out);
       tx.vout.push_back(out);
       output_index++;
       summary_outs_money += dst_entr.amount;

@@ -930,6 +930,34 @@ namespace cryptonote
       : boost::optional<crypto::view_tag>();
   }
   //---------------------------------------------------------------
+  bool get_output_asset_type(const cryptonote::tx_out& out, std::string& output_asset_type)
+  {
+    // after HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_tagged_key
+    if (out.target.type() == typeid(txout_to_tagged_key))
+      output_asset_type = boost::get< txout_to_tagged_key >(out.target).asset_type;
+    else
+    {
+      LOG_ERROR("Unexpected output target type found: " << out.target.type().name());
+      return false;
+    }
+
+    return true;
+  }
+  //---------------------------------------------------------------
+  bool get_output_unlock_time(const cryptonote::tx_out& out, uint64_t& output_unlock_time)
+  {
+    // after HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_tagged_key
+    if (out.target.type() == typeid(txout_to_tagged_key))
+      output_unlock_time = boost::get< txout_to_tagged_key >(out.target).unlock_time;
+    else
+    {
+      LOG_ERROR("Unexpected output target type found: " << out.target.type().name());
+      return false;
+    }
+
+    return true;
+  }
+  //---------------------------------------------------------------
   std::string short_hash_str(const crypto::hash& h)
   {
     std::string res = string_tools::pod_to_hex(h);
@@ -939,7 +967,7 @@ namespace cryptonote
     return res;
   }
   //---------------------------------------------------------------
-  void set_tx_out(const uint64_t amount, const crypto::public_key& output_public_key, const bool use_view_tags, const crypto::view_tag& view_tag, tx_out& out)
+  void set_tx_out(const uint64_t amount, const crypto::public_key& output_public_key, const bool use_view_tags, const crypto::view_tag& view_tag, const std::string& asset_type, const uint64_t unlock_time, tx_out& out)
   {
     out.amount = amount;
     if (use_view_tags)
@@ -947,6 +975,8 @@ namespace cryptonote
       txout_to_tagged_key ttk;
       ttk.key = output_public_key;
       ttk.view_tag = view_tag;
+      ttk.asset_type = asset_type;
+      ttk.unlock_time = unlock_time;
       out.target = ttk;
     }
     else
