@@ -108,6 +108,7 @@ namespace rct {
     };
     typedef std::vector<ctkey> ctkeyV;
     typedef std::vector<ctkeyV> ctkeyM;
+    typedef std::vector<std::pair<ctkey,ctkey>> ctkeyPV;
 
     //used for multisig data
     struct multisig_kLRki {

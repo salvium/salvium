@@ -339,8 +339,8 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
         totins += io;
       }
       if (do_ringsize) {
-        const cryptonote::txin_to_key& tx_in_to_key
-                       = boost::get<cryptonote::txin_to_key>(tx.vin[0]);
+        const cryptonote::txin_fulmo_key& tx_in_to_key
+                       = boost::get<cryptonote::txin_fulmo_key>(tx.vin[0]);
         io = tx_in_to_key.key_offsets.size();
         if (io < minrings)
           minrings = io;

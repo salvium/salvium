@@ -870,26 +870,6 @@ uint64_t estimate_tx_weight(bool use_rct, int n_inputs, int mixin, int n_outputs
   return size;
 }
 
-uint8_t get_bulletproof_fork()
-{
-  return 8;
-}
-
-uint8_t get_bulletproof_plus_fork()
-{
-  return HF_VERSION_BULLETPROOF_PLUS;
-}
-
-uint8_t get_clsag_fork()
-{
-  return HF_VERSION_CLSAG;
-}
-
-uint8_t get_view_tag_fork()
-{
-  return HF_VERSION_VIEW_TAGS;
-}
-
 uint64_t calculate_fee(bool use_per_byte_fee, const cryptonote::transaction &tx, size_t blob_size, uint64_t base_fee, uint64_t fee_quantization_mask)
 {
   if (use_per_byte_fee)
@@ -1985,8 +1965,8 @@ bool wallet2::frozen(const multisig_tx_set& txs) const
     {
       // Check that the key images are consistent between tx vin and construction data
       const crypto::key_image multisig_ki = rct::rct2ki(cd.sources[src_idx].multisig_kLRki.ki);
-      CHECK_AND_ASSERT_THROW_MES(ptx.tx.vin[src_idx].type() == typeid(cryptonote::txin_to_key), "multisig tx cannot be miner");
-      const crypto::key_image vin_ki = boost::get<cryptonote::txin_to_key>(ptx.tx.vin[src_idx]).k_image;
+      CHECK_AND_ASSERT_THROW_MES(ptx.tx.vin[src_idx].type() == typeid(cryptonote::txin_fulmo_key), "multisig tx cannot be miner");
+      const crypto::key_image vin_ki = boost::get<cryptonote::txin_fulmo_key>(ptx.tx.vin[src_idx]).k_image;
       CHECK_AND_ASSERT_THROW_MES(multisig_ki == vin_ki, "Mismatched key image b/t vin and construction data");
 
       // Add key image to set
@@ -2210,9 +2190,9 @@ bool wallet2::spends_one_of_ours(const cryptonote::transaction &tx) const
 {
   for (const auto &in: tx.vin)
   {
-    if (in.type() != typeid(cryptonote::txin_to_key))
+    if (in.type() != typeid(cryptonote::txin_fulmo_key))
       continue;
-    const cryptonote::txin_to_key &in_to_key = boost::get<cryptonote::txin_to_key>(in);
+    const cryptonote::txin_fulmo_key &in_to_key = boost::get<cryptonote::txin_fulmo_key>(in);
     auto it = m_key_images.find(in_to_key.k_image);
     if (it != m_key_images.end())
       return true;
@@ -2573,9 +2553,9 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   // check all outputs for spending (compare key images)
   for(auto& in: tx.vin)
   {
-    if(in.type() != typeid(cryptonote::txin_to_key))
+    if(in.type() != typeid(cryptonote::txin_fulmo_key))
       continue;
-    const cryptonote::txin_to_key &in_to_key = boost::get<cryptonote::txin_to_key>(in);
+    const cryptonote::txin_fulmo_key &in_to_key = boost::get<cryptonote::txin_fulmo_key>(in);
     auto it = m_key_images.find(in_to_key.k_image);
     if(it != m_key_images.end())
     {
@@ -2827,9 +2807,9 @@ void wallet2::process_outgoing(const crypto::hash &txid, const cryptonote::trans
   entry.first->second.m_rings.clear();
   for (const auto &in: tx.vin)
   {
-    if (in.type() != typeid(cryptonote::txin_to_key))
+    if (in.type() != typeid(cryptonote::txin_fulmo_key))
       continue;
-    const auto &txin = boost::get<cryptonote::txin_to_key>(in);
+    const auto &txin = boost::get<cryptonote::txin_fulmo_key>(in);
     entry.first->second.m_rings.push_back(std::make_pair(txin.k_image, txin.key_offsets));
   }
   entry.first->second.m_block_height = height;
@@ -3165,7 +3145,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
   geniods.reserve(num_txes);
 
   txidx = 0;
-  uint8_t hf_version_view_tags = get_view_tag_fork();
+  uint8_t hf_version_view_tags = 1;
   for (size_t i = 0; i < blocks.size(); ++i)
   {
     if (should_skip_block(parsed_blocks[i].block, start_height + i))
@@ -3517,9 +3497,9 @@ void wallet2::process_unconfirmed_transfer(bool incremental, const crypto::hash 
       // the inputs aren't spent anymore, since the tx failed
       for (size_t vini = 0; vini < tx_details.m_tx.vin.size(); ++vini)
       {
-        if (tx_details.m_tx.vin[vini].type() == typeid(txin_to_key))
+        if (tx_details.m_tx.vin[vini].type() == typeid(txin_fulmo_key))
         {
-          txin_to_key &tx_in_to_key = boost::get<txin_to_key>(tx_details.m_tx.vin[vini]);
+          txin_fulmo_key &tx_in_to_key = boost::get<txin_fulmo_key>(tx_details.m_tx.vin[vini]);
           for (size_t i = 0; i < m_transfers.size(); ++i)
           {
             const transfer_details &td = m_transfers[i];
@@ -6871,9 +6851,9 @@ void wallet2::add_unconfirmed_tx(const cryptonote::transaction& tx, uint64_t amo
   utd.m_subaddr_indices = subaddr_indices;
   for (const auto &in: tx.vin)
   {
-    if (in.type() != typeid(cryptonote::txin_to_key))
+    if (in.type() != typeid(cryptonote::txin_fulmo_key))
       continue;
-    const auto &txin = boost::get<cryptonote::txin_to_key>(in);
+    const auto &txin = boost::get<cryptonote::txin_fulmo_key>(in);
     utd.m_rings.push_back(std::make_pair(txin.k_image, txin.key_offsets));
   }
 }
@@ -7194,13 +7174,13 @@ bool wallet2::sign_tx(unsigned_tx_set &exported_txs, std::vector<wallet2::pendin
     }
 
     std::string key_images;
-    bool all_are_txin_to_key = std::all_of(ptx.tx.vin.begin(), ptx.tx.vin.end(), [&](const txin_v& s_e) -> bool
+    bool all_are_txin_fulmo_key = std::all_of(ptx.tx.vin.begin(), ptx.tx.vin.end(), [&](const txin_v& s_e) -> bool
     {
-      CHECKED_GET_SPECIFIC_VARIANT(s_e, const txin_to_key, in, false);
+      CHECKED_GET_SPECIFIC_VARIANT(s_e, const txin_fulmo_key, in, false);
       key_images += boost::to_string(in.k_image) + " ";
       return true;
     });
-    THROW_WALLET_EXCEPTION_IF(!all_are_txin_to_key, error::unexpected_txin_type, ptx.tx);
+    THROW_WALLET_EXCEPTION_IF(!all_are_txin_fulmo_key, error::unexpected_txin_type, ptx.tx);
 
     ptx.key_images = key_images;
     ptx.fee = 0;
@@ -7899,23 +7879,19 @@ uint64_t wallet2::get_dynamic_base_fee_estimate()
   boost::optional<std::string> result = m_node_rpc_proxy.get_dynamic_base_fee_estimate(FEE_ESTIMATE_GRACE_BLOCKS, fee);
   if (!result)
     return fee;
-  const uint64_t base_fee = use_fork_rules(HF_VERSION_PER_BYTE_FEE) ? FEE_PER_BYTE : FEE_PER_KB;
+  const uint64_t base_fee = FEE_PER_BYTE;
   LOG_PRINT_L1("Failed to query base fee, using " << print_money(base_fee));
   return base_fee;
 }
 //----------------------------------------------------------------------------------------------------
 uint64_t wallet2::get_base_fee()
 {
-  bool use_dyn_fee = use_fork_rules(HF_VERSION_DYNAMIC_FEE, -30 * 1);
-  if (!use_dyn_fee)
-    return FEE_PER_KB;
-
   return get_dynamic_base_fee_estimate();
 }
 //----------------------------------------------------------------------------------------------------
 uint64_t wallet2::get_base_fee(uint32_t priority)
 {
-  const bool use_2021_scaling = use_fork_rules(HF_VERSION_2021_SCALING, -30 * 1);
+  const bool use_2021_scaling = true;
   if (use_2021_scaling)
   {
     // clamp and map to 0..3 indices, mapping 0 (default, but should not end up here) to 0, and 1..4 to 0..3
@@ -7949,10 +7925,6 @@ uint64_t wallet2::get_base_fee(uint32_t priority)
 //----------------------------------------------------------------------------------------------------
 uint64_t wallet2::get_fee_quantization_mask()
 {
-  bool use_per_byte_fee = use_fork_rules(HF_VERSION_PER_BYTE_FEE, 0);
-  if (!use_per_byte_fee)
-    return 1;
-
   uint64_t fee_quantization_mask;
   boost::optional<std::string> result = m_node_rpc_proxy.get_fee_quantization_mask(fee_quantization_mask);
   if (result)
@@ -7962,38 +7934,17 @@ uint64_t wallet2::get_fee_quantization_mask()
 //----------------------------------------------------------------------------------------------------
 int wallet2::get_fee_algorithm()
 {
-  // changes at v3, v5, v8
-  if (use_fork_rules(HF_VERSION_PER_BYTE_FEE, 0))
-    return 3;
-  if (use_fork_rules(5, 0))
-    return 2;
-  if (use_fork_rules(3, -30 * 14))
-   return 1;
-  return 0;
+  return 3;
 }
 //------------------------------------------------------------------------------------------------------------------------------
 uint64_t wallet2::get_min_ring_size()
 {
-  if (use_fork_rules(HF_VERSION_MIN_MIXIN_15, 0))
-    return 16;
-  if (use_fork_rules(8, 10))
-    return 11;
-  if (use_fork_rules(7, 10))
-    return 7;
-  if (use_fork_rules(6, 10))
-    return 5;
-  if (use_fork_rules(2, 10))
-    return 3;
-  return 0;
+  return 16;
 }
 //------------------------------------------------------------------------------------------------------------------------------
 uint64_t wallet2::get_max_ring_size()
 {
-  if (use_fork_rules(HF_VERSION_MIN_MIXIN_15, 0))
-    return 16;
-  if (use_fork_rules(8, 10))
-    return 11;
-  return 0;
+  return 16;
 }
 //------------------------------------------------------------------------------------------------------------------------------
 uint64_t wallet2::adjust_mixin(uint64_t mixin)
@@ -8020,7 +7971,7 @@ uint32_t wallet2::adjust_priority(uint32_t priority)
     try
     {
       // check if there's a backlog in the tx pool
-      const bool use_per_byte_fee = use_fork_rules(HF_VERSION_PER_BYTE_FEE, 0);
+      const bool use_per_byte_fee = true;
       const uint64_t base_fee = get_base_fee(1);
       const double fee_level = base_fee * (use_per_byte_fee ? 1 : (12/(double)13 / (double)1024));
       const std::vector<std::pair<uint64_t, uint64_t>> blocks = estimate_backlog({std::make_pair(fee_level, fee_level)});
@@ -9203,13 +9154,13 @@ void wallet2::transfer_selected(const std::vector<cryptonote::tx_destination_ent
   THROW_WALLET_EXCEPTION_IF(upper_transaction_weight_limit <= get_transaction_weight(tx), error::tx_too_big, tx, upper_transaction_weight_limit);
 
   std::string key_images;
-  bool all_are_txin_to_key = std::all_of(tx.vin.begin(), tx.vin.end(), [&](const txin_v& s_e) -> bool
+  bool all_are_txin_fulmo_key = std::all_of(tx.vin.begin(), tx.vin.end(), [&](const txin_v& s_e) -> bool
   {
-    CHECKED_GET_SPECIFIC_VARIANT(s_e, const txin_to_key, in, false);
+    CHECKED_GET_SPECIFIC_VARIANT(s_e, const txin_fulmo_key, in, false);
     key_images += boost::to_string(in.k_image) + " ";
     return true;
   });
-  THROW_WALLET_EXCEPTION_IF(!all_are_txin_to_key, error::unexpected_txin_type, tx);
+  THROW_WALLET_EXCEPTION_IF(!all_are_txin_fulmo_key, error::unexpected_txin_type, tx);
   
   
   bool dust_sent_elsewhere = (dust_policy.addr_for_dust.m_view_public_key != change_dts.addr.m_view_public_key
@@ -9560,13 +9511,13 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
 
   LOG_PRINT_L2("gathering key images");
   std::string key_images;
-  bool all_are_txin_to_key = std::all_of(tx.vin.begin(), tx.vin.end(), [&](const txin_v& s_e) -> bool
+  bool all_are_txin_fulmo_key = std::all_of(tx.vin.begin(), tx.vin.end(), [&](const txin_v& s_e) -> bool
   {
-    CHECKED_GET_SPECIFIC_VARIANT(s_e, const txin_to_key, in, false);
+    CHECKED_GET_SPECIFIC_VARIANT(s_e, const txin_fulmo_key, in, false);
     key_images += boost::to_string(in.k_image) + " ";
     return true;
   });
-  THROW_WALLET_EXCEPTION_IF(!all_are_txin_to_key, error::unexpected_txin_type, tx);
+  THROW_WALLET_EXCEPTION_IF(!all_are_txin_fulmo_key, error::unexpected_txin_type, tx);
   LOG_PRINT_L2("gathered key images");
 
   ptx.key_images = key_images;
@@ -9591,9 +9542,9 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
   ptx.construction_data.use_rct = true;
   ptx.construction_data.rct_config = {
     rct::RangeProofPaddedBulletproof,
-    use_fork_rules(HF_VERSION_BULLETPROOF_PLUS, -10) ? 4 : 3
+    4
   };
-  ptx.construction_data.use_view_tags = use_fork_rules(get_view_tag_fork(), 0);
+  ptx.construction_data.use_view_tags = true;
   ptx.construction_data.dests = dsts;
   // record which subaddress indices are being used as inputs
   ptx.construction_data.subaddr_account = subaddr_account;
@@ -9747,12 +9698,21 @@ static uint32_t get_count_above(const std::vector<wallet2::transfer_details> &tr
 // This system allows for sending (almost) the entire balance, since it does
 // not generate spurious change in all txes, thus decreasing the instantaneous
 // usable balance.
-std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
-{
+std::vector<wallet2::pending_tx> wallet2::create_transactions_2(
+  std::vector<cryptonote::tx_destination_entry> dsts,
+  const std::string& source_asset,
+  const size_t fake_outs_count,
+  const uint64_t unlock_time,
+  uint32_t priority,
+  const std::vector<uint8_t>& extra,
+  uint32_t subaddr_account,
+  std::set<uint32_t> subaddr_indices
+){
   //ensure device is let in NONE mode in any case
   hw::device &hwdev = m_account.get_device();
   boost::unique_lock<hw::device> hwdev_lock (hwdev);
   hw::reset_mode rst(hwdev);  
+  using tt = cryptonote::transaction_type;
 
   auto original_dsts = dsts;
 
@@ -9810,16 +9770,13 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
   bool adding_fee; // true if new outputs go towards fee, rather than destinations
   uint64_t needed_fee, available_for_fee = 0;
   uint64_t upper_transaction_weight_limit = get_upper_transaction_weight_limit();
-  const bool use_per_byte_fee = use_fork_rules(HF_VERSION_PER_BYTE_FEE, 0);
-  const bool use_rct = use_fork_rules(4, 0);
-  const bool bulletproof = use_fork_rules(get_bulletproof_fork(), 0);
-  const bool bulletproof_plus = use_fork_rules(get_bulletproof_plus_fork(), 0);
-  const bool clsag = use_fork_rules(get_clsag_fork(), 0);
-  const rct::RCTConfig rct_config {
-    rct::RangeProofPaddedBulletproof,
-    bulletproof_plus ? 4 : 3
-  };
-  const bool use_view_tags = use_fork_rules(get_view_tag_fork(), 0);
+  const bool use_per_byte_fee = true;
+  const bool use_rct = true;
+  const bool bulletproof = true;
+  const bool bulletproof_plus = true;
+  const bool clsag = true;
+  const rct::RCTConfig rct_config { rct::RangeProofPaddedBulletproof, 4 };
+  const bool use_view_tags = true;
   std::unordered_set<crypto::public_key> valid_public_keys_cache;
 
   const uint64_t base_fee  = get_base_fee(priority);
@@ -10405,14 +10362,14 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
 {
   std::vector<size_t> unused_transfers_indices;
   std::vector<size_t> unused_dust_indices;
-  const bool use_rct = use_fork_rules(4, 0);
+  const bool use_rct = true;
 
   // determine threshold for fractional amount
-  const bool use_per_byte_fee = use_fork_rules(HF_VERSION_PER_BYTE_FEE, 0);
-  const bool bulletproof = use_fork_rules(get_bulletproof_fork(), 0);
-  const bool bulletproof_plus = use_fork_rules(get_bulletproof_plus_fork(), 0);
-  const bool clsag = use_fork_rules(get_clsag_fork(), 0);
-  const bool use_view_tags = use_fork_rules(get_view_tag_fork(), 0);
+  const bool use_per_byte_fee = true;
+  const bool bulletproof = true;
+  const bool bulletproof_plus = true;
+  const bool clsag = true;
+  const bool use_view_tags = true;
   const uint64_t base_fee  = get_base_fee(priority);
   const size_t tx_weight_one_ring = estimate_tx_weight(use_rct, 1, fake_outs_count, 2, 0, bulletproof, clsag, bulletproof_plus, use_view_tags);
   const size_t tx_weight_two_rings = estimate_tx_weight(use_rct, 2, fake_outs_count, 2, 0, bulletproof, clsag, bulletproof_plus, use_view_tags);
@@ -10520,16 +10477,16 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
   uint64_t upper_transaction_weight_limit = get_upper_transaction_weight_limit();
   std::vector<std::vector<get_outs_entry>> outs;
 
-  const bool use_per_byte_fee = use_fork_rules(HF_VERSION_PER_BYTE_FEE);
-  const bool use_rct = fake_outs_count > 0 && use_fork_rules(4, 0);
-  const bool bulletproof = use_fork_rules(get_bulletproof_fork(), 0);
-  const bool bulletproof_plus = use_fork_rules(get_bulletproof_plus_fork(), 0);
-  const bool clsag = use_fork_rules(get_clsag_fork(), 0);
+  const bool use_per_byte_fee = true;
+  const bool use_rct = fake_outs_count > 0;
+  const bool bulletproof = true;
+  const bool bulletproof_plus = true;
+  const bool clsag = true;
   const rct::RCTConfig rct_config {
     rct::RangeProofPaddedBulletproof,
     bulletproof_plus ? 4 : 3
   };
-  const bool use_view_tags = use_fork_rules(get_view_tag_fork(), 0);
+  const bool use_view_tags = true;
   const uint64_t base_fee  = get_base_fee(priority);
   const uint64_t fee_quantization_mask = get_fee_quantization_mask();
 
@@ -10554,15 +10511,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
     // dust and non dust to ensure we never get with only dust, from which we might
     // get a tx that can't pay for itself
     uint64_t fee_dust_threshold;
-    if (use_fork_rules(HF_VERSION_PER_BYTE_FEE))
-    {
-      const uint64_t estimated_tx_weight_with_one_extra_output = estimate_tx_weight(use_rct, tx.selected_transfers.size() + 1, fake_outs_count, tx.dsts.size()+1, extra.size(), bulletproof, clsag, bulletproof_plus, use_view_tags);
-      fee_dust_threshold = calculate_fee_from_weight(base_fee, estimated_tx_weight_with_one_extra_output, fee_quantization_mask);
-    }
-    else
-    {
-      fee_dust_threshold = base_fee * (upper_transaction_weight_limit + 1023) / 1024;
-    }
+    const uint64_t estimated_tx_weight_with_one_extra_output = estimate_tx_weight(use_rct, tx.selected_transfers.size() + 1, fake_outs_count, tx.dsts.size()+1, extra.size(), bulletproof, clsag, bulletproof_plus, use_view_tags);
+    fee_dust_threshold = calculate_fee_from_weight(base_fee, estimated_tx_weight_with_one_extra_output, fee_quantization_mask);
 
     size_t idx =
       unused_transfers_indices.empty()
@@ -10753,7 +10703,7 @@ void wallet2::cold_sign_tx(const std::vector<pending_tx>& ptx_vector, signed_tx_
   hw::wallet_shim wallet_shim;
   setup_shim(&wallet_shim, this);
   aux_data.tx_recipients = dsts_info;
-  aux_data.bp_version = (use_fork_rules(HF_VERSION_BULLETPROOF_PLUS, -10) ? 4 : use_fork_rules(HF_VERSION_CLSAG, -10) ? 3 : use_fork_rules(HF_VERSION_SMALLER_BP, -10) ? 2 : 1);
+  aux_data.bp_version = 4;
   aux_data.hard_fork = get_current_hard_fork();
   dev_cold->tx_sign(&wallet_shim, txs, exported_txs, aux_data);
   tx_device_aux = aux_data.tx_device_aux;
@@ -11188,7 +11138,7 @@ std::string wallet2::get_spend_proof(const crypto::hash &txid, const std::string
 
   for(size_t i = 0; i < tx.vin.size(); ++i)
   {
-    const txin_to_key* const in_key = boost::get<txin_to_key>(std::addressof(tx.vin[i]));
+    const txin_fulmo_key* const in_key = boost::get<txin_fulmo_key>(std::addressof(tx.vin[i]));
     if (in_key == nullptr)
       continue;
 
@@ -11295,7 +11245,7 @@ bool wallet2::check_spend_proof(const crypto::hash &txid, const std::string &mes
   size_t num_sigs = 0;
   for(size_t i = 0; i < tx.vin.size(); ++i)
   {
-    const txin_to_key* const in_key = boost::get<txin_to_key>(std::addressof(tx.vin[i]));
+    const txin_fulmo_key* const in_key = boost::get<txin_fulmo_key>(std::addressof(tx.vin[i]));
     if (in_key != nullptr)
       num_sigs += in_key->key_offsets.size();
   }
@@ -11310,7 +11260,7 @@ bool wallet2::check_spend_proof(const crypto::hash &txid, const std::string &mes
   size_t offset = header_len;
   for(size_t i = 0; i < tx.vin.size(); ++i)
   {
-    const txin_to_key* const in_key = boost::get<txin_to_key>(std::addressof(tx.vin[i]));
+    const txin_fulmo_key* const in_key = boost::get<txin_fulmo_key>(std::addressof(tx.vin[i]));
     if (in_key == nullptr)
       continue;
     signatures.resize(signatures.size() + 1);
@@ -11334,7 +11284,7 @@ bool wallet2::check_spend_proof(const crypto::hash &txid, const std::string &mes
   std::vector<std::vector<crypto::signature>>::const_iterator sig_iter = signatures.cbegin();
   for(size_t i = 0; i < tx.vin.size(); ++i)
   {
-    const txin_to_key* const in_key = boost::get<txin_to_key>(std::addressof(tx.vin[i]));
+    const txin_fulmo_key* const in_key = boost::get<txin_fulmo_key>(std::addressof(tx.vin[i]));
     if (in_key == nullptr)
       continue;
 
@@ -12705,8 +12655,8 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
   {
     for (const cryptonote::txin_v& in : td.m_tx.vin)
     {
-      if (in.type() == typeid(cryptonote::txin_to_key))
-        spent_key_images.insert(std::make_pair(boost::get<cryptonote::txin_to_key>(in).k_image, td.m_txid));
+      if (in.type() == typeid(cryptonote::txin_fulmo_key))
+        spent_key_images.insert(std::make_pair(boost::get<cryptonote::txin_fulmo_key>(in).k_image, td.m_txid));
     }
   }
   PERF_TIMER_STOP(import_key_images_C);
@@ -12830,14 +12780,14 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
       std::set<uint32_t> subaddr_indices;
       for (const cryptonote::txin_v& in : spent_tx.vin)
       {
-        if (in.type() != typeid(cryptonote::txin_to_key))
+        if (in.type() != typeid(cryptonote::txin_fulmo_key))
           continue;
-        auto it = m_key_images.find(boost::get<cryptonote::txin_to_key>(in).k_image);
+        auto it = m_key_images.find(boost::get<cryptonote::txin_fulmo_key>(in).k_image);
         if (it != m_key_images.end())
         {
           THROW_WALLET_EXCEPTION_IF(it->second >= m_transfers.size(), error::wallet_internal_error, std::string("Key images cache contains illegal transfer offset: ") + std::to_string(it->second) + std::string(" m_transfers.size() = ") + std::to_string(m_transfers.size()));
           const transfer_details& td = m_transfers[it->second];
-          uint64_t amount = boost::get<cryptonote::txin_to_key>(in).amount;
+          uint64_t amount = boost::get<cryptonote::txin_fulmo_key>(in).amount;
           if (amount > 0)
           {
             THROW_WALLET_EXCEPTION_IF(amount != td.amount(), error::wallet_internal_error,
@@ -13206,7 +13156,7 @@ size_t wallet2::import_outputs(const std::tuple<uint64_t, uint64_t, std::vector<
 
     THROW_WALLET_EXCEPTION_IF(etd.m_internal_output_index >= 65536, error::wallet_internal_error, "internal output index seems outrageously high, rejecting");
     td.m_internal_output_index = etd.m_internal_output_index;
-    cryptonote::txout_to_key tk;
+    cryptonote::txout_fulmo_tagged_key tk;
     tk.key = etd.m_pubkey;
     cryptonote::tx_out out;
     out.amount = etd.m_amount;
@@ -14346,10 +14296,10 @@ std::pair<size_t, uint64_t> wallet2::estimate_tx_size_and_weight(bool use_rct, i
   if (n_outputs == 1)
     n_outputs = 2; // extra dummy output
 
-  const bool bulletproof = use_fork_rules(get_bulletproof_fork(), 0);
-  const bool bulletproof_plus = use_fork_rules(get_bulletproof_plus_fork(), 0);
-  const bool clsag = use_fork_rules(get_clsag_fork(), 0);
-  const bool use_view_tags = use_fork_rules(get_view_tag_fork(), 0);
+  const bool bulletproof = true;
+  const bool bulletproof_plus = true;
+  const bool clsag = true;
+  const bool use_view_tags = true;
   size_t size = estimate_tx_size(use_rct, n_inputs, ring_size - 1, n_outputs, extra_size, bulletproof, clsag, bulletproof_plus, use_view_tags);
   uint64_t weight = estimate_tx_weight(use_rct, n_inputs, ring_size - 1, n_outputs, extra_size, bulletproof, clsag, bulletproof_plus, use_view_tags);
   return std::make_pair(size, weight);

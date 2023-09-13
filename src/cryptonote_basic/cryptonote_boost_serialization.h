@@ -101,16 +101,12 @@ namespace boost
 
 
   template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txout_to_key &x, const boost::serialization::version_type ver)
-  {
-    a & x.key;
-  }
-
-  template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txout_to_tagged_key &x, const boost::serialization::version_type ver)
+  inline void serialize(Archive &a, cryptonote::txout_fulmo_tagged_key &x, const boost::serialization::version_type ver)
   {
     a & x.key;
     a & x.view_tag;
+    a & x.asset_type;
+    a & x.unlock_time;
   }
 
   template <class Archive>
@@ -143,11 +139,12 @@ namespace boost
   }
 
   template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txin_to_key &x, const boost::serialization::version_type ver)
+  inline void serialize(Archive &a, cryptonote::txin_fulmo_key &x, const boost::serialization::version_type ver)
   {
     a & x.amount;
     a & x.key_offsets;
     a & x.k_image;
+    a & x.asset_type;
   }
 
   template <class Archive>

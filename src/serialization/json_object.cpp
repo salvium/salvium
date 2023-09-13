@@ -345,7 +345,7 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
 
     rapidjson::Writer<epee::byte_stream>& dest;
 
-    void operator()(cryptonote::txin_to_key const& input) const
+    void operator()(cryptonote::txin_fulmo_key const& input) const
     {
       INSERT_INTO_JSON_OBJECT(dest, to_key, input);
     }
@@ -383,7 +383,7 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_v& txin)
   {
     if (elem.name == "to_key")
     {
-      cryptonote::txin_to_key tmpVal;
+      cryptonote::txin_fulmo_key tmpVal;
       fromJsonValue(elem.value, tmpVal);
       txin = std::move(tmpVal);
     }
@@ -478,18 +478,19 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_to_scripthash& 
   GET_FROM_JSON_OBJECT(val, txin.sigset, sigset);
 }
 
-void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::txin_to_key& txin)
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::txin_fulmo_key& txin)
 {
   dest.StartObject();
 
   INSERT_INTO_JSON_OBJECT(dest, amount, txin.amount);
   INSERT_INTO_JSON_OBJECT(dest, key_offsets, txin.key_offsets);
   INSERT_INTO_JSON_OBJECT(dest, key_image, txin.k_image);
+  INSERT_INTO_JSON_OBJECT(dest, asset_type, txin.asset_type);
 
   dest.EndObject();
 }
 
-void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_to_key& txin)
+void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_fulmo_key& txin)
 {
   if (!val.IsObject())
   {
@@ -499,6 +500,7 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_to_key& txin)
   GET_FROM_JSON_OBJECT(val, txin.amount, amount);
   GET_FROM_JSON_OBJECT(val, txin.key_offsets, key_offsets);
   GET_FROM_JSON_OBJECT(val, txin.k_image, key_image);
+  GET_FROM_JSON_OBJECT(val, txin.asset_type, asset_type);
 }
 
 
@@ -544,36 +546,19 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_to_scripthash&
 }
 
 
-void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::txout_to_key& txout)
-{
-  dest.StartObject();
-
-  INSERT_INTO_JSON_OBJECT(dest, key, txout.key);
-
-  dest.EndObject();
-}
-
-void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_to_key& txout)
-{
-  if (!val.IsObject())
-  {
-    throw WRONG_TYPE("json object");
-  }
-
-  GET_FROM_JSON_OBJECT(val, txout.key, key);
-}
-
-void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::txout_to_tagged_key& txout)
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::txout_fulmo_tagged_key& txout)
 {
   dest.StartObject();
 
   INSERT_INTO_JSON_OBJECT(dest, key, txout.key);
   INSERT_INTO_JSON_OBJECT(dest, view_tag, txout.view_tag);
+  INSERT_INTO_JSON_OBJECT(dest, asset_type, txout.asset_type);
+  INSERT_INTO_JSON_OBJECT(dest, unlock_time, txout.unlock_time);
 
   dest.EndObject();
 }
 
-void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_to_tagged_key& txout)
+void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_fulmo_tagged_key& txout)
 {
   if (!val.IsObject())
   {
@@ -582,6 +567,8 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_to_tagged_key&
 
   GET_FROM_JSON_OBJECT(val, txout.key, key);
   GET_FROM_JSON_OBJECT(val, txout.view_tag, view_tag);
+  GET_FROM_JSON_OBJECT(val, txout.asset_type, asset_type);
+  GET_FROM_JSON_OBJECT(val, txout.unlock_time, unlock_time);
 }
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::tx_out& txout)
@@ -595,13 +582,9 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
 
     rapidjson::Writer<epee::byte_stream>& dest;
 
-    void operator()(cryptonote::txout_to_key const& output) const
+    void operator()(cryptonote::txout_fulmo_tagged_key const& output) const
     {
-      INSERT_INTO_JSON_OBJECT(dest, to_key, output);
-    }
-    void operator()(cryptonote::txout_to_tagged_key const& output) const
-    {
-      INSERT_INTO_JSON_OBJECT(dest, to_tagged_key, output);
+      INSERT_INTO_JSON_OBJECT(dest, fulmo_tagged_key, output);
     }
     void operator()(cryptonote::txout_to_script const& output) const
     {
@@ -635,15 +618,9 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::tx_out& txout)
       fromJsonValue(elem.value, txout.amount);
     }
 
-    if (elem.name == "to_key")
+    if (elem.name == "fulmo_tagged_key")
     {
-      cryptonote::txout_to_key tmpVal;
-      fromJsonValue(elem.value, tmpVal);
-      txout.target = std::move(tmpVal);
-    }
-    else if (elem.name == "to_tagged_key")
-    {
-      cryptonote::txout_to_tagged_key tmpVal;
+      cryptonote::txout_fulmo_tagged_key tmpVal;
       fromJsonValue(elem.value, tmpVal);
       txout.target = std::move(tmpVal);
     }

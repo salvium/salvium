@@ -33,6 +33,8 @@
 #include <boost/serialization/vector.hpp>
 #include <boost/serialization/utility.hpp>
 #include "ringct/rctOps.h"
+#include "oracle/pricing_record.h"
+#include "cryptonote_protocol/enums.h"
 
 namespace cryptonote
 {
@@ -52,6 +54,8 @@ namespace cryptonote
     bool rct;                           //true if the output is rct
     rct::key mask;                      //ringct amount mask
     rct::multisig_kLRki multisig_kLRki; //multisig info
+    oracle::pricing_record pr;
+    std::string asset_type;
 
     void push_output(uint64_t idx, const crypto::public_key &k, uint64_t amount) { outputs.push_back(std::make_pair(idx, rct::ctkey({rct::pk2rct(k), rct::zeroCommit(amount)}))); }
 
@@ -65,6 +69,7 @@ namespace cryptonote
       FIELD(rct)
       FIELD(mask)
       FIELD(multisig_kLRki)
+      FIELD(asset_type)
 
       if (real_output >= outputs.size())
         return false;
@@ -76,10 +81,11 @@ namespace cryptonote
     std::string original;
     uint64_t amount;                    //money
     account_public_address addr;        //destination address
+    std::string asset_type;
     bool is_subaddress;
     bool is_integrated;
 
-    tx_destination_entry() : amount(0), addr(AUTO_VAL_INIT(addr)), is_subaddress(false), is_integrated(false) { }
+    tx_destination_entry() : amount(0), addr(AUTO_VAL_INIT(addr)), asset_type("FULM"), is_subaddress(false), is_integrated(false) { }
     tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress) : amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false) { }
     tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress) : original(o), amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false) { }
 
@@ -102,6 +108,7 @@ namespace cryptonote
       FIELD(original)
       VARINT_FIELD(amount)
       FIELD(addr)
+      FIELD(asset_type)
       FIELD(is_subaddress)
       FIELD(is_integrated)
     END_SERIALIZE()
@@ -149,6 +156,8 @@ namespace cryptonote
   crypto::hash get_block_longhash(const Blockchain *pb, const block& b, const uint64_t height, const crypto::hash *seed_hash = nullptr, const int miners = 0);
   void get_altblock_longhash(const block& b, crypto::hash& res, const crypto::hash& seed_hash);
 
+  bool get_tx_asset_types(const transaction& tx, const crypto::hash &txid, std::string& source, std::string& destination, const bool is_miner_tx);
+  bool get_tx_type(const std::string& source, const std::string& destination, transaction_type& type);
 }
 
 BOOST_CLASS_VERSION(cryptonote::tx_source_entry, 1)

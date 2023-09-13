@@ -832,17 +832,8 @@ namespace rpc
   {
     res.hard_fork_version = m_core.get_blockchain_storage().get_current_hard_fork_version();
     res.estimated_base_fee = m_core.get_blockchain_storage().get_dynamic_base_fee_estimate(req.num_grace_blocks);
-
-    if (res.hard_fork_version < HF_VERSION_PER_BYTE_FEE)
-    {
-       res.size_scale = 1024; // per KiB fee
-       res.fee_mask = 1;
-    }
-    else
-    {
-      res.size_scale = 1; // per byte fee
-      res.fee_mask = Blockchain::get_fee_quantization_mask();
-    }
+    res.size_scale = 1; // per byte fee
+    res.fee_mask = Blockchain::get_fee_quantization_mask();
     res.status = Message::STATUS_OK;
   }
 

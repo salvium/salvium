@@ -203,9 +203,9 @@ int main(int argc, char* argv[])
 
     for (const auto &in: tx.vin)
     {
-      if (in.type() != typeid(txin_to_key))
+      if (in.type() != typeid(txin_fulmo_key))
         continue;
-      const auto &txin = boost::get<txin_to_key>(in);
+      const auto &txin = boost::get<txin_fulmo_key>(in);
       if (opt_rct_only && txin.amount != 0)
         continue;
 

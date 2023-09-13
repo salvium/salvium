@@ -75,6 +75,7 @@
 #include <stdexcept>
 #include "wallet/message_store.h"
 #include "QrCode.hpp"
+#include "oracle/asset_types.h"
 
 #ifdef WIN32
 #include <boost/locale.hpp>
@@ -188,13 +189,14 @@ namespace
   const char* USAGE_INCOMING_TRANSFERS("incoming_transfers [available|unavailable] [verbose] [uses] [index=<N1>[,<N2>[,...]]]");
   const char* USAGE_PAYMENTS("payments <PID_1> [<PID_2> ... <PID_N>]");
   const char* USAGE_PAYMENT_ID("payment_id");
-  const char* USAGE_TRANSFER("transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <amount>) [<payment_id>]");
+  const char* USAGE_TRANSFER("transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <amount>) [<asset_type>] [<payment_id>]");
   const char* USAGE_LOCKED_TRANSFER("locked_transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <addr> <amount>) <lockblocks> [<payment_id (obsolete)>]");
   const char* USAGE_LOCKED_SWEEP_ALL("locked_sweep_all [index=<N1>[,<N2>,...] | index=all] [<priority>] [<ring_size>] <address> <lockblocks> [<payment_id (obsolete)>]");
   const char* USAGE_SWEEP_ALL("sweep_all [index=<N1>[,<N2>,...] | index=all] [<priority>] [<ring_size>] [outputs=<N>] <address> [<payment_id (obsolete)>]");
   const char* USAGE_SWEEP_ACCOUNT("sweep_account <account> [index=<N1>[,<N2>,...] | index=all] [<priority>] [<ring_size>] [outputs=<N>] <address> [<payment_id (obsolete)>]");
   const char* USAGE_SWEEP_BELOW("sweep_below <amount_threshold> [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> [<payment_id (obsolete)>]");
   const char* USAGE_SWEEP_SINGLE("sweep_single [<priority>] [<ring_size>] [outputs=<N>] <key_image> <address> [<payment_id (obsolete)>]");
+  const char* USAGE_CONVERT("convert [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <source_amount>) <source_asset> <dest_asset> [<payment_id>]");
   const char* USAGE_DONATE("donate [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <amount> [<payment_id (obsolete)>]");
   const char* USAGE_SIGN_TRANSFER("sign_transfer [export_raw] [<filename>]");
   const char* USAGE_SET_LOG("set_log <level>|{+,-,}<categories>");
@@ -933,7 +935,7 @@ bool simple_wallet::print_fee_info(const std::vector<std::string> &args/* = std:
 {
   if (!try_connect_to_daemon())
     return true;
-  const bool per_byte = m_wallet->use_fork_rules(HF_VERSION_PER_BYTE_FEE);
+  const bool per_byte = true;
   const uint64_t base_fee = m_wallet->get_base_fee();
   const char *base = per_byte ? "byte" : "kB";
   const uint64_t typical_size = per_byte ? 2500 : 13;
@@ -3080,7 +3082,7 @@ simple_wallet::simple_wallet()
                            tr("Show the blockchain height."));
   m_cmd_binder.set_handler("transfer", boost::bind(&simple_wallet::on_command, this, &simple_wallet::transfer, _1),
                            tr(USAGE_TRANSFER),
-                           tr("Transfer <amount> to <address>. If the parameter \"index=<N1>[,<N2>,...]\" is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. <priority> is the priority of the transaction. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command \"set priority\") is used. <ring_size> is the number of inputs to include for untraceability. Multiple payments can be made at once by adding URI_2 or <address_2> <amount_2> etcetera (before the payment ID, if it's included)"));
+                           tr("Transfer <amount> or type <asset_type> to <address>. If the parameter \"index=<N1>[,<N2>,...]\" is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. <priority> is the priority of the transaction. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command \"set priority\") is used. <ring_size> is the number of inputs to include for untraceability. Multiple payments can be made at once by adding URI_2 or <address_2> <amount_2> etcetera (before the payment ID, if it's included)"));
   m_cmd_binder.set_handler("locked_transfer",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::locked_transfer,_1),
                            tr(USAGE_LOCKED_TRANSFER),
@@ -3106,10 +3108,14 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::sweep_single, _1),
                            tr(USAGE_SWEEP_SINGLE),
                            tr("Send a single output of the given key image to an address without change."));
+  m_cmd_binder.set_handler("convert",
+                           boost::bind(&simple_wallet::convert, this, _1),
+                           tr(USAGE_CONVERT),
+                           tr("Converts <amount> Fulmo (FULM) to Fulmo Dollars (FUSD), with optional <priority> [0-5]"));
   m_cmd_binder.set_handler("donate",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::donate, _1),
                            tr(USAGE_DONATE),
-                           tr("Donate <amount> to the development team (donate.getmonero.org)."));
+                           tr("Donate <amount> of <asset_type> to the development team."));
   m_cmd_binder.set_handler("sign_transfer",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::sign_transfer, _1),
                            tr(USAGE_SIGN_TRANSFER),
@@ -6058,9 +6064,9 @@ bool simple_wallet::process_ring_members(const std::vector<tools::wallet2::pendi
     std::vector<crypto::hash> spent_key_txid  (tx.vin.size());
     for (size_t i = 0; i < tx.vin.size(); ++i)
     {
-      if (tx.vin[i].type() != typeid(cryptonote::txin_to_key))
+      if (tx.vin[i].type() != typeid(cryptonote::txin_fulmo_key))
         continue;
-      const cryptonote::txin_to_key& in_key = boost::get<cryptonote::txin_to_key>(tx.vin[i]);
+      const cryptonote::txin_fulmo_key& in_key = boost::get<cryptonote::txin_fulmo_key>(tx.vin[i]);
       const tools::wallet2::transfer_details &td = m_wallet->get_transfer_details(construction_data.selected_transfers[i]);
       const cryptonote::tx_source_entry *sptr = NULL;
       for (const auto &src: construction_data.sources)
@@ -6248,7 +6254,12 @@ bool simple_wallet::on_command(bool (simple_wallet::*cmd)(const std::vector<std:
   return (this->*cmd)(args);
 }
 //----------------------------------------------------------------------------------------------------
-bool simple_wallet::transfer_main(int transfer_type, const std::vector<std::string> &args_, bool called_by_mms)
+bool simple_wallet::transfer_main(
+                                  int transfer_type,
+                                  const std::string& source_asset,
+                                  const std::string& dest_asset,
+                                  const std::vector<std::string> &args_,
+                                  bool called_by_mms)
 {
 //  "transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> <amount> [<payment_id>]"
   if (!try_connect_to_daemon())
@@ -6343,6 +6354,14 @@ bool simple_wallet::transfer_main(int transfer_type, const std::vector<std::stri
       return false;
     }
     local_args.pop_back();
+  }
+
+  // get tx type
+  using tt = cryptonote::transaction_type;
+  tt tx_type;
+  if(!get_tx_type(source_asset, dest_asset, tx_type)) {
+    fail_msg_writer() << tr("fail to get tx asset types.");
+    return false;
   }
 
   vector<cryptonote::address_parse_info> dsts_info;
@@ -6680,23 +6699,71 @@ bool simple_wallet::transfer_main(int transfer_type, const std::vector<std::stri
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::transfer(const std::vector<std::string> &args_)
 {
-  if (args_.size() < 1)
+  // TODO: add locked versions
+  if (args_.size() < 2)
   {
     PRINT_USAGE(USAGE_TRANSFER);
     return true;
   }
-  transfer_main(Transfer, args_, false);
+
+  std::vector<std::string> local_args = args_;
+  
+  // get payment id and pop
+  std::string payment_id_str;
+  crypto::hash payment_id;
+  crypto::hash8 payment_id8;
+  if (tools::wallet2::parse_long_payment_id (local_args.back(), payment_id ) or
+      tools::wallet2::parse_short_payment_id(local_args.back(), payment_id8))
+  {
+    payment_id_str = local_args.back();
+    local_args.pop_back();
+  }
+  
+  // Get the source asset type
+  std::string source_asset = "FULM";
+  std::string strLastArg = local_args.back();
+  std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
+  if (strLastArg == "FULM" or strLastArg == "FUSD") {
+    source_asset = strLastArg;
+    local_args.pop_back();  
+  }
+  
+  transfer_main(Transfer, source_asset, source_asset, local_args, false);
   return true;
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::locked_transfer(const std::vector<std::string> &args_)
 {
-  if (args_.size() < 1)
+  // TODO: add locked versions
+  if (args_.size() < 2)
   {
     PRINT_USAGE(USAGE_LOCKED_TRANSFER);
     return true;
   }
-  transfer_main(TransferLocked, args_, false);
+
+  std::vector<std::string> local_args = args_;
+  
+  // get payment id and pop
+  std::string payment_id_str;
+  crypto::hash payment_id;
+  crypto::hash8 payment_id8;
+  if (tools::wallet2::parse_long_payment_id (local_args.back(), payment_id ) or
+      tools::wallet2::parse_short_payment_id(local_args.back(), payment_id8))
+  {
+    payment_id_str = local_args.back();
+    local_args.pop_back();
+  }
+  
+  // Get the source asset type
+  std::string source_asset = "FULM";
+  std::string strLastArg = local_args.back();
+  std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
+  if (strLastArg == "FULM" or strLastArg == "FUSD") {
+    source_asset = strLastArg;
+    local_args.pop_back();  
+  }
+  
+  transfer_main(TransferLocked, source_asset, source_asset, local_args, false);
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -7417,6 +7484,52 @@ bool simple_wallet::sweep_below(const std::vector<std::string> &args_)
   return true;
 }
 //----------------------------------------------------------------------------------------------------
+bool simple_wallet::convert(const std::vector<std::string> &args_)
+{
+  // TODO: add locked versions
+  if (args_.size() < 4)
+  {
+    PRINT_USAGE(USAGE_CONVERT);
+    return true;
+  }
+
+  std::vector<std::string> local_args = args_;
+  
+  // get payment id and pop
+  std::string payment_id_str;
+  crypto::hash payment_id;
+  crypto::hash8 payment_id8;
+  if (tools::wallet2::parse_long_payment_id (local_args.back(), payment_id ) or
+      tools::wallet2::parse_short_payment_id(local_args.back(), payment_id8))
+  {
+    payment_id_str = local_args.back();
+    local_args.pop_back();
+  }
+  
+  // Get the destination asset type
+  std::string source_asset, dest_asset;
+  std::string strLastArg = local_args.back();
+  std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
+  if (strLastArg not_eq "FULM" and strLastArg not_eq "FUSD") {
+     PRINT_USAGE(USAGE_CONVERT);
+     return true;
+  }
+  dest_asset = strLastArg;
+  local_args.pop_back();
+  // Get the source asset type
+  strLastArg = local_args.back();
+  std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
+  if (strLastArg not_eq "FULM" and strLastArg not_eq "FUSD") {
+     PRINT_USAGE(USAGE_CONVERT);
+     return true;
+  }
+  source_asset = strLastArg;
+  local_args.pop_back();  
+  
+  transfer_main(Transfer, source_asset, dest_asset, local_args, false);
+  return true;  
+}
+//----------------------------------------------------------------------------------------------------
 bool simple_wallet::donate(const std::vector<std::string> &args_)
 {
   std::vector<std::string> local_args = args_;
@@ -7455,23 +7568,23 @@ bool simple_wallet::donate(const std::vector<std::string> &args_)
   {
     // if not mainnet, convert donation address string to the relevant network type
     address_parse_info info;
-    if (!cryptonote::get_account_address_from_str(info, cryptonote::MAINNET, MONERO_DONATION_ADDR))
+    if (!cryptonote::get_account_address_from_str(info, cryptonote::MAINNET, FULMO_DONATION_ADDR))
     {
-      fail_msg_writer() << tr("Failed to parse donation address: ") << MONERO_DONATION_ADDR;
+      fail_msg_writer() << tr("Failed to parse donation address: ") << FULMO_DONATION_ADDR;
       return true;
     }
     address_str = cryptonote::get_account_address_as_str(m_wallet->nettype(), info.is_subaddress, info.address);
   }
   else
   {
-    address_str = MONERO_DONATION_ADDR;
+    address_str = FULMO_DONATION_ADDR;
   }
   local_args.push_back(address_str);
   local_args.push_back(amount_str);
   if (!payment_id_str.empty())
     local_args.push_back(payment_id_str);
   if (m_wallet->nettype() == cryptonote::MAINNET)
-    message_writer() << (boost::format(tr("Donating %s %s to The Monero Project (donate.getmonero.org or %s).")) % amount_str % cryptonote::get_unit(cryptonote::get_default_decimal_point()) % MONERO_DONATION_ADDR).str();
+    message_writer() << (boost::format(tr("Donating %s %s to The Fulmo Project (donate.fulmo.org or %s).")) % amount_str % cryptonote::get_unit(cryptonote::get_default_decimal_point()) % FULMO_DONATION_ADDR).str();
   else
     message_writer() << (boost::format(tr("Donating %s %s to %s.")) % amount_str % cryptonote::get_unit(cryptonote::get_default_decimal_point()) % address_str).str();
   transfer(local_args);
@@ -10941,7 +11054,7 @@ void simple_wallet::mms_sync(const std::vector<std::string> &args)
 void simple_wallet::mms_transfer(const std::vector<std::string> &args)
 {
   // It's too complicated to check any arguments here, just let 'transfer_main' do the whole job
-  transfer_main(Transfer, args, true);
+  transfer_main(Transfer, "FULM", "FULM", args, true);
 }
 
 void simple_wallet::mms_delete(const std::vector<std::string> &args)

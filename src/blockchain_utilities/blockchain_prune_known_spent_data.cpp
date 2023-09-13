@@ -197,9 +197,9 @@ int main(int argc, char* argv[])
       const bool miner_tx = tx.vin.size() == 1 && tx.vin[0].type() == typeid(txin_gen);
       for (const auto &in: tx.vin)
       {
-        if (in.type() != typeid(txin_to_key))
+        if (in.type() != typeid(txin_fulmo_key))
           continue;
-        const auto &txin = boost::get<txin_to_key>(in);
+        const auto &txin = boost::get<txin_fulmo_key>(in);
         if (txin.amount == 0)
           continue;
 
@@ -213,7 +213,7 @@ int main(int argc, char* argv[])
           amount = 0;
         if (amount == 0)
           continue;
-        if (out.target.type() != typeid(txout_to_key))
+        if (out.target.type() != typeid(txout_fulmo_tagged_key))
           continue;
 
         outputs[amount].first++;

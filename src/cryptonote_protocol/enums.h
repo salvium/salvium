@@ -42,4 +42,12 @@ namespace cryptonote
     fluff,    //!< Received/sent over network using Dandelion++ fluff
     block     //!< Received in block, takes precedence over others
   };
+
+  enum class transaction_type : std::uint8_t
+  {
+    UNSET = 0,
+    TRANSFER,
+    CONVERT,
+    BURN
+  };
 }

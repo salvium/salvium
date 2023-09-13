@@ -1123,15 +1123,6 @@ namespace rct {
             case 4:
               rv.type = RCTTypeBulletproofPlus;
               break;
-            case 3:
-              rv.type = RCTTypeCLSAG;
-              break;
-            case 2:
-              rv.type = RCTTypeBulletproof2;
-              break;
-            case 1:
-              rv.type = RCTTypeBulletproof;
-              break;
             default:
               ASSERT_MES_AND_THROW("Unsupported BP version: " << rct_config.bp_version);
           }

@@ -1008,13 +1008,13 @@ namespace tools
 
       // add spent key images
       tools::wallet_rpc::key_image_list key_image_list;
-      bool all_are_txin_to_key = std::all_of(ptx.tx.vin.begin(), ptx.tx.vin.end(), [&](const cryptonote::txin_v& s_e) -> bool
+      bool all_are_txin_fulmo_key = std::all_of(ptx.tx.vin.begin(), ptx.tx.vin.end(), [&](const cryptonote::txin_v& s_e) -> bool
       {
-        CHECKED_GET_SPECIFIC_VARIANT(s_e, const cryptonote::txin_to_key, in, false);
+        CHECKED_GET_SPECIFIC_VARIANT(s_e, const cryptonote::txin_fulmo_key, in, false);
         key_image_list.key_images.push_back(epee::string_tools::pod_to_hex(in.k_image));
         return true;
       });
-      THROW_WALLET_EXCEPTION_IF(!all_are_txin_to_key, error::unexpected_txin_type, ptx.tx);
+      THROW_WALLET_EXCEPTION_IF(!all_are_txin_fulmo_key, error::unexpected_txin_type, ptx.tx);
       fill(spent_key_images, key_image_list);
     }
 

@@ -62,7 +62,7 @@ static bool expand_tx_and_ver_rct_non_sem(transaction& tx, const rct::ctkeyM& mi
     // For each input, check that the key images were copied into the expanded RCT sig correctly
     for (size_t n = 0; n < n_sigs; ++n)
     {
-        const crypto::key_image& nth_vin_image = boost::get<txin_to_key>(tx.vin[n]).k_image;
+        const crypto::key_image& nth_vin_image = boost::get<txin_fulmo_key>(tx.vin[n]).k_image;
 
         if (rct::is_rct_clsag(rv.type))
         {

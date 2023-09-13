@@ -95,9 +95,9 @@ struct tx_data_t
       vin.reserve(tx.vin.size());
       for (size_t ring = 0; ring < tx.vin.size(); ++ring)
       {
-        if (tx.vin[ring].type() == typeid(cryptonote::txin_to_key))
+        if (tx.vin[ring].type() == typeid(cryptonote::txin_fulmo_key))
         {
-          const cryptonote::txin_to_key &txin = boost::get<cryptonote::txin_to_key>(tx.vin[ring]);
+          const cryptonote::txin_fulmo_key &txin = boost::get<cryptonote::txin_fulmo_key>(tx.vin[ring]);
           vin.push_back(std::make_pair(txin.amount, cryptonote::relative_output_offsets_to_absolute(txin.key_offsets)));
         }
         else
@@ -110,9 +110,9 @@ struct tx_data_t
     vout.reserve(tx.vout.size());
     for (size_t out = 0; out < tx.vout.size(); ++out)
     {
-      if (tx.vout[out].target.type() == typeid(cryptonote::txout_to_key))
+      if (tx.vout[out].target.type() == typeid(cryptonote::txout_fulmo_tagged_key))
       {
-        const auto &txout = boost::get<cryptonote::txout_to_key>(tx.vout[out].target);
+        const auto &txout = boost::get<cryptonote::txout_fulmo_tagged_key>(tx.vout[out].target);
         vout.push_back(txout.key);
       }
       else
@@ -293,9 +293,9 @@ static bool get_output_txid(ancestry_state_t &state, BlockchainDB *db, uint64_t 
 
   for (size_t out = 0; out < b.miner_tx.vout.size(); ++out)
   {
-    if (b.miner_tx.vout[out].target.type() == typeid(cryptonote::txout_to_key))
+    if (b.miner_tx.vout[out].target.type() == typeid(cryptonote::txout_fulmo_tagged_key))
     {
-      const auto &txout = boost::get<cryptonote::txout_to_key>(b.miner_tx.vout[out].target);
+      const auto &txout = boost::get<cryptonote::txout_fulmo_tagged_key>(b.miner_tx.vout[out].target);
       if (txout.key == od.pubkey)
       {
         txid = cryptonote::get_transaction_hash(b.miner_tx);

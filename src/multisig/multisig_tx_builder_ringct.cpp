@@ -471,7 +471,7 @@ static void set_tx_inputs(
     offsets.reserve(sources[i].outputs.size());
     for (const auto& e: sources[i].outputs)
       offsets.emplace_back(e.first);
-    unsigned_tx.vin[i] = cryptonote::txin_to_key{
+    unsigned_tx.vin[i] = cryptonote::txin_fulmo_key{
       .amount = 0,
       .key_offsets = cryptonote::absolute_output_offsets_to_relative(offsets),
       .k_image = rct::rct2ki(sources[i].multisig_kLRki.ki),
