@@ -196,7 +196,11 @@ namespace
   const char* USAGE_SWEEP_ACCOUNT("sweep_account <account> [index=<N1>[,<N2>,...] | index=all] [<priority>] [<ring_size>] [outputs=<N>] <address> [<payment_id (obsolete)>]");
   const char* USAGE_SWEEP_BELOW("sweep_below <amount_threshold> [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> [<payment_id (obsolete)>]");
   const char* USAGE_SWEEP_SINGLE("sweep_single [<priority>] [<ring_size>] [outputs=<N>] <key_image> <address> [<payment_id (obsolete)>]");
+  const char* USAGE_BURN("burn [index=<N1>[,<N2>,...]] <amount> <asset_type>");
   const char* USAGE_CONVERT("convert [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <source_amount>) <source_asset> <dest_asset> [<payment_id>]");
+  const char* USAGE_PRICE_INFO("price_info");
+  const char* USAGE_SUPPLY_INFO("supply_info");
+  const char* USAGE_YIELD_INFO("yield_info");
   const char* USAGE_DONATE("donate [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <amount> [<payment_id (obsolete)>]");
   const char* USAGE_SIGN_TRANSFER("sign_transfer [export_raw] [<filename>]");
   const char* USAGE_SET_LOG("set_log <level>|{+,-,}<categories>");
@@ -3108,10 +3112,26 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::sweep_single, _1),
                            tr(USAGE_SWEEP_SINGLE),
                            tr("Send a single output of the given key image to an address without change."));
+  m_cmd_binder.set_handler("burn",
+                           boost::bind(&simple_wallet::burn, this, _1),
+                           tr(USAGE_BURN),
+                           tr("PERMANENTLY destroys (burns) <amount> of <asset_type>"));
   m_cmd_binder.set_handler("convert",
                            boost::bind(&simple_wallet::convert, this, _1),
                            tr(USAGE_CONVERT),
-                           tr("Converts <amount> Fulmo (FULM) to Fulmo Dollars (FUSD), with optional <priority> [0-5]"));
+                           tr("Converts <amount> <source_asset> into <dest_asset>, with optional <priority> [0-5]"));
+  m_cmd_binder.set_handler("price_info",
+                           boost::bind(&simple_wallet::price_info, this, _1),
+                           tr(USAGE_PRICE_INFO),
+                           tr("Displays the current exchange rate information for FULM <--> FUSD conversions"));
+  m_cmd_binder.set_handler("supply_info",
+                           boost::bind(&simple_wallet::supply_info, this, _1),
+                           tr(USAGE_SUPPLY_INFO),
+                           tr("Displays the current circulating supply information for FULM and FUSD currencies"));
+  m_cmd_binder.set_handler("yield_info",
+                           boost::bind(&simple_wallet::yield_info, this, _1),
+                           tr(USAGE_YIELD_INFO),
+                           tr("Displays the statistics for yield returns over the last <NN> blocks"));
   m_cmd_binder.set_handler("donate",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::donate, _1),
                            tr(USAGE_DONATE),
@@ -7484,6 +7504,32 @@ bool simple_wallet::sweep_below(const std::vector<std::string> &args_)
   return true;
 }
 //----------------------------------------------------------------------------------------------------
+bool simple_wallet::burn(const std::vector<std::string> &args_)
+{
+  // TODO: add locked versions
+  if (args_.size() < 3)
+  {
+    PRINT_USAGE(USAGE_BURN);
+    return true;
+  }
+
+  std::vector<std::string> local_args = args_;
+  
+  // Get the asset type
+  std::string asset_type;
+  std::string strLastArg = local_args.back();
+  std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
+  if (strLastArg not_eq "FULM" and strLastArg not_eq "FUSD") {
+     PRINT_USAGE(USAGE_BURN);
+     return true;
+  }
+  asset_type = strLastArg;
+  local_args.pop_back();
+  
+  transfer_main(Transfer, asset_type, "", local_args, false);
+  return true;  
+}
+//----------------------------------------------------------------------------------------------------
 bool simple_wallet::convert(const std::vector<std::string> &args_)
 {
   // TODO: add locked versions
@@ -7528,6 +7574,75 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
   
   transfer_main(Transfer, source_asset, dest_asset, local_args, false);
   return true;  
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::price_info(const std::vector<std::string> &args) {
+  // get circulating supply
+  std::vector<std::pair<std::string, std::string>> supply_amounts;
+  if(!m_wallet->get_circulating_supply(supply_amounts)) {
+    fail_msg_writer() << "failed to get circulating supply. Make sure you are connected to a daemon.";
+    return false;
+  }
+
+  // get pricing record
+  std::string err;
+  uint64_t bc_height = get_daemon_blockchain_height(err);
+  oracle::pricing_record pr;
+  if (!m_wallet->get_pricing_record(pr, bc_height-1)) {
+    fail_msg_writer() << "failed to get pricing record. Make sure you are connected to a daemon.";
+    return false;
+  }
+  
+  // calculate current block cap
+  //uint64_t block_cap = cryptonote::get_block_cap(supply_amounts, pr, m_wallet->get_current_hard_fork());
+  //message_writer() <<  boost::format(tr("Current Block Cap(height %d): %d XHV")) % bc_height % print_money(block_cap);
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::supply_info(const std::vector<std::string> &args) {
+  // get circulating supply
+  std::vector<std::pair<std::string, std::string>> supply_amounts;
+  if(!m_wallet->get_circulating_supply(supply_amounts)) {
+    fail_msg_writer() << "failed to get circulating supply. Make sure you are connected to a daemon.";
+    return false;
+  }
+
+  // get pricing record
+  std::string err;
+  uint64_t bc_height = get_daemon_blockchain_height(err);
+  oracle::pricing_record pr;
+  if (!m_wallet->get_pricing_record(pr, bc_height-1)) {
+    fail_msg_writer() << "failed to get pricing record. Make sure you are connected to a daemon.";
+    return false;
+  }
+  
+  // calculate current block cap
+  //uint64_t block_cap = cryptonote::get_block_cap(supply_amounts, pr, m_wallet->get_current_hard_fork());
+  //message_writer() <<  boost::format(tr("Current Block Cap(height %d): %d XHV")) % bc_height % print_money(block_cap);
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::yield_info(const std::vector<std::string> &args) {
+  // get circulating supply
+  std::vector<std::pair<std::string, std::string>> supply_amounts;
+  if(!m_wallet->get_circulating_supply(supply_amounts)) {
+    fail_msg_writer() << "failed to get circulating supply. Make sure you are connected to a daemon.";
+    return false;
+  }
+
+  // get pricing record
+  std::string err;
+  uint64_t bc_height = get_daemon_blockchain_height(err);
+  oracle::pricing_record pr;
+  if (!m_wallet->get_pricing_record(pr, bc_height-1)) {
+    fail_msg_writer() << "failed to get pricing record. Make sure you are connected to a daemon.";
+    return false;
+  }
+  
+  // calculate current block cap
+  //uint64_t block_cap = cryptonote::get_block_cap(supply_amounts, pr, m_wallet->get_current_hard_fork());
+  //message_writer() <<  boost::format(tr("Current Block Cap(height %d): %d XHV")) % bc_height % print_money(block_cap);
+  return true;
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::donate(const std::vector<std::string> &args_)

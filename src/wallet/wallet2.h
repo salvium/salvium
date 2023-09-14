@@ -1645,6 +1645,9 @@ private:
 
     static std::string get_default_daemon_address() { CRITICAL_REGION_LOCAL(default_daemon_address_lock); return default_daemon_address; }
 
+    bool get_pricing_record(oracle::pricing_record& pr, const uint64_t height);
+    bool get_circulating_supply(std::vector<std::pair<std::string, std::string>> &amounts);
+        
   private:
     /*!
      * \brief  Stores wallet information to wallet file.
