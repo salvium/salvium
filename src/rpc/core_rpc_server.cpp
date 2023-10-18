@@ -1275,12 +1275,15 @@ namespace cryptonote
       return true;
     }
 
-    if (req.do_sanity_checks && !cryptonote::tx_sanity_check(tx_blob, m_core.get_blockchain_storage().get_num_mature_outputs(0)))
-    {
-      res.status = "Failed";
-      res.reason = "Sanity check failed";
-      res.sanity_check_failed = true;
-      return true;
+    uint64_t output_count = m_core.get_blockchain_storage().get_num_mature_outputs(req.source_asset_type);
+    bool ok = cryptonote::tx_sanity_check(tx_blob, output_count);
+    if (!ok) {
+      if (req.do_sanity_checks && !cryptonote::tx_sanity_check(tx_blob, output_count)) {
+        res.status = "Failed";
+        res.reason = "Sanity check failed";
+        res.sanity_check_failed = true;
+        return true;
+      }
     }
     res.sanity_check_failed = false;
 
@@ -3359,7 +3362,7 @@ namespace cryptonote
           return true;
         }
 
-        res.distributions.push_back({std::move(*data), amount, "", req.binary, req.compress});
+        res.distributions.push_back({std::move(*data), amount, req.rct_asset_type, req.binary, req.compress});
       }
     }
     catch (const std::exception &e)

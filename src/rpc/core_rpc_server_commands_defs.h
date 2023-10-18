@@ -602,12 +602,14 @@ namespace cryptonote
     struct request_t: public rpc_access_request_base
     {
       std::string tx_as_hex;
+      std::string source_asset_type;
       bool do_not_relay;
       bool do_sanity_checks;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE_PARENT(rpc_access_request_base);
         KV_SERIALIZE(tx_as_hex)
+        KV_SERIALIZE(source_asset_type)
         KV_SERIALIZE_OPT(do_not_relay, false)
         KV_SERIALIZE_OPT(do_sanity_checks, true)
       END_KV_SERIALIZE_MAP()
@@ -2493,6 +2495,7 @@ namespace cryptonote
       uint64_t from_height;
       uint64_t to_height;
       std::string rct_asset_type;
+
       bool cumulative;
       bool binary;
       bool compress;
