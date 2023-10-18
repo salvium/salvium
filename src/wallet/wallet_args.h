@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -36,6 +36,7 @@ namespace wallet_args
 {
   command_line::arg_descriptor<std::string> arg_generate_from_json();
   command_line::arg_descriptor<std::string> arg_wallet_file();
+  command_line::arg_descriptor<std::string> arg_rpc_client_secret_key();
   command_line::arg_descriptor<std::string> arg_password_file();
 
   const char* tr(const char* str);

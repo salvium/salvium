@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -644,14 +644,7 @@ bool t_rpc_command_executor::print_connections() {
     }
   }
 
-  auto longest_host = *std::max_element(res.connections.begin(), res.connections.end(),
-                                        [](const auto &info1, const auto &info2)
-                                        {
-                                          return info1.address.length() < info2.address.length();
-                                        });
-  int host_field_width = std::max(15, 8 + (int) longest_host.address.length());
-
-  tools::msg_writer() << std::setw(host_field_width) << std::left << "Remote Host"
+  tools::msg_writer() << std::setw(30) << std::left << "Remote Host"
       << std::setw(8) << "Type"
       << std::setw(6) << "SSL"
       << std::setw(20) << "Peer id"
@@ -668,11 +661,11 @@ bool t_rpc_command_executor::print_connections() {
   for (auto & info : res.connections)
   {
     std::string address = info.incoming ? "INC " : "OUT ";
-    address += info.address;
+    address += info.ip + ":" + info.port;
     //std::string in_out = info.incoming ? "INC " : "OUT ";
     tools::msg_writer() 
      //<< std::setw(30) << std::left << in_out
-     << std::setw(host_field_width) << std::left << address
+     << std::setw(30) << std::left << address
      << std::setw(8) << (get_address_type_name((epee::net_utils::address_type)info.address_type))
      << std::setw(6) << (info.ssl ? "yes" : "no")
      << std::setw(20) << info.peer_id
@@ -782,7 +775,7 @@ bool t_rpc_command_executor::print_blockchain_info(int64_t start_block_index, ui
         return true;
       }
     }
-    if ((uint64_t)-start_block_index >= ires.height)
+    if (start_block_index < 0 && (uint64_t)-start_block_index >= ires.height)
     {
       tools::fail_msg_writer() << "start offset is larger than blockchain height";
       return true;
@@ -1070,7 +1063,7 @@ bool t_rpc_command_executor::print_transaction(crypto::hash transaction_hash,
       cryptonote::blobdata blob;
       std::string source = as_hex.empty() ? pruned_as_hex + prunable_as_hex : as_hex;
       bool pruned = !pruned_as_hex.empty() && prunable_as_hex.empty();
-      if (!epee::string_tools::parse_hexstr_to_binbuff(source, blob))
+      if (!string_tools::parse_hexstr_to_binbuff(source, blob))
       {
         tools::fail_msg_writer() << "Failed to parse tx to get json format";
       }
@@ -1466,10 +1459,10 @@ bool t_rpc_command_executor::print_status()
   bool daemon_is_alive = m_rpc_client->check_connection();
 
   if(daemon_is_alive) {
-    tools::success_msg_writer() << "elbowd is running";
+    tools::success_msg_writer() << "monerod is running";
   }
   else {
-    tools::fail_msg_writer() << "elbowd is NOT running";
+    tools::fail_msg_writer() << "monerod is NOT running";
   }
 
   return true;
@@ -2066,7 +2059,7 @@ bool t_rpc_command_executor::print_blockchain_dynamic_stats(uint64_t nblocks)
   std::string fail_message = "Problem fetching info";
 
   fereq.grace_blocks = 0;
-  hfreq.version = 1;
+  hfreq.version = HF_VERSION_PER_BYTE_FEE;
   if (m_is_rpc)
   {
     if (!m_rpc_client->rpc_request(ireq, ires, "/getinfo", fail_message.c_str()))

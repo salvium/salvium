@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -101,12 +101,16 @@ namespace boost
 
 
   template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txout_fulmo_tagged_key &x, const boost::serialization::version_type ver)
+  inline void serialize(Archive &a, cryptonote::txout_to_key &x, const boost::serialization::version_type ver)
+  {
+    a & x.key;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::txout_to_tagged_key &x, const boost::serialization::version_type ver)
   {
     a & x.key;
     a & x.view_tag;
-    a & x.asset_type;
-    a & x.unlock_time;
   }
 
   template <class Archive>
@@ -139,12 +143,11 @@ namespace boost
   }
 
   template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txin_fulmo_key &x, const boost::serialization::version_type ver)
+  inline void serialize(Archive &a, cryptonote::txin_to_key &x, const boost::serialization::version_type ver)
   {
     a & x.amount;
     a & x.key_offsets;
     a & x.k_image;
-    a & x.asset_type;
   }
 
   template <class Archive>
@@ -163,6 +166,10 @@ namespace boost
     a & x.vin;
     a & x.vout;
     a & x.extra;
+    a & x.pricing_record_height;
+    a & x.amount_burnt;
+    a & x.amount_minted;
+    a & x.amount_slippage;
   }
 
   template <class Archive>
@@ -173,6 +180,10 @@ namespace boost
     a & x.vin;
     a & x.vout;
     a & x.extra;
+    a & x.pricing_record_height;
+    a & x.amount_burnt;
+    a & x.amount_minted;
+    a & x.amount_slippage;
     if (x.version == 1)
     {
       a & x.signatures;
@@ -193,8 +204,10 @@ namespace boost
     a & b.timestamp;
     a & b.prev_id;
     a & b.nonce;
+    a & b.pricing_record;
     //------------------
     a & b.miner_tx;
+    a & b.protocol_tx;
     a & b.tx_hashes;
   }
 
@@ -419,7 +432,18 @@ namespace boost
     }
   }
 
+  template <class Archive>
+  inline void serialize(Archive &a, oracle::pricing_record &x, const boost::serialization::version_type ver)
+  {
+    a & x.pr_version;
+    a & x.timestamp;
+    a & x.spot;
+    a & x.moving_average;
+    a & x.signature;
+  }
+
 }
+
 }
 
 BOOST_CLASS_VERSION(rct::rctSigPrunable, 2)

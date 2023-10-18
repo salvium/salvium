@@ -40,6 +40,7 @@
 #include "cryptonote_basic/difficulty.h"
 #include "cryptonote_basic/hardfork.h"
 #include "cryptonote_protocol/enums.h"
+#include "oracle/asset_types.h"
 
 /** \file
  * Cryptonote Blockchain Database Interface
@@ -126,6 +127,7 @@ struct output_data_t
   crypto::public_key pubkey;       //!< the output's public key (for spend verification)
   uint64_t           unlock_time;  //!< the output's unlock time (or height)
   uint64_t           height;       //!< the height of the block which created the output
+  char               asset_type[8];   //!< the asset type of the output
   rct::key           commitment;   //!< the output's amount commitment (for spend verification)
 };
 #pragma pack(pop)
@@ -405,6 +407,7 @@ private:
                 , const difficulty_type& cumulative_difficulty
                 , const uint64_t& coins_generated
                 , uint64_t num_rct_outs
+                , oracle::asset_type_counts& cum_rct_by_asset_type
                 , const crypto::hash& blk_hash
                 ) = 0;
 
@@ -440,7 +443,7 @@ private:
    * @param tx_prunable_hash the hash of the prunable part of the transaction
    * @return the transaction ID
    */
-  virtual uint64_t add_transaction_data(const crypto::hash& blk_hash, const std::pair<transaction, blobdata_ref>& tx, const crypto::hash& tx_hash, const crypto::hash& tx_prunable_hash) = 0;
+  virtual uint64_t add_transaction_data(const crypto::hash& blk_hash, const std::pair<transaction, blobdata_ref>& tx, const crypto::hash& tx_hash, const crypto::hash& tx_prunable_hash, const bool miner_tx) = 0;
 
   /**
    * @brief remove data about a transaction
@@ -458,7 +461,7 @@ private:
    * @param tx_hash the hash of the transaction to be removed
    * @param tx the transaction
    */
-  virtual void remove_transaction_data(const crypto::hash& tx_hash, const transaction& tx) = 0;
+  virtual void remove_transaction_data(const crypto::hash& tx_hash, const transaction& tx, const bool miner_tx) = 0;
 
   /**
    * @brief store an output
@@ -486,7 +489,7 @@ private:
    * @param commitment the rct commitment to the output amount
    * @return amount output index
    */
-  virtual uint64_t add_output(const crypto::hash& tx_hash, const tx_out& tx_output, const uint64_t& local_index, const uint64_t unlock_time, const rct::key *commitment) = 0;
+  virtual std::pair<uint64_t, uint64_t> add_output(const crypto::hash& tx_hash, const tx_out& tx_output, const uint64_t& local_index, const uint64_t unlock_time, const rct::key *commitment) = 0;
 
   /**
    * @brief store amount output indices for a tx's outputs
@@ -501,7 +504,7 @@ private:
    * @param tx_id ID of the transaction containing these outputs
    * @param amount_output_indices the amount output indices of the transaction
    */
-  virtual void add_tx_amount_output_indices(const uint64_t tx_id, const std::vector<uint64_t>& amount_output_indices) = 0;
+  virtual void add_tx_amount_output_indices(const uint64_t tx_id, const std::vector<std::pair<uint64_t, uint64_t>>& amount_output_indices) = 0;
 
   /**
    * @brief store a spent key
@@ -975,7 +978,7 @@ public:
    *
    * @return the cumulative number of rct outputs
    */
-  virtual std::vector<uint64_t> get_block_cumulative_rct_outputs(const std::vector<uint64_t> &heights) const = 0;
+  virtual std::pair<std::vector<uint64_t>, uint64_t> get_block_cumulative_rct_outputs(const std::vector<uint64_t> &heights, const std::string asset_type) const = 0;
 
   /**
    * @brief fetch the top block's timestamp
@@ -1162,6 +1165,13 @@ public:
    */
   virtual uint64_t height() const = 0;
 
+  /**
+   * @brief fetch the circulating supply tally values from the blockchain
+   *
+   * @return the current circulating supply tally values
+   */
+  virtual std::vector<std::pair<std::string, std::string>> get_circulating_supply() const = 0;
+  
 
   /**
    * <!--
@@ -1413,6 +1423,19 @@ public:
    */
   virtual uint64_t get_num_outputs(const uint64_t& amount) const = 0;
 
+  // returns the total number of outputs for asset <asset_type>
+  /**
+   * @brief fetches the number of outputs of a given asset type
+   *
+   * The subclass should return a count of outputs of the given asset type,
+   * or zero if there are none.
+   *
+   * @param asset_type the asset type to look up
+   *
+   * @return the number of outputs of the given asset type
+   */
+  virtual uint64_t get_num_outputs_of_asset_type(const std::string asset_type) const = 0;
+
   /**
    * @brief return index of the first element (should be hidden, but isn't)
    *
@@ -1437,6 +1460,29 @@ public:
    * @return the requested output data
    */
   virtual output_data_t get_output_key(const uint64_t& amount, const uint64_t& index, bool include_commitmemt = true) const = 0;
+
+  /**
+   * @brief gets output id's using asset type output indices
+   *
+   * This function returns a list of global output id's
+   * using a list of asset type output indices.
+   *
+   * @param asset_type
+   * @param asset_type_output_indices a list of asset type output indices
+   * @param offsets return-by-reference list of outputs' global id
+  */
+  virtual void get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const = 0;
+
+  /**
+   * @brief gets output id for an asset type output index
+   *
+   * This function returns a global output id
+   * for a single asset type output index.
+   *
+   * @param asset_type
+   * @param asset_type_output_index asset type output index to retrieve output id for
+  */
+  virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const = 0;
 
   /**
    * @brief gets an output's tx hash and index
@@ -1511,7 +1557,7 @@ public:
    *
    * @return a list of amount-specific output indices
    */
-  virtual std::vector<std::vector<uint64_t>> get_tx_amount_output_indices(const uint64_t tx_id, size_t n_txes = 1) const = 0;
+  virtual std::vector<std::vector<std::pair<uint64_t, uint64_t>>> get_tx_amount_output_indices(const uint64_t tx_id, size_t n_txes = 1) const = 0;
 
   /**
    * @brief check if a key image is stored as spent

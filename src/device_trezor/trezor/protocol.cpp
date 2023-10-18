@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2023, The Monero Project
+// Copyright (c) 2017-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -603,8 +603,8 @@ namespace tx {
 
     CHECK_AND_ASSERT_THROW_MES(m_ct.tx.vin.size() == input_size, "Invalid vector size");
     std::sort(m_ct.source_permutation.begin(), m_ct.source_permutation.end(), [&](const size_t i0, const size_t i1) {
-      const cryptonote::txin_fulmo_key &tk0 = boost::get<cryptonote::txin_fulmo_key>(m_ct.tx.vin[i0]);
-      const cryptonote::txin_fulmo_key &tk1 = boost::get<cryptonote::txin_fulmo_key>(m_ct.tx.vin[i1]);
+      const cryptonote::txin_to_key &tk0 = boost::get<cryptonote::txin_to_key>(m_ct.tx.vin[i0]);
+      const cryptonote::txin_to_key &tk1 = boost::get<cryptonote::txin_to_key>(m_ct.tx.vin[i1]);
       return memcmp(&tk0.k_image, &tk1.k_image, sizeof(tk0.k_image)) > 0;
     });
 

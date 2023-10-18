@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -28,6 +28,7 @@
 
 #include "bootstrap_serialization.h"
 #include "serialization/binary_utils.h" // dump_binary(), parse_binary()
+#include "serialization/json_utils.h" // dump_json()
 
 #include "bootstrap_file.h"
 

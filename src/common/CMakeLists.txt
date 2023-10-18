@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2023, The Monero Project
+# Copyright (c) 2014-2022, The Monero Project
 #
 # All rights reserved.
 #
@@ -81,9 +81,6 @@ target_link_libraries(common
   PRIVATE
     ${OPENSSL_LIBRARIES}
     ${EXTRA_LIBRARIES})
-target_include_directories(common
-  PRIVATE
-    ${Boost_INCLUDE_DIRS})
 
 #monero_install_headers(common
 #  ${common_headers})

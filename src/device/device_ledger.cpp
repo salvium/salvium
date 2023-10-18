@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2023, The Monero Project
+// Copyright (c) 2017-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -42,10 +42,6 @@ namespace hw {
   namespace ledger {
 
   #ifdef WITH_DEVICE_LEDGER
-
-    namespace {
-        bool apdu_verbose =true;
-    }
 
     #undef MONERO_DEFAULT_LOG_CATEGORY
     #define MONERO_DEFAULT_LOG_CATEGORY "device.ledger"

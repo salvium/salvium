@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -44,7 +44,7 @@
 #include <boost/functional/hash.hpp>
 
 #include "include_base_utils.h"
-#include "chaingen_serialization.h"
+#include "common/boost_serialization_helper.h"
 #include "common/command_line.h"
 #include "common/threadpool.h"
 

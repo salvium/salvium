@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -87,6 +87,7 @@ namespace
         , const cryptonote::difficulty_type& cumulative_difficulty
         , const uint64_t& coins_generated
         , uint64_t num_rct_outs
+                        , oracle::asset_type_counts& cum_rct_by_asset_type
         , const crypto::hash& blk_hash
     ) override
     {
@@ -174,7 +175,8 @@ static std::unique_ptr<cryptonote::Blockchain> init_blockchain(const std::vector
 
     const block *blk = &boost::get<block>(ev);
     auto blk_hash = get_block_hash(*blk);
-    bdb->add_block(*blk, 1, 1, 1, 0, 0, blk_hash);
+    oracle::asset_type_counts num_rct_outs_by_asset_type;
+    bdb->add_block(*blk, 1, 1, 1, 0, 0, num_rct_outs_by_asset_type, blk_hash);
   }
 
   bool r = blockchain->init(bdb, nettype, true, test_options, 2, nullptr);
@@ -1007,7 +1009,7 @@ bool construct_miner_tx_manually(size_t height, uint64_t already_generated_coins
     crypto::derive_view_tag(derivation, 0, view_tag);
 
   tx_out out;
-  cryptonote::set_tx_out(block_reward, out_eph_public_key, use_view_tags, view_tag, out);
+  cryptonote::set_tx_out(block_reward, "FULM", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);
 
   tx.vout.push_back(out);
 

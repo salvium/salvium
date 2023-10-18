@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2023, The Monero Project
+// Copyright (c) 2017-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -86,6 +86,10 @@ namespace hw {
     #define SW_INS_NOT_SUPPORTED                    0x6d00
     #define SW_PROTOCOL_NOT_SUPPORTED               0x6e00
     #define SW_UNKNOWN                              0x6f00
+
+    namespace {
+        bool apdu_verbose =true;
+    }
 
     void set_apdu_verbose(bool verbose);
 

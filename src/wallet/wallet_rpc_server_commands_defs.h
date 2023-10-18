@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -530,38 +530,13 @@ namespace wallet_rpc
     END_KV_SERIALIZE_MAP()
   };
 
-  struct single_transfer_response
-  {
-    std::string tx_hash;
-    std::string tx_key;
-    uint64_t amount;
-    uint64_t fee;
-    uint64_t weight;
-    std::string tx_blob;
-    std::string tx_metadata;
-    std::string multisig_txset;
-    std::string unsigned_txset;
-    key_image_list spent_key_images;
-
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(tx_hash)
-      KV_SERIALIZE(tx_key)
-      KV_SERIALIZE(amount)
-      KV_SERIALIZE(fee)
-      KV_SERIALIZE(weight)
-      KV_SERIALIZE(tx_blob)
-      KV_SERIALIZE(tx_metadata)
-      KV_SERIALIZE(multisig_txset)
-      KV_SERIALIZE(unsigned_txset)
-      KV_SERIALIZE(spent_key_images)
-    END_KV_SERIALIZE_MAP()
-  };
-
   struct COMMAND_RPC_TRANSFER
   {
     struct request_t
     {
       std::list<transfer_destination> destinations;
+      std::string source_asset;
+      std::string dest_asset;
       uint32_t account_index;
       std::set<uint32_t> subaddr_indices;
       uint32_t priority;
@@ -575,6 +550,8 @@ namespace wallet_rpc
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(destinations)
+        KV_SERIALIZE(source_asset)
+        KV_SERIALIZE(dest_asset)
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(subaddr_indices)
         KV_SERIALIZE(priority)
@@ -589,35 +566,33 @@ namespace wallet_rpc
     };
     typedef epee::misc_utils::struct_init<request_t> request;
 
-    typedef single_transfer_response response_t;
+    struct response_t
+    {
+      std::string tx_hash;
+      std::string tx_key;
+      uint64_t amount;
+      uint64_t fee;
+      uint64_t weight;
+      std::string tx_blob;
+      std::string tx_metadata;
+      std::string multisig_txset;
+      std::string unsigned_txset;
+      key_image_list spent_key_images;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(tx_hash)
+        KV_SERIALIZE(tx_key)
+        KV_SERIALIZE(amount)
+        KV_SERIALIZE(fee)
+        KV_SERIALIZE(weight)
+        KV_SERIALIZE(tx_blob)
+        KV_SERIALIZE(tx_metadata)
+        KV_SERIALIZE(multisig_txset)
+        KV_SERIALIZE(unsigned_txset)
+        KV_SERIALIZE(spent_key_images)
+      END_KV_SERIALIZE_MAP()
+    };
     typedef epee::misc_utils::struct_init<response_t> response;
-  };
-
-  struct split_transfer_response
-  {
-    std::list<std::string> tx_hash_list;
-    std::list<std::string> tx_key_list;
-    std::list<uint64_t> amount_list;
-    std::list<uint64_t> fee_list;
-    std::list<uint64_t> weight_list;
-    std::list<std::string> tx_blob_list;
-    std::list<std::string> tx_metadata_list;
-    std::string multisig_txset;
-    std::string unsigned_txset;
-    std::list<key_image_list> spent_key_images_list;
-
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(tx_hash_list)
-      KV_SERIALIZE(tx_key_list)
-      KV_SERIALIZE(amount_list)
-      KV_SERIALIZE(fee_list)
-      KV_SERIALIZE(weight_list)
-      KV_SERIALIZE(tx_blob_list)
-      KV_SERIALIZE(tx_metadata_list)
-      KV_SERIALIZE(multisig_txset)
-      KV_SERIALIZE(unsigned_txset)
-      KV_SERIALIZE(spent_key_images_list)
-    END_KV_SERIALIZE_MAP()
   };
 
   struct COMMAND_RPC_TRANSFER_SPLIT
@@ -625,6 +600,8 @@ namespace wallet_rpc
     struct request_t
     {
       std::list<transfer_destination> destinations;
+      std::string source_asset;
+      std::string dest_asset;
       uint32_t account_index;
       std::set<uint32_t> subaddr_indices;
       uint32_t priority;
@@ -638,6 +615,8 @@ namespace wallet_rpc
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(destinations)
+        KV_SERIALIZE(source_asset)
+        KV_SERIALIZE(dest_asset)
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(subaddr_indices)
         KV_SERIALIZE(priority)
@@ -652,7 +631,41 @@ namespace wallet_rpc
     };
     typedef epee::misc_utils::struct_init<request_t> request;
 
-    typedef split_transfer_response response_t;
+    struct key_list
+    {
+      std::list<std::string> keys;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(keys)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response_t
+    {
+      std::list<std::string> tx_hash_list;
+      std::list<std::string> tx_key_list;
+      std::list<uint64_t> amount_list;
+      std::list<uint64_t> fee_list;
+      std::list<uint64_t> weight_list;
+      std::list<std::string> tx_blob_list;
+      std::list<std::string> tx_metadata_list;
+      std::string multisig_txset;
+      std::string unsigned_txset;
+      std::list<key_image_list> spent_key_images_list;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(tx_hash_list)
+        KV_SERIALIZE(tx_key_list)
+        KV_SERIALIZE(amount_list)
+        KV_SERIALIZE(fee_list)
+        KV_SERIALIZE(weight_list)
+        KV_SERIALIZE(tx_blob_list)
+        KV_SERIALIZE(tx_metadata_list)
+        KV_SERIALIZE(multisig_txset)
+        KV_SERIALIZE(unsigned_txset)
+        KV_SERIALIZE(spent_key_images_list)
+      END_KV_SERIALIZE_MAP()
+    };
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
@@ -816,7 +829,41 @@ namespace wallet_rpc
     };
     typedef epee::misc_utils::struct_init<request_t> request;
 
-    typedef split_transfer_response response_t;
+    struct key_list
+    {
+      std::list<std::string> keys;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(keys)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response_t
+    {
+      std::list<std::string> tx_hash_list;
+      std::list<std::string> tx_key_list;
+      std::list<uint64_t> amount_list;
+      std::list<uint64_t> fee_list;
+      std::list<uint64_t> weight_list;
+      std::list<std::string> tx_blob_list;
+      std::list<std::string> tx_metadata_list;
+      std::string multisig_txset;
+      std::string unsigned_txset;
+      std::list<key_image_list> spent_key_images_list;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(tx_hash_list)
+        KV_SERIALIZE(tx_key_list)
+        KV_SERIALIZE(amount_list)
+        KV_SERIALIZE(fee_list)
+        KV_SERIALIZE(weight_list)
+        KV_SERIALIZE(tx_blob_list)
+        KV_SERIALIZE(tx_metadata_list)
+        KV_SERIALIZE(multisig_txset)
+        KV_SERIALIZE(unsigned_txset)
+        KV_SERIALIZE(spent_key_images_list)
+      END_KV_SERIALIZE_MAP()
+    };
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
@@ -858,7 +905,41 @@ namespace wallet_rpc
     };
     typedef epee::misc_utils::struct_init<request_t> request;
 
-    typedef split_transfer_response response_t;
+    struct key_list
+    {
+      std::list<std::string> keys;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(keys)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response_t
+    {
+      std::list<std::string> tx_hash_list;
+      std::list<std::string> tx_key_list;
+      std::list<uint64_t> amount_list;
+      std::list<uint64_t> fee_list;
+      std::list<uint64_t> weight_list;
+      std::list<std::string> tx_blob_list;
+      std::list<std::string> tx_metadata_list;
+      std::string multisig_txset;
+      std::string unsigned_txset;
+      std::list<key_image_list> spent_key_images_list;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(tx_hash_list)
+        KV_SERIALIZE(tx_key_list)
+        KV_SERIALIZE(amount_list)
+        KV_SERIALIZE(fee_list)
+        KV_SERIALIZE(weight_list)
+        KV_SERIALIZE(tx_blob_list)
+        KV_SERIALIZE(tx_metadata_list)
+        KV_SERIALIZE(multisig_txset)
+        KV_SERIALIZE(unsigned_txset)
+        KV_SERIALIZE(spent_key_images_list)
+      END_KV_SERIALIZE_MAP()
+    };
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
@@ -894,7 +975,32 @@ namespace wallet_rpc
     };
     typedef epee::misc_utils::struct_init<request_t> request;
 
-    typedef single_transfer_response response_t;
+    struct response_t
+    {
+      std::string tx_hash;
+      std::string tx_key;
+      uint64_t amount;
+      uint64_t fee;
+      uint64_t weight;
+      std::string tx_blob;
+      std::string tx_metadata;
+      std::string multisig_txset;
+      std::string unsigned_txset;
+      key_image_list spent_key_images;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(tx_hash)
+        KV_SERIALIZE(tx_key)
+        KV_SERIALIZE(amount)
+        KV_SERIALIZE(fee)
+        KV_SERIALIZE(weight)
+        KV_SERIALIZE(tx_blob)
+        KV_SERIALIZE(tx_metadata)
+        KV_SERIALIZE(multisig_txset)
+        KV_SERIALIZE(unsigned_txset)
+        KV_SERIALIZE(spent_key_images)
+      END_KV_SERIALIZE_MAP()
+    };
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 

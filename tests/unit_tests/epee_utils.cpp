@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -1239,22 +1239,6 @@ TEST(ToHex, ArrayFromPod)
     expected,
     (epee::to_hex::array(crypto::ec_point{{0x5F, 0x2B, 0x01, 0x00}}))
   );
-}
-
-TEST(ToHex, Buffer)
-{
-  static constexpr const std::uint8_t source[] = {0xFF, 0x00, 0xAB, 0x01};
-  const std::vector<char> expected{'f', 'f', '0', '0', 'a', 'b', '0', '1'};
-
-  std::vector<char> buffer;
-  buffer.resize(expected.size());
-  EXPECT_TRUE(epee::to_hex::buffer(epee::to_mut_span(buffer), source));
-  EXPECT_EQ(expected, buffer);
-
-  buffer.pop_back();
-  EXPECT_FALSE(epee::to_hex::buffer(epee::to_mut_span(buffer), source));
-  buffer.pop_back();
-  EXPECT_FALSE(epee::to_hex::buffer(epee::to_mut_span(buffer), source));
 }
 
 TEST(ToHex, Ostream)

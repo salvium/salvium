@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -60,7 +60,6 @@ using namespace epee;
 #define MONERO_DEFAULT_LOG_CATEGORY "wallet.rpc"
 
 #define DEFAULT_AUTO_REFRESH_PERIOD 20 // seconds
-#define REFRESH_INFICATIVE_BLOCK_CHUNK_SIZE 256    // just to split refresh in separate calls to play nicer with other threads
 
 #define CHECK_MULTISIG_ENABLED() \
   do \
@@ -80,7 +79,6 @@ namespace
   const command_line::arg_descriptor<bool> arg_restricted = {"restricted-rpc", "Restricts to view-only commands", false};
   const command_line::arg_descriptor<std::string> arg_wallet_dir = {"wallet-dir", "Directory for newly created wallets"};
   const command_line::arg_descriptor<bool> arg_prompt_for_password = {"prompt-for-password", "Prompts for password when not provided", false};
-  const command_line::arg_descriptor<bool> arg_no_initial_sync = {"no-initial-sync", "Skips the initial sync before listening for connections", false};
 
   constexpr const char default_rpc_username[] = "monero";
 
@@ -151,17 +149,12 @@ namespace tools
         return true;
       if (boost::posix_time::microsec_clock::universal_time() < m_last_auto_refresh_time + boost::posix_time::seconds(m_auto_refresh_period))
         return true;
-      uint64_t blocks_fetched = 0;
       try {
-        bool received_money = false;
-        if (m_wallet) m_wallet->refresh(m_wallet->is_trusted_daemon(), 0, blocks_fetched, received_money, true, true, REFRESH_INFICATIVE_BLOCK_CHUNK_SIZE);
+        if (m_wallet) m_wallet->refresh(m_wallet->is_trusted_daemon());
       } catch (const std::exception& ex) {
         LOG_ERROR("Exception at while refreshing, what=" << ex.what());
       }
-      // if we got the max amount of blocks, do not set the last refresh time, we did only part of the refresh and will
-      // continue asap, and only set the last refresh time once the refresh is actually finished
-      if (blocks_fetched < REFRESH_INFICATIVE_BLOCK_CHUNK_SIZE)
-        m_last_auto_refresh_time = boost::posix_time::microsec_clock::universal_time();
+      m_last_auto_refresh_time = boost::posix_time::microsec_clock::universal_time();
       return true;
     }, 1000);
     m_net_server.add_idle_handler([this](){
@@ -404,6 +397,7 @@ namespace tools
     bool is_failed = pd.m_state == tools::wallet2::unconfirmed_transfer_details::failed;
     entry.txid = string_tools::pod_to_hex(txid);
     entry.payment_id = string_tools::pod_to_hex(pd.m_payment_id);
+    entry.payment_id = string_tools::pod_to_hex(pd.m_payment_id);
     if (entry.payment_id.substr(16).find_first_not_of('0') == std::string::npos)
       entry.payment_id = entry.payment_id.substr(0,16);
     entry.height = 0;
@@ -583,9 +577,9 @@ namespace tools
     if (!m_wallet) return not_open(er);
     try
     {
-      if (req.count < 1 || req.count > 65536) {
+      if (req.count < 1 || req.count > 64) {
         er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
-        er.message = "Count must be between 1 and 65536.";
+        er.message = "Count must be between 1 and 64.";
         return false;
       }
 
@@ -1008,13 +1002,13 @@ namespace tools
 
       // add spent key images
       tools::wallet_rpc::key_image_list key_image_list;
-      bool all_are_txin_fulmo_key = std::all_of(ptx.tx.vin.begin(), ptx.tx.vin.end(), [&](const cryptonote::txin_v& s_e) -> bool
+      bool all_are_txin_to_key = std::all_of(ptx.tx.vin.begin(), ptx.tx.vin.end(), [&](const cryptonote::txin_v& s_e) -> bool
       {
-        CHECKED_GET_SPECIFIC_VARIANT(s_e, const cryptonote::txin_fulmo_key, in, false);
+        CHECKED_GET_SPECIFIC_VARIANT(s_e, const cryptonote::txin_to_key, in, false);
         key_image_list.key_images.push_back(epee::string_tools::pod_to_hex(in.k_image));
         return true;
       });
-      THROW_WALLET_EXCEPTION_IF(!all_are_txin_fulmo_key, error::unexpected_txin_type, ptx.tx);
+      THROW_WALLET_EXCEPTION_IF(!all_are_txin_to_key, error::unexpected_txin_type, ptx.tx);
       fill(spent_key_images, key_image_list);
     }
 
@@ -1086,7 +1080,7 @@ namespace tools
     {
       uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
       uint32_t priority = m_wallet->adjust_priority(req.priority);
-      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices);
+      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, req.source_asset, req.dest_asset, mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices);
 
       if (ptx_vector.empty())
       {
@@ -1141,7 +1135,7 @@ namespace tools
       uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
       uint32_t priority = m_wallet->adjust_priority(req.priority);
       LOG_PRINT_L2("on_transfer_split calling create_transactions_2");
-      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices);
+      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, req.source_asset, req.dest_asset, mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices);
       LOG_PRINT_L2("on_transfer_split called create_transactions_2");
 
       if (ptx_vector.empty())
@@ -3173,7 +3167,7 @@ namespace tools
           return false;
       }
 
-      std::unordered_set<crypto::hash> txids;
+      std::vector<crypto::hash> txids;
       std::list<std::string>::const_iterator i = req.txids.begin();
       while (i != req.txids.end())
       {
@@ -3186,15 +3180,11 @@ namespace tools
           }
 
           crypto::hash txid = *reinterpret_cast<const crypto::hash*>(txid_blob.data());
-          txids.insert(txid);
+          txids.push_back(txid);
       }
 
       try {
           m_wallet->scan_tx(txids);
-      }  catch (const tools::error::wont_reprocess_recent_txs_via_untrusted_daemon &e) {
-          er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
-          er.message = e.what() + std::string(". Either connect to a trusted daemon or rescan the chain.");
-          return false;
       } catch (const std::exception &e) {
           handle_rpc_exception(std::current_exception(), er, WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR);
           return false;
@@ -3264,7 +3254,7 @@ namespace tools
     if (!m_wallet) return not_open(er);
     cryptonote::COMMAND_RPC_STOP_MINING::request daemon_req;
     cryptonote::COMMAND_RPC_STOP_MINING::response daemon_res;
-    bool r = m_wallet->invoke_http_json("/stop_mining", daemon_req, daemon_res, std::chrono::seconds(60)); // this waits till stopped, and if randomx has just started initializing its dataset, it might be a while
+    bool r = m_wallet->invoke_http_json("/stop_mining", daemon_req, daemon_res);
     if (!r || daemon_res.status != CORE_RPC_STATUS_OK)
     {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
@@ -3540,6 +3530,7 @@ namespace tools
         cryptonote::print_money(e.tx_amount() + e.fee())  %
         cryptonote::print_money(e.tx_amount()) %
         cryptonote::print_money(e.fee())).str();
+      er.message = e.what();
     }
     catch (const tools::error::not_enough_outs_to_mix& e)
     {
@@ -4521,6 +4512,7 @@ public:
 
       const auto arg_wallet_file = wallet_args::arg_wallet_file();
       const auto arg_from_json = wallet_args::arg_generate_from_json();
+      const auto arg_rpc_client_secret_key = wallet_args::arg_rpc_client_secret_key();
       const auto arg_password_file = wallet_args::arg_password_file();
 
       const auto wallet_file = command_line::get_arg(vm, arg_wallet_file);
@@ -4529,7 +4521,6 @@ public:
       const auto password_file = command_line::get_arg(vm, arg_password_file);
       const auto prompt_for_password = command_line::get_arg(vm, arg_prompt_for_password);
       const auto password_prompt = prompt_for_password ? password_prompter : nullptr;
-      const auto no_initial_sync = command_line::get_arg(vm, arg_no_initial_sync);
 
       if(!wallet_file.empty() && !from_json.empty())
       {
@@ -4578,6 +4569,17 @@ public:
         return false;
       }
 
+      if (!command_line::is_arg_defaulted(vm, arg_rpc_client_secret_key))
+      {
+        crypto::secret_key client_secret_key;
+        if (!epee::string_tools::hex_to_pod(command_line::get_arg(vm, arg_rpc_client_secret_key), client_secret_key))
+        {
+          MERROR(arg_rpc_client_secret_key.name << ": RPC client secret key should be 32 byte in hex format");
+          return false;
+        }
+        wal->set_rpc_client_secret_key(client_secret_key);
+      }
+
       bool quit = false;
       tools::signal_handler::install([&wal, &quit](int) {
         assert(wal);
@@ -4587,8 +4589,7 @@ public:
 
       try
       {
-        if (!no_initial_sync)
-          wal->refresh(wal->is_trusted_daemon());
+        wal->refresh(wal->is_trusted_daemon());
       }
       catch (const std::exception& e)
       {
@@ -4684,6 +4685,7 @@ int main(int argc, char** argv) {
 
   const auto arg_wallet_file = wallet_args::arg_wallet_file();
   const auto arg_from_json = wallet_args::arg_generate_from_json();
+  const auto arg_rpc_client_secret_key = wallet_args::arg_rpc_client_secret_key();
 
   po::options_description hidden_options("Hidden");
 
@@ -4697,8 +4699,7 @@ int main(int argc, char** argv) {
   command_line::add_arg(desc_params, arg_from_json);
   command_line::add_arg(desc_params, arg_wallet_dir);
   command_line::add_arg(desc_params, arg_prompt_for_password);
-  command_line::add_arg(desc_params, arg_no_initial_sync);
-  command_line::add_arg(hidden_options, daemonizer::arg_non_interactive);
+  command_line::add_arg(desc_params, arg_rpc_client_secret_key);
 
   daemonizer::init_options(hidden_options, desc_params);
   desc_params.add(hidden_options);

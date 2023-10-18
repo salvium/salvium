@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -339,8 +339,8 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
         totins += io;
       }
       if (do_ringsize) {
-        const cryptonote::txin_fulmo_key& tx_in_to_key
-                       = boost::get<cryptonote::txin_fulmo_key>(tx.vin[0]);
+        const cryptonote::txin_to_key& tx_in_to_key
+                       = boost::get<cryptonote::txin_to_key>(tx.vin[0]);
         io = tx_in_to_key.key_offsets.size();
         if (io < minrings)
           minrings = io;

@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -313,7 +313,7 @@ void mock_daemon::mine_blocks(size_t num_blocks, const std::string &miner_addres
 {
   bool blocks_mined = false;
   const uint64_t start_height = get_height();
-  const auto mining_timeout = std::chrono::seconds(360);
+  const auto mining_timeout = std::chrono::seconds(120);
   MDEBUG("Current height before mining: " << start_height);
 
   start_mining(miner_address);

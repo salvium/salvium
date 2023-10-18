@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -173,6 +173,11 @@ namespace cryptonote
   , "Check for new versions of monero: [disabled|notify|download|update]"
   , "notify"
   };
+  static const command_line::arg_descriptor<bool> arg_fluffy_blocks  = {
+    "fluffy-blocks"
+  , "Relay blocks as fluffy blocks (obsolete, now default)"
+  , true
+  };
   static const command_line::arg_descriptor<bool> arg_no_fluffy_blocks  = {
     "no-fluffy-blocks"
   , "Relay blocks as normal blocks"
@@ -335,6 +340,7 @@ namespace cryptonote
     command_line::add_arg(desc, arg_show_time_stats);
     command_line::add_arg(desc, arg_block_sync_size);
     command_line::add_arg(desc, arg_check_updates);
+    command_line::add_arg(desc, arg_fluffy_blocks);
     command_line::add_arg(desc, arg_no_fluffy_blocks);
     command_line::add_arg(desc, arg_test_dbg_lock_sleep);
     command_line::add_arg(desc, arg_offline);
@@ -386,6 +392,9 @@ namespace cryptonote
     m_fluffy_blocks_enabled = !get_arg(vm, arg_no_fluffy_blocks);
     m_offline = get_arg(vm, arg_offline);
     m_disable_dns_checkpoints = get_arg(vm, arg_disable_dns_checkpoints);
+
+    if (!command_line::is_arg_defaulted(vm, arg_fluffy_blocks))
+      MWARNING(arg_fluffy_blocks.name << " is obsolete, it is now default");
 
     if (command_line::get_arg(vm, arg_test_drop_download) == true)
       test_drop_download();
@@ -567,11 +576,7 @@ namespace cryptonote
         else if(options[0] == "fastest")
         {
           db_flags = DBF_FASTEST;
-#ifdef _WIN32
           sync_threshold = 1000; // default to fastest:async:1000
-#else
-          sync_threshold = 100000; // default to fastest:async:100000
-#endif
           sync_mode = db_sync_mode_is_default ? db_defaultsync : db_async;
         }
         else
@@ -1294,7 +1299,7 @@ namespace cryptonote
     std::unordered_set<crypto::key_image> ki;
     for(const auto& in: tx.vin)
     {
-      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_fulmo_key, tokey_in, false);
+      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
       if(!ki.insert(tokey_in.k_image).second)
         return false;
     }
@@ -1307,7 +1312,7 @@ namespace cryptonote
     {
       for(const auto& in: tx.vin)
       {
-        CHECKED_GET_SPECIFIC_VARIANT(in, const txin_fulmo_key, tokey_in, false);
+        CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
         for (size_t n = 1; n < tokey_in.key_offsets.size(); ++n)
           if (tokey_in.key_offsets[n] == 0)
             return false;
@@ -1321,7 +1326,7 @@ namespace cryptonote
     std::unordered_set<crypto::key_image> ki;
     for(const auto& in: tx.vin)
     {
-      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_fulmo_key, tokey_in, false);
+      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
       if (!(rct::scalarmultKey(rct::ki2rct(tokey_in.k_image), rct::curveOrder()) == rct::identity()))
         return false;
     }
@@ -1497,17 +1502,18 @@ namespace cryptonote
     return m_blockchain_storage.get_outs(req, res);
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::get_output_distribution(uint64_t amount, uint64_t from_height, uint64_t to_height, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &base) const
+  bool core::get_output_distribution(uint64_t amount, std::string asset_type,  uint64_t from_height, uint64_t to_height, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &base, uint64_t &num_spendable_global_outs) const
   {
-    return m_blockchain_storage.get_output_distribution(amount, from_height, to_height, start_height, distribution, base);
+    MDEBUG("core::" << __func__);
+    return m_blockchain_storage.get_output_distribution(amount, asset_type, from_height, to_height, start_height, distribution, base, num_spendable_global_outs);
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs) const
+  bool core::get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<std::pair<uint64_t, uint64_t>>& indexs) const
   {
     return m_blockchain_storage.get_tx_outputs_gindexs(tx_id, indexs);
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::get_tx_outputs_gindexs(const crypto::hash& tx_id, size_t n_txes, std::vector<std::vector<uint64_t>>& indexs) const
+  bool core::get_tx_outputs_gindexs(const crypto::hash& tx_id, size_t n_txes, std::vector<std::vector<std::pair<uint64_t, uint64_t>>>& indexs) const
   {
     return m_blockchain_storage.get_tx_outputs_gindexs(tx_id, n_txes, indexs);
   }
@@ -1722,11 +1728,6 @@ namespace cryptonote
     return true;
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::get_pool_transactions_info(const std::vector<crypto::hash>& txids, std::vector<std::pair<crypto::hash, tx_memory_pool::tx_details>>& txs, bool include_sensitive_txes) const
-  {
-    return m_mempool.get_transactions_info(txids, txs, include_sensitive_txes);
-  }
-  //-----------------------------------------------------------------------------------------------
   bool core::get_pool_transactions(std::vector<transaction>& txs, bool include_sensitive_data) const
   {
     m_mempool.get_transactions(txs, include_sensitive_data);
@@ -1737,11 +1738,6 @@ namespace cryptonote
   {
     m_mempool.get_transaction_hashes(txs, include_sensitive_data);
     return true;
-  }
-  //-----------------------------------------------------------------------------------------------
-  bool core::get_pool_info(time_t start_time, bool include_sensitive_txes, size_t max_tx_count, std::vector<std::pair<crypto::hash, tx_memory_pool::tx_details>>& added_txs, std::vector<crypto::hash>& remaining_added_txids, std::vector<crypto::hash>& removed_txs, bool& incremental) const
-  {
-    return m_mempool.get_pool_info(start_time, include_sensitive_txes, max_tx_count, added_txs, remaining_added_txids, removed_txs, incremental);
   }
   //-----------------------------------------------------------------------------------------------
   bool core::get_pool_transaction_stats(struct txpool_stats& stats, bool include_sensitive_data) const

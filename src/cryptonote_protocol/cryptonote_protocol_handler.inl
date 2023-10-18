@@ -2,7 +2,7 @@
 /// @author rfree (current maintainer/user in monero.cc project - most of code is from CryptoNote)
 /// @brief This is the original cryptonote protocol network-events handler, modified by us
 
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -280,11 +280,6 @@ namespace cryptonote
       {
         cnx.ip = cnx.host;
         cnx.port = std::to_string(cntxt.m_remote_address.as<epee::net_utils::ipv4_network_address>().port());
-      }
-      else if (cntxt.m_remote_address.get_type_id() == epee::net_utils::ipv6_network_address::get_type_id())
-      {
-        cnx.ip = cnx.host;
-        cnx.port = std::to_string(cntxt.m_remote_address.as<epee::net_utils::ipv6_network_address>().port());
       }
       cnx.rpc_port = cntxt.m_rpc_port;
       cnx.rpc_credits_per_hash = cntxt.m_rpc_credits_per_hash;
@@ -984,18 +979,8 @@ namespace cryptonote
   int t_cryptonote_protocol_handler<t_core>::handle_notify_new_transactions(int command, NOTIFY_NEW_TRANSACTIONS::request& arg, cryptonote_connection_context& context)
   {
     MLOG_P2P_MESSAGE("Received NOTIFY_NEW_TRANSACTIONS (" << arg.txs.size() << " txes)");
-    std::unordered_set<blobdata> seen;
     for (const auto &blob: arg.txs)
-    {
       MLOGIF_P2P_MESSAGE(cryptonote::transaction tx; crypto::hash hash; bool ret = cryptonote::parse_and_validate_tx_from_blob(blob, tx, hash);, ret, "Including transaction " << hash);
-      if (seen.find(blob) != seen.end())
-      {
-        LOG_PRINT_CCONTEXT_L1("Duplicate transaction in notification, dropping connection");
-        drop_connection(context, false, false);
-        return 1;
-      }
-      seen.insert(blob);
-    }
 
     if(context.m_state != cryptonote_connection_context::state_normal)
       return 1;
@@ -2073,12 +2058,9 @@ skip:
     if (local_stripe == 0)
       return false;
     // don't request pre-bulletprooof pruned blocks, we can't reconstruct their weight (yet)
-    /*
-    // SRCG: TODO: Figure out if this is even needed
     static const uint64_t bp_fork_height = m_core.get_earliest_ideal_height_for_version(HF_VERSION_SMALLER_BP + 1);
     if (first_block_height < bp_fork_height)
       return false;
-    */
     // assumes the span size is less or equal to the stripe size
     bool full_data_needed = tools::get_pruning_stripe(first_block_height, context.m_remote_blockchain_height, CRYPTONOTE_PRUNING_LOG_STRIPES) == local_stripe
         || tools::get_pruning_stripe(first_block_height + nblocks - 1, context.m_remote_blockchain_height, CRYPTONOTE_PRUNING_LOG_STRIPES) == local_stripe;
@@ -2954,7 +2936,7 @@ skip:
       m_core.set_target_blockchain_height(target);
       if (target == 0 && context.m_state > cryptonote_connection_context::state_before_handshake && !m_stopping)
       {
-        MCWARNING("global", "elbowd is now disconnected from the network");
+        MCWARNING("global", "monerod is now disconnected from the network");
         m_ask_for_txpool_complement = true;
       }
     }

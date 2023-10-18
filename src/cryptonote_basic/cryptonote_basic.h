@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -42,7 +42,7 @@
 #include "serialization/json_archive.h"
 #include "serialization/debug_archive.h"
 #include "serialization/crypto.h"
-#include "serialization/keyvalue_serialization.h" // eepe named serialization
+#include "serialization/keyvalue_serialization.h" // epee named serialization
 #include "serialization/pricing_record.h"
 #include "cryptonote_config.h"
 #include "crypto/crypto.h"
@@ -76,20 +76,38 @@ namespace cryptonote
     crypto::hash hash;
   };
 
-  struct txout_fulmo_tagged_key
+  // outputs <= HF_VERSION_VIEW_TAGS
+  struct txout_to_key
   {
-    txout_fulmo_tagged_key() { }
-    txout_fulmo_tagged_key(const crypto::public_key &_key, const crypto::view_tag &_view_tag, const std::string &_asset_type, const uint64_t _unlock_time) : key(_key), view_tag(_view_tag), asset_type(_asset_type), unlock_time(_unlock_time) { }
+    txout_to_key() { }
+    txout_to_key(const crypto::public_key &_key) : key(_key) { }
+    txout_to_key(const crypto::public_key &_key, const std::string &_asset_type, const uint64_t _unlock_time) : key(_key), asset_type(_asset_type), unlock_time(_unlock_time) { }
     crypto::public_key key;
-    crypto::view_tag view_tag; // optimization to reduce scanning time
     std::string asset_type;
     uint64_t unlock_time;
 
     BEGIN_SERIALIZE_OBJECT()
       FIELD(key)
-      FIELD(view_tag)
       FIELD(asset_type)
       FIELD(unlock_time)
+    END_SERIALIZE()
+  };
+
+  // outputs >= HF_VERSION_VIEW_TAGS
+  struct txout_to_tagged_key
+  {
+    txout_to_tagged_key() { }
+    txout_to_tagged_key(const crypto::public_key &_key, const std::string &_asset_type, const uint64_t _unlock_time, const crypto::view_tag &_view_tag) : key(_key), asset_type(_asset_type), unlock_time(_unlock_time), view_tag(_view_tag) { }
+    crypto::public_key key;
+    std::string asset_type;
+    uint64_t unlock_time;
+    crypto::view_tag view_tag; // optimization to reduce scanning time
+
+    BEGIN_SERIALIZE_OBJECT()
+      FIELD(key)
+      FIELD(asset_type)
+      FIELD(unlock_time)
+      FIELD(view_tag)
     END_SERIALIZE()
   };
 
@@ -132,25 +150,25 @@ namespace cryptonote
     END_SERIALIZE()
   };
 
-  struct txin_fulmo_key
+  struct txin_to_key
   {
     uint64_t amount;
+    std::string asset_type;
     std::vector<uint64_t> key_offsets;
     crypto::key_image k_image;      // double spending protection
-    std::string asset_type;
 
     BEGIN_SERIALIZE_OBJECT()
       VARINT_FIELD(amount)
+      FIELD(asset_type)
       FIELD(key_offsets)
       FIELD(k_image)
-      FIELD(asset_type)
     END_SERIALIZE()
   };
 
 
-  typedef boost::variant<txin_gen, txin_to_script, txin_to_scripthash, txin_fulmo_key> txin_v;
+  typedef boost::variant<txin_gen, txin_to_script, txin_to_scripthash, txin_to_key> txin_v;
 
-  typedef boost::variant<txout_to_script, txout_to_scripthash, txout_fulmo_tagged_key> txout_target_v;
+  typedef boost::variant<txout_to_script, txout_to_scripthash, txout_to_key, txout_to_tagged_key> txout_target_v;
 
   //typedef std::pair<uint64_t, txout> out_t;
   struct tx_out
@@ -188,7 +206,7 @@ namespace cryptonote
 
     BEGIN_SERIALIZE()
       VARINT_FIELD(version)
-      if((version == 0 || CURRENT_TRANSACTION_VERSION < version)) return false;
+      if(version == 0 || CURRENT_TRANSACTION_VERSION < version) return false;
       VARINT_FIELD(unlock_time)
       FIELD(vin)
       FIELD(vout)
@@ -320,7 +338,7 @@ namespace cryptonote
             ar.tag("rctsig_prunable");
             ar.begin_object();
             r = rct_signatures.p.serialize_rctsig_prunable(ar, rct_signatures.type, vin.size(), vout.size(),
-                vin.size() > 0 && vin[0].type() == typeid(txin_fulmo_key) ? boost::get<txin_fulmo_key>(vin[0]).key_offsets.size() - 1 : 0);
+                vin.size() > 0 && vin[0].type() == typeid(txin_to_key) ? boost::get<txin_to_key>(vin[0]).key_offsets.size() - 1 : 0);
             if (!r || !ar.good()) return false;
             ar.end_object();
           }
@@ -457,12 +475,11 @@ namespace cryptonote
       size_t operator()(const txin_gen& txin) const{return 0;}
       size_t operator()(const txin_to_script& txin) const{return 0;}
       size_t operator()(const txin_to_scripthash& txin) const{return 0;}
-      size_t operator()(const txin_fulmo_key& txin) const {return txin.key_offsets.size();}
+      size_t operator()(const txin_to_key& txin) const {return txin.key_offsets.size();}
     };
 
     return boost::apply_visitor(txin_signature_size_visitor(), tx_in);
   }
-
 
 
   /************************************************************************/
@@ -495,14 +512,15 @@ namespace cryptonote
 
   public:
     block(): block_header(), hash_valid(false) {}
-    block(const block &b): block_header(b), hash_valid(false), miner_tx(b.miner_tx), tx_hashes(b.tx_hashes) { if (b.is_hash_valid()) { hash = b.hash; set_hash_valid(true); } }
-    block &operator=(const block &b) { block_header::operator=(b); hash_valid = false; miner_tx = b.miner_tx; tx_hashes = b.tx_hashes; if (b.is_hash_valid()) { hash = b.hash; set_hash_valid(true); } return *this; }
+    block(const block &b): block_header(b), hash_valid(false), miner_tx(b.miner_tx), protocol_tx(b.protocol_tx), tx_hashes(b.tx_hashes) { if (b.is_hash_valid()) { hash = b.hash; set_hash_valid(true); } }
+    block &operator=(const block &b) { block_header::operator=(b); hash_valid = false; miner_tx = b.miner_tx; protocol_tx = b.protocol_tx; tx_hashes = b.tx_hashes; if (b.is_hash_valid()) { hash = b.hash; set_hash_valid(true); } return *this; }
     void invalidate_hashes() { set_hash_valid(false); }
     bool is_hash_valid() const { return hash_valid.load(std::memory_order_acquire); }
     void set_hash_valid(bool v) const { hash_valid.store(v,std::memory_order_release); }
     void set_hash(const crypto::hash &h) const { hash = h; set_hash_valid(true); }
 
     transaction miner_tx;
+    transaction protocol_tx;
     std::vector<crypto::hash> tx_hashes;
 
     // hash cash
@@ -514,6 +532,7 @@ namespace cryptonote
 
       FIELDS(*static_cast<block_header *>(this))
       FIELD(miner_tx)
+      FIELD(protocol_tx)
       FIELD(tx_hashes)
       if (tx_hashes.size() > CRYPTONOTE_MAX_TX_PER_BLOCK)
         return false;
@@ -588,32 +607,32 @@ BLOB_SERIALIZER(cryptonote::txout_to_scripthash);
 VARIANT_TAG(binary_archive, cryptonote::txin_gen, 0xff);
 VARIANT_TAG(binary_archive, cryptonote::txin_to_script, 0x0);
 VARIANT_TAG(binary_archive, cryptonote::txin_to_scripthash, 0x1);
-VARIANT_TAG(binary_archive, cryptonote::txin_fulmo_key, 0x2);
+VARIANT_TAG(binary_archive, cryptonote::txin_to_key, 0x2);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_script, 0x0);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_scripthash, 0x1);
-//VARIANT_TAG(binary_archive, cryptonote::txout_to_key, 0x2);
-VARIANT_TAG(binary_archive, cryptonote::txout_fulmo_tagged_key, 0x3);
+VARIANT_TAG(binary_archive, cryptonote::txout_to_key, 0x2);
+VARIANT_TAG(binary_archive, cryptonote::txout_to_tagged_key, 0x3);
 VARIANT_TAG(binary_archive, cryptonote::transaction, 0xcc);
 VARIANT_TAG(binary_archive, cryptonote::block, 0xbb);
 
 VARIANT_TAG(json_archive, cryptonote::txin_gen, "gen");
 VARIANT_TAG(json_archive, cryptonote::txin_to_script, "script");
 VARIANT_TAG(json_archive, cryptonote::txin_to_scripthash, "scripthash");
-VARIANT_TAG(json_archive, cryptonote::txin_fulmo_key, "key");
+VARIANT_TAG(json_archive, cryptonote::txin_to_key, "key");
 VARIANT_TAG(json_archive, cryptonote::txout_to_script, "script");
 VARIANT_TAG(json_archive, cryptonote::txout_to_scripthash, "scripthash");
-//VARIANT_TAG(json_archive, cryptonote::txout_to_key, "key");
-VARIANT_TAG(json_archive, cryptonote::txout_fulmo_tagged_key, "tagged_key");
+VARIANT_TAG(json_archive, cryptonote::txout_to_key, "key");
+VARIANT_TAG(json_archive, cryptonote::txout_to_tagged_key, "tagged_key");
 VARIANT_TAG(json_archive, cryptonote::transaction, "tx");
 VARIANT_TAG(json_archive, cryptonote::block, "block");
 
 VARIANT_TAG(debug_archive, cryptonote::txin_gen, "gen");
 VARIANT_TAG(debug_archive, cryptonote::txin_to_script, "script");
 VARIANT_TAG(debug_archive, cryptonote::txin_to_scripthash, "scripthash");
-VARIANT_TAG(debug_archive, cryptonote::txin_fulmo_key, "key");
+VARIANT_TAG(debug_archive, cryptonote::txin_to_key, "key");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_script, "script");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_scripthash, "scripthash");
-//VARIANT_TAG(debug_archive, cryptonote::txout_to_key, "key");
-VARIANT_TAG(debug_archive, cryptonote::txout_fulmo_tagged_key, "tagged_key");
+VARIANT_TAG(debug_archive, cryptonote::txout_to_key, "key");
+VARIANT_TAG(debug_archive, cryptonote::txout_to_tagged_key, "tagged_key");
 VARIANT_TAG(debug_archive, cryptonote::transaction, "tx");
 VARIANT_TAG(debug_archive, cryptonote::block, "block");

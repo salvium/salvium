@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2023, The Monero Project
+# Copyright (c) 2014-2022, The Monero Project
 #
 # All rights reserved.
 #
@@ -53,6 +53,7 @@ set(unit_tests_sources
   expect.cpp
   fee.cpp
   json_serialization.cpp
+  get_tx_asset_types.cpp
   get_xtype_from_string.cpp
   hashchain.cpp
   hmac_keccak.cpp
@@ -74,6 +75,7 @@ set(unit_tests_sources
   notify.cpp
   output_distribution.cpp
   parse_amount.cpp
+  pricing_record.cpp
   pruning.cpp
   random.cpp
   rolling_median.cpp
@@ -90,8 +92,6 @@ set(unit_tests_sources
   hardfork.cpp
   unbound.cpp
   uri.cpp
-  variant.cpp
-  util.cpp
   varint.cpp
   ver_rct_non_semantics_simple_cached.cpp
   ringct.cpp

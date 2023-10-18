@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -104,6 +104,7 @@ get_builtin_ds(void)
 {
   static const char * const ds[] =
   {
+    ". IN DS 19036 8 2 49AAC11D7B6F6446702E54A1607371607A1A41855200FD2CE1CDDE32F24E8FB5\n",
     ". IN DS 20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D\n",
     NULL
   };
@@ -339,10 +340,7 @@ std::vector<std::string> DNSResolver::get_record(const std::string& url, int rec
     dnssec_available = (result->secure || result->bogus);
     dnssec_valid = result->secure && !result->bogus;
     if (dnssec_available && !dnssec_valid)
-    {
       MWARNING("Invalid DNSSEC " << get_record_name(record_type) << " record signature for " << url << ": " << result->why_bogus);
-      MWARNING("Possibly your DNS service is problematic. You can have elbowd use an alternate via env variable DNS_PUBLIC. Example: DNS_PUBLIC=tcp://9.9.9.9");
-    }
     if (result->havedata)
     {
       for (size_t i=0; result->data[i] != NULL; i++)

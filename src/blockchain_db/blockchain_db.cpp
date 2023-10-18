@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -205,9 +205,9 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
 
   for (const txin_v& tx_input : tx.vin)
   {
-    if (tx_input.type() == typeid(txin_fulmo_key))
+    if (tx_input.type() == typeid(txin_to_key))
     {
-      add_spent_key(boost::get<txin_fulmo_key>(tx_input).k_image);
+      add_spent_key(boost::get<txin_to_key>(tx_input).k_image);
     }
     else if (tx_input.type() == typeid(txin_gen))
     {
@@ -221,9 +221,9 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
     }
   }
 
-  uint64_t tx_id = add_transaction_data(blk_hash, txp, tx_hash, tx_prunable_hash);
+  uint64_t tx_id = add_transaction_data(blk_hash, txp, tx_hash, tx_prunable_hash, miner_tx);
 
-  std::vector<uint64_t> amount_output_indices(tx.vout.size());
+  std::vector<std::pair<uint64_t, uint64_t>> amount_output_indices(tx.vout.size());
 
   // iterate tx.vout using indices instead of C++11 foreach syntax because
   // we need the index
@@ -274,10 +274,23 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
   time1 = epee::misc_utils::get_tick_count();
 
   uint64_t num_rct_outs = 0;
+  oracle::asset_type_counts num_rct_outs_by_asset_type;
   blobdata miner_bd = tx_to_blob(blk.miner_tx);
   add_transaction(blk_hash, std::make_pair(blk.miner_tx, blobdata_ref(miner_bd)));
+
   if (blk.miner_tx.version == 2)
+  {
     num_rct_outs += blk.miner_tx.vout.size();
+
+    // count the current block's rct outs by asset type
+    for (auto& vout: blk.miner_tx.vout) {
+      std::string asset_type;
+      if (!get_output_asset_type(vout, asset_type))
+        throw std::runtime_error("Failed to get output asset type");
+      num_rct_outs_by_asset_type.add(asset_type, 1);
+    }
+  }
+
   int tx_i = 0;
   crypto::hash tx_hash = crypto::null_hash;
   for (const std::pair<transaction, blobdata>& tx : txs)
@@ -286,8 +299,13 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
     add_transaction(blk_hash, tx, &tx_hash);
     for (const auto &vout: tx.first.vout)
     {
-      if (vout.amount == 0)
+      if (vout.amount == 0) {
         ++num_rct_outs;
+        std::string asset_type;
+        if (!get_output_asset_type(vout, asset_type))
+          throw std::runtime_error("Failed to get output asset type");
+        num_rct_outs_by_asset_type.add(asset_type, 1);
+      }
     }
     ++tx_i;
   }
@@ -296,7 +314,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
 
   // call out to subclass implementation to add the block & metadata
   time1 = epee::misc_utils::get_tick_count();
-  add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, num_rct_outs, blk_hash);
+  add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, num_rct_outs, num_rct_outs_by_asset_type, blk_hash);
   TIME_MEASURE_FINISH(time1);
   time_add_block1 += time1;
 
@@ -340,14 +358,16 @@ void BlockchainDB::remove_transaction(const crypto::hash& tx_hash)
 
   for (const txin_v& tx_input : tx.vin)
   {
-    if (tx_input.type() == typeid(txin_fulmo_key))
+    if (tx_input.type() == typeid(txin_to_key))
     {
-      remove_spent_key(boost::get<txin_fulmo_key>(tx_input).k_image);
+      remove_spent_key(boost::get<txin_to_key>(tx_input).k_image);
     }
   }
 
+  const bool miner_tx = tx.vin.size() == 1 && tx.vin[0].type() == typeid(txin_gen);
+
   // need tx as tx.vout has the tx outputs, and the output amounts are needed
-  remove_transaction_data(tx_hash, tx);
+  remove_transaction_data(tx_hash, tx, miner_tx);
 }
 
 block BlockchainDB::get_block_from_height(const uint64_t& height) const

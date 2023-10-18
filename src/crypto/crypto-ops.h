@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -29,8 +29,6 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #pragma once
-
-#include <stdint.h>
 
 /* From fe.h */
 
@@ -163,7 +161,5 @@ void ge_sub(ge_p1p1 *r, const ge_p3 *p, const ge_cached *q);
 void fe_add(fe h, const fe f, const fe g);
 void fe_tobytes(unsigned char *, const fe);
 void fe_invert(fe out, const fe z);
-void fe_mul(fe out, const fe, const fe);
-void fe_0(fe h);
 
 int ge_p3_is_point_at_infinity_vartime(const ge_p3 *p);

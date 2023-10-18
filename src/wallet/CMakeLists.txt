@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2023, The Monero Project
+# Copyright (c) 2014-2022, The Monero Project
 #
 # All rights reserved.
 #
@@ -37,6 +37,7 @@ set(wallet_sources
   node_rpc_proxy.cpp
   message_store.cpp
   message_transporter.cpp
+  wallet_rpc_payments.cpp
 )
 
 monero_find_all_headers(wallet_private_headers "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -99,7 +100,7 @@ if(NOT IOS)
       ${EXTRA_LIBRARIES})
   set_property(TARGET wallet_rpc_server
     PROPERTY
-      OUTPUT_NAME "monero-wallet-rpc")
+      OUTPUT_NAME "fulmo-wallet-rpc")
   install(TARGETS wallet_rpc_server DESTINATION bin)
 endif()
 

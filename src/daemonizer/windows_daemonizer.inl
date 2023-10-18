@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -61,6 +61,11 @@ namespace daemonizer
       "run-as-service"
     , "Hidden -- true if running as windows service"
     };
+    const command_line::arg_descriptor<bool> arg_non_interactive = {
+      "non-interactive"
+    , "Run non-interactive"
+    };
+
     std::string get_argument_string(int argc, char const * argv[])
     {
       std::string result = "";
@@ -82,6 +87,7 @@ namespace daemonizer
     command_line::add_arg(normal_options, arg_start_service);
     command_line::add_arg(normal_options, arg_stop_service);
     command_line::add_arg(hidden_options, arg_is_service);
+    command_line::add_arg(hidden_options, arg_non_interactive);
   }
 
   inline boost::filesystem::path get_default_data_dir()

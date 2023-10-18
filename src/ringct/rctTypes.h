@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023, Monero Research Labs
+// Copyright (c) 2016, Monero Research Labs
 //
 // Author: Shen Noether <shen.noether@gmx.com>
 //
@@ -108,7 +108,6 @@ namespace rct {
     };
     typedef std::vector<ctkey> ctkeyV;
     typedef std::vector<ctkeyV> ctkeyM;
-    typedef std::vector<std::pair<ctkey,ctkey>> ctkeyPV;
 
     //used for multisig data
     struct multisig_kLRki {

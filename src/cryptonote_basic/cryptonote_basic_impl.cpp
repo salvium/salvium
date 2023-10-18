@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -94,6 +94,12 @@ namespace cryptonote {
 
     uint64_t full_reward_zone = get_min_block_weight(version);
 
+    // Check for height == 0
+    if (already_generated_coins == 0) {
+      reward = PREMINE_AMOUNT;
+      return true;
+    }
+    
     //make it soft
     if (median_weight < full_reward_zone) {
       median_weight = full_reward_zone;

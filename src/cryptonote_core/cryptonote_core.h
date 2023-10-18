@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -510,23 +510,6 @@ namespace cryptonote
      bool get_pool_transaction_hashes(std::vector<crypto::hash>& txs, bool include_sensitive_txes = false) const;
 
      /**
-      * @copydoc tx_memory_pool::get_pool_transactions_info
-      * @param include_sensitive_txes include private transactions
-      *
-      * @note see tx_memory_pool::get_pool_transactions_info
-      */
-     bool get_pool_transactions_info(const std::vector<crypto::hash>& txids, std::vector<std::pair<crypto::hash, tx_memory_pool::tx_details>>& txs, bool include_sensitive_txes = false) const;
-
-     /**
-      * @copydoc tx_memory_pool::get_pool_info
-      * @param include_sensitive_txes include private transactions
-      * @param max_tx_count max allowed added_txs in response
-      *
-      * @note see tx_memory_pool::get_pool_info
-      */
-     bool get_pool_info(time_t start_time, bool include_sensitive_txes, size_t max_tx_count, std::vector<std::pair<crypto::hash, tx_memory_pool::tx_details>>& added_txs, std::vector<crypto::hash>& remaining_added_txids, std::vector<crypto::hash>& removed_txs, bool& incremental) const;
-
-    /**
       * @copydoc tx_memory_pool::get_transactions
       * @param include_sensitive_txes include private transactions
       *
@@ -605,8 +588,8 @@ namespace cryptonote
       *
       * @note see Blockchain::get_tx_outputs_gindexs
       */
-     bool get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs) const;
-     bool get_tx_outputs_gindexs(const crypto::hash& tx_id, size_t n_txes, std::vector<std::vector<uint64_t>>& indexs) const;
+     bool get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<std::pair<uint64_t, uint64_t>>& indexs) const;
+     bool get_tx_outputs_gindexs(const crypto::hash& tx_id, size_t n_txes, std::vector<std::vector<std::pair<uint64_t, uint64_t>>>& indexs) const;
 
      /**
       * @copydoc Blockchain::get_tail_id
@@ -634,7 +617,7 @@ namespace cryptonote
       *
       * @brief get per block distribution of outputs of a given amount
       */
-     bool get_output_distribution(uint64_t amount, uint64_t from_height, uint64_t to_height, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &base) const;
+     bool get_output_distribution(uint64_t amount, std::string asset_type, uint64_t from_height, uint64_t to_height, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &base, uint64_t &num_spendable_global_outs) const;
 
      /**
       * @copydoc miner::pause

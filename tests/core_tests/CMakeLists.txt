@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2023, The Monero Project
+# Copyright (c) 2014-2022, The Monero Project
 #
 # All rights reserved.
 #
@@ -76,6 +76,8 @@ monero_add_minimal_executable(core_tests
 target_link_libraries(core_tests
   PRIVATE
     multisig
+    cryptonote_basic
+    cryptonote_format_utils_basic
     cryptonote_core
     p2p
     version

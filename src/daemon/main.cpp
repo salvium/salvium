@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -83,7 +83,7 @@ uint16_t parse_public_rpc_port(const po::variables_map &vm)
   }
 
   uint16_t rpc_port;
-  if (!epee::string_tools::get_xtype_from_string(rpc_port, rpc_port_str))
+  if (!string_tools::get_xtype_from_string(rpc_port, rpc_port_str))
   {
     throw std::runtime_error("invalid RPC port " + rpc_port_str);
   }
@@ -122,6 +122,56 @@ bool isFat32(const wchar_t* root_path)
 }
 #endif
 
+// Helper function to generate genesis transaction
+void print_genesis_tx_hex(const cryptonote::network_type nettype) {
+
+  using namespace cryptonote;
+
+  account_base miner_acc1;
+  miner_acc1.generate();
+
+  //Create file with miner keys information
+  auto t = std::time(nullptr);
+  auto tm = *std::localtime(&t);
+  std::stringstream key_fine_name_ss;
+  key_fine_name_ss << "./miner01_keys" << std::put_time(&tm, "%Y%m%d%H%M%S") << ".dat";
+  std::string key_file_name = key_fine_name_ss.str();
+  std::ofstream miner_key_file;
+  miner_key_file.open (key_file_name);
+  miner_key_file << "Miner account address:" << std::endl;
+  miner_key_file << cryptonote::get_account_address_as_str((network_type)nettype, false, miner_acc1.get_keys().m_account_address);
+  miner_key_file << std::endl<< "Miner spend secret key:"  << std::endl;
+  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(miner_acc1.get_keys().m_spend_secret_key));
+  miner_key_file << std::endl << "Miner view secret key:" << std::endl;
+  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(miner_acc1.get_keys().m_view_secret_key));
+  miner_key_file << std::endl << std::endl;
+  miner_key_file.close();
+
+  //Prepare genesis_tx
+  cryptonote::transaction tx_genesis;
+  cryptonote::construct_miner_tx(0, 0, 0, 10, 0, miner_acc1.get_keys().m_account_address, tx_genesis, blobdata(), 999, 1);
+  std::cout << "Object:" << std::endl;
+  std::cout << obj_to_json_str(tx_genesis) << std::endl << std::endl;
+
+  std::cout << "Gennerating miner wallet..." << std::endl;
+  std::cout << "Miner account address:" << std::endl;
+  std::cout << cryptonote::get_account_address_as_str((network_type)nettype, false, miner_acc1.get_keys().m_account_address);
+  std::cout << std::endl << "Miner spend secret key:"  << std::endl;
+  epee::to_hex::formatted(std::cout, epee::as_byte_span(miner_acc1.get_keys().m_spend_secret_key));
+  std::cout << std::endl << "Miner view secret key:" << std::endl;
+  epee::to_hex::formatted(std::cout, epee::as_byte_span(miner_acc1.get_keys().m_view_secret_key));
+  std::cout << std::endl << std::endl;
+
+  std::stringstream ss;
+  binary_archive<true> ba(ss);
+  ::serialization::serialize(ba, tx_genesis);
+  std::string tx_hex = ss.str();
+  std::cout << "Insert this line into your coin configuration file: " << std::endl;
+  std::cout << "std::string const GENESIS_TX = \"" << epee::string_tools::buff_to_hex_nodelimer(tx_hex) << "\";" << std::endl;
+
+  return;
+}
+
 int main(int argc, char const * argv[])
 {
   try {
@@ -143,6 +193,7 @@ int main(int argc, char const * argv[])
 
       command_line::add_arg(visible_options, command_line::arg_help);
       command_line::add_arg(visible_options, command_line::arg_version);
+      command_line::add_arg(visible_options, daemon_args::arg_os_version);
       command_line::add_arg(visible_options, daemon_args::arg_config_file);
 
       // Settings
@@ -158,7 +209,7 @@ int main(int argc, char const * argv[])
       command_line::add_arg(core_settings, daemon_args::arg_zmq_rpc_bind_port);
       command_line::add_arg(core_settings, daemon_args::arg_zmq_pub);
       command_line::add_arg(core_settings, daemon_args::arg_zmq_rpc_disabled);
-      command_line::add_arg(core_settings, daemonizer::arg_non_interactive);
+      command_line::add_arg(core_settings, daemon_args::arg_print_genesis_tx);
 
       daemonizer::init_options(hidden_options, visible_options);
       daemonize::t_executor::init_options(core_settings);
@@ -190,7 +241,7 @@ int main(int argc, char const * argv[])
 
     if (command_line::get_arg(vm, command_line::arg_help))
     {
-      std::cout << "Monero '" << MONERO_RELEASE_NAME << "' (v" << MONERO_VERSION_FULL << ")" << ENDL << ENDL;
+      std::cout << "Fulmo '" << MONERO_RELEASE_NAME << "' (v" << MONERO_VERSION_FULL << ")" << ENDL << ENDL;
       std::cout << "Usage: " + std::string{argv[0]} + " [options|settings] [daemon_command...]" << std::endl << std::endl;
       std::cout << visible_options << std::endl;
       return 0;
@@ -199,7 +250,21 @@ int main(int argc, char const * argv[])
     // Monero Version
     if (command_line::get_arg(vm, command_line::arg_version))
     {
-      std::cout << "Monero '" << MONERO_RELEASE_NAME << "' (v" << MONERO_VERSION_FULL << ")" << ENDL;
+      std::cout << "Fulmo '" << MONERO_RELEASE_NAME << "' (v" << MONERO_VERSION_FULL << ")" << ENDL;
+      return 0;
+    }
+
+    // OS
+    if (command_line::get_arg(vm, daemon_args::arg_os_version))
+    {
+      std::cout << "OS: " << tools::get_os_version_string() << ENDL;
+      return 0;
+    }
+
+    // OS
+    if (command_line::get_arg(vm, daemon_args::arg_print_genesis_tx))
+    {
+      print_genesis_tx_hex(cryptonote::MAINNET);
       return 0;
     }
 
@@ -211,19 +276,6 @@ int main(int argc, char const * argv[])
       try
       {
         po::store(po::parse_config_file<char>(config_path.string<std::string>().c_str(), core_settings), vm);
-      }
-      catch (const po::unknown_option &e)
-      {
-        std::string unrecognized_option = e.get_option_name();
-        if (all_options.find_nothrow(unrecognized_option, false))
-        {
-          std::cerr << "Option '" << unrecognized_option << "' is not allowed in the config file, please use it as a command line flag." << std::endl;
-        }
-        else
-        {
-          std::cerr << "Unrecognized option '" << unrecognized_option << "' in config file." << std::endl;
-        }
-        return 1;
       }
       catch (const std::exception &e)
       {
@@ -299,7 +351,7 @@ int main(int argc, char const * argv[])
       tools::set_max_concurrency(command_line::get_arg(vm, daemon_args::arg_max_concurrency));
 
     // logging is now set up
-    MGINFO("Monero '" << MONERO_RELEASE_NAME << "' (v" << MONERO_VERSION_FULL << ")");
+    MGINFO("Fulmo '" << MONERO_RELEASE_NAME << "' (v" << MONERO_VERSION_FULL << ")");
 
     // If there are positional options, we're running a daemon command
     {

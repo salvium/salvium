@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2023, The Monero Project
+# Copyright (c) 2014-2022, The Monero Project
 # 
 # All rights reserved.
 # 
@@ -104,6 +104,8 @@ endif()
 if (TREZOR_DEBUG)
   add_subdirectory(trezor)
 endif()
+
+# add_subdirectory(daemon_tests)
 
 set(hash_targets_sources
   hash-target.cpp)

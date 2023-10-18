@@ -53,6 +53,7 @@ typedef struct mdb_txn_cursors
 
   MDB_cursor *m_txc_output_txs;
   MDB_cursor *m_txc_output_amounts;
+  MDB_cursor *m_txc_output_types;
 
   MDB_cursor *m_txc_txs;
   MDB_cursor *m_txc_txs_pruned;
@@ -72,6 +73,10 @@ typedef struct mdb_txn_cursors
   MDB_cursor *m_txc_hf_versions;
 
   MDB_cursor *m_txc_properties;
+
+  MDB_cursor *m_txc_circ_supply;
+  MDB_cursor *m_txc_circ_supply_tally;
+
 } mdb_txn_cursors;
 
 #define m_cur_blocks	m_cursors->m_txc_blocks
@@ -79,6 +84,7 @@ typedef struct mdb_txn_cursors
 #define m_cur_block_info	m_cursors->m_txc_block_info
 #define m_cur_output_txs	m_cursors->m_txc_output_txs
 #define m_cur_output_amounts	m_cursors->m_txc_output_amounts
+#define m_cur_output_types  m_cursors->m_txc_output_types
 #define m_cur_txs	m_cursors->m_txc_txs
 #define m_cur_txs_pruned	m_cursors->m_txc_txs_pruned
 #define m_cur_txs_prunable	m_cursors->m_txc_txs_prunable
@@ -93,6 +99,9 @@ typedef struct mdb_txn_cursors
 #define m_cur_hf_versions	m_cursors->m_txc_hf_versions
 #define m_cur_properties	m_cursors->m_txc_properties
 
+#define m_cur_circ_supply       m_cursors->m_txc_circ_supply
+#define m_cur_circ_supply_tally m_cursors->m_txc_circ_supply_tally
+
 typedef struct mdb_rflags
 {
   bool m_rf_txn;
@@ -101,6 +110,7 @@ typedef struct mdb_rflags
   bool m_rf_block_info;
   bool m_rf_output_txs;
   bool m_rf_output_amounts;
+  bool m_rf_output_types;
   bool m_rf_txs;
   bool m_rf_txs_pruned;
   bool m_rf_txs_prunable;
@@ -114,6 +124,8 @@ typedef struct mdb_rflags
   bool m_rf_alt_blocks;
   bool m_rf_hf_versions;
   bool m_rf_properties;
+  bool m_rf_circ_supply;
+  bool m_rf_circ_supply_tally;
 } mdb_rflags;
 
 typedef struct mdb_threadinfo
@@ -216,7 +228,7 @@ public:
 
   virtual cryptonote::blobdata get_block_blob_from_height(const uint64_t& height) const;
 
-  virtual std::vector<uint64_t> get_block_cumulative_rct_outputs(const std::vector<uint64_t> &heights) const;
+  virtual std::pair<std::vector<uint64_t>, uint64_t> get_block_cumulative_rct_outputs(const std::vector<uint64_t> &heights, const std::string asset_type) const;
 
   virtual uint64_t get_block_timestamp(const uint64_t& height) const;
 
@@ -250,6 +262,8 @@ public:
 
   virtual uint64_t height() const;
 
+  virtual std::vector<std::pair<std::string, std::string>> get_circulating_supply() const;
+  
   virtual bool tx_exists(const crypto::hash& h) const;
   virtual bool tx_exists(const crypto::hash& h, uint64_t& tx_index) const;
 
@@ -269,9 +283,13 @@ public:
   virtual uint64_t get_tx_block_height(const crypto::hash& h) const;
 
   virtual uint64_t get_num_outputs(const uint64_t& amount) const;
+  virtual uint64_t get_num_outputs_of_asset_type(const std::string asset_type) const;
 
   virtual output_data_t get_output_key(const uint64_t& amount, const uint64_t& index, bool include_commitmemt) const;
   virtual void get_output_key(const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &offsets, std::vector<output_data_t> &outputs, bool allow_partial = false) const;
+
+  virtual void get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const;
+  virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const;
 
   virtual tx_out_index get_output_tx_and_index_from_global(const uint64_t& index) const;
   virtual void get_output_tx_and_index_from_global(const std::vector<uint64_t> &global_indices,
@@ -280,7 +298,7 @@ public:
   virtual tx_out_index get_output_tx_and_index(const uint64_t& amount, const uint64_t& index) const;
   virtual void get_output_tx_and_index(const uint64_t& amount, const std::vector<uint64_t> &offsets, std::vector<tx_out_index> &indices) const;
 
-  virtual std::vector<std::vector<uint64_t>> get_tx_amount_output_indices(const uint64_t tx_id, size_t n_txes) const;
+  virtual std::vector<std::vector<std::pair<uint64_t, uint64_t>>> get_tx_amount_output_indices(const uint64_t tx_id, size_t n_txes) const;
 
   virtual bool has_key_image(const crypto::key_image& img) const;
 
@@ -371,16 +389,17 @@ private:
                 , const difficulty_type& cumulative_difficulty
                 , const uint64_t& coins_generated
                 , uint64_t num_rct_outs
+                , oracle::asset_type_counts& cum_rct_by_asset_type
                 , const crypto::hash& block_hash
                 );
 
   virtual void remove_block();
 
-  virtual uint64_t add_transaction_data(const crypto::hash& blk_hash, const std::pair<transaction, blobdata_ref>& tx, const crypto::hash& tx_hash, const crypto::hash& tx_prunable_hash);
+  virtual uint64_t add_transaction_data(const crypto::hash& blk_hash, const std::pair<transaction, blobdata_ref>& tx, const crypto::hash& tx_hash, const crypto::hash& tx_prunable_hash, const bool miner_tx);
 
-  virtual void remove_transaction_data(const crypto::hash& tx_hash, const transaction& tx);
+  virtual void remove_transaction_data(const crypto::hash& tx_hash, const transaction& tx, const bool miner_tx);
 
-  virtual uint64_t add_output(const crypto::hash& tx_hash,
+  virtual std::pair<uint64_t, uint64_t> add_output(const crypto::hash& tx_hash,
       const tx_out& tx_output,
       const uint64_t& local_index,
       const uint64_t unlock_time,
@@ -388,12 +407,12 @@ private:
       );
 
   virtual void add_tx_amount_output_indices(const uint64_t tx_id,
-      const std::vector<uint64_t>& amount_output_indices
+      const std::vector<std::pair<uint64_t, uint64_t>>& amount_output_indices
       );
 
   void remove_tx_outputs(const uint64_t tx_id, const transaction& tx);
 
-  void remove_output(const uint64_t amount, const uint64_t& out_index);
+  void remove_output(const uint64_t amount, const uint64_t& out_index, const std::string& output_asset_type, const uint64_t& asset_type_output_id);
 
   virtual void prune_outputs(uint64_t amount);
 
@@ -429,20 +448,7 @@ private:
   void migrate(const uint32_t oldversion);
 
   // migrate from DB version 0 to 1
-  void migrate_0_1();
-
-  // migrate from DB version 1 to 2
-  void migrate_1_2();
-
-  // migrate from DB version 2 to 3
-  void migrate_2_3();
-
-  // migrate from DB version 3 to 4
-  void migrate_3_4();
-
-  // migrate from DB version 4 to 5
-  void migrate_4_5();
-
+  //void migrate_0_1();
   void cleanup_batch();
 
 private:
@@ -462,6 +468,7 @@ private:
 
   MDB_dbi m_output_txs;
   MDB_dbi m_output_amounts;
+  MDB_dbi m_output_types;
 
   MDB_dbi m_spent_keys;
 
@@ -474,6 +481,9 @@ private:
   MDB_dbi m_hf_versions;
 
   MDB_dbi m_properties;
+
+  MDB_dbi m_circ_supply;
+  MDB_dbi m_circ_supply_tally;
 
   mutable uint64_t m_cum_size;	// used in batch size estimation
   mutable unsigned int m_cum_count;

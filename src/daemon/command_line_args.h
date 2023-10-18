@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -35,7 +35,7 @@
 
 namespace daemon_args
 {
-  std::string const WINDOWS_SERVICE_NAME = "Monero Daemon";
+  std::string const WINDOWS_SERVICE_NAME = "Fulmo Daemon";
 
   const command_line::arg_descriptor<std::string, false, true, 2> arg_config_file = {
     "config-file"
@@ -86,6 +86,10 @@ namespace daemon_args
     "daemon_command"
   , "Hidden"
   };
+  const command_line::arg_descriptor<bool> arg_os_version = {
+    "os-version"
+  , "OS for which this executable was compiled"
+  };
   const command_line::arg_descriptor<unsigned> arg_max_concurrency = {
     "max-concurrency"
   , "Max number of threads to use for a parallel job"
@@ -130,6 +134,10 @@ namespace daemon_args
   const command_line::arg_descriptor<std::vector<std::string>> arg_zmq_pub = {
     "zmq-pub"
   , "Address for ZMQ pub - tcp://ip:port or ipc://path"
+  };
+  const command_line::arg_descriptor<bool> arg_print_genesis_tx = {
+    "print-genesis-tx"
+  , "Print the genesis transaction"
   };
 
   const command_line::arg_descriptor<bool> arg_zmq_rpc_disabled = {

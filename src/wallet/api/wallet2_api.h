@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -38,7 +38,6 @@
 #include <ctime>
 #include <iostream>
 #include <stdexcept>
-#include <cstdint>
 
 //  Public interface for libwallet library
 namespace Monero {
@@ -542,7 +541,7 @@ struct Wallet
      * \param upper_transaction_size_limit
      * \param daemon_username
      * \param daemon_password
-     * \param lightWallet - deprecated
+     * \param lightWallet - start wallet in light mode, connect to a openmonero compatible server.
      * \param proxy_address - set proxy address, empty string to disable
      * \return  - true on success
      */
@@ -1065,6 +1064,12 @@ struct Wallet
 
     //! secondary key reuse mitigation
     virtual void keyReuseMitigation2(bool mitigation) = 0;
+
+    //! Light wallet authenticate and login
+    virtual bool lightWalletLogin(bool &isNewWallet) const = 0;
+    
+    //! Initiates a light wallet import wallet request
+    virtual bool lightWalletImportWalletRequest(std::string &payment_id, uint64_t &fee, bool &new_request, bool &request_fulfilled, std::string &payment_address, std::string &status) = 0;
 
     //! locks/unlocks the keys file; returns true on success
     virtual bool lockKeysFile() = 0;

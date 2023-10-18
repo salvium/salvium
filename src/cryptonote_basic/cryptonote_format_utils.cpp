@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -33,12 +33,15 @@
 #include "wipeable_string.h"
 #include "string_tools.h"
 #include "string_tools_lexical.h"
+#include "serialization/serialization.h"
 #include "serialization/string.h"
+#include "serialization/pricing_record.h"
 #include "cryptonote_format_utils.h"
 #include "cryptonote_config.h"
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
 #include "ringct/rctSigs.h"
+#include "oracle/asset_types.h"
 
 using namespace epee;
 
@@ -464,7 +467,7 @@ namespace cryptonote
     CHECK_AND_ASSERT_MES(tx.rct_signatures.type == rct::RCTTypeBulletproof2 || tx.rct_signatures.type == rct::RCTTypeCLSAG || tx.rct_signatures.type == rct::RCTTypeBulletproofPlus,
         std::numeric_limits<uint64_t>::max(), "Unsupported rct_signatures type in get_pruned_transaction_weight");
     CHECK_AND_ASSERT_MES(!tx.vin.empty(), std::numeric_limits<uint64_t>::max(), "empty vin");
-    CHECK_AND_ASSERT_MES(tx.vin[0].type() == typeid(cryptonote::txin_fulmo_key), std::numeric_limits<uint64_t>::max(), "empty vin");
+    CHECK_AND_ASSERT_MES(tx.vin[0].type() == typeid(cryptonote::txin_to_key), std::numeric_limits<uint64_t>::max(), "empty vin");
 
     // get pruned data size
     std::ostringstream s;
@@ -484,7 +487,7 @@ namespace cryptonote
     weight += extra;
 
     // calculate deterministic CLSAG/MLSAG data size
-    const size_t ring_size = boost::get<cryptonote::txin_fulmo_key>(tx.vin[0]).key_offsets.size();
+    const size_t ring_size = boost::get<cryptonote::txin_to_key>(tx.vin[0]).key_offsets.size();
     if (rct::is_rct_clsag(tx.rct_signatures.type))
       extra = tx.vin.size() * (ring_size + 2) * 32;
     else
@@ -531,8 +534,8 @@ namespace cryptonote
     uint64_t amount_out = 0;
     for(auto& in: tx.vin)
     {
-      CHECK_AND_ASSERT_MES(in.type() == typeid(txin_fulmo_key), 0, "unexpected type id in transaction");
-      amount_in += boost::get<txin_fulmo_key>(in).amount;
+      CHECK_AND_ASSERT_MES(in.type() == typeid(txin_to_key), 0, "unexpected type id in transaction");
+      amount_in += boost::get<txin_to_key>(in).amount;
     }
     for(auto& o: tx.vout)
       amount_out += o.amount;
@@ -824,7 +827,7 @@ namespace cryptonote
     money = 0;
     for(const auto& in: tx.vin)
     {
-      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_fulmo_key, tokey_in, false);
+      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
       money += tokey_in.amount;
     }
     return true;
@@ -841,8 +844,8 @@ namespace cryptonote
   {
     for(const auto& in: tx.vin)
     {
-      CHECK_AND_ASSERT_MES(in.type() == typeid(txin_fulmo_key), false, "wrong variant type: "
-        << in.type().name() << ", expected " << typeid(txin_fulmo_key).name()
+      CHECK_AND_ASSERT_MES(in.type() == typeid(txin_to_key), false, "wrong variant type: "
+        << in.type().name() << ", expected " << typeid(txin_to_key).name()
         << ", in transaction id=" << get_transaction_hash(tx));
 
     }
@@ -878,7 +881,7 @@ namespace cryptonote
     uint64_t money = 0;
     for(const auto& in: tx.vin)
     {
-      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_fulmo_key, tokey_in, false);
+      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
       if(money > tokey_in.amount + money)
         return false;
       money += tokey_in.amount;
@@ -906,17 +909,119 @@ namespace cryptonote
     return outputs_amount;
   }
   //---------------------------------------------------------------
+  bool get_tx_asset_types(const transaction& tx, const crypto::hash &txid, std::string& source, std::string& destination, const bool is_miner_tx) {
+    // Clear the source
+    std::set<std::string> source_asset_types;
+    source = "";
+    for (size_t i = 0; i < tx.vin.size(); i++) {
+      if (tx.vin[i].type() == typeid(txin_gen)) {
+        if (!is_miner_tx) {
+          LOG_ERROR("txin_gen detected in non-miner TX. Rejecting..");
+          return false;
+        }
+        source_asset_types.insert("FULM");
+      } else if (tx.vin[i].type() == typeid(txin_to_key)) {
+        source_asset_types.insert(boost::get<txin_to_key>(tx.vin[i]).asset_type);
+      } else {
+        LOG_ERROR("Unexpected input type found: " << tx.vin[i].type().name());
+        return false;
+      }
+    }
+    std::vector<std::string> sat;
+    sat.reserve(source_asset_types.size());
+    std::copy(source_asset_types.begin(), source_asset_types.end(), std::back_inserter(sat));
+    
+    // Sanity check that we only have 1 source asset type
+    if (sat.size() != 1) {
+      LOG_ERROR("Multiple Source Asset types detected. Rejecting..");
+      return false;
+    }
+    source = sat[0];
+    
+    // Clear the destination
+    std::set<std::string> destination_asset_types;
+    destination = "";
+    for (const auto &out: tx.vout) {
+      std::string output_asset_type;
+      bool ok = cryptonote::get_output_asset_type(out, output_asset_type);
+      if (!ok) {
+        LOG_ERROR("Unexpected output asset type found: " << out.target.type().name());
+        return false;
+      }
+      destination_asset_types.insert(output_asset_type);
+    }
+
+    std::vector<std::string> dat;
+    dat.reserve(destination_asset_types.size());
+    std::copy(destination_asset_types.begin(), destination_asset_types.end(), std::back_inserter(dat));
+    
+    // Check that we have at least 1 destination_asset_type
+    if (!dat.size()) {
+      LOG_ERROR("No supported destinations asset types detected. Rejecting..");
+      return false;
+    }
+    
+    // Handle miner_txs differently - full validation is performed in validate_miner_transaction()
+    if (is_miner_tx) {
+      destination = "FULM";
+    } else {
+    
+      // Sanity check that we only have 1 or 2 destination asset types
+      if (dat.size() > 2) {
+        LOG_ERROR("Too many (" << dat.size() << ") destination asset types detected in non-miner TX. Rejecting..");
+        return false;
+      } else if (dat.size() == 1) {
+        if (sat.size() != 1) {
+          LOG_ERROR("Impossible input asset types. Rejecting..");
+          return false;
+        }
+        if (dat[0] != source) {
+          LOG_ERROR("Conversion without change detected ([" << source << "] -> [" << dat[0] << "]). Rejecting..");
+          return false;
+        }
+        destination = dat[0];
+      } else {
+        if (sat.size() == 2) {
+          if (!((dat[0] == "FULM" && dat[1] == "FUSD") || (dat[0] == "FUSD" && dat[1] == "FULM"))) {
+            LOG_ERROR("Impossible input asset types. Rejecting..");
+            return false;
+          }
+        }
+        if (dat[0] == source) {
+          destination = dat[1];
+        } else if (dat[1] == source) {
+          destination = dat[0];
+        } else {
+          LOG_ERROR("Conversion outputs are incorrect asset types (source asset type not found - [" << source << "] -> [" << dat[0] << "," << dat[1] << "]). Rejecting..");
+          return false;
+        }
+      }
+    }
+    
+    // check both strSource and strDest are supported.
+    if (std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), source) == oracle::ASSET_TYPES.end()) {
+      LOG_ERROR("Source Asset type " << source << " is not supported! Rejecting..");
+      return false;
+    }
+    if (std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), destination) == oracle::ASSET_TYPES.end()) {
+      LOG_ERROR("Destination Asset type " << destination << " is not supported! Rejecting..");
+      return false;
+    }
+
+    return true;
+  }
+  //---------------------------------------------------------------
   bool get_output_public_key(const cryptonote::tx_out& out, crypto::public_key& output_public_key)
   {
-    // before HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_fulmo_tagged_key
-    // after HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_fulmo_tagged_key
-    if (out.target.type() == typeid(txout_fulmo_tagged_key))
-      output_public_key = boost::get< txout_fulmo_tagged_key >(out.target).key;
-    else if (out.target.type() == typeid(txout_fulmo_tagged_key))
-      output_public_key = boost::get< txout_fulmo_tagged_key >(out.target).key;
+    // before HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_key
+    // after HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_tagged_key
+    if (out.target.type() == typeid(txout_to_key))
+      output_public_key = boost::get< txout_to_key >(out.target).key;
+    else if (out.target.type() == typeid(txout_to_tagged_key))
+      output_public_key = boost::get< txout_to_tagged_key >(out.target).key;
     else
     {
-      LOG_ERROR("Unexpected output target type found: " << out.target.type().name());
+      LOG_ERROR("Unexpected output target type found: " << out.target.type().name() << " - cannot retrieve output_public_key");
       return false;
     }
 
@@ -925,19 +1030,22 @@ namespace cryptonote
   //---------------------------------------------------------------
   boost::optional<crypto::view_tag> get_output_view_tag(const cryptonote::tx_out& out)
   {
-    return out.target.type() == typeid(txout_fulmo_tagged_key)
-      ? boost::optional<crypto::view_tag>(boost::get< txout_fulmo_tagged_key >(out.target).view_tag)
+    return out.target.type() == typeid(txout_to_tagged_key)
+      ? boost::optional<crypto::view_tag>(boost::get< txout_to_tagged_key >(out.target).view_tag)
       : boost::optional<crypto::view_tag>();
   }
   //---------------------------------------------------------------
   bool get_output_asset_type(const cryptonote::tx_out& out, std::string& output_asset_type)
   {
-    // after HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_fulmo_tagged_key
-    if (out.target.type() == typeid(txout_fulmo_tagged_key))
-      output_asset_type = boost::get< txout_fulmo_tagged_key >(out.target).asset_type;
+    // before HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_key
+    // after HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_tagged_key
+    if (out.target.type() == typeid(txout_to_key))
+      output_asset_type = boost::get< txout_to_key>(out.target).asset_type;
+    else if (out.target.type() == typeid(txout_to_tagged_key))
+      output_asset_type = boost::get< txout_to_tagged_key >(out.target).asset_type;
     else
     {
-      LOG_ERROR("Unexpected output target type found: " << out.target.type().name());
+      LOG_ERROR("Unexpected output target type found: " << out.target.type().name() << " - cannot retrieve output_asset_type");
       return false;
     }
 
@@ -946,12 +1054,15 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool get_output_unlock_time(const cryptonote::tx_out& out, uint64_t& output_unlock_time)
   {
-    // after HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_fulmo_tagged_key
-    if (out.target.type() == typeid(txout_fulmo_tagged_key))
-      output_unlock_time = boost::get< txout_fulmo_tagged_key >(out.target).unlock_time;
+    // before HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_key
+    // after HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_tagged_key
+    if (out.target.type() == typeid(txout_to_key))
+      output_unlock_time = boost::get< txout_to_key>(out.target).unlock_time;
+    else if (out.target.type() == typeid(txout_to_tagged_key))
+      output_unlock_time = boost::get< txout_to_tagged_key >(out.target).unlock_time;
     else
     {
-      LOG_ERROR("Unexpected output target type found: " << out.target.type().name());
+      LOG_ERROR("Unexpected output target type found: " << out.target.type().name() << " - cannot retrieve output_unlock_time");
       return false;
     }
 
@@ -967,12 +1078,12 @@ namespace cryptonote
     return res;
   }
   //---------------------------------------------------------------
-  void set_tx_out(const uint64_t amount, const crypto::public_key& output_public_key, const bool use_view_tags, const crypto::view_tag& view_tag, const std::string& asset_type, const uint64_t unlock_time, tx_out& out)
+  void set_tx_out(const uint64_t amount, const std::string& asset_type, const uint64_t unlock_time, const crypto::public_key& output_public_key, const bool use_view_tags, const crypto::view_tag& view_tag, tx_out& out)
   {
     out.amount = amount;
     if (use_view_tags)
     {
-      txout_fulmo_tagged_key ttk;
+      txout_to_tagged_key ttk;
       ttk.key = output_public_key;
       ttk.view_tag = view_tag;
       ttk.asset_type = asset_type;
@@ -981,8 +1092,10 @@ namespace cryptonote
     }
     else
     {
-      txout_fulmo_tagged_key tk;
+      txout_to_key tk;
       tk.key = output_public_key;
+      tk.asset_type = asset_type;
+      tk.unlock_time = unlock_time;
       out.target = tk;
     }
   }
@@ -991,9 +1104,30 @@ namespace cryptonote
   {
     for (const auto &o: tx.vout)
     {
-      // require outputs have view tags
-      CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_fulmo_tagged_key), false, "wrong variant type: "
-                           << o.target.type().name() << ", expected txout_fulmo_tagged_key in transaction id=" << get_transaction_hash(tx));
+      if (hf_version > HF_VERSION_VIEW_TAGS)
+      {
+        // from v15, require outputs have view tags
+        CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
+          << o.target.type().name() << ", expected txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
+      }
+      else if (hf_version < HF_VERSION_VIEW_TAGS)
+      {
+        // require outputs to be of type txout_to_key
+        CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key), false, "wrong variant type: "
+          << o.target.type().name() << ", expected txout_to_key in transaction id=" << get_transaction_hash(tx));
+      }
+      else  //(hf_version == HF_VERSION_VIEW_TAGS)
+      {
+        // require outputs be of type txout_to_key OR txout_to_tagged_key
+        // to allow grace period before requiring all to be txout_to_tagged_key
+        CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key) || o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
+          << o.target.type().name() << ", expected txout_to_key or txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
+
+        // require all outputs in a tx be of the same type
+        CHECK_AND_ASSERT_MES(o.target.type() == tx.vout[0].target.type(), false, "non-matching variant types: "
+          << o.target.type().name() << " and " << tx.vout[0].target.type().name() << ", "
+          << "expected matching variant types in transaction id=" << get_transaction_hash(tx));
+      }
     }
     return true;
   }
@@ -1122,11 +1256,16 @@ namespace cryptonote
   {
     switch (decimal_point)
     {
+      /*
       case 12:
       case 9:
       case 6:
       case 3:
       case 0:
+      */
+      case 8:
+      case 5:
+      case 2:
         default_decimal_point = decimal_point;
         break;
       default:
@@ -1145,6 +1284,7 @@ namespace cryptonote
       decimal_point = default_decimal_point;
     switch (decimal_point)
     {
+      /*
       case 12:
         return "monero";
       case 9:
@@ -1155,8 +1295,15 @@ namespace cryptonote
         return "nanonero";
       case 0:
         return "piconero";
-      default:
-        ASSERT_MES_AND_THROW("Invalid decimal point specification: " << decimal_point);
+      */
+    case 8:
+      return "fulmo";
+    case 5:
+      return "millifulmo";
+    case 2:
+      return "microfulmo";
+    default:
+      ASSERT_MES_AND_THROW("Invalid decimal point specification: " << decimal_point);
     }
   }
   //---------------------------------------------------------------
@@ -1238,7 +1385,7 @@ namespace cryptonote
     char *end = NULL;
     errno = 0;
     const unsigned long long ull = strtoull(buf, &end, 10);
-    CHECK_AND_ASSERT_THROW_MES(ull != ULLONG_MAX || errno == 0, "Failed to parse rounded amount: " << buf);
+    CHECK_AND_ASSERT_THROW_MES(ull != ULONG_MAX || errno == 0, "Failed to parse rounded amount: " << buf);
     CHECK_AND_ASSERT_THROW_MES(ull != 0 || amount == 0, "Overflow in rounding");
     return ull;
   }
@@ -1295,7 +1442,7 @@ namespace cryptonote
       binary_archive<true> ba(ss);
       const size_t inputs = t.vin.size();
       const size_t outputs = t.vout.size();
-      const size_t mixin = t.vin.empty() ? 0 : t.vin[0].type() == typeid(txin_fulmo_key) ? boost::get<txin_fulmo_key>(t.vin[0]).key_offsets.size() - 1 : 0;
+      const size_t mixin = t.vin.empty() ? 0 : t.vin[0].type() == typeid(txin_to_key) ? boost::get<txin_to_key>(t.vin[0]).key_offsets.size() - 1 : 0;
       bool r = tt.rct_signatures.p.serialize_rctsig_prunable(ba, t.rct_signatures.type, inputs, outputs, mixin);
       CHECK_AND_ASSERT_MES(r, false, "Failed to serialize rct signatures prunable");
       cryptonote::get_blob_hash(ss.str(), res);
@@ -1553,6 +1700,7 @@ namespace cryptonote
     CHECK_AND_ASSERT_MES(r, false, "Failed to parse block from blob");
     b.invalidate_hashes();
     b.miner_tx.invalidate_hashes();
+    b.protocol_tx.invalidate_hashes();
     if (block_hash)
     {
       calculate_block_hash(b, *block_hash, &b_blob);
@@ -1607,10 +1755,16 @@ namespace cryptonote
   crypto::hash get_tx_tree_hash(const block& b)
   {
     std::vector<crypto::hash> txs_ids;
-    txs_ids.reserve(1 + b.tx_hashes.size());
+    txs_ids.reserve(2 + b.tx_hashes.size());
+    // Miner TX
     crypto::hash h = null_hash;
     size_t bl_sz = 0;
-    CHECK_AND_ASSERT_THROW_MES(get_transaction_hash(b.miner_tx, h, bl_sz), "Failed to calculate transaction hash");
+    CHECK_AND_ASSERT_THROW_MES(get_transaction_hash(b.miner_tx, h, bl_sz), "Failed to calculate transaction hash (miner_tx)");
+    txs_ids.push_back(h);
+    // Protocol TX
+    h = null_hash;
+    bl_sz = 0;
+    CHECK_AND_ASSERT_THROW_MES(get_transaction_hash(b.protocol_tx, h, bl_sz), "Failed to calculate transaction hash (protocol_tx)");
     txs_ids.push_back(h);
     for(auto& th: b.tx_hashes)
       txs_ids.push_back(th);

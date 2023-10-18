@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -33,9 +33,64 @@
 #include "cryptonote_basic/account.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
 #include "misc_language.h"
+#include "string_tools.h"
 
 using namespace cryptonote;
 
+
+
+bool test_genesis_tx()
+{
+  using namespace cryptonote;
+
+  cryptonote::network_type nettype = cryptonote::MAINNET;
+
+  account_base miner_acc1;
+  miner_acc1.generate();
+
+  std::cout << "Gennerating miner wallet..." << std::endl;
+  std::cout << "Miner account address:" << std::endl;
+  std::cout << cryptonote::get_account_address_as_str((network_type)nettype, false, miner_acc1.get_keys().m_account_address);
+  std::cout << std::endl << "Miner spend secret key:"  << std::endl;
+  epee::to_hex::formatted(std::cout, epee::as_byte_span(miner_acc1.get_keys().m_spend_secret_key));
+  std::cout << std::endl << "Miner view secret key:" << std::endl;
+  epee::to_hex::formatted(std::cout, epee::as_byte_span(miner_acc1.get_keys().m_view_secret_key));
+  std::cout << std::endl << std::endl;
+
+  //Create file with miner keys information
+  auto t = std::time(nullptr);
+  auto tm = *std::localtime(&t);
+  std::stringstream key_fine_name_ss;
+  key_fine_name_ss << "./miner01_keys" << std::put_time(&tm, "%Y%m%d%H%M%S") << ".dat";
+  std::string key_file_name = key_fine_name_ss.str();
+  std::ofstream miner_key_file;
+  miner_key_file.open (key_file_name);
+  miner_key_file << "Miner account address:" << std::endl;
+  miner_key_file << cryptonote::get_account_address_as_str((network_type)nettype, false, miner_acc1.get_keys().m_account_address);
+  miner_key_file << std::endl<< "Miner spend secret key:"  << std::endl;
+  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(miner_acc1.get_keys().m_spend_secret_key));
+  miner_key_file << std::endl << "Miner view secret key:" << std::endl;
+  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(miner_acc1.get_keys().m_view_secret_key));
+  miner_key_file << std::endl << std::endl;
+  miner_key_file.close();
+
+
+  //Prepare genesis_tx
+  cryptonote::transaction tx_genesis;
+  cryptonote::construct_miner_tx(0, 0, 0, 10, 0, miner_acc1.get_keys().m_account_address, tx_genesis);
+  std::cout << "Object:" << std::endl;
+  std::cout << obj_to_json_str(tx_genesis) << std::endl << std::endl;
+
+
+  std::stringstream ss;
+  binary_archive<true> ba(ss);
+  ::serialization::serialize(ba, tx_genesis);
+  std::string tx_hex = ss.str();
+  std::cout << "Insert this line into your coin configuration file: " << std::endl;
+  std::cout << "std::string const GENESIS_TX = \"" << epee::string_tools::buff_to_hex_nodelimer(tx_hex) << "\";" << std::endl;
+
+  return true;
+}
 
 
 bool test_transaction_generation_and_ring_signature()

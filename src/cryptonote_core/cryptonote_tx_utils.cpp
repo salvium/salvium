@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -43,6 +43,7 @@ using namespace epee;
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
 #include "ringct/rctSigs.h"
+#include "oracle/asset_types.h"
 
 using namespace crypto;
 
@@ -76,9 +77,9 @@ namespace cryptonote
   }
   //---------------------------------------------------------------
   bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, const blobdata& extra_nonce, size_t max_outs, uint8_t hard_fork_version) {
-    tx.vin.clear();
-    tx.vout.clear();
-    tx.extra.clear();
+
+    // Clear the TX contents
+    tx.set_null();
 
     keypair txkey = keypair::generate(hw::get_device("default"));
     add_tx_pub_key_to_extra(tx, txkey.pub);
@@ -152,23 +153,20 @@ namespace cryptonote
       uint64_t amount = out_amounts[no];
       summary_amounts += amount;
 
-      bool use_view_tags = true;
+      bool use_view_tags = hard_fork_version >= HF_VERSION_VIEW_TAGS;
       crypto::view_tag view_tag;
       if (use_view_tags)
         crypto::derive_view_tag(derivation, no, view_tag);
 
       tx_out out;
-      cryptonote::set_tx_out(amount, out_eph_public_key, use_view_tags, view_tag, "" /* asset_type */, 0 /* unlock_time */, out);
+      cryptonote::set_tx_out(amount, "FULM", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);
 
       tx.vout.push_back(out);
     }
 
     CHECK_AND_ASSERT_MES(summary_amounts == block_reward, false, "Failed to construct miner tx, summary_amounts = " << summary_amounts << " not equal block_reward = " << block_reward);
 
-    if (hard_fork_version >= 4)
-      tx.version = 2;
-    else
-      tx.version = 1;
+    tx.version = 2;
 
     //lock
     tx.unlock_time = height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
@@ -201,6 +199,31 @@ namespace cryptonote
     if (count == 0 && change_addr)
       return change_addr->m_view_public_key;
     return addr.m_view_public_key;
+  }
+  //---------------------------------------------------------------
+  bool get_tx_type(const std::string& source, const std::string& destination, transaction_type& type) {
+
+    // check both source and destination are supported.
+    if (std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), source) == oracle::ASSET_TYPES.end()) {
+      LOG_ERROR("Source Asset type " << source << " is not supported! Rejecting..");
+      return false;
+    }
+    if (std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), destination) == oracle::ASSET_TYPES.end()) {
+      LOG_ERROR("Destination Asset type " << destination << " is not supported! Rejecting..");
+      return false;
+    }
+
+    // Find the tx type
+    if (source == destination) {
+      type = transaction_type::TRANSFER;
+    } else if (destination == "") {
+      type = transaction_type::BURN;
+    } else {
+      type = transaction_type::CONVERT;
+    }
+
+    // Return success to caller
+    return true;
   }
   //---------------------------------------------------------------
   bool construct_tx_with_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const boost::optional<cryptonote::account_public_address>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, bool rct, const rct::RCTConfig &rct_config, bool shuffle_outs, bool use_view_tags)
@@ -341,7 +364,7 @@ namespace cryptonote
       }
 
       //put key image into tx input
-      txin_fulmo_key input_to_key;
+      txin_to_key input_to_key;
       input_to_key.amount = src_entr.amount;
       input_to_key.k_image = img;
 
@@ -363,8 +386,8 @@ namespace cryptonote
     for (size_t n = 0; n < sources.size(); ++n)
       ins_order[n] = n;
     std::sort(ins_order.begin(), ins_order.end(), [&](const size_t i0, const size_t i1) {
-      const txin_fulmo_key &tk0 = boost::get<txin_fulmo_key>(tx.vin[i0]);
-      const txin_fulmo_key &tk1 = boost::get<txin_fulmo_key>(tx.vin[i1]);
+      const txin_to_key &tk0 = boost::get<txin_to_key>(tx.vin[i0]);
+      const txin_to_key &tk1 = boost::get<txin_to_key>(tx.vin[i1]);
       return memcmp(&tk0.k_image, &tk1.k_image, sizeof(tk0.k_image)) > 0;
     });
     tools::apply_permutation(ins_order, [&] (size_t i0, size_t i1) {
@@ -416,7 +439,7 @@ namespace cryptonote
                                            use_view_tags, view_tag);
 
       tx_out out;
-      cryptonote::set_tx_out(dst_entr.amount, out_eph_public_key, use_view_tags, view_tag, "" /* asset_type */, 0 /* unlock_time */, out);
+      cryptonote::set_tx_out(dst_entr.amount, dst_entr.asset_type, unlock_time, out_eph_public_key, use_view_tags, view_tag, out);
       tx.vout.push_back(out);
       output_index++;
       summary_outs_money += dst_entr.amount;
@@ -481,7 +504,7 @@ namespace cryptonote
         std::vector<crypto::signature>& sigs = tx.signatures.back();
         sigs.resize(src_entr.outputs.size());
         if (!zero_secret_key)
-          crypto::generate_ring_signature(tx_prefix_hash, boost::get<txin_fulmo_key>(tx.vin[i]).k_image, keys_ptrs, in_contexts[i].in_ephemeral.sec, src_entr.real_output, sigs.data());
+          crypto::generate_ring_signature(tx_prefix_hash, boost::get<txin_to_key>(tx.vin[i]).k_image, keys_ptrs, in_contexts[i].in_ephemeral.sec, src_entr.real_output, sigs.data());
         ss_ring_s << "signatures:" << ENDL;
         std::for_each(sigs.begin(), sigs.end(), [&](const crypto::signature& s){ss_ring_s << s << ENDL;});
         ss_ring_s << "prefix_hash:" << tx_prefix_hash << ENDL << "in_ephemeral_key: " << in_contexts[i].in_ephemeral.sec << ENDL << "real_output: " << src_entr.real_output << ENDL;
@@ -582,7 +605,7 @@ namespace cryptonote
       for (size_t i = 0; i < tx.vin.size(); ++i)
       {
         if (sources[i].rct)
-          boost::get<txin_fulmo_key>(tx.vin[i]).amount = 0;
+          boost::get<txin_to_key>(tx.vin[i]).amount = 0;
       }
       for (size_t i = 0; i < tx.vout.size(); ++i)
         tx.vout[i].amount = 0;
@@ -654,6 +677,7 @@ namespace cryptonote
   {
     //genesis block
     bl = {};
+    bl.protocol_tx.set_null();
 
     blobdata tx_bl;
     bool r = string_tools::parse_hexstr_to_binbuff(genesis_tx, tx_bl);
