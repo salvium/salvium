@@ -264,6 +264,21 @@ namespace cryptonote
     bool cleanup_handle_incoming_blocks(bool force_sync = false);
 
     /**
+     * @brief gets the pricing record for the specified timestamp
+     *
+     * @return false if method failed to obtain pricing record from oracle, otherwise true
+     */
+    bool get_pricing_record(oracle::pricing_record& pr, uint64_t timestamp);
+
+    /**
+     * @brief gets the latest pricing record that was in the last 10 block.
+     * If no pricing record found in the past 10 block, fails.
+     *
+     * @return false if method failed to obtain pricing, otherwise true
+     */
+    bool get_latest_acceptable_pr(oracle::pricing_record& pr) const;
+
+    /**
      * @brief search the blockchain for a transaction by hash
      *
      * @param id the hash to search for
@@ -604,7 +619,7 @@ namespace cryptonote
      * can be reconstituted by the receiver. This function expands
      * that implicit data.
      */
-    static bool expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys);
+    static bool expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys, const uint8_t &hf_version);
 
     /**
      * @brief validates a transaction's inputs
@@ -730,13 +745,6 @@ namespace cryptonote
      * @return the median
      */
     uint64_t get_current_cumulative_block_weight_median() const;
-
-    /**
-     * @brief gets the pricing record for the specified timestamp
-     *
-     * @return false if method failed to obtain pricing record from oracle, otherwise true
-     */
-    bool get_pricing_record(oracle::pricing_record& pr, uint64_t timestamp);
 
     /**
      * @brief gets the difficulty of the block with a given height

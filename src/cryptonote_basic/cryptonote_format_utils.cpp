@@ -1003,9 +1003,11 @@ namespace cryptonote
       LOG_ERROR("Source Asset type " << source << " is not supported! Rejecting..");
       return false;
     }
-    if (std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), destination) == oracle::ASSET_TYPES.end()) {
-      LOG_ERROR("Destination Asset type " << destination << " is not supported! Rejecting..");
-      return false;
+    if (destination != "BURN") {
+      if (std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), destination) == oracle::ASSET_TYPES.end()) {
+        LOG_ERROR("Destination Asset type " << destination << " is not supported! Rejecting..");
+        return false;
+      }
     }
 
     return true;

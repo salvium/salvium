@@ -47,6 +47,8 @@ extern "C" {
 }
 #include "crypto/crypto.h"
 
+#include "cryptonote_basic/cryptonote_basic.h"
+#include "cryptonote_protocol/enums.h"
 
 #include "rctTypes.h"
 #include "rctOps.h"
@@ -125,8 +127,39 @@ namespace rct {
     //   must know the destination private key to find the correct amount, else will return a random number
     rctSig genRct(const key &message, const ctkeyV & inSk, const keyV & destinations, const std::vector<xmr_amount> & amounts, const ctkeyM &mixRing, const keyV &amount_keys, unsigned int index, ctkeyV &outSk, const RCTConfig &rct_config, hw::device &hwdev);
     rctSig genRct(const key &message, const ctkeyV & inSk, const ctkeyV  & inPk, const keyV & destinations, const std::vector<xmr_amount> & amounts, const keyV &amount_keys, const int mixin, const RCTConfig &rct_config, hw::device &hwdev);
-    rctSig genRctSimple(const key & message, const ctkeyV & inSk, const ctkeyV & inPk, const keyV & destinations, const std::vector<xmr_amount> & inamounts, const std::vector<xmr_amount> & outamounts, const keyV &amount_keys, xmr_amount txnFee, unsigned int mixin, const RCTConfig &rct_config, hw::device &hwdev);
-    rctSig genRctSimple(const key & message, const ctkeyV & inSk, const keyV & destinations, const std::vector<xmr_amount> & inamounts, const std::vector<xmr_amount> & outamounts, xmr_amount txnFee, const ctkeyM & mixRing, const keyV &amount_keys, const std::vector<unsigned int> & index, ctkeyV &outSk, const RCTConfig &rct_config, hw::device &hwdev);
+    rctSig genRctSimple(
+        const key & message,
+        const ctkeyV & inSk,
+        const ctkeyV & inPk,
+        const keyV & destinations,
+        const cryptonote::transaction_type tx_type,
+        const std::string& in_asset_type,
+        const std::vector<std::string> & destination_asset_types,
+        const std::vector<xmr_amount> & inamounts,
+        const std::vector<xmr_amount> & outamounts,
+        const keyV &amount_keys,
+        xmr_amount txnFee,
+        unsigned int mixin,
+        const RCTConfig &rct_config,
+        hw::device &hwdev
+    );
+    rctSig genRctSimple(
+        const key & message,
+        const ctkeyV & inSk,
+        const keyV & destinations,
+        const cryptonote::transaction_type tx_type,
+        const std::string& in_asset_type,
+        const std::vector<std::string> & destination_asset_types,
+        const std::vector<xmr_amount> & inamounts,
+        const std::vector<xmr_amount> & outamounts,
+        xmr_amount txnFee,
+        const ctkeyM & mixRing,
+        const keyV &amount_keys,
+        const std::vector<unsigned int> & index,
+        ctkeyV &outSk,
+        const RCTConfig &rct_config,
+        hw::device &hwdev
+    );
     bool verRct(const rctSig & rv, bool semantics);
     static inline bool verRct(const rctSig & rv) { return verRct(rv, true) && verRct(rv, false); }
     bool verRctSemanticsSimple(const rctSig & rv);

@@ -1102,7 +1102,23 @@ namespace rct {
     
     //RCT simple    
     //for post-rct only
-    rctSig genRctSimple(const key &message, const ctkeyV & inSk, const keyV & destinations, const vector<xmr_amount> &inamounts, const vector<xmr_amount> &outamounts, xmr_amount txnFee, const ctkeyM & mixRing, const keyV &amount_keys, const std::vector<unsigned int> & index, ctkeyV &outSk, const RCTConfig &rct_config, hw::device &hwdev) {
+    rctSig genRctSimple(
+      const key &message,
+      const ctkeyV & inSk,
+      const keyV & destinations,
+      const cryptonote::transaction_type tx_type,
+      const std::string& in_asset_type,
+      const std::vector<std::string> & destination_asset_types,
+      const vector<xmr_amount> &inamounts,
+      const vector<xmr_amount> &outamounts,
+      xmr_amount txnFee,
+      const ctkeyM & mixRing,
+      const keyV &amount_keys,
+      const std::vector<unsigned int> & index,
+      ctkeyV &outSk,
+      const RCTConfig &rct_config,
+      hw::device &hwdev
+    ) {
         const bool bulletproof_or_plus = rct_config.range_proof_type > RangeProofBorromean;
         CHECK_AND_ASSERT_THROW_MES(inamounts.size() > 0, "Empty inamounts");
         CHECK_AND_ASSERT_THROW_MES(inamounts.size() == inSk.size(), "Different number of inamounts/inSk");
@@ -1283,7 +1299,22 @@ namespace rct {
         return rv;
     }
 
-    rctSig genRctSimple(const key &message, const ctkeyV & inSk, const ctkeyV & inPk, const keyV & destinations, const vector<xmr_amount> &inamounts, const vector<xmr_amount> &outamounts, const keyV &amount_keys, xmr_amount txnFee, unsigned int mixin, const RCTConfig &rct_config, hw::device &hwdev) {
+    rctSig genRctSimple(
+      const key &message,
+      const ctkeyV & inSk,
+      const ctkeyV & inPk,
+      const keyV & destinations,
+      const cryptonote::transaction_type tx_type,
+      const std::string& in_asset_type,
+        const std::vector<std::string> & destination_asset_types,
+      const vector<xmr_amount> &inamounts,
+      const vector<xmr_amount> &outamounts,
+      const keyV &amount_keys,
+      xmr_amount txnFee,
+      unsigned int mixin,
+      const RCTConfig &rct_config,
+      hw::device &hwdev
+    ) {
         std::vector<unsigned int> index;
         index.resize(inPk.size());
         ctkeyM mixRing;
@@ -1293,7 +1324,7 @@ namespace rct {
           mixRing[i].resize(mixin+1);
           index[i] = populateFromBlockchainSimple(mixRing[i], inPk[i], mixin);
         }
-        return genRctSimple(message, inSk, destinations, inamounts, outamounts, txnFee, mixRing, amount_keys, index, outSk, rct_config, hwdev);
+        return genRctSimple(message, inSk, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, txnFee, mixRing, amount_keys, index, outSk, rct_config, hwdev);
     }
 
     //RingCT protocol

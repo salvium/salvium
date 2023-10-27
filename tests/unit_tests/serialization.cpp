@@ -594,7 +594,12 @@ TEST(Serialization, serializes_ringct_types)
   destinations.push_back(Pk);
   //compute rct data with mixin 3
   const rct::RCTConfig rct_config{ rct::RangeProofPaddedBulletproof, 2 };
-  s0 = rct::genRctSimple(rct::zero(), sc, pc, destinations, inamounts, amounts, amount_keys, 0, 3, rct_config, hw::get_device("default"));
+  cryptonote::transaction_type tx_type = cryptonote::transaction_type::TRANSFER;
+  std::string in_asset_type = "FULM";
+  std::vector<std::string> destination_asset_types;
+  for (size_t i = 0; i < destinations.size(); ++i)
+    destination_asset_types.push_back("FULM");
+  s0 = rct::genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, amounts, amount_keys, 0, 3, rct_config, hw::get_device("default"));
 
   ASSERT_FALSE(s0.p.MGs.empty());
   ASSERT_TRUE(s0.p.CLSAGs.empty());
@@ -619,7 +624,7 @@ TEST(Serialization, serializes_ringct_types)
   ASSERT_EQ(bp0, bp1);
 
   const rct::RCTConfig rct_config_clsag{ rct::RangeProofPaddedBulletproof, 3 };
-  s0 = rct::genRctSimple(rct::zero(), sc, pc, destinations, inamounts, amounts, amount_keys, 0, 3, rct_config_clsag, hw::get_device("default"));
+  s0 = rct::genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, amounts, amount_keys, 0, 3, rct_config_clsag, hw::get_device("default"));
 
   ASSERT_FALSE(s0.p.CLSAGs.empty());
   ASSERT_TRUE(s0.p.MGs.empty());

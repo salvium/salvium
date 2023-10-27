@@ -132,8 +132,13 @@ TEST(bulletproofs, multi_splitting)
 
     rct::ctkeyV outSk;
     rct::RCTConfig rct_config { rct::RangeProofPaddedBulletproof, 4 };
+    cryptonote::transaction_type tx_type = cryptonote::transaction_type::TRANSFER;
+    std::string in_asset_type = "FULM";
+    std::vector<std::string> destination_asset_types;
+    for (size_t i = 0; i < destinations.size(); ++i)
+      destination_asset_types.push_back("FULM");
 
-    rct::rctSig s = rct::genRctSimple(rct::zero(), sc, destinations, inamounts, outamounts, available, mixRing, amount_keys, index, outSk, rct_config, hw::get_device("default"));
+    rct::rctSig s = rct::genRctSimple(rct::zero(), sc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, available, mixRing, amount_keys, index, outSk, rct_config, hw::get_device("default"));
     ASSERT_TRUE(rct::verRctSimple(s));
     for (size_t i = 0; i < n_outputs; ++i)
     {

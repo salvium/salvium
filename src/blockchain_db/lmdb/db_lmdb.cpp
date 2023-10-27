@@ -338,7 +338,7 @@ typedef struct outassettype {
 
 typedef struct circ_supply {
   crypto::hash tx_hash;
-  uint64_t pricing_record_height;
+  //uint64_t pricing_record_height;
   uint64_t source_currency_type;
   uint64_t dest_currency_type;
   uint64_t amount_burnt;
@@ -1051,7 +1051,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
     // Conversion TX - update our records
     circ_supply cs;
     cs.tx_hash = tx_hash;
-    cs.pricing_record_height = tx.pricing_record_height;
+    //cs.pricing_record_height = tx.pricing_record_height;
     cs.source_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strSource) - oracle::ASSET_TYPES.begin();
     cs.dest_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strDest) - oracle::ASSET_TYPES.begin();
     cs.amount_burnt = tx.amount_burnt;
@@ -1162,7 +1162,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
     // Get the current tally value for the source currency type
     circ_supply cs;
     cs.tx_hash = tx_hash;
-    cs.pricing_record_height = tx.pricing_record_height;
+    //cs.pricing_record_height = tx.pricing_record_height;
     cs.amount_burnt = tx.amount_burnt;
     cs.amount_minted = tx.amount_minted;
     cs.source_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strSource) - oracle::ASSET_TYPES.begin();

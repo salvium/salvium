@@ -197,7 +197,7 @@ namespace cryptonote
     //extra
     std::vector<uint8_t> extra;
     // Block height of PR to use
-    uint64_t pricing_record_height;
+    //uint64_t pricing_record_height;
     // Circulating supply information
     uint64_t amount_burnt;
     uint64_t amount_minted;
@@ -211,7 +211,7 @@ namespace cryptonote
       FIELD(vin)
       FIELD(vout)
       FIELD(extra)
-      VARINT_FIELD(pricing_record_height)
+      //VARINT_FIELD(pricing_record_height)
       VARINT_FIELD(amount_burnt)
       VARINT_FIELD(amount_minted)
       VARINT_FIELD(amount_slippage)
@@ -226,7 +226,7 @@ namespace cryptonote
       vin.clear();
       vout.clear();
       extra.clear();
-      pricing_record_height = 0;
+      //pricing_record_height = 0;
       amount_burnt = 0;
       amount_minted = 0;
       amount_slippage = 0;
@@ -520,6 +520,57 @@ namespace cryptonote
     void set_hash(const crypto::hash &h) const { hash = h; set_hash_valid(true); }
 
     transaction miner_tx;
+    /**
+     * Ok, the "protocol_tx" is a large part of what makes Fulmo unique, and requires a bit of explaining...
+     *
+     * In Haven, and therefore Zephyr also, conversions take place "in-transaction". That is to say,
+     * amounts of coin A are burnt, and amounts of coin B are minted, and the conversion rate is known,
+     * and therefore verifiable all in the same TX. All very neat and tidy.
+     *
+     * But to implement slippage and yield, it isn't quite as easy to put a nice neat bow around it all.
+     * Solving slippage in particular requires an approach that means it isn't POSSIBLE to know how much
+     * you are going to receive ahead of the transaction being included in a mined block. The reason for
+     * this is simple enough to explain... so here goes.
+     *
+     * There are an indeterminate number of conversion TXs that may be included in any given block. Each
+     * of these conversion TXs may improve the relative pool ratio for each other conversion TX, or it
+     * may worsen it. For example, an "offshore" (to borrow the Haven definition for the sake of expediency)
+     * increases the stablecoin pool size and reduces the volatile coin pool size. This means that, for
+     * other "offshore" TXs in the same block, the pool ratios are potentially worsened. Conversely, any
+     * "onshore" TXs in the same block would experience a balancing effect from the "offshore" TXs in terms
+     * of the source -> dest asset pool MCAP ratios.
+     *
+     * Now, the slippage for a given conversion TX is determined by the following factors:
+     *
+     * change in source asset pool MCAP
+     * change in destination asset pool MCAP
+     * the source -> dest asset pool ratios
+     * the amounts that are being burnt / minted
+     *
+     * Therefore, it follows that slippage can only accurately be assessed when we know ALL of the changes
+     * to the above parameters that will occur at a given point in time (specifically, when the block is
+     * mined). There is a fundamental interdependence between each conversion TX in a given block. This
+     * means that, in Fulmo, you can't tell in advance precisely how much you will get minted by a given
+     * conversion TX until the block is mined. Instead, when creating a conversion TX, the user is asked
+     * to specify a minimum amount they will accept - if the transaction can satisfy that criterion when
+     * it is mined, the conversion will be processed and the minted amount will be sent to the user. If
+     * the transaction cannot satisfy the minimum minted requirement, the user will be refunded their
+     * money, minus a nominal transaction fee.
+     *
+     * Welcome to Fulmo, and the protocol_tx.
+     * --------------------------------------
+     * The protocol_tx is a per-block TX (much like the miner_tx, where the block reward gets paid out).
+     * It is created at the time of populating the block template to be sent to the miner. Specifically,
+     * the code takes a snapshot of the circulating supply for each asset type, and then applies the
+     * "amount burnt" for each of the conversion TXs being included in the block. With this updated
+     * supply tally information, the slippage for each transaction can be calculated and can be tested
+     * against the "minimum minted" parameter supplied by the user. Transactions that cannot be satisfied
+     * are refunded using an RCT output in the protocol_tx for the "amount burnt" minus the nominal TX fee.
+     * The remainder of the conversion TXs will then have an RCT output created in the protocol_tx for the
+     * converted amount minus the slippage.
+     *
+     * The protocol_tx is also used to pay out "yield" amounts to the yield stakeholders.
+     */
     transaction protocol_tx;
     std::vector<crypto::hash> tx_hashes;
 

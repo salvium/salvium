@@ -166,7 +166,7 @@ namespace boost
     a & x.vin;
     a & x.vout;
     a & x.extra;
-    a & x.pricing_record_height;
+    //a & x.pricing_record_height;
     a & x.amount_burnt;
     a & x.amount_minted;
     a & x.amount_slippage;
@@ -180,7 +180,7 @@ namespace boost
     a & x.vin;
     a & x.vout;
     a & x.extra;
-    a & x.pricing_record_height;
+    //a & x.pricing_record_height;
     a & x.amount_burnt;
     a & x.amount_minted;
     a & x.amount_slippage;

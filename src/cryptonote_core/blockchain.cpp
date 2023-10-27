@@ -229,7 +229,7 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
           output_index = m_db->get_output_key(tx_in_to_key.amount, i);
 
         // call to the passed boost visitor to grab the public key for the output
-        if (!vis.handle_output(output_index.unlock_time, output_index.pubkey, output_index.commitment))
+        if (!vis.handle_output(output_index.unlock_time, tx_in_to_key.asset_type, output_index.pubkey, output_index.commitment))
         {
           MERROR_VER("Failed to handle_output for output no = " << count << ", with absolute offset " << i);
           return false;
@@ -3249,7 +3249,7 @@ bool Blockchain::have_tx_keyimges_as_spent(const transaction &tx) const
   }
   return false;
 }
-bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys)
+bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys, const uint8_t &hf_version)
 {
   PERF_TIMER(expand_transaction_2);
   CHECK_AND_ASSERT_MES(tx.version == 2, false, "Transaction version is not 2");
@@ -3602,7 +3602,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     case rct::RCTTypeCLSAG:
     case rct::RCTTypeBulletproofPlus:
     {
-      if (!ver_rct_non_semantics_simple_cached(tx, pubkeys, m_rct_ver_cache, RCT_CACHE_TYPE))
+      if (!ver_rct_non_semantics_simple_cached(tx, pubkeys, m_rct_ver_cache, RCT_CACHE_TYPE, hf_version))
       {
         MERROR_VER("Failed to check ringct signatures!");
         return false;
@@ -3611,7 +3611,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     }
     case rct::RCTTypeFull:
     {
-      if (!expand_transaction_2(tx, tx_prefix_hash, pubkeys))
+      if (!expand_transaction_2(tx, tx_prefix_hash, pubkeys, hf_version))
       {
         MERROR_VER("Failed to expand rct signatures!");
         return false;
@@ -3911,17 +3911,23 @@ bool Blockchain::check_tx_input(size_t tx_version, const txin_to_key& txin, cons
   {
     std::vector<rct::ctkey >& m_output_keys;
     const Blockchain& m_bch;
+    const std::string& m_asset_type;
     const uint8_t hf_version;
-    outputs_visitor(std::vector<rct::ctkey>& output_keys, const Blockchain& bch, uint8_t hf_version) :
-      m_output_keys(output_keys), m_bch(bch), hf_version(hf_version)
+    outputs_visitor(std::vector<rct::ctkey>& output_keys, const Blockchain& bch, const std::string& asset_type, uint8_t hf_version) :
+      m_output_keys(output_keys), m_asset_type(asset_type), m_bch(bch), hf_version(hf_version)
     {
     }
-    bool handle_output(uint64_t unlock_time, const crypto::public_key &pubkey, const rct::key &commitment)
+    bool handle_output(uint64_t unlock_time, const std::string& asset_type, const crypto::public_key &pubkey, const rct::key &commitment)
     {
       //check tx unlock time
       if (!m_bch.is_tx_spendtime_unlocked(unlock_time, hf_version))
       {
         MERROR_VER("One of outputs for one of inputs has wrong tx.unlock_time = " << unlock_time);
+        return false;
+      }
+
+      if (asset_type != m_asset_type) {
+        MERROR_VER("One of outputs for one of inputs has wrong asset type. Expected = " << asset_type << " Got = " << m_asset_type);
         return false;
       }
 
@@ -3940,7 +3946,7 @@ bool Blockchain::check_tx_input(size_t tx_version, const txin_to_key& txin, cons
   output_keys.clear();
 
   // collect output keys
-  outputs_visitor vi(output_keys, *this, hf_version);
+  outputs_visitor vi(output_keys, *this, txin.asset_type, hf_version);
   if (!scan_outputkeys_for_indexes(tx_version, txin, vi, tx_prefix_hash, pmax_related_block_height))
   {
     MERROR_VER("Failed to get output keys for tx with amount = " << print_money(txin.amount) << " and count indexes " << txin.key_offsets.size());
