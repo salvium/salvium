@@ -1120,6 +1120,7 @@ namespace rct {
       hw::device &hwdev
     ) {
         const bool bulletproof_or_plus = rct_config.range_proof_type > RangeProofBorromean;
+        CHECK_AND_ASSERT_THROW_MES(destination_asset_types.size() == destinations.size(), "Different number of amount_keys/destinations");
         CHECK_AND_ASSERT_THROW_MES(inamounts.size() > 0, "Empty inamounts");
         CHECK_AND_ASSERT_THROW_MES(inamounts.size() == inSk.size(), "Different number of inamounts/inSk");
         CHECK_AND_ASSERT_THROW_MES(outamounts.size() == destinations.size(), "Different number of amounts/destinations");
@@ -1400,7 +1401,8 @@ namespace rct {
 
     //ver RingCT simple
     //assumes only post-rct style inputs (at least for max anonymity)
-    bool verRctSemanticsSimple(const std::vector<const rctSig*> & rvv) {
+    bool verRctSemanticsSimple(const rctSig & rv, const uint64_t amount_burnt)
+    {
       try
       {
         PERF_TIMER(verRctSemanticsSimple);
@@ -1412,87 +1414,79 @@ namespace rct {
         std::vector<const BulletproofPlus*> bpp_proofs;
         size_t max_non_bp_proofs = 0, offset = 0;
 
-        for (const rctSig *rvp: rvv)
+        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus,
+                             false, "verRctSemanticsSimple called on non simple rctSig");
+        const bool bulletproof = is_rct_bulletproof(rv.type);
+        const bool bulletproof_plus = is_rct_bulletproof_plus(rv.type);
+        if (bulletproof || bulletproof_plus)
         {
-          CHECK_AND_ASSERT_MES(rvp, false, "rctSig pointer is NULL");
-          const rctSig &rv = *rvp;
-          CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus,
-              false, "verRctSemanticsSimple called on non simple rctSig");
-          const bool bulletproof = is_rct_bulletproof(rv.type);
-          const bool bulletproof_plus = is_rct_bulletproof_plus(rv.type);
-          if (bulletproof || bulletproof_plus)
+          if (bulletproof_plus)
+            CHECK_AND_ASSERT_MES(rv.outPk.size() == n_bulletproof_plus_amounts(rv.p.bulletproofs_plus), false, "Mismatched sizes of outPk and bulletproofs_plus");
+          else
+            CHECK_AND_ASSERT_MES(rv.outPk.size() == n_bulletproof_amounts(rv.p.bulletproofs), false, "Mismatched sizes of outPk and bulletproofs");
+          if (is_rct_clsag(rv.type))
           {
-            if (bulletproof_plus)
-              CHECK_AND_ASSERT_MES(rv.outPk.size() == n_bulletproof_plus_amounts(rv.p.bulletproofs_plus), false, "Mismatched sizes of outPk and bulletproofs_plus");
-            else
-              CHECK_AND_ASSERT_MES(rv.outPk.size() == n_bulletproof_amounts(rv.p.bulletproofs), false, "Mismatched sizes of outPk and bulletproofs");
-            if (is_rct_clsag(rv.type))
-            {
-              CHECK_AND_ASSERT_MES(rv.p.MGs.empty(), false, "MGs are not empty for CLSAG");
-              CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.size() == rv.p.CLSAGs.size(), false, "Mismatched sizes of rv.p.pseudoOuts and rv.p.CLSAGs");
-            }
-            else
-            {
-              CHECK_AND_ASSERT_MES(rv.p.CLSAGs.empty(), false, "CLSAGs are not empty for MLSAG");
-              CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.size() == rv.p.MGs.size(), false, "Mismatched sizes of rv.p.pseudoOuts and rv.p.MGs");
-            }
-            CHECK_AND_ASSERT_MES(rv.pseudoOuts.empty(), false, "rv.pseudoOuts is not empty");
+            CHECK_AND_ASSERT_MES(rv.p.MGs.empty(), false, "MGs are not empty for CLSAG");
+            CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.size() == rv.p.CLSAGs.size(), false, "Mismatched sizes of rv.p.pseudoOuts and rv.p.CLSAGs");
           }
           else
           {
-            CHECK_AND_ASSERT_MES(rv.outPk.size() == rv.p.rangeSigs.size(), false, "Mismatched sizes of outPk and rv.p.rangeSigs");
-            CHECK_AND_ASSERT_MES(rv.pseudoOuts.size() == rv.p.MGs.size(), false, "Mismatched sizes of rv.pseudoOuts and rv.p.MGs");
-            CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.empty(), false, "rv.p.pseudoOuts is not empty");
+            CHECK_AND_ASSERT_MES(rv.p.CLSAGs.empty(), false, "CLSAGs are not empty for MLSAG");
+            CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.size() == rv.p.MGs.size(), false, "Mismatched sizes of rv.p.pseudoOuts and rv.p.MGs");
           }
-          CHECK_AND_ASSERT_MES(rv.outPk.size() == rv.ecdhInfo.size(), false, "Mismatched sizes of outPk and rv.ecdhInfo");
-
-          if (!bulletproof && !bulletproof_plus)
-            max_non_bp_proofs += rv.p.rangeSigs.size();
+          CHECK_AND_ASSERT_MES(rv.pseudoOuts.empty(), false, "rv.pseudoOuts is not empty");
         }
+        else
+        {
+          CHECK_AND_ASSERT_MES(rv.outPk.size() == rv.p.rangeSigs.size(), false, "Mismatched sizes of outPk and rv.p.rangeSigs");
+          CHECK_AND_ASSERT_MES(rv.pseudoOuts.size() == rv.p.MGs.size(), false, "Mismatched sizes of rv.pseudoOuts and rv.p.MGs");
+          CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.empty(), false, "rv.p.pseudoOuts is not empty");
+        }
+        CHECK_AND_ASSERT_MES(rv.outPk.size() == rv.ecdhInfo.size(), false, "Mismatched sizes of outPk and rv.ecdhInfo");
+
+        if (!bulletproof && !bulletproof_plus)
+          max_non_bp_proofs += rv.p.rangeSigs.size();
 
         results.resize(max_non_bp_proofs);
-        for (const rctSig *rvp: rvv)
+
+        const keyV &pseudoOuts = bulletproof || bulletproof_plus ? rv.p.pseudoOuts : rv.pseudoOuts;
+
+        rct::keyV masks(rv.outPk.size());
+        for (size_t i = 0; i < rv.outPk.size(); i++) {
+          masks[i] = rv.outPk[i].mask;
+        }
+        key sumOutpks = addKeys(masks);
+        DP(sumOutpks);
+        const key txnFeeKey = scalarmultH(d2h(rv.txnFee));
+        addKeys(sumOutpks, txnFeeKey, sumOutpks);
+
+        const key txnAmountBurntKey = scalarmultH(d2h(amount_burnt));
+        addKeys(sumOutpks, txnAmountBurntKey, sumOutpks);
+          
+        key sumPseudoOuts = addKeys(pseudoOuts);
+        DP(sumPseudoOuts);
+
+        //check pseudoOuts vs Outs..
+        if (!equalKeys(sumPseudoOuts, sumOutpks)) {
+          LOG_PRINT_L1("Sum check failed");
+          return false;
+        }
+
+        if (bulletproof_plus)
         {
-          const rctSig &rv = *rvp;
-
-          const bool bulletproof = is_rct_bulletproof(rv.type);
-          const bool bulletproof_plus = is_rct_bulletproof_plus(rv.type);
-          const keyV &pseudoOuts = bulletproof || bulletproof_plus ? rv.p.pseudoOuts : rv.pseudoOuts;
-
-          rct::keyV masks(rv.outPk.size());
-          for (size_t i = 0; i < rv.outPk.size(); i++) {
-            masks[i] = rv.outPk[i].mask;
-          }
-          key sumOutpks = addKeys(masks);
-          DP(sumOutpks);
-          const key txnFeeKey = scalarmultH(d2h(rv.txnFee));
-          addKeys(sumOutpks, txnFeeKey, sumOutpks);
-
-          key sumPseudoOuts = addKeys(pseudoOuts);
-          DP(sumPseudoOuts);
-
-          //check pseudoOuts vs Outs..
-          if (!equalKeys(sumPseudoOuts, sumOutpks)) {
-            LOG_PRINT_L1("Sum check failed");
-            return false;
-          }
-
-          if (bulletproof_plus)
-          {
-            for (size_t i = 0; i < rv.p.bulletproofs_plus.size(); i++)
-              bpp_proofs.push_back(&rv.p.bulletproofs_plus[i]);
-          }
-          else if (bulletproof)
-          {
-            for (size_t i = 0; i < rv.p.bulletproofs.size(); i++)
-              bp_proofs.push_back(&rv.p.bulletproofs[i]);
-          }
-          else
-          {
-            for (size_t i = 0; i < rv.p.rangeSigs.size(); i++)
-              tpool.submit(&waiter, [&, i, offset] { results[i+offset] = verRange(rv.outPk[i].mask, rv.p.rangeSigs[i]); });
-            offset += rv.p.rangeSigs.size();
-          }
+          for (size_t i = 0; i < rv.p.bulletproofs_plus.size(); i++)
+            bpp_proofs.push_back(&rv.p.bulletproofs_plus[i]);
+        }
+        else if (bulletproof)
+        {
+          for (size_t i = 0; i < rv.p.bulletproofs.size(); i++)
+            bp_proofs.push_back(&rv.p.bulletproofs[i]);
+        }
+        else
+        {
+          for (size_t i = 0; i < rv.p.rangeSigs.size(); i++)
+            tpool.submit(&waiter, [&, i, offset] { results[i+offset] = verRange(rv.outPk[i].mask, rv.p.rangeSigs[i]); });
+          offset += rv.p.rangeSigs.size();
         }
         if (!bpp_proofs.empty() && !verBulletproofPlus(bpp_proofs))
         {
@@ -1531,11 +1525,6 @@ namespace rct {
         LOG_PRINT_L1("Error in verRctSemanticsSimple, but not an actual exception");
         return false;
       }
-    }
-
-    bool verRctSemanticsSimple(const rctSig & rv)
-    {
-      return verRctSemanticsSimple(std::vector<const rctSig*>(1, &rv));
     }
 
     //ver RingCT simple

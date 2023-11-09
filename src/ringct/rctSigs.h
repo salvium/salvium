@@ -162,10 +162,9 @@ namespace rct {
     );
     bool verRct(const rctSig & rv, bool semantics);
     static inline bool verRct(const rctSig & rv) { return verRct(rv, true) && verRct(rv, false); }
-    bool verRctSemanticsSimple(const rctSig & rv);
-    bool verRctSemanticsSimple(const std::vector<const rctSig*> & rv);
+    bool verRctSemanticsSimple(const rctSig & rv, const uint64_t amount_burnt=0);
     bool verRctNonSemanticsSimple(const rctSig & rv);
-    static inline bool verRctSimple(const rctSig & rv) { return verRctSemanticsSimple(rv) && verRctNonSemanticsSimple(rv); }
+  static inline bool verRctSimple(const rctSig & rv, const uint64_t amount_burnt=0) { return verRctSemanticsSimple(rv, amount_burnt) && verRctNonSemanticsSimple(rv); }
     xmr_amount decodeRct(const rctSig & rv, const key & sk, unsigned int i, key & mask, hw::device &hwdev);
     xmr_amount decodeRct(const rctSig & rv, const key & sk, unsigned int i, hw::device &hwdev);
     xmr_amount decodeRctSimple(const rctSig & rv, const key & sk, unsigned int i, key & mask, hw::device &hwdev);

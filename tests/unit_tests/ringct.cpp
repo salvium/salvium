@@ -1288,7 +1288,6 @@ TEST(ringct, aggregated)
     static const uint64_t outputs[] = {500, 1500};
     s[n] = make_sample_simple_rct_sig(NELTS(inputs), inputs, NELTS(outputs), outputs, 0);
     sp[n] = &s[n];
+    ASSERT_TRUE(verRctSemanticsSimple(s[n]));
   }
-
-  ASSERT_TRUE(verRctSemanticsSimple(sp));
 }

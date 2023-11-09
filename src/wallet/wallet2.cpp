@@ -2595,7 +2595,8 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
       payment_details payment;
       payment.m_tx_hash      = txid;
       payment.m_fee          = fee;
-      payment.m_amount       = source_asset == dest_asset ? i.second[dest_asset] : tx.amount_minted;
+      // SRCG - figure out what this needs to be (pretty sure we should never get here with CONVERT!)
+      payment.m_amount       = source_asset == dest_asset ? i.second[dest_asset] : tx.amount_burnt;
       payment.m_asset_type   = dest_asset;
       payment.m_amounts      = tx_amounts_individual_outs[i.first];
       payment.m_block_height = height;
@@ -10766,6 +10767,7 @@ bool wallet2::sanity_check(const std::vector<wallet2::pending_tx> &ptx_vector, s
         check_tx_proof(ptx.tx, address, r.second.second, "automatic-sanity-check", proof, received);
       }
       catch (const std::exception &e) { received = 0; }
+      received += ptx.tx.amount_burnt;
       total_received += received;
     }
 

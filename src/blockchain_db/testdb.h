@@ -170,7 +170,7 @@ public:
   virtual void drop_alt_blocks() override {}
   virtual bool for_all_alt_blocks(std::function<bool(const crypto::hash &blkid, const alt_block_data_t &data, const cryptonote::blobdata_ref *blob)> f, bool include_blob = false) const override { return true; }
 
-  virtual std::vector<std::pair<std::string, std::string>> get_circulating_supply() const override { return std::vector<std::pair<std::string, std::string>>(); }
+  virtual std::map<std::string, uint64_t> get_circulating_supply() const override { return std::map<std::string, uint64_t>(); }
   virtual void get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const override { }
   virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const override { return 0; };
 };

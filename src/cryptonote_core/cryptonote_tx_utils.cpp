@@ -76,6 +76,165 @@ namespace cryptonote
     LOG_PRINT_L2("destinations include " << num_stdaddresses << " standard addresses and " << num_subaddresses << " subaddresses");
   }
   //---------------------------------------------------------------
+  bool get_conversion_rate(const oracle::pricing_record& pr, const std::string& from_asset, const std::string& to_asset, uint64_t& rate) {
+    // Check for burns
+    if (to_asset == "") {
+      LOG_ERROR("Converting to a BURN is nonsensical - aborting");
+      rate = std::numeric_limits<uint64_t>::max();
+      return false;
+    }
+    // Check for transfers
+    if (from_asset == to_asset) {
+      rate = COIN;
+      return true;
+    }
+    if (from_asset == "FULM") {
+      // FULM as source
+      if (to_asset not_eq "FUSD") {
+        // Invalid conversion - abort
+        LOG_ERROR("Invalid conversion (" << from_asset << "," << to_asset << ") - aborting");
+        return false;
+      }
+      // Scale to FUSD
+      rate = pr["FUSD"];
+    } else if (from_asset == "FUSD") {
+      // FUSD as source
+      if (to_asset not_eq "FULM") {
+        // Invalid conversion - abort
+        LOG_ERROR("Invalid conversion (" << from_asset << "," << to_asset << ") - aborting");
+        return false;
+      }
+      // Scale to FULM
+      boost::multiprecision::uint128_t rate_128 = COIN;
+      rate_128 *= COIN;
+      rate_128 /= pr["FUSD"];
+      rate = rate_128.convert_to<uint64_t>();
+      rate -= (rate % 10000);
+    }
+    return true;
+  }
+  //---------------------------------------------------------------
+  bool get_converted_amount(const uint64_t& conversion_rate, const uint64_t& source_amount, uint64_t& dest_amount) {
+    if (!conversion_rate || !source_amount) {
+      LOG_ERROR("Invalid conversion rate or input amount for conversion (" << conversion_rate << "," << source_amount << ") - aborting");
+      return false;
+    }
+    boost::multiprecision::uint128_t source_amount_128 = source_amount;
+    boost::multiprecision::uint128_t conversion_rate_128 = conversion_rate;
+    boost::multiprecision::uint128_t dest_amount_128 = source_amount_128 * conversion_rate_128;
+    dest_amount_128 /= COIN;
+    dest_amount = dest_amount_128.convert_to<uint64_t>();
+    return true;
+  }
+  //---------------------------------------------------------------
+  bool calculate_conversion(const std::string& source_asset, const std::string& dest_asset, const uint64_t amount_burnt, const uint64_t amount_slippage_limit, uint64_t& amount_minted, uint64_t& amount_slippage, const std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version) {
+
+    // Sanity check - are the asset types a valid conversion?
+    CHECK_AND_ASSERT_MES(source_asset != dest_asset, false, "cannot calculate slippage when source and dest assets are identical");
+    CHECK_AND_ASSERT_MES(source_asset != "", false, "source_asset not provided");
+    CHECK_AND_ASSERT_MES(dest_asset != "", false, "dest_asset not provided (is this a BURN?)");
+    /////CHECK_AND_ASSERT_MES(pr.has_rate(dest_asset), false, "missing rate for " << dest_asset <<" in pricing record - cannot calculate conversion");
+    CHECK_AND_ASSERT_MES(circ_supply.count(source_asset) != 0, false, "missing circulating_supply data - cannot calculate slippage");
+
+    // Get the conversion rate for the TX
+    uint64_t conversion_rate = COIN;
+    bool ok = get_conversion_rate(pr, source_asset, dest_asset, conversion_rate);
+    CHECK_AND_ASSERT_MES(ok, false, "Unable to get conversion rate for " << source_asset << " to " << dest_asset);
+    
+    if (hf_version >= HF_VERSION_SLIPPAGE_YIELD) {
+
+      // Apply slippage to the burnt amount
+      amount_slippage = 0;
+
+      // Check that the slippage is acceptable
+      if (amount_slippage > amount_slippage_limit) {
+        // Bail out with no conversion
+        LOG_PRINT_L1("Unable to convert - slippage limit was too low");
+        amount_minted = 0;
+        return true;
+      }
+    }
+
+    // Work out the converted amount
+    ok = get_converted_amount(conversion_rate, amount_burnt - amount_slippage, amount_minted);
+    CHECK_AND_ASSERT_MES(ok, false, "Unable to get converted amount for " << (amount_burnt - amount_slippage) << ", converting from " << source_asset << " to " << dest_asset);
+    
+    return true;
+  }
+  //---------------------------------------------------------------
+  bool construct_protocol_tx(const size_t height,
+                             uint64_t& protocol_fee,
+                             transaction& tx,
+                             std::vector<protocol_data_entry>& protocol_data,
+                             std::map<std::string, uint64_t> circ_supply,
+                             const oracle::pricing_record& pr,
+                             const uint8_t hf_version) {
+
+    // Clear the TX contents
+    tx.set_null();
+
+    keypair txkey = keypair::generate(hw::get_device("default"));
+    add_tx_pub_key_to_extra(tx, txkey.pub);
+    if (!sort_tx_extra(tx.extra, tx.extra))
+      return false;
+
+    txin_gen in;
+    in.height = height;
+
+    // Update the circulating_supply information, while keeping a count of amount to be created using txin_gen
+    std::map<std::string, uint64_t> txin_gen_totals;
+    uint64_t txin_gen_final = 0;
+    for (auto const& entry: protocol_data) {
+      if (!circ_supply.count(entry.source_asset)) {
+        LOG_ERROR("Circulating supply does not have " << entry.source_asset << " balance - invalid source_asset");
+        return false;
+      }
+      // Deduct the amount_burnt from the circulating_supply balance
+      circ_supply[entry.source_asset] -= entry.amount_burnt;
+    }
+
+    // Calculate the slippage for the output amounts
+    for (auto const& entry: protocol_data) {
+      if (entry.destination_asset == "") {
+        // BURN TX - no slippage, no money minted - skip
+        continue;
+      }
+      // CONVERT TX - calculate the slippage, and decide if it is going to be converted or refunded
+      uint64_t amount_slippage = 0, amount_minted = 0;
+      bool ok = cryptonote::calculate_conversion(entry.source_asset, entry.destination_asset, entry.amount_burnt, entry.amount_slippage_limit, amount_minted, amount_slippage, circ_supply, pr, hf_version);
+      if (!ok) {
+        LOG_ERROR("failed to calculate slippage when trying to build protocol_tx");
+        return false;
+      }
+      if (amount_minted == 0) {
+        
+        // REFUND
+        txin_gen_totals[entry.source_asset] += entry.amount_burnt;
+
+        // Create the TX output for this refund
+        tx_out out;
+        cryptonote::set_tx_out(entry.amount_burnt, entry.source_asset, 0, entry.destination_address, false, crypto::view_tag{}, out);
+        tx.vout.push_back(out);
+      } else {
+        
+        // CONVERTED
+        txin_gen_totals[entry.destination_asset] += amount_minted;
+
+        // Create the TX output for this conversion
+        tx_out out;
+        cryptonote::set_tx_out(amount_minted, entry.destination_asset, 0, entry.destination_address, false, crypto::view_tag{}, out);
+        tx.vout.push_back(out);
+      }
+
+    }
+
+    // TODO: create the YIELD outputs
+    
+    // TODO: sum the txin_gen_totals values so that we know how much we are going to include in the protocol TX
+    
+    return false;
+  }
+  //---------------------------------------------------------------
   bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, const blobdata& extra_nonce, size_t max_outs, uint8_t hard_fork_version) {
 
     // Clear the TX contents
@@ -111,9 +270,9 @@ namespace cryptonote
     // from hard fork 4, we use a single "dusty" output. This makes the tx even smaller,
     // and avoids the quantization. These outputs will be added as rct outputs with identity
     // masks, to they can be used as rct inputs.
-    if (hard_fork_version >= 2 && hard_fork_version < 4) {
-      block_reward = block_reward - block_reward % ::config::BASE_REWARD_CLAMP_THRESHOLD;
-    }
+    //if (hard_fork_version >= 2 && hard_fork_version < 4) {
+    //  block_reward = block_reward - block_reward % ::config::BASE_REWARD_CLAMP_THRESHOLD;
+    //}
 
     std::vector<uint64_t> out_amounts;
     decompose_amount_into_digits(block_reward, hard_fork_version >= 2 ? 0 : ::config::DEFAULT_DUST_THRESHOLD,
@@ -271,6 +430,24 @@ namespace cryptonote
     tx.extra = extra;
     crypto::public_key txkey_pub;
 
+    transaction_type tx_type;
+    if (!get_tx_type(source_asset, dest_asset, tx_type)) {
+      LOG_ERROR("invalid tx type");
+      return false;
+    }
+    tx.type = static_cast<uint8_t>(tx_type);
+    
+    // Is this a CONVERT tx?
+    if (tx_type == cryptonote::transaction_type::CONVERT) {
+      // Set the destination address to be something only our wallet can identify
+      // This is where Fulmo gets interesting...
+      tx.destination_address = get_destination_view_key_pub(destinations, change_addr);
+    }
+    
+    // Set the source and destination asset_type values
+    tx.source_asset_type = source_asset;
+    tx.destination_asset_type = dest_asset;
+    
     // if we have a stealth payment id, find it and encrypt it with the tx key now
     std::vector<tx_extra_field> tx_extra_fields;
     if (parse_tx_extra(tx.extra, tx_extra_fields))
@@ -402,12 +579,6 @@ namespace cryptonote
       tx.vin.push_back(input_to_key);
     }
 
-    transaction_type tx_type;
-    if (!get_tx_type(source_asset, dest_asset, tx_type)) {
-      LOG_ERROR("invalid tx type");
-      return false;
-    }
-
     if (shuffle_outs)
     {
       std::shuffle(destinations.begin(), destinations.end(), crypto::random_device{});
@@ -470,19 +641,23 @@ namespace cryptonote
                                            additional_tx_public_keys, amount_keys, out_eph_public_key,
                                            use_view_tags, view_tag);
 
+      // Is this a BURN or CONVERT TX?
+      if (tx_type == cryptonote::transaction_type::BURN || tx_type == cryptonote::transaction_type::CONVERT) {
+        // Do not create outputs that are for the destination asset type - discard them as unused
+        if (dst_entr.asset_type == dest_asset) {
+          tx.amount_burnt += dst_entr.amount;
+          amount_keys.pop_back();
+          if (tx_type == cryptonote::transaction_type::CONVERT) {
+            //tx.amount_slippage_limit += dst_entr.amount;
+          }
+          continue;
+        }
+      }
       tx_out out;
       cryptonote::set_tx_out(dst_entr.amount, dst_entr.asset_type, unlock_time, out_eph_public_key, use_view_tags, view_tag, out);
       tx.vout.push_back(out);
       output_index++;
       summary_outs_money += dst_entr.amount;
-      if (tx_type == cryptonote::transaction_type::BURN || tx_type == cryptonote::transaction_type::CONVERT) {
-        if (dst_entr.asset_type == dest_asset) {
-          tx.amount_burnt += dst_entr.amount;
-        }
-        if (tx_type == cryptonote::transaction_type::CONVERT) {
-          tx.amount_minted += dst_entr.amount;
-        }
-      }
     }
     CHECK_AND_ASSERT_MES(additional_tx_public_keys.size() == additional_tx_keys.size(), false, "Internal error creating additional public keys");
 
@@ -654,7 +829,7 @@ namespace cryptonote
       if (!use_simple_rct && amount_in > amount_out)
         outamounts.push_back(amount_in - amount_out);
       else
-        fee = summary_inputs_money - summary_outs_money;
+        fee = summary_inputs_money - summary_outs_money - tx.amount_burnt;
 
       // zero out all amounts to mask rct outputs, real amounts are now encrypted
       for (size_t i = 0; i < tx.vin.size(); ++i)

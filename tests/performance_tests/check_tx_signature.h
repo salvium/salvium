@@ -161,16 +161,15 @@ public:
 
   bool test()
   {
-    std::vector<const rct::rctSig*> rvv;
-    rvv.reserve(m_txes.size());
     for (size_t n = 0; n < m_txes.size(); ++n)
     {
       const rct::rctSig &rv = m_txes[n].rct_signatures;
       if (!rct::verRctNonSemanticsSimple(rv))
         return false;
-      rvv.push_back(&rv);
+      if (!rct::verRctSemanticsSimple(rv))
+        return false;
     }
-    return rct::verRctSemanticsSimple(rvv);
+    return true;
   }
 
 private:

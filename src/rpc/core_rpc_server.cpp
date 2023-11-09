@@ -2926,10 +2926,10 @@ namespace cryptonote
   bool core_rpc_server::on_get_circulating_supply(const COMMAND_RPC_GET_CIRCULATING_SUPPLY::request& req, COMMAND_RPC_GET_CIRCULATING_SUPPLY::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
   {
     PERF_TIMER(on_get_circulating_supply);
-    std::vector<std::pair<std::string, std::string>> amounts = m_core.get_blockchain_storage().get_db().get_circulating_supply();
+    std::map<std::string, uint64_t> amounts = m_core.get_blockchain_storage().get_db().get_circulating_supply();
     for (const auto &i: amounts)
     {
-      COMMAND_RPC_GET_CIRCULATING_SUPPLY::supply_entry se(i.first, i.second);
+      COMMAND_RPC_GET_CIRCULATING_SUPPLY::supply_entry se(i.first, std::to_string(i.second));
       res.supply_tally.push_back(se);
     }
     res.status = CORE_RPC_STATUS_OK;

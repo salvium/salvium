@@ -166,10 +166,12 @@ namespace boost
     a & x.vin;
     a & x.vout;
     a & x.extra;
-    //a & x.pricing_record_height;
+    a & x.type;
+    a & x.destination_address;
+    a & x.source_asset_type;
+    a & x.destination_asset_type;
     a & x.amount_burnt;
-    a & x.amount_minted;
-    a & x.amount_slippage;
+    a & x.amount_slippage_limit;
   }
 
   template <class Archive>
@@ -180,10 +182,12 @@ namespace boost
     a & x.vin;
     a & x.vout;
     a & x.extra;
-    //a & x.pricing_record_height;
+    a & x.type;
+    a & x.destination_address;
+    a & x.source_asset_type;
+    a & x.destination_asset_type;
     a & x.amount_burnt;
-    a & x.amount_minted;
-    a & x.amount_slippage;
+    a & x.amount_slippage_limit;
     if (x.version == 1)
     {
       a & x.signatures;

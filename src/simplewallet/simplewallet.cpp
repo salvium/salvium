@@ -7853,6 +7853,7 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
   // TODO: add locked versions
   if (args_.size() < 4)
   {
+    fail_msg_writer() << tr("missing argument(s)");
     PRINT_USAGE(USAGE_CONVERT);
     return true;
   }
@@ -7875,8 +7876,9 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
   std::string strLastArg = local_args.back();
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
   if (strLastArg not_eq "FULM" and strLastArg not_eq "FUSD") {
-     PRINT_USAGE(USAGE_CONVERT);
-     return true;
+    fail_msg_writer() << tr("invalid destination asset_type");
+    PRINT_USAGE(USAGE_CONVERT);
+    return true;
   }
   dest_asset = strLastArg;
   local_args.pop_back();
@@ -7884,11 +7886,19 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
   strLastArg = local_args.back();
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
   if (strLastArg not_eq "FULM" and strLastArg not_eq "FUSD") {
-     PRINT_USAGE(USAGE_CONVERT);
-     return true;
+    fail_msg_writer() << tr("invalid source asset_type");
+    PRINT_USAGE(USAGE_CONVERT);
+    return true;
   }
   source_asset = strLastArg;
   local_args.pop_back();  
+
+  // Sanity check - it isn't a conversion if the asset_type for source and dest are equal
+  if (source_asset == dest_asset) {
+    fail_msg_writer() << tr("invalid conversion - asset_type is unchanged");
+    PRINT_USAGE(USAGE_CONVERT);
+    return true;
+  }
   
   transfer_main(Convert, source_asset, dest_asset, local_args, false);
   return true;  

@@ -52,6 +52,8 @@
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "rpc/message_data_structs.h"
 
+#include "oracle/pricing_record.h"
+
 namespace cryptonote
 {
   class Blockchain;
@@ -233,10 +235,13 @@ namespace cryptonote
      * @param fee return-by-reference the total of fees from the included transactions
      * @param expected_reward return-by-reference the total reward awarded to the miner finding this block, including transaction fees
      * @param version hard fork version to use for consensus rules
+     * @param pr the current pricing record
+     * @param circ_cupply the circulating supply information for all asset types
+     * @param protocol_metadata the TX-specific data needed to create conversion outputs in the protocol TX (including converted amounts and refunds)
      *
      * @return true
      */
-    bool fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version);
+    bool fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version, oracle::pricing_record& pr, std::map<std::string, uint64_t>& circ_supply, std::vector<txpool_tx_meta_t>& protocol_metadata);
 
     /**
      * @brief get a list of all transactions in the pool

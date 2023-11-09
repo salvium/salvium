@@ -133,6 +133,9 @@ namespace cryptonote
   boost::optional<crypto::view_tag> get_output_view_tag(const cryptonote::tx_out& out);
   bool get_output_asset_type(const cryptonote::tx_out& out, std::string& output_asset_type);
   bool get_output_unlock_time(const cryptonote::tx_out& out, uint64_t& output_unlock_time);
+  std::string asset_type_from_id(const uint32_t asset_type_id);
+  uint32_t asset_id_from_type(const std::string asset_type);
+  bool get_tx_asset_types(const transaction& tx, const crypto::hash &txid, std::string& source, std::string& destination, const bool is_miner_tx);
   bool check_inputs_types_supported(const transaction& tx);
   bool check_outs_valid(const transaction& tx);
   bool parse_amount(uint64_t& amount, const std::string& str_amount);

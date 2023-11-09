@@ -925,7 +925,7 @@ namespace cryptonote
           tx_info[n].result = false;
           break;
         case rct::RCTTypeSimple:
-          if (!rct::verRctSemanticsSimple(rv))
+          if (!rct::verRctSemanticsSimple(rv, tx_info[n].tx->amount_burnt))
           {
             MERROR_VER("rct signature semantics check failed");
             set_semantics_failed(tx_info[n].tx_hash);
@@ -976,18 +976,17 @@ namespace cryptonote
           break;
       }
     }
-    if (!rvv.empty() && !rct::verRctSemanticsSimple(rvv))
+    if (!rvv.empty())
     {
       LOG_PRINT_L1("One transaction among this group has bad semantics, verifying one at a time");
       ret = false;
-      const bool assumed_bad = rvv.size() == 1; // if there's only one tx, it must be the bad one
       for (size_t n = 0; n < tx_info.size(); ++n)
       {
         if (!tx_info[n].result)
           continue;
         if (tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof2 && tx_info[n].tx->rct_signatures.type != rct::RCTTypeCLSAG && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproofPlus)
           continue;
-        if (assumed_bad || !rct::verRctSemanticsSimple(tx_info[n].tx->rct_signatures))
+        if (!rct::verRctSemanticsSimple(tx_info[n].tx->rct_signatures, tx_info[n].tx->amount_burnt))
         {
           set_semantics_failed(tx_info[n].tx_hash);
           tx_info[n].tvc.m_verifivation_failed = true;

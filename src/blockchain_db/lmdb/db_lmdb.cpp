@@ -1055,7 +1055,8 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
     cs.source_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strSource) - oracle::ASSET_TYPES.begin();
     cs.dest_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strDest) - oracle::ASSET_TYPES.begin();
     cs.amount_burnt = tx.amount_burnt;
-    cs.amount_minted = tx.amount_minted;
+    // SRCG - need to work out how to populate this
+    //cs.amount_minted = tx.amount_minted;
 
     MDB_val_set(val_circ_supply, cs);
     result = mdb_cursor_put(m_cur_circ_supply, &val_tx_id, &val_circ_supply, MDB_APPEND);
@@ -1164,7 +1165,8 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
     cs.tx_hash = tx_hash;
     //cs.pricing_record_height = tx.pricing_record_height;
     cs.amount_burnt = tx.amount_burnt;
-    cs.amount_minted = tx.amount_minted;
+    // SRCG - need to work out how to populate this
+    //cs.amount_minted = tx.amount_minted;
     cs.source_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strSource) - oracle::ASSET_TYPES.begin();
     cs.dest_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strDest) - oracle::ASSET_TYPES.begin();
 
@@ -3183,10 +3185,10 @@ uint64_t BlockchainLMDB::height() const
   return db_stats.ms_entries;
 }
 
-std::vector<std::pair<std::string, std::string>> BlockchainLMDB::get_circulating_supply() const
+std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  std::vector<std::pair<std::string, std::string>> circulating_supply;
+  std::map<std::string, uint64_t> circulating_supply;
   uint64_t m_height = height();
   if (m_height == 0) {
     return circulating_supply;
@@ -3225,14 +3227,14 @@ std::vector<std::pair<std::string, std::string>> BlockchainLMDB::get_circulating
       amount += m_coinbase;
     }
 
-    circulating_supply.emplace_back(std::pair<std::string, std::string>{currency_label, amount.str()});
+    circulating_supply[currency_label] = amount.convert_to<uint64_t>();
   }
 
   TXN_POSTFIX_RDONLY();
 
   // NEAC: check for empty supply tally - only happens prior to first conversion on chain
   if (circulating_supply.empty()) {
-    circulating_supply.emplace_back(std::pair<std::string, std::string>{"FULM", std::to_string(m_coinbase)});
+    circulating_supply["FULM"] = m_coinbase;
   }
   return circulating_supply;
 }

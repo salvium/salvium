@@ -157,13 +157,18 @@ struct txpool_tx_meta_t
 {
   crypto::hash max_used_block_id;
   crypto::hash last_failed_id;
+  crypto::public_key destination_address;
   uint64_t weight;
   uint64_t fee;
+  uint64_t amount_burnt;
+  uint64_t amount_slippage_limit;
   uint64_t max_used_block_height;
   uint64_t last_failed_height;
   uint64_t receive_time;
   uint64_t last_relayed_time; //!< If received over i2p/tor, randomized forward time. If Dandelion++stem, randomized embargo time. Otherwise, last relayed timestamp
-  // 112 bytes
+  uint32_t source_asset_id;
+  uint32_t destination_asset_id;
+  // 168 bytes
   uint8_t kept_by_block;
   uint8_t relayed;
   uint8_t do_not_relay;
@@ -174,7 +179,7 @@ struct txpool_tx_meta_t
   uint8_t is_forwarding: 1;
   uint8_t bf_padding: 3;
 
-  uint8_t padding[76]; // till 192 bytes
+  uint8_t padding[20]; // till 192 bytes
 
   void set_relay_method(relay_method method) noexcept;
   relay_method get_relay_method() const noexcept;
@@ -1170,7 +1175,7 @@ public:
    *
    * @return the current circulating supply tally values
    */
-  virtual std::vector<std::pair<std::string, std::string>> get_circulating_supply() const = 0;
+  virtual std::map<std::string, uint64_t> get_circulating_supply() const = 0;
   
 
   /**

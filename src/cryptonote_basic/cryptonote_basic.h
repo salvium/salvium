@@ -51,6 +51,7 @@
 #include "ringct/rctTypes.h"
 #include "device/device.hpp"
 #include "cryptonote_basic/fwd.h"
+#include "cryptonote_protocol/enums.h"
 #include "oracle/pricing_record.h"
 
 namespace cryptonote
@@ -196,13 +197,18 @@ namespace cryptonote
     std::vector<tx_out> vout;
     //extra
     std::vector<uint8_t> extra;
-    // Block height of PR to use
-    //uint64_t pricing_record_height;
+    // TX type
+    uint8_t type;
+    // Destination address (encrypted)
+    crypto::public_key destination_address;
+    // Source asset type
+    std::string source_asset_type;
+    // Destination asset type (this is only necessary for CONVERT transactions)
+    std::string destination_asset_type;
     // Circulating supply information
     uint64_t amount_burnt;
-    uint64_t amount_minted;
-    // Slippage tracking
-    uint64_t amount_slippage;
+    // Slippage limit
+    uint64_t amount_slippage_limit;
 
     BEGIN_SERIALIZE()
       VARINT_FIELD(version)
@@ -211,10 +217,12 @@ namespace cryptonote
       FIELD(vin)
       FIELD(vout)
       FIELD(extra)
-      //VARINT_FIELD(pricing_record_height)
+      VARINT_FIELD(type)
+      FIELD(destination_address)
+      FIELD(source_asset_type)
+      FIELD(destination_asset_type)
       VARINT_FIELD(amount_burnt)
-      VARINT_FIELD(amount_minted)
-      VARINT_FIELD(amount_slippage)
+      VARINT_FIELD(amount_slippage_limit)
     END_SERIALIZE()
 
   public:
@@ -226,10 +234,12 @@ namespace cryptonote
       vin.clear();
       vout.clear();
       extra.clear();
-      //pricing_record_height = 0;
+      type = static_cast<uint8_t>(cryptonote::transaction_type::TRANSFER);
+      destination_address = crypto::null_pkey;
+      source_asset_type.clear();
+      destination_asset_type.clear();
       amount_burnt = 0;
-      amount_minted = 0;
-      amount_slippage = 0;
+      amount_slippage_limit = 0;
     }
   };
 

@@ -38,8 +38,33 @@
 
 namespace cryptonote
 {
+  bool get_conversion_rate(const oracle::pricing_record& pr, const std::string& from_asset, const std::string& to_asset, uint64_t& rate);
+  bool get_converted_amount(const uint64_t& conversion_rate, const uint64_t& source_amount, uint64_t& dest_amount);
+  bool calculate_conversion(const std::string& source_asset, const std::string& dest_asset, const uint64_t amount_burnt, const uint64_t amount_slippage_limit, uint64_t& amount_minted, uint64_t& amount_slippage, const std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version);
+  //---------------------------------------------------------------
+  /**
+   * Construct the protocol_tx
+   *
+   * @param height the current blockchain height (for reasons unknown)
+   * @param protocol_fee a variable that will receive the total supplementary fee due to be assigned to the block reward
+   * @param tx the actual TX instance to be populated with the necessary txin_gen and txout_to_key entries etc
+   * @param hf_version the current hard-fork version of the blockchain
+   *
+   * @return TRUE on success, FALSE otherwise (duh)
+   */
+  struct protocol_data_entry
+  {
+    crypto::public_key destination_address;
+    uint64_t amount_burnt;
+    uint64_t amount_minted;
+    uint64_t amount_slippage_limit;
+    std::string source_asset;
+    std::string destination_asset;
+  };
+  bool construct_protocol_tx(const size_t height, uint64_t& protocol_fee, transaction& tx, std::vector<protocol_data_entry>& protocol_data, std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version);
   //---------------------------------------------------------------
   bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, const blobdata& extra_nonce = blobdata(), size_t max_outs = 999, uint8_t hard_fork_version = 1);
+  bool construct_protocol_tx(size_t height, transaction& tx, size_t max_outs = 999, uint8_t hard_fork_version = 1);
 
   struct tx_source_entry
   {
@@ -156,7 +181,6 @@ namespace cryptonote
   crypto::hash get_block_longhash(const Blockchain *pb, const block& b, const uint64_t height, const crypto::hash *seed_hash = nullptr, const int miners = 0);
   void get_altblock_longhash(const block& b, crypto::hash& res, const crypto::hash& seed_hash);
 
-  bool get_tx_asset_types(const transaction& tx, const crypto::hash &txid, std::string& source, std::string& destination, const bool is_miner_tx);
   bool get_tx_type(const std::string& source, const std::string& destination, transaction_type& type);
 }
 

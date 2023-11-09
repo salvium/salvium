@@ -909,6 +909,36 @@ namespace cryptonote
     return outputs_amount;
   }
   //---------------------------------------------------------------
+  std::string asset_type_from_id(const uint32_t asset_type_id)
+  {
+    switch (asset_type_id) {
+    case 0x46554c4d:
+      return "FULM";
+    case 0x46555344:
+      return "FUSD";
+    case 0x00000000:
+      return "";
+    default:
+      break;
+    }
+    // Should probably throw() here
+    return "";
+  }
+  //---------------------------------------------------------------
+  uint32_t asset_id_from_type(const std::string asset_type)
+  {
+    if (asset_type == "FULM") {
+      return 0x46554c4d;
+    } else if (asset_type == "FUSD") {
+      return 0x46555344;
+    } else if (asset_type == "") {
+      return 0x00000000;
+    } else {
+      // Should probably throw() here
+      return static_cast<uint32_t>(-1);
+    }
+  }
+  //---------------------------------------------------------------
   bool get_tx_asset_types(const transaction& tx, const crypto::hash &txid, std::string& source, std::string& destination, const bool is_miner_tx) {
     // Clear the source
     std::set<std::string> source_asset_types;

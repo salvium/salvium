@@ -1666,12 +1666,49 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   
   CHECK_AND_ASSERT_MES(diffic, false, "difficulty overhead.");
 
+  std::map<std::string, uint64_t> circ_supply = get_db().get_circulating_supply();
+ 
   size_t txs_weight;
   uint64_t fee;
-  if (!m_tx_pool.fill_block_template(b, median_weight, already_generated_coins, txs_weight, fee, expected_reward, b.major_version))
+  
+  /**
+   * Here is where the magic happens - determination of the payments for the protocol_tx
+   *
+   * We need to know the following:
+   *   - address to send the funds to ("destination_address")
+   *   - asset_type being burnt
+   *   - amount being burnt
+   *   - asset_type being minted
+   *
+   * (All of this information should be provided by the txpool_tx_meta_t object)
+   *
+   * From that little lot, we can hopefully work out the slippage on all of the TXs, and
+   * therefore the amount to be minted for each TX, and who to pay it to, etc, etc.
+   */
+  std::vector<txpool_tx_meta_t> protocol_metadata;
+  std::vector<cryptonote::protocol_data_entry> protocol_entries;
+  if (!m_tx_pool.fill_block_template(b, median_weight, already_generated_coins, txs_weight, fee, expected_reward, b.major_version, pr, circ_supply, protocol_metadata))
   {
     return false;
   }
+  
+  // Clone the txpool_tx_meta_t data into a more useable format
+  for (auto& meta: protocol_metadata) {
+    cryptonote::protocol_data_entry entry;
+    entry.amount_burnt = meta.amount_burnt;
+    entry.amount_minted = 0;
+    entry.amount_slippage_limit = meta.amount_slippage_limit;
+    entry.source_asset = asset_type_from_id(meta.source_asset_id);
+    entry.destination_asset = asset_type_from_id(meta.destination_asset_id);
+    entry.destination_address = meta.destination_address;
+    protocol_entries.push_back(entry);
+  }
+
+  // Time to construct the protocol_tx
+  uint64_t protocol_fee = 0;
+  bool ok = construct_protocol_tx(height, protocol_fee, b.protocol_tx, protocol_entries, circ_supply, pr, b.major_version);
+  CHECK_AND_ASSERT_MES(ok, false, "Failed to construct protocol tx");
+  
   pool_cookie = m_tx_pool.cookie();
 #if defined(DEBUG_CREATE_BLOCK_TEMPLATE)
   size_t real_txs_weight = 0;
@@ -2444,7 +2481,7 @@ bool Blockchain::find_blockchain_supplement(const std::list<crypto::hash>& qbloc
 bool Blockchain::get_pricing_record(oracle::pricing_record& pr, uint64_t timestamp)
 {
   LOG_PRINT_L1("Requesting pricing record from Oracle - time : " << timestamp);
-
+  /*
   bool r = false;
   const uint8_t hf_version = m_hardfork->get_current_version();
 
@@ -2472,18 +2509,6 @@ bool Blockchain::get_pricing_record(oracle::pricing_record& pr, uint64_t timesta
 
   // Copy the PR
   pr = res.pr;
-  /*
-  pr.version = res.pr.version;
-  pr.timestamp = res.pr.timestamp;
-  for (auto &asset: res.pr.assets) {
-    cryptonote::pricing_record_entry entry;
-    entry.asset_type = asset.asset;
-    entry.spot = asset.spot;
-    entry.ma = asset.ma;
-    pr.assets.push_back(entry);
-  }
-  pr.signature = res.pr.signature;
-  */
   // Verify the signature
   if (pr.verifySignature(get_config(m_nettype).ORACLE_PUBLIC_KEY)) {
   } else {
@@ -2498,6 +2523,11 @@ bool Blockchain::get_pricing_record(oracle::pricing_record& pr, uint64_t timesta
     sig_hex += ss.str();
   }
   LOG_PRINT_L1("Received pricing record - signature = " << sig_hex);
+  */
+  
+  uint64_t height = get_current_blockchain_height();
+  std::vector<uint64_t> prices = {200000000, 150000000, 100000000, 75000000};
+  pr.spot = pr.moving_average = prices[height % 4];
 
   return true;
 }
@@ -3358,6 +3388,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
 
   const uint8_t hf_version = m_hardfork->get_current_version();
 
+  /*
   if (tx.version >= 2)
   {
     if (tx.vout.size() < 2)
@@ -3367,6 +3398,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
       return false;
     }
   }
+  */
 
   // from hard fork 2, we require mixin at least 2 unless one output cannot mix with 2 others
   // if one output cannot mix with 2 others, we accept at most 1 output that can mix
@@ -3492,6 +3524,9 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     // e.g. txin_gen, which is only used for miner transactions
     CHECK_AND_ASSERT_MES(txin.type() == typeid(txin_to_key), false, "wrong type id in tx input at Blockchain::check_tx_inputs");
     const txin_to_key& in_to_key = boost::get<txin_to_key>(txin);
+
+    // Make sure the user isn't trying to spend BURNt coins
+    CHECK_AND_ASSERT_MES(in_to_key.asset_type not_eq "BURN", false, "trying to spend BURNt coins");
 
     // make sure tx output has key offset(s) (is signed to be used)
     CHECK_AND_ASSERT_MES(in_to_key.key_offsets.size(), false, "empty in_to_key.key_offsets in transaction with id " << get_transaction_hash(tx));
