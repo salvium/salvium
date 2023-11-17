@@ -277,6 +277,8 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
   oracle::asset_type_counts num_rct_outs_by_asset_type;
   blobdata miner_bd = tx_to_blob(blk.miner_tx);
   add_transaction(blk_hash, std::make_pair(blk.miner_tx, blobdata_ref(miner_bd)));
+  blobdata protocol_bd = tx_to_blob(blk.protocol_tx);
+  add_transaction(blk_hash, std::make_pair(blk.protocol_tx, blobdata_ref(protocol_bd)));
 
   if (blk.miner_tx.version == 2)
   {
@@ -284,6 +286,19 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
 
     // count the current block's rct outs by asset type
     for (auto& vout: blk.miner_tx.vout) {
+      std::string asset_type;
+      if (!get_output_asset_type(vout, asset_type))
+        throw std::runtime_error("Failed to get output asset type");
+      num_rct_outs_by_asset_type.add(asset_type, 1);
+    }
+  }
+
+  if (blk.protocol_tx.version == 2)
+  {
+    num_rct_outs += blk.protocol_tx.vout.size();
+
+    // count the current block's rct outs by asset type
+    for (auto& vout: blk.protocol_tx.vout) {
       std::string asset_type;
       if (!get_output_asset_type(vout, asset_type))
         throw std::runtime_error("Failed to get output asset type");
@@ -344,6 +359,7 @@ void BlockchainDB::pop_block(block& blk, std::vector<transaction>& txs)
     txs.push_back(std::move(tx));
     remove_transaction(h);
   }
+  remove_transaction(get_transaction_hash(blk.protocol_tx));
   remove_transaction(get_transaction_hash(blk.miner_tx));
 }
 
@@ -364,6 +380,10 @@ void BlockchainDB::remove_transaction(const crypto::hash& tx_hash)
     }
   }
 
+  // Check for yield_tx entries
+  if (tx.type == cryptonote::transaction_type::YIELD) {
+  }
+  
   const bool miner_tx = tx.vin.size() == 1 && tx.vin[0].type() == typeid(txin_gen);
 
   // need tx as tx.vout has the tx outputs, and the output amounts are needed

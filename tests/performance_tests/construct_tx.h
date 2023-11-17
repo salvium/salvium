@@ -76,7 +76,7 @@ public:
     rct::RCTConfig rct_config{range_proof_type, bp_version};
     std::string source_asset = "FULM";
     std::string dest_asset = "FULM";
-    return cryptonote::construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, m_destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_tx, 0, tx_key, additional_tx_keys, rct, rct_config);
+    return cryptonote::construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, m_destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_tx, 0, tx_key, additional_tx_keys, rct, rct_config);
   }
 
 private:

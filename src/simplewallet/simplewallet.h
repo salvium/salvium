@@ -182,6 +182,7 @@ namespace cryptonote
     bool sweep_unmixable(const std::vector<std::string> &args);
     bool burn(const std::vector<std::string> &args);
     bool convert(const std::vector<std::string> &args);
+    bool lock_for_yield(const std::vector<std::string> &args);
     bool price_info(const std::vector<std::string> &args);
     bool supply_info(const std::vector<std::string> &args);
     bool yield_info(const std::vector<std::string> &args);

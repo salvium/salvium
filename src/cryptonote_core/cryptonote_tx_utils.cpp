@@ -141,10 +141,13 @@ namespace cryptonote
     bool ok = get_conversion_rate(pr, source_asset, dest_asset, conversion_rate);
     CHECK_AND_ASSERT_MES(ok, false, "Unable to get conversion rate for " << source_asset << " to " << dest_asset);
     
+    // Apply slippage to the burnt amount
+    amount_slippage = amount_burnt >> 5; // (1/32)
+
     if (hf_version >= HF_VERSION_SLIPPAGE_YIELD) {
 
       // Apply slippage to the burnt amount
-      amount_slippage = 0;
+      amount_slippage = amount_burnt >> 5; // (1/32)
 
       // Check that the slippage is acceptable
       if (amount_slippage > amount_slippage_limit) {
@@ -173,13 +176,19 @@ namespace cryptonote
     // Clear the TX contents
     tx.set_null();
 
+    // Force the TX type to 2
+    tx.version = 2;
+
+    // Clear the unlock_time
+    tx.unlock_time = 0;
+    
+    // Force the TX type to "special" (0)
+    tx.type = cryptonote::transaction_type::UNSET;
+
     keypair txkey = keypair::generate(hw::get_device("default"));
     add_tx_pub_key_to_extra(tx, txkey.pub);
     if (!sort_tx_extra(tx.extra, tx.extra))
       return false;
-
-    txin_gen in;
-    in.height = height;
 
     // Update the circulating_supply information, while keeping a count of amount to be created using txin_gen
     std::map<std::string, uint64_t> txin_gen_totals;
@@ -194,6 +203,7 @@ namespace cryptonote
     }
 
     // Calculate the slippage for the output amounts
+    LOG_PRINT_L2("Creating protocol_tx...");
     for (auto const& entry: protocol_data) {
       if (entry.destination_asset == "") {
         // BURN TX - no slippage, no money minted - skip
@@ -209,6 +219,7 @@ namespace cryptonote
       if (amount_minted == 0) {
         
         // REFUND
+        LOG_PRINT_L2("Conversion TX refunded - slippage too high");
         txin_gen_totals[entry.source_asset] += entry.amount_burnt;
 
         // Create the TX output for this refund
@@ -218,6 +229,7 @@ namespace cryptonote
       } else {
         
         // CONVERTED
+        LOG_PRINT_L2("Conversion TX submitted - converted " << entry.amount_burnt << entry.source_asset << " to " << amount_minted << entry.destination_asset << "(slippage " << amount_slippage << ")");
         txin_gen_totals[entry.destination_asset] += amount_minted;
 
         // Create the TX output for this conversion
@@ -229,10 +241,13 @@ namespace cryptonote
     }
 
     // TODO: create the YIELD outputs
-    
-    // TODO: sum the txin_gen_totals values so that we know how much we are going to include in the protocol TX
-    
-    return false;
+      
+    // Create the txin_gen now
+    txin_gen in;
+    in.height = height;
+    tx.vin.push_back(in);
+
+    return true;
   }
   //---------------------------------------------------------------
   bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, const blobdata& extra_nonce, size_t max_outs, uint8_t hard_fork_version) {
@@ -396,6 +411,7 @@ namespace cryptonote
     const uint8_t hf_version,
     const std::string& source_asset,
     const std::string& dest_asset,
+    const transaction_type& tx_type,
     const boost::optional<cryptonote::account_public_address>& change_addr,
     const std::vector<uint8_t> &extra,
     transaction& tx,
@@ -430,17 +446,14 @@ namespace cryptonote
     tx.extra = extra;
     crypto::public_key txkey_pub;
 
-    transaction_type tx_type;
-    if (!get_tx_type(source_asset, dest_asset, tx_type)) {
-      LOG_ERROR("invalid tx type");
-      return false;
-    }
-    tx.type = static_cast<uint8_t>(tx_type);
+    tx.type = tx_type;
     
     // Is this a CONVERT tx?
     if (tx_type == cryptonote::transaction_type::CONVERT) {
       // Set the destination address to be something only our wallet can identify
-      // This is where Fulmo gets interesting...
+      // This is where Fulmo gets interesting... we need to include the input key images
+      // so that we get uniqueness and prevent either Monero burning bug or key leakage.
+      // tx.d_a = Hs("convert" || input_key_images || 8rAG) + B
       tx.destination_address = get_destination_view_key_pub(destinations, change_addr);
     }
     
@@ -875,7 +888,7 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  bool construct_tx_and_get_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const uint8_t hf_version, const std::string& source_asset, const std::string& dest_asset, const boost::optional<cryptonote::account_public_address>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, crypto::secret_key &tx_key, std::vector<crypto::secret_key> &additional_tx_keys, bool rct, const rct::RCTConfig &rct_config, bool use_view_tags)
+  bool construct_tx_and_get_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const uint8_t hf_version, const std::string& source_asset, const std::string& dest_asset, const transaction_type& tx_type, const boost::optional<cryptonote::account_public_address>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, crypto::secret_key &tx_key, std::vector<crypto::secret_key> &additional_tx_keys, bool rct, const rct::RCTConfig &rct_config, bool use_view_tags)
   {
     hw::device &hwdev = sender_account_keys.get_device();
     hwdev.open_tx(tx_key);
@@ -896,7 +909,7 @@ namespace cryptonote
       }
 
       bool shuffle_outs = true;
-      bool r = construct_tx_with_tx_key(sender_account_keys, subaddresses, sources, destinations, hf_version, source_asset, dest_asset, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, rct, rct_config, shuffle_outs, use_view_tags);
+      bool r = construct_tx_with_tx_key(sender_account_keys, subaddresses, sources, destinations, hf_version, source_asset, dest_asset, tx_type, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, rct, rct_config, shuffle_outs, use_view_tags);
       hwdev.close_tx();
       return r;
     } catch(...) {
@@ -905,14 +918,14 @@ namespace cryptonote
     }
   }
   //---------------------------------------------------------------
-  bool construct_tx(const account_keys& sender_account_keys, std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, const uint8_t hf_version, const std::string& source_asset, const std::string& dest_asset, const boost::optional<cryptonote::account_public_address>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time)
+  bool construct_tx(const account_keys& sender_account_keys, std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, const uint8_t hf_version, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type& tx_type, const boost::optional<cryptonote::account_public_address>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time)
   {
      std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
      subaddresses[sender_account_keys.m_account_address.m_spend_public_key] = {0,0};
      crypto::secret_key tx_key;
      std::vector<crypto::secret_key> additional_tx_keys;
      std::vector<tx_destination_entry> destinations_copy = destinations;
-     return construct_tx_and_get_tx_key(sender_account_keys, subaddresses, sources, destinations_copy, hf_version, source_asset, dest_asset, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, false, { rct::RangeProofBorromean, 0});
+     return construct_tx_and_get_tx_key(sender_account_keys, subaddresses, sources, destinations_copy, hf_version, source_asset, dest_asset, tx_type, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, false, { rct::RangeProofBorromean, 0});
   }
   //---------------------------------------------------------------
   bool generate_genesis_block(

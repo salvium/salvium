@@ -43,11 +43,12 @@ namespace cryptonote
     block     //!< Received in block, takes precedence over others
   };
 
-  enum class transaction_type : std::uint8_t
+  enum transaction_type
   {
     UNSET = 0,
-    TRANSFER,
-    CONVERT,
-    BURN
+    TRANSFER = 1,
+    CONVERT = 2,
+    BURN = 3,
+    YIELD = 4
   };
 }

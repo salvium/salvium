@@ -138,7 +138,7 @@ bool gen_rct2_tx_validation_base::generate_with(std::vector<test_event_entry>& e
     rct_txes.resize(rct_txes.size() + 1);
     std::string source_asset = "FULM";
     std::string dest_asset = "FULM";
-    bool r = construct_tx_and_get_tx_key(miner_accounts[n].get_keys(), subaddresses, sources, destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::account_public_address{}, std::vector<uint8_t>(), rct_txes.back(), 0, tx_key, additional_tx_keys, true, rct_config[n]);
+    bool r = construct_tx_and_get_tx_key(miner_accounts[n].get_keys(), subaddresses, sources, destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), rct_txes.back(), 0, tx_key, additional_tx_keys, true, rct_config[n]);
     CHECK_AND_ASSERT_MES(r, false, "failed to construct transaction");
 
     if (post_tx && !post_tx(rct_txes.back(), n))

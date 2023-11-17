@@ -198,7 +198,7 @@ namespace cryptonote
     //extra
     std::vector<uint8_t> extra;
     // TX type
-    uint8_t type;
+    cryptonote::transaction_type type;
     // Destination address (encrypted)
     crypto::public_key destination_address;
     // Source asset type
@@ -234,7 +234,7 @@ namespace cryptonote
       vin.clear();
       vout.clear();
       extra.clear();
-      type = static_cast<uint8_t>(cryptonote::transaction_type::TRANSFER);
+      type = cryptonote::transaction_type::TRANSFER;
       destination_address = crypto::null_pkey;
       source_asset_type.clear();
       destination_asset_type.clear();

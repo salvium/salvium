@@ -38,6 +38,7 @@
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "tx_pool.h"
 #include "blockchain.h"
+#include "blockchain_db/locked_txn.h"
 #include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
 #include "cryptonote_config.h"
@@ -1399,6 +1400,45 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, 
   return true;
 }
 //------------------------------------------------------------------
+// This function does a sanity check on basic things that all protocol
+// transactions have in common, such as:
+//   one input, of type txin_gen, with height set to the block's height
+//   valid output types
+bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version)
+{
+  LOG_PRINT_L3("Blockchain::" << __func__);
+  CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 1, false, "coinbase protocol transaction in the block has no inputs");
+  CHECK_AND_ASSERT_MES(b.protocol_tx.vin[0].type() == typeid(txin_gen), false, "coinbase protocol transaction in the block has the wrong type");
+  CHECK_AND_ASSERT_MES(b.protocol_tx.version > 1, false, "Invalid coinbase protocol transaction version");
+
+  // for v2 txes (ringct), we only accept empty rct signatures for protocol transactions,
+  if (hf_version >= HF_VERSION_REJECT_SIGS_IN_COINBASE && b.protocol_tx.version >= 2)
+  {
+    CHECK_AND_ASSERT_MES(b.protocol_tx.rct_signatures.type == rct::RCTTypeNull, false, "RingCT signatures not allowed in coinbase protocol transactions");
+  }
+
+  if(boost::get<txin_gen>(b.protocol_tx.vin[0]).height != height)
+  {
+    MWARNING("The protocol transaction in block has invalid height: " << boost::get<txin_gen>(b.protocol_tx.vin[0]).height << ", expected: " << height);
+    return false;
+  }
+  MDEBUG("Protocol tx hash: " << get_transaction_hash(b.protocol_tx));
+  //CHECK_AND_ASSERT_MES(b.protocol_tx.unlock_time == height, false, "coinbase protocol transaction transaction has the wrong unlock time=" << b.protocol_tx.unlock_time << ", expected " << height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
+
+  // SRCG - we still need to make output checks
+  /*
+  //check outs overflow
+  if(!check_outs_overflow(b.protocol_tx))
+  {
+    MERROR("protocol transaction has money overflow in block " << get_block_hash(b));
+    return false;
+  }
+
+  CHECK_AND_ASSERT_MES(check_output_types(b.miner_tx, hf_version), false, "miner transaction has invalid output type(s) in block " << get_block_hash(b));
+  */
+  return true;
+}
+//------------------------------------------------------------------
 // This function validates the miner transaction reward
 bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version)
 {
@@ -1427,7 +1467,98 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   }
   return true;
 }
+//------------------------------------------------------------------
 // SRCG
+bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, std::vector<std::pair<transaction, blobdata>>& txs, const std::map<std::string, uint64_t>& circ_supply, uint8_t hf_version)
+{
+  LOG_PRINT_L3("Blockchain::" << __func__);
+  CHECK_AND_ASSERT_MES(b.tx_hashes.size() == txs.size(), false, "Invalid number of TXs / hashes supplied");
+
+  key_images_container keys;
+
+  uint64_t fee_summary = 0;
+  uint64_t t_checktx = 0;
+  uint64_t t_exists = 0;
+  uint64_t t_pool = 0;
+  uint64_t t_dblspnd = 0;
+  uint64_t n_pruned = 0;
+
+  // Build a map of outputs from the protocol_tx
+  std::map<crypto::public_key, std::tuple<std::string, uint64_t, uint64_t>> outputs;
+  for (auto& o : b.protocol_tx.vout) {
+    if (o.target.type() == typeid(txout_to_key)) {
+      txout_to_key out = boost::get<txout_to_key>(o.target);
+      outputs[out.key] = {out.asset_type, o.amount, out.unlock_time};
+    } else if (o.target.type() == typeid(txout_to_tagged_key)) {
+      txout_to_tagged_key out = boost::get<txout_to_tagged_key>(o.target);
+      outputs[out.key] = {out.asset_type, o.amount, out.unlock_time};
+    } else {
+      MERROR("Block at height: " << height << " attempting to add protocol transaction with invalid type " << o.target.type().name());
+      return false;
+    }
+  }
+  
+  size_t tx_index = 0;
+  // Iterate over the block's transaction hashes, grabbing each
+  // from the tx_pool and validating them.
+  for (const auto& tx_tmp : txs)
+  {
+    // Get a ptr to the TX to simplify coding
+    const transaction* tx = &tx_tmp.first;
+    
+    // Check to see if the TX exists in the DB - this probably duplicates the effort in our caller, but better to be sure
+    if (m_db->tx_exists(tx->hash))
+    {
+      MERROR("Block at height: " << height << " attempting to add transaction already in blockchain with id: " << tx->hash);
+      return false;
+    }
+
+    // Check to see if the TX is a conversion or not
+    if (tx->type != cryptonote::transaction_type::CONVERT) {
+      // Only conversion (and failed conversion, aka refund) TXs need to be verified - skip this TX
+      continue;
+    }
+
+    // Verify that the TX has an output in the protocol_tx to verify
+    if (outputs.count(tx->destination_address) != 1) {
+      LOG_ERROR("Failed to locate output for conversion TX id " << tx->hash << " - rejecting block");
+      return false;
+    }
+
+    // Get the output information
+    std::string output_asset_type;
+    uint64_t output_amount;
+    uint64_t output_unlock_time;
+    std::tie(output_asset_type, output_amount, output_unlock_time) = outputs[tx->destination_address];
+
+    // Verify the asset_type
+    if (tx->source_asset_type == output_asset_type) {
+      // Check the amount for REFUND
+      if (tx->amount_burnt != output_amount) {
+        LOG_ERROR("Output amount does not match amount_burnt for refunded TX id " << tx->hash << " - rejecting block");
+        return false;
+      }
+    } else if (tx->destination_asset_type == output_asset_type) {
+      // Check the amount for CONVERT
+
+      // Verify the amount of the conversion
+      uint64_t amount_minted_check = 0, amount_slippage_check = 0;
+      bool ok = cryptonote::calculate_conversion(tx->source_asset_type, tx->destination_asset_type, tx->amount_burnt, tx->amount_slippage_limit, amount_minted_check, amount_slippage_check, circ_supply, b.pricing_record, hf_version);
+      if (!ok) {
+        LOG_ERROR("Failed to calculate conversion for TX id " << tx->hash << " - rejecting block");
+        return false;
+      }
+      if (amount_minted_check != output_amount) {
+        LOG_ERROR("Output amount does not match amount_burnt for refunded TX id " << tx->hash << " - rejecting block");
+        return false;
+      }
+    } else {
+      LOG_ERROR("Output asset type incorrect: source " << tx->source_asset_type << ", dest " << tx->destination_asset_type << ", got " << output_asset_type << " - rejecting block");
+      return false;
+    }
+  }
+  return false;
+}
 //------------------------------------------------------------------
 // get the block weights of the last <count> blocks, and return by reference <sz>.
 void Blockchain::get_last_n_blocks_weights(std::vector<uint64_t>& weights, size_t count) const
@@ -2053,6 +2184,13 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
     }
 
     if(!prevalidate_miner_transaction(b, bei.height, hf_version))
+    {
+      MERROR_VER("Block with id: " << epee::string_tools::pod_to_hex(id) << " (as alternative) has incorrect miner transaction.");
+      bvc.m_verifivation_failed = true;
+      return false;
+    }
+
+    if(!prevalidate_protocol_transaction(b, bei.height, hf_version))
     {
       MERROR_VER("Block with id: " << epee::string_tools::pod_to_hex(id) << " (as alternative) has incorrect miner transaction.");
       bvc.m_verifivation_failed = true;
@@ -4283,6 +4421,14 @@ leave:
     goto leave;
   }
 
+  // sanity check basic protocol tx properties;
+  if(!prevalidate_protocol_transaction(bl, blockchain_height, hf_version))
+  {
+    MERROR_VER("Block with id: " << id << " failed to pass protocol prevalidation");
+    bvc.m_verifivation_failed = true;
+    goto leave;
+  }
+
   size_t coinbase_weight = get_transaction_weight(bl.miner_tx);
   size_t cumulative_block_weight = coinbase_weight;
 
@@ -4431,6 +4577,22 @@ leave:
   }
 
   TIME_MEASURE_FINISH(vmt);
+
+  TIME_MEASURE_START(gcs);
+  std::map<std::string, uint64_t> circ_supply = get_db().get_circulating_supply();
+  TIME_MEASURE_FINISH(gcs);
+
+  TIME_MEASURE_START(vpt);
+  if(!validate_protocol_transaction(bl, blockchain_height, txs, circ_supply, m_hardfork->get_current_version()))
+  {
+    MERROR_VER("Block with id: " << id << " has incorrect protocol transaction");
+    bvc.m_verifivation_failed = true;
+    return_tx_to_pool(txs);
+    goto leave;
+  }
+
+  TIME_MEASURE_FINISH(vpt);
+
   size_t block_weight;
   difficulty_type cumulative_difficulty;
 

@@ -27,6 +27,7 @@
 //
 // Portions of this code based upon code Copyright (c) 2019, The Monero Project
 
+#include <boost/multiprecision/cpp_int.hpp>
 #include "pricing_record.h"
 
 #include "serialization/keyvalue_serialization.h"
@@ -115,6 +116,18 @@ namespace oracle
     timestamp = orig.timestamp;
     ::memcpy(signature, orig.signature, sizeof(signature));
     return *this;
+  }
+
+  uint64_t pricing_record::operator[](const std::string& asset_type) const
+  {
+    if (asset_type == "FULM") return spot;
+    if (asset_type == "FUSD") {
+      boost::multiprecision::uint128_t exchange_128 = COIN;
+      exchange_128 *= COIN;
+      exchange_128 /= spot;
+      return exchange_128.convert_to<uint64_t>();
+    }
+    return 0;
   }
   
   bool pricing_record::equal(const pricing_record& other) const noexcept

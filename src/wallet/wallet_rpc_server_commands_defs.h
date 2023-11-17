@@ -537,6 +537,7 @@ namespace wallet_rpc
       std::list<transfer_destination> destinations;
       std::string source_asset;
       std::string dest_asset;
+      uint8_t tx_type;
       uint32_t account_index;
       std::set<uint32_t> subaddr_indices;
       uint32_t priority;
@@ -552,6 +553,7 @@ namespace wallet_rpc
         KV_SERIALIZE(destinations)
         KV_SERIALIZE(source_asset)
         KV_SERIALIZE(dest_asset)
+        KV_SERIALIZE(tx_type)
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(subaddr_indices)
         KV_SERIALIZE(priority)
@@ -602,6 +604,7 @@ namespace wallet_rpc
       std::list<transfer_destination> destinations;
       std::string source_asset;
       std::string dest_asset;
+      uint8_t tx_type;
       uint32_t account_index;
       std::set<uint32_t> subaddr_indices;
       uint32_t priority;
@@ -617,6 +620,7 @@ namespace wallet_rpc
         KV_SERIALIZE(destinations)
         KV_SERIALIZE(source_asset)
         KV_SERIALIZE(dest_asset)
+        KV_SERIALIZE(tx_type)
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(subaddr_indices)
         KV_SERIALIZE(priority)

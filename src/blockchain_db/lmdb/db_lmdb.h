@@ -76,6 +76,7 @@ typedef struct mdb_txn_cursors
 
   MDB_cursor *m_txc_circ_supply;
   MDB_cursor *m_txc_circ_supply_tally;
+  MDB_cursor *m_txc_yield_txs;
 
 } mdb_txn_cursors;
 
@@ -98,9 +99,9 @@ typedef struct mdb_txn_cursors
 #define m_cur_alt_blocks	m_cursors->m_txc_alt_blocks
 #define m_cur_hf_versions	m_cursors->m_txc_hf_versions
 #define m_cur_properties	m_cursors->m_txc_properties
-
 #define m_cur_circ_supply       m_cursors->m_txc_circ_supply
 #define m_cur_circ_supply_tally m_cursors->m_txc_circ_supply_tally
+#define m_cur_yield_txs		m_cursors->m_txc_yield_txs
 
 typedef struct mdb_rflags
 {
@@ -126,6 +127,7 @@ typedef struct mdb_rflags
   bool m_rf_properties;
   bool m_rf_circ_supply;
   bool m_rf_circ_supply_tally;
+  bool m_rf_yield_txs;
 } mdb_rflags;
 
 typedef struct mdb_threadinfo
@@ -484,6 +486,7 @@ private:
 
   MDB_dbi m_circ_supply;
   MDB_dbi m_circ_supply_tally;
+  MDB_dbi m_yield_txs;
 
   mutable uint64_t m_cum_size;	// used in batch size estimation
   mutable unsigned int m_cum_count;

@@ -1421,6 +1421,20 @@ namespace cryptonote
     bool prevalidate_miner_transaction(const block& b, uint64_t height, uint8_t hf_version);
 
     /**
+     * @brief sanity checks a protocol transaction before validating an entire block
+     *
+     * This function merely checks basic things like the structure of the protocol
+     * transaction, the unlock time, and that the amount doesn't overflow.
+     *
+     * @param b the block containing the protocol transaction
+     * @param height the height at which the block will be added
+     * @param hf_version the consensus rules to apply
+     *
+     * @return false if anything is found wrong with the protocol transaction, otherwise true
+     */
+    bool prevalidate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version);
+
+    /**
      * @brief validates a miner (coinbase) transaction
      *
      * This function makes sure that the miner calculated his reward correctly
@@ -1437,6 +1451,21 @@ namespace cryptonote
      * @return false if anything is found wrong with the miner transaction, otherwise true
      */
     bool validate_miner_transaction(const block& b, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version);
+
+    /**
+     * @brief validates a protocol (coinbase) transaction
+     *
+     * This function makes sure that the protocol rules are being implemented correctly
+     * and that the conversions and yield payouts match what is expected.
+     *
+     * @param b the block containing the miner transaction to be validated
+     * @param height the blockchain's weight
+     * @param txs a vector containing all the TXs and their blobs, needed to obtain tx_types, asset_types and burnt amounts
+     * @param version hard fork version for that transaction
+     *
+     * @return false if anything is found wrong with the protocol transaction, otherwise true
+     */
+    bool validate_protocol_transaction(const block& b, uint64_t height, std::vector<std::pair<transaction, blobdata>>& txs, const std::map<std::string, uint64_t>& circ_supply, uint8_t hf_version);
 
     /**
      * @brief reverts the blockchain to its previous state following a failed switch

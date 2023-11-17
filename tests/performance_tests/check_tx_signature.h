@@ -74,7 +74,7 @@ public:
     rct::RCTConfig rct_config{range_proof_type, bp_version};
     std::string source_asset = "FULM";
     std::string dest_asset = "FULM";
-    if (!construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_tx, 0, tx_key, additional_tx_keys, rct, rct_config))
+    if (!construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_tx, 0, tx_key, additional_tx_keys, rct, rct_config))
       return false;
 
     get_transaction_prefix_hash(m_tx, m_tx_prefix_hash);
@@ -141,7 +141,7 @@ public:
     m_txes.resize(a_num_txes + (extra_outs > 0 ? 1 : 0));
     for (size_t n = 0; n < a_num_txes; ++n)
     {
-      if (!construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_txes[n], 0, tx_key, additional_tx_keys, true, {rct::RangeProofPaddedBulletproof, 2}))
+      if (!construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_txes[n], 0, tx_key, additional_tx_keys, true, {rct::RangeProofPaddedBulletproof, 2}))
         return false;
     }
 
@@ -152,7 +152,7 @@ public:
       for (size_t n = 1; n < extra_outs; ++n)
         destinations.push_back(tx_destination_entry(1, m_alice.get_keys().m_account_address, false));
 
-      if (!construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_txes.back(), 0, tx_key, additional_tx_keys, true, {rct::RangeProofMultiOutputBulletproof, 2}))
+      if (!construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_txes.back(), 0, tx_key, additional_tx_keys, true, {rct::RangeProofMultiOutputBulletproof, 2}))
         return false;
     }
 

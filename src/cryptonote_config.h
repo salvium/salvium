@@ -55,6 +55,10 @@
 #define EMISSION_SPEED_FACTOR_PER_MINUTE                (19)
 #define FINAL_SUBSIDY_PER_MINUTE                        ((uint64_t)30000000) // 3 * pow(10, 7)
 
+#define BURN_LOCK_PERIOD                                0
+#define CONVERT_LOCK_PERIOD                             0
+#define YIELD_LOCK_PERIOD                               30*24*30
+
 #define CRYPTONOTE_REWARD_BLOCKS_WINDOW                 100
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2    60000 //size of block (bytes) after which reward for block calculated using block size
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1    20000 //size of block (bytes) after which reward for block calculated using block size - before first fork

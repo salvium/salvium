@@ -1080,7 +1080,7 @@ bool construct_tx_rct(const cryptonote::account_keys& sender_account_keys, std::
   rct::RCTConfig rct_config = {range_proof_type, bp_version};
   std::string source_asset = "FULM";
   std::string dest_asset = "FULM";
-  return construct_tx_and_get_tx_key(sender_account_keys, subaddresses, sources, destinations_copy, 1/*hf_version*/, source_asset, dest_asset, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, rct, rct_config);
+  return construct_tx_and_get_tx_key(sender_account_keys, subaddresses, sources, destinations_copy, 1/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, rct, rct_config);
 }
 
 transaction construct_tx_with_fee(std::vector<test_event_entry>& events, const block& blk_head,

@@ -211,6 +211,8 @@ namespace
  *
  * alt_blocks       block hash   {block data, block blob}
  *
+ * yield_txs        block height {txn hash, dest address, amount}
+ *
  * Note: where the data items are of uniform size, DUPFIXED tables have
  * been used to save space. In most of these cases, a dummy "zerokval"
  * key is used when accessing the table; the Key listed above will be
@@ -248,6 +250,35 @@ const char* const LMDB_PROPERTIES = "properties";
 
 const char* const LMDB_CIRC_SUPPLY = "circ_supply";
 const char* const LMDB_CIRC_SUPPLY_TALLY = "circ_supply_tally";
+
+  /**
+   * We have the following information that will go into a table in the blockchain:
+   * block_height    (this is the key field)
+   * -----------------------------------------
+   * txn_hash        (so we can verify)
+   * dest_address    (where to send the yield)
+   * amount          (how much was locked)
+   *
+   *
+   * If we only allow a 30-day (actually 21,600 block) lock, and no variation on that period, then the code
+   * to identify locks that are earning yield in a given block is probably pretty simple. It gets a LOT more
+   * complicated if you can lock for a variable period, of course.
+   *
+   * So, let's say that we have a block height h for which we want to assess the yield payments. First off,
+   * we are ONLY interested in making ANY payment if we have YIELD.block_height == h + 21600 (i.e. the yield
+   * TX has matured).
+   *
+   * Now, to calculate the payable yield, we need to know:
+   * # how much slippage accrued in each of the last 21600 blocks
+   *   (call this slippage_amounts, which is a vector of slippage_height and slippage_amount tuples)
+   * # the list of all yield TXs that fulfil the criteria
+   *   (YIELD.block_height > (h - 21600)) and (YIELD.block_height <= h) (call this yield_txs)
+   *
+   * Given this information, we would sort yield_txs by block_height. Then we iterate over slippage_amounts,
+   * and for each entry, we look to see which of the yield_txs overlaps the height for the given slippage_height.
+   * This allows us to work out the % of the slippage_amount that should be paid to the maturing yield TX.
+   */
+const char* const LMDB_YIELD_TXS = "yield_txs";
 
 const char zerokey[8] = {0};
 const MDB_val zerokval = { sizeof(zerokey), (void *)zerokey };
@@ -350,7 +381,13 @@ typedef struct circ_supply_tally {
   uint64_t amount_hi;
   uint64_t amount_lo;
 } circ_supply_tally;
-
+  
+typedef struct yield_tx_data {
+  crypto::hash tx_hash;
+  crypto::public_key destination_address;
+  uint64_t amount;
+} yield_tx_data;    
+  
 std::atomic<uint64_t> mdb_txn_safe::num_active_txns{0};
 std::atomic_flag mdb_txn_safe::creation_gate = ATOMIC_FLAG_INIT;
 
@@ -973,6 +1010,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   CURSOR(tx_indices)
   CURSOR(circ_supply)
   CURSOR(circ_supply_tally)
+  CURSOR(yield_txs)
 
   MDB_val_set(val_tx_id, tx_id);
   MDB_val_set(val_h, tx_hash);
@@ -1085,6 +1123,20 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
        "\nDest tally before mint =" << dest_tally.str() << "\nDest tally after mint =" << final_dest_tally.str());
   }
 
+  // Is there yield_tx data to add?
+  if (tx.type == cryptonote::transaction_type::YIELD) {
+    // Create the object we are going to write to the database
+    yield_tx_data yield_data;
+    yield_data.tx_hash = tx_hash;
+    yield_data.destination_address = tx.destination_address;
+    yield_data.amount = tx.amount_burnt; // SRCG - this feels as though we are bastardising the variable for an invalid purpose
+    MDB_val_set(val_height, m_height);
+    MDB_val_set(val_yield_tx_data, yield_data);
+    result = mdb_cursor_put(m_cur_yield_txs, &val_height, &val_yield_tx_data, MDB_APPEND);
+    if (result)
+      throw0(DB_ERROR(  lmdb_error("Failed to add tx yield data to db transaction: ", result).c_str()  ));
+  }
+  
   return tx_id;
 }
 
@@ -1107,6 +1159,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
   CURSOR(tx_outputs)
   CURSOR(circ_supply)
   CURSOR(circ_supply_tally)
+  CURSOR(yield_txs)
 
   MDB_val_set(val_h, tx_hash);
 
@@ -1213,6 +1266,22 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
       throw1(DB_ERROR(lmdb_error("Failed to add removal of tx outputs to db transaction: ", result).c_str()));
   }
 
+  // Is there yield_tx data to remove?
+  if (tx.type == cryptonote::transaction_type::YIELD) {
+    // Remove any yield_tx data for this transaction
+    result = mdb_cursor_get(m_cur_yield_txs, &val_tx_id, NULL, MDB_SET);
+    if (result == MDB_NOTFOUND)
+      LOG_PRINT_L1("tx has no yield_tx data to remove: " << tx_hash);
+    else if (result)
+      throw1(DB_ERROR(lmdb_error("Failed to locate yield_tx data for removal: ", result).c_str()));
+    if (!result)
+    {
+      result = mdb_cursor_del(m_cur_yield_txs, 0);
+      if (result)
+        throw1(DB_ERROR(lmdb_error("Failed to add removal of yield_tx data to db transaction: ", result).c_str()));
+    }
+  }
+  
   // Don't delete the tx_indices entry until the end, after we're done with val_tx_id
   if (mdb_cursor_del(m_cur_tx_indices, 0))
       throw1(DB_ERROR("Failed to add removal of tx index to db transaction"));

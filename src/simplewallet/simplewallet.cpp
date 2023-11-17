@@ -161,6 +161,7 @@ enum TransferType {
   TransferLocked,
   Convert,
   Burn,
+  LockForYield
 };
 
 static std::string get_human_readable_timespan(std::chrono::seconds seconds);
@@ -208,6 +209,7 @@ namespace
   const char* USAGE_SWEEP_SINGLE("sweep_single [<priority>] [<ring_size>] [outputs=<N>] <key_image> <address> [<payment_id (obsolete)>]");
   const char* USAGE_BURN("burn <amount> <asset_type>");
   const char* USAGE_CONVERT("convert [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <source_amount>) <source_asset> <dest_asset> [<payment_id>]");
+  const char* USAGE_LOCK_FOR_YIELD("lock_for_yield <amount>");
   const char* USAGE_PRICE_INFO("price_info");
   const char* USAGE_SUPPLY_INFO("supply_info");
   const char* USAGE_YIELD_INFO("yield_info");
@@ -3152,6 +3154,7 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
     message_writer() << tr("\"transfer <address> <amount> [<asset_type>]\" - Send FULM or F$ to an address.");
     message_writer() << tr("\"burn <amount> <asset_type>\" - destroy coins forever.");
     message_writer() << tr("\"convert <address> <amount> <source_asset> <dest_asset>\" - convert between coin types and send to address.");
+    message_writer() << tr("\"lock_for_tield <amount>\" - lock FULM in order to earn yield.");
     message_writer() << tr("\"price_info\" - Display current pricing information for supported assets.");
     message_writer() << tr("\"supply_info\" - Display circulating supply information.");
     message_writer() << tr("\"yield_info\" - Display current stats on Fulmo yield.");
@@ -3336,6 +3339,10 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::convert, this, _1),
                            tr(USAGE_CONVERT),
                            tr("Converts <amount> <source_asset> into <dest_asset>, with optional <priority> [0-5]"));
+  m_cmd_binder.set_handler("lock_for_yield",
+                           boost::bind(&simple_wallet::lock_for_yield, this, _1),
+                           tr(USAGE_LOCK_FOR_YIELD),
+                           tr("Locks <amount> of FULM in order to earn yield"));
   m_cmd_binder.set_handler("price_info",
                            boost::bind(&simple_wallet::price_info, this, _1),
                            tr(USAGE_PRICE_INFO),
@@ -6789,6 +6796,18 @@ bool simple_wallet::transfer_main(
     std::string err;
     switch (transfer_type)
     {
+      case Burn:
+        unlock_block = 0;
+        ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::BURN, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices);
+      break;
+      case Convert:
+        unlock_block = CONVERT_LOCK_PERIOD;
+        ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::CONVERT, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices);
+      break;
+      case LockForYield:
+        unlock_block = YIELD_LOCK_PERIOD;
+        ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::YIELD, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices);
+      break;
       case TransferLocked:
         bc_height = get_daemon_blockchain_height(err);
         if (!err.empty())
@@ -6797,13 +6816,13 @@ bool simple_wallet::transfer_main(
           return false;
         }
         unlock_block = bc_height + locked_blocks;
-        ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices);
+        ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices);
       break;
       default:
         LOG_ERROR("Unknown transfer method, using default");
         /* FALLTHRU */
       case Transfer:
-        ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices);
+        ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices);
       break;
     }
 
@@ -7901,6 +7920,23 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
   }
   
   transfer_main(Convert, source_asset, dest_asset, local_args, false);
+  return true;  
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::lock_for_yield(const std::vector<std::string> &args_)
+{
+  // TODO: add locked versions
+  if (args_.size() != 1)
+  {
+    PRINT_USAGE(USAGE_LOCK_FOR_YIELD);
+    return true;
+  }
+
+  std::vector<std::string> local_args;
+  local_args.push_back(m_wallet->get_subaddress_as_str({m_current_subaddress_account,0}));
+  local_args.insert(local_args.end(), args_.begin(), args_.end());
+  
+  transfer_main(LockForYield, "FULM", "FULM", local_args, false);
   return true;  
 }
 //----------------------------------------------------------------------------------------------------
