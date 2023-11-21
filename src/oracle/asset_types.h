@@ -31,7 +31,7 @@
 
 namespace oracle {
 
-  const std::vector<std::string> ASSET_TYPES = {"FULM", "FUSD"};
+  const std::vector<std::string> ASSET_TYPES = {"FULM", "FUSD", "BURN"};
 
   class asset_type_counts
   {
@@ -41,10 +41,12 @@ namespace oracle {
       // Fields 
       uint64_t FULM;
       uint64_t FUSD;
+      uint64_t BURN;
 
       asset_type_counts() noexcept
         : FULM(0)
         , FUSD(0)
+        , BURN(0)
       {
       }
 
@@ -54,6 +56,8 @@ namespace oracle {
           return FULM;
         } else if (asset_type == "FUSD") {
           return FUSD;
+        } else if (asset_type == "BURN") {
+          return BURN;
         }
 
         return 0;
@@ -65,6 +69,8 @@ namespace oracle {
           FULM += val;
         } else if (asset_type == "FUSD") {
           FUSD += val;
+        } else if (asset_type == "BURN") {
+          BURN += val;
         }
       }
   };

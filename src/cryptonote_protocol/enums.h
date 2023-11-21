@@ -46,9 +46,11 @@ namespace cryptonote
   enum transaction_type
   {
     UNSET = 0,
-    TRANSFER = 1,
-    CONVERT = 2,
-    BURN = 3,
-    YIELD = 4
+    MINER = 1,
+    PROTOCOL = 2,
+    TRANSFER = 3,
+    CONVERT = 4,
+    BURN = 5,
+    YIELD = 6
   };
 }

@@ -916,6 +916,8 @@ namespace cryptonote
       return "FULM";
     case 0x46555344:
       return "FUSD";
+    case 0x4255524E:
+      return "BURN";
     case 0x00000000:
       return "";
     default:
@@ -931,6 +933,8 @@ namespace cryptonote
       return 0x46554c4d;
     } else if (asset_type == "FUSD") {
       return 0x46555344;
+    } else if (asset_type == "BURN") {
+      return 0x4255524E;
     } else if (asset_type == "") {
       return 0x00000000;
     } else {
@@ -939,7 +943,30 @@ namespace cryptonote
     }
   }
   //---------------------------------------------------------------
+  /**
+   * The various scenarios that are permitted for Fulmo are more extensive than
+   * they are for Zepyhr / Havan. Specifically, we permit:
+   *
+   * MINER_TX: (SRCG => all fees are to be paid in FULM?)
+   *   - input txin_gen (FULM)
+   *   - outputs txout_to_key (FULM) / txout_to_tagged_key (FULM)
+   *
+   * PROTOCOL_TX:
+   *   - input txin_gen (FULM) --- ONLY if there are outputs
+   *   - input void ("")       --- ONLY if there are NO outputs
+   *   - outputs txout_to_key (FULM, FUSD) / txout_to_tagged_key (FULM, FUSD)
+   *
+   * BURN:
+   *
+   * CONVERT:
+   *
+   * TRANSFER:
+   *
+   * LOCK_FOR_YIELD:
+   *
+   */
   bool get_tx_asset_types(const transaction& tx, const crypto::hash &txid, std::string& source, std::string& destination, const bool is_miner_tx) {
+
     // Clear the source
     std::set<std::string> source_asset_types;
     source = "";
@@ -961,12 +988,28 @@ namespace cryptonote
     sat.reserve(source_asset_types.size());
     std::copy(source_asset_types.begin(), source_asset_types.end(), std::back_inserter(sat));
     
+    // Check for empty TX
+    if (sat.size() == 0) {
+      CHECK_AND_ASSERT_MES(tx.type == cryptonote::transaction_type::PROTOCOL, false, "Only protocol_tx type can have no vin entry");
+      CHECK_AND_ASSERT_MES(tx.vin.empty(), false, "Only protocol_tx type can have no vin entry");
+      CHECK_AND_ASSERT_MES(tx.vout.empty(), false, "Protocol TX with no inputs cannot have outputs");
+      destination = "";
+      return true;
+    }
+
     // Sanity check that we only have 1 source asset type
     if (sat.size() != 1) {
       LOG_ERROR("Multiple Source Asset types detected. Rejecting..");
       return false;
     }
     source = sat[0];
+
+    // Check for empty TX (no outputs)
+    if (tx.vout.empty()) {
+      LOG_PRINT_L1("No TX outputs found - returning empty destination");
+      destination = "";
+      return true;
+    }
     
     // Clear the destination
     std::set<std::string> destination_asset_types;

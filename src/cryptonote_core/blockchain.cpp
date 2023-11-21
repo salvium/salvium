@@ -1407,6 +1407,11 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, 
 bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
+  if (!b.protocol_tx.vin.size()) {
+    // Nothing is created by this TX - check no money is included
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "void protocol transaction in the block has outputs");
+    return true;
+  }
   CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 1, false, "coinbase protocol transaction in the block has no inputs");
   CHECK_AND_ASSERT_MES(b.protocol_tx.vin[0].type() == typeid(txin_gen), false, "coinbase protocol transaction in the block has the wrong type");
   CHECK_AND_ASSERT_MES(b.protocol_tx.version > 1, false, "Invalid coinbase protocol transaction version");
@@ -1474,6 +1479,12 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   LOG_PRINT_L3("Blockchain::" << __func__);
   CHECK_AND_ASSERT_MES(b.tx_hashes.size() == txs.size(), false, "Invalid number of TXs / hashes supplied");
 
+  if (!b.protocol_tx.vin.size()) {
+    // Nothing is created by this TX - check no money is included
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "void protocol transaction in the block has outputs");
+    return true;
+  }
+  
   key_images_container keys;
 
   uint64_t fee_summary = 0;
@@ -1557,7 +1568,8 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
       return false;
     }
   }
-  return false;
+  
+  return true;
 }
 //------------------------------------------------------------------
 // get the block weights of the last <count> blocks, and return by reference <sz>.

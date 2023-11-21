@@ -260,6 +260,11 @@ void fromJsonValue(const rapidjson::Value& val, long& i)
   to_int64(val, i);
 }
 
+void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction_type& type)
+{
+  to_uint(val, type);
+}
+
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::transaction& tx)
 {
   dest.StartObject();
@@ -269,6 +274,12 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
   INSERT_INTO_JSON_OBJECT(dest, inputs, tx.vin);
   INSERT_INTO_JSON_OBJECT(dest, outputs, tx.vout);
   INSERT_INTO_JSON_OBJECT(dest, extra, tx.extra);
+  INSERT_INTO_JSON_OBJECT(dest, type, static_cast<uint8_t>(tx.type));
+  INSERT_INTO_JSON_OBJECT(dest, destination_address, tx.destination_address);
+  INSERT_INTO_JSON_OBJECT(dest, source_asset_type, tx.source_asset_type);
+  INSERT_INTO_JSON_OBJECT(dest, destination_asset_type, tx.destination_asset_type);
+  INSERT_INTO_JSON_OBJECT(dest, amount_burnt, tx.amount_burnt);
+  INSERT_INTO_JSON_OBJECT(dest, amount_slippage_limit, tx.amount_slippage_limit);
   if (!tx.pruned)
   {
     INSERT_INTO_JSON_OBJECT(dest, signatures, tx.signatures);
@@ -291,6 +302,12 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
   GET_FROM_JSON_OBJECT(val, tx.vin, inputs);
   GET_FROM_JSON_OBJECT(val, tx.vout, outputs);
   GET_FROM_JSON_OBJECT(val, tx.extra, extra);
+  GET_FROM_JSON_OBJECT(val, tx.type, type);
+  GET_FROM_JSON_OBJECT(val, tx.destination_address, destination_address);
+  GET_FROM_JSON_OBJECT(val, tx.source_asset_type, source_asset_type);
+  GET_FROM_JSON_OBJECT(val, tx.destination_asset_type, destination_asset_type);
+  GET_FROM_JSON_OBJECT(val, tx.amount_burnt, amount_burnt);
+  GET_FROM_JSON_OBJECT(val, tx.amount_slippage_limit, amount_slippage_limit);
   GET_FROM_JSON_OBJECT(val, tx.rct_signatures, ringct);
 
   const auto& sigs = val.FindMember("signatures");

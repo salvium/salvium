@@ -234,7 +234,7 @@ namespace cryptonote
       vin.clear();
       vout.clear();
       extra.clear();
-      type = cryptonote::transaction_type::TRANSFER;
+      type = cryptonote::transaction_type::UNSET;
       destination_address = crypto::null_pkey;
       source_asset_type.clear();
       destination_asset_type.clear();

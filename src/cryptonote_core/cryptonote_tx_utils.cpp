@@ -78,7 +78,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool get_conversion_rate(const oracle::pricing_record& pr, const std::string& from_asset, const std::string& to_asset, uint64_t& rate) {
     // Check for burns
-    if (to_asset == "") {
+    if (to_asset == "BURN") {
       LOG_ERROR("Converting to a BURN is nonsensical - aborting");
       rate = std::numeric_limits<uint64_t>::max();
       return false;
@@ -175,6 +175,7 @@ namespace cryptonote
 
     // Clear the TX contents
     tx.set_null();
+    tx.type = cryptonote::transaction_type::PROTOCOL;
 
     // Force the TX type to 2
     tx.version = 2;
@@ -182,9 +183,6 @@ namespace cryptonote
     // Clear the unlock_time
     tx.unlock_time = 0;
     
-    // Force the TX type to "special" (0)
-    tx.type = cryptonote::transaction_type::UNSET;
-
     keypair txkey = keypair::generate(hw::get_device("default"));
     add_tx_pub_key_to_extra(tx, txkey.pub);
     if (!sort_tx_extra(tx.extra, tx.extra))
@@ -205,7 +203,7 @@ namespace cryptonote
     // Calculate the slippage for the output amounts
     LOG_PRINT_L2("Creating protocol_tx...");
     for (auto const& entry: protocol_data) {
-      if (entry.destination_asset == "") {
+      if (entry.destination_asset == "BURN") {
         // BURN TX - no slippage, no money minted - skip
         continue;
       }
@@ -241,7 +239,7 @@ namespace cryptonote
     }
 
     // TODO: create the YIELD outputs
-      
+    
     // Create the txin_gen now
     txin_gen in;
     in.height = height;
@@ -254,6 +252,7 @@ namespace cryptonote
 
     // Clear the TX contents
     tx.set_null();
+    tx.type = cryptonote::transaction_type::MINER;
 
     keypair txkey = keypair::generate(hw::get_device("default"));
     add_tx_pub_key_to_extra(tx, txkey.pub);
@@ -278,65 +277,29 @@ namespace cryptonote
       ", fee " << fee);
 #endif
     block_reward += fee;
-
-    // from hard fork 2, we cut out the low significant digits. This makes the tx smaller, and
-    // keeps the paid amount almost the same. The unpaid remainder gets pushed back to the
-    // emission schedule
-    // from hard fork 4, we use a single "dusty" output. This makes the tx even smaller,
-    // and avoids the quantization. These outputs will be added as rct outputs with identity
-    // masks, to they can be used as rct inputs.
-    //if (hard_fork_version >= 2 && hard_fork_version < 4) {
-    //  block_reward = block_reward - block_reward % ::config::BASE_REWARD_CLAMP_THRESHOLD;
-    //}
-
-    std::vector<uint64_t> out_amounts;
-    decompose_amount_into_digits(block_reward, hard_fork_version >= 2 ? 0 : ::config::DEFAULT_DUST_THRESHOLD,
-      [&out_amounts](uint64_t a_chunk) { out_amounts.push_back(a_chunk); },
-      [&out_amounts](uint64_t a_dust) { out_amounts.push_back(a_dust); });
-
-    CHECK_AND_ASSERT_MES(1 <= max_outs, false, "max_out must be non-zero");
-    if (height == 0 || hard_fork_version >= 4)
-    {
-      // the genesis block was not decomposed, for unknown reasons
-      while (max_outs < out_amounts.size())
-      {
-        //out_amounts[out_amounts.size() - 2] += out_amounts.back();
-        //out_amounts.resize(out_amounts.size() - 1);
-        out_amounts[1] += out_amounts[0];
-        for (size_t n = 1; n < out_amounts.size(); ++n)
-          out_amounts[n - 1] = out_amounts[n];
-        out_amounts.pop_back();
-      }
-    }
-    else
-    {
-      CHECK_AND_ASSERT_MES(max_outs >= out_amounts.size(), false, "max_out exceeded");
-    }
-
     uint64_t summary_amounts = 0;
-    for (size_t no = 0; no < out_amounts.size(); no++)
-    {
-      crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
-      crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
-      bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << txkey.sec << ")");
+    CHECK_AND_ASSERT_MES(1 <= max_outs, false, "max_out must be non-zero");
 
-      r = crypto::derive_public_key(derivation, no, miner_address.m_spend_public_key, out_eph_public_key);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << no << ", "<< miner_address.m_spend_public_key << ")");
-
-      uint64_t amount = out_amounts[no];
-      summary_amounts += amount;
-
-      bool use_view_tags = hard_fork_version >= HF_VERSION_VIEW_TAGS;
-      crypto::view_tag view_tag;
-      if (use_view_tags)
-        crypto::derive_view_tag(derivation, no, view_tag);
-
-      tx_out out;
-      cryptonote::set_tx_out(amount, "FULM", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);
-
-      tx.vout.push_back(out);
-    }
+    crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+    crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
+    bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
+    CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << txkey.sec << ")");
+    
+    r = crypto::derive_public_key(derivation, 0, miner_address.m_spend_public_key, out_eph_public_key);
+    CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
+    
+    uint64_t amount = block_reward;
+    summary_amounts += amount;
+    
+    bool use_view_tags = hard_fork_version >= HF_VERSION_VIEW_TAGS;
+    crypto::view_tag view_tag;
+    if (use_view_tags)
+      crypto::derive_view_tag(derivation, 0, view_tag);
+    
+    tx_out out;
+    cryptonote::set_tx_out(amount, "FULM", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);
+    
+    tx.vout.push_back(out);
 
     CHECK_AND_ASSERT_MES(summary_amounts == block_reward, false, "Failed to construct miner tx, summary_amounts = " << summary_amounts << " not equal block_reward = " << block_reward);
 
@@ -937,6 +900,7 @@ namespace cryptonote
     //genesis block
     bl = {};
     bl.protocol_tx.set_null();
+    bl.protocol_tx.type = cryptonote::transaction_type::PROTOCOL;
 
     blobdata tx_bl;
     bool r = string_tools::parse_hexstr_to_binbuff(genesis_tx, tx_bl);

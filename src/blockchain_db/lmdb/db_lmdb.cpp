@@ -369,9 +369,7 @@ typedef struct outassettype {
 
 typedef struct circ_supply {
   crypto::hash tx_hash;
-  //uint64_t pricing_record_height;
-  uint64_t source_currency_type;
-  uint64_t dest_currency_type;
+  uint32_t asset_type;
   uint64_t amount_burnt;
   uint64_t amount_minted;
 } circ_supply;
@@ -944,25 +942,22 @@ import_tally_from_cst(circ_supply_tally *cst)
   return tally;
 }
 
-boost::multiprecision::int128_t
-read_circulating_supply_data(MDB_cursor *cur_circ_supply_tally, MDB_val idx)
+int read_circulating_supply_data(MDB_cursor *cur_circ_supply_tally, MDB_val idx, boost::multiprecision::int128_t& tally)
 {
   MDB_val vcst;
   circ_supply_tally cst;
   int result = mdb_cursor_get(cur_circ_supply_tally, &idx, &vcst, MDB_SET);
   if (result == MDB_NOTFOUND) {
     LOG_PRINT_L1("Failed to obtain circulating supply - must be first TX with this asset");
-
-    cst.is_negative = false;
-    cst.amount_hi = 0;
-    cst.amount_lo = 0;
+    tally = 0;
   } else if (!result) {  
     cst = *(circ_supply_tally*) vcst.mv_data;
+    tally = import_tally_from_cst(&cst);
   } else {
-    throw0(DB_ERROR(lmdb_error("Failed to obtain tally for circulating supply: ", result).c_str()));      
+    throw0(DB_ERROR(lmdb_error("Failed to obtain tally for circulating supply: ", result).c_str()));
+    tally = -1;
   }
-
-  return import_tally_from_cst(&cst);
+  return result;
 }
 
 void write_circulating_supply_data(MDB_cursor *cur_circ_supply_tally, MDB_val idx, boost::multiprecision::int128_t tally)
@@ -1078,23 +1073,13 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       throw0(DB_ERROR(lmdb_error("Failed to add prunable tx prunable hash to db transaction: ", result).c_str()));
   }
 
-  // get tx assets
-  std::string strSource;
-  std::string strDest;
-  if (!get_tx_asset_types(tx, tx_hash, strSource, strDest, miner_tx)) {
-    throw0(DB_ERROR("Failed to add tx circulating supply to db transaction: get_tx_asset_types fails."));
-  }
-
-  if (strSource != strDest) {  
+  if (tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::BURN) {
     // Conversion TX - update our records
     circ_supply cs;
     cs.tx_hash = tx_hash;
-    //cs.pricing_record_height = tx.pricing_record_height;
-    cs.source_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strSource) - oracle::ASSET_TYPES.begin();
-    cs.dest_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strDest) - oracle::ASSET_TYPES.begin();
+    cs.asset_type = cryptonote::asset_id_from_type(tx.source_asset_type);
     cs.amount_burnt = tx.amount_burnt;
-    // SRCG - need to work out how to populate this
-    //cs.amount_minted = tx.amount_minted;
+    cs.amount_minted = 0;
 
     MDB_val_set(val_circ_supply, cs);
     result = mdb_cursor_put(m_cur_circ_supply, &val_tx_id, &val_circ_supply, MDB_APPEND);
@@ -1102,27 +1087,67 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       throw0(DB_ERROR(  lmdb_error("Failed to add tx circulating supply to db transaction: ", result).c_str()  ));
 
     // Get the current tally value for the source currency type
-    MDB_val_copy<uint64_t> source_idx(cs.source_currency_type);
-    boost::multiprecision::int128_t source_tally = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx);
+    MDB_val_copy<uint64_t> source_idx(cs.asset_type);
+    boost::multiprecision::int128_t source_tally = 0;
+    result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
     boost::multiprecision::int128_t final_source_tally = source_tally - cs.amount_burnt;
     boost::multiprecision::int128_t coinbase = get_block_already_generated_coins(m_height-1);
-    if ((strSource == "FULM" && (coinbase + final_source_tally < 0)) ||
-        (strSource != "FULM" && final_source_tally < 0)) {
-      LOG_ERROR(__func__ << " : mint/burn underflow detected for " << strSource << " : correcting supply tally by " << final_source_tally);
-      final_source_tally = 0;
+    if (source_tally == 0 && result == MDB_NOTFOUND) {
+      if (tx.source_asset_type == "FULM") {
+        final_source_tally += coinbase;
+      } else {
+        throw0(DB_ERROR("burn underflow - asset balance is zero for non-FULM asset"));
+      }
     }
     write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
-
-    // Get the current tally value for the dest currency type
-    MDB_val_copy<uint64_t> dest_idx(cs.dest_currency_type);
-    boost::multiprecision::int128_t dest_tally = read_circulating_supply_data(m_cur_circ_supply_tally, dest_idx);
-    boost::multiprecision::int128_t final_dest_tally = dest_tally + cs.amount_minted;
-    write_circulating_supply_data(m_cur_circ_supply_tally, dest_idx, final_dest_tally);
-
-    LOG_PRINT_L1("tx ID " << tx_id << "\nSource tally before burn =" << source_tally.str() << "\nSource tally after burn =" << final_source_tally.str() <<
-       "\nDest tally before mint =" << dest_tally.str() << "\nDest tally after mint =" << final_dest_tally.str());
+    LOG_PRINT_L1("tx ID " << tx_id << "\n\tTally before burn = " << source_tally.str() << "\n\tTally after burn = " << final_source_tally.str());
   }
 
+  if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+
+    // Iterate over all of the outputs for a PROTOCOL_TX since they're all MINTED
+    std::map<uint32_t, uint64_t> minted_amounts;
+    for (const auto& out: tx.vout) {
+
+      // Fetch the amount and output_asset_type for this output
+      std::string asset_type = "";
+      bool ok = cryptonote::get_output_asset_type(out, asset_type);
+      if (!ok)
+        throw0(DB_ERROR("failed to get output asset type (needed to update the circulating supply data for the PROTOCOL_TX)"));
+      
+      circ_supply cs;
+      cs.tx_hash = tx_hash;
+      cs.asset_type = cryptonote::asset_id_from_type(asset_type);
+      cs.amount_burnt = 0;
+      cs.amount_minted = out.amount;
+
+      minted_amounts[cs.asset_type] += out.amount;
+
+      MDB_val_set(val_circ_supply, cs);
+      result = mdb_cursor_put(m_cur_circ_supply, &val_tx_id, &val_circ_supply, MDB_APPEND);
+      if (result)
+      throw0(DB_ERROR(  lmdb_error("Failed to add tx circulating supply to db transaction: ", result).c_str()  ));
+    }
+
+    // Now update the overall tally entries
+    for (const auto& asset: minted_amounts) {
+      
+      // Get the current tally value for the source currency type
+      MDB_val_copy<uint64_t> source_idx(asset.first);
+      boost::multiprecision::int128_t source_tally = 0;
+      result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
+      boost::multiprecision::int128_t final_source_tally = source_tally + asset.second;
+      boost::multiprecision::int128_t coinbase = get_block_already_generated_coins(m_height-1);
+      if (source_tally == 0 && result == MDB_NOTFOUND) {
+        if (tx.source_asset_type == "FULM") {
+          final_source_tally += coinbase;
+        }
+      }
+      write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
+      LOG_PRINT_L1("tx ID " << tx_id << "\n\tAsset Type = " << cryptonote::asset_type_from_id(asset.first) << "\n\tTally before burn =" << source_tally.str() << "\n\tTally after burn =" << final_source_tally.str());
+    }
+  }
+  
   // Is there yield_tx data to add?
   if (tx.type == cryptonote::transaction_type::YIELD) {
     // Create the object we are going to write to the database
@@ -1203,55 +1228,64 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
         throw1(DB_ERROR(lmdb_error("Failed to add removal of prunable hash tx to db transaction: ", result).c_str()));
   }
 
-  // get tx assets
-  std::string strSource;
-  std::string strDest;
-  if (!get_tx_asset_types(tx, tx_hash, strSource, strDest, miner_tx)) {
-    throw0(DB_ERROR("Failed to add tx circulating supply to db transaction: get_tx_asset_types fails."));
+  if (tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::BURN) {
+
+    // Get the current tally value for the source currency type
+    MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
+    boost::multiprecision::int128_t source_tally = 0;
+    result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
+    if (result == MDB_NOTFOUND)
+      throw0(DB_ERROR("remove_transaction_data() - minted asset not found"));
+    boost::multiprecision::int128_t final_source_tally = source_tally + tx.amount_burnt;
+    boost::multiprecision::int128_t coinbase = get_block_already_generated_coins(m_height-1);
+    write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
+    LOG_PRINT_L1("tx ID " << tip->data.tx_id << "\n\tTally before remint =" << source_tally.str() << "\n\tTally after remint =" << final_source_tally.str());
   }
 
-  if (strSource != strDest)
-  {    
-    // Update the tally table
-    // Get the current tally value for the source currency type
-    circ_supply cs;
-    cs.tx_hash = tx_hash;
-    //cs.pricing_record_height = tx.pricing_record_height;
-    cs.amount_burnt = tx.amount_burnt;
-    // SRCG - need to work out how to populate this
-    //cs.amount_minted = tx.amount_minted;
-    cs.source_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strSource) - oracle::ASSET_TYPES.begin();
-    cs.dest_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strDest) - oracle::ASSET_TYPES.begin();
+  if (tx.type == cryptonote::transaction_type::PROTOCOL) {
 
-    // Update the tally by increasing the amount by how much we've burnt
-    MDB_val_copy<uint64_t> source_idx(cs.source_currency_type);
-    boost::multiprecision::int128_t source_tally = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx);
-    boost::multiprecision::int128_t final_source_tally = source_tally + cs.amount_burnt;
-    write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
-    
-    // Update the tally by decreasing the amount by how much we've minted
-    MDB_val_copy<uint64_t> dest_idx(cs.dest_currency_type);
-    boost::multiprecision::int128_t dest_tally = read_circulating_supply_data(m_cur_circ_supply_tally, dest_idx);
-    boost::multiprecision::int128_t final_dest_tally = dest_tally - cs.amount_minted;
-    boost::multiprecision::int128_t coinbase = get_block_already_generated_coins(m_height-1);
-    if ((strDest == "FULM" && (coinbase + final_dest_tally < 0)) ||
-        (strDest != "FULM" && final_dest_tally < 0)) {
-      LOG_ERROR(__func__ << " : mint/burn underflow detected for " << strDest << " : correcting supply tally by " << final_dest_tally);
-      final_dest_tally = 0;
+    // Iterate over all of the outputs for a PROTOCOL_TX since they're all MINTED
+    std::map<uint32_t, uint64_t> minted_amounts;
+    for (const auto& out: tx.vout) {
+
+      // Fetch the amount and output_asset_type for this output
+      std::string asset_type = "";
+      bool ok = cryptonote::get_output_asset_type(out, asset_type);
+      if (!ok)
+        throw0(DB_ERROR("failed to get output asset type (needed to update the circulating supply data for the PROTOCOL_TX)"));
+      
+      minted_amounts[cryptonote::asset_id_from_type(asset_type)] += out.amount;
     }
-    write_circulating_supply_data(m_cur_circ_supply_tally, dest_idx, final_dest_tally);
 
-    // Update the circ_supply table
-    if ((result = mdb_cursor_get(m_cur_circ_supply, &val_tx_id, NULL, MDB_SET)))
+    // Now update the overall tally entries
+    for (const auto& asset: minted_amounts) {
+      
+      // Get the current tally value for the source currency type
+      MDB_val_copy<uint64_t> source_idx(asset.first);
+      boost::multiprecision::int128_t source_tally = 0;
+      result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
+      if (result == MDB_NOTFOUND)
+        throw0(DB_ERROR("remove_transaction_data() - minted asset not found"));
+      if (source_tally < asset.second)
+        throw0(DB_ERROR("remove_transaction_data() - mint underflow"));
+      boost::multiprecision::int128_t final_source_tally = source_tally - asset.second;
+      write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
+      LOG_PRINT_L1("tx ID " << tip->data.tx_id << "\n\tAsset Type = " << cryptonote::asset_type_from_id(asset.first) << "\n\tTally before undoing mint =" << source_tally.str() << "\n\tTally after undoing mint =" << final_source_tally.str());
+    }
+  }
+  
+  // Update the circ_supply table by deleting all entries for this TX
+  if ((result = mdb_cursor_get(m_cur_circ_supply, &val_tx_id, NULL, MDB_SET))) {
+    if (result == MDB_NOTFOUND) {
+      LOG_PRINT_L1("failed to obtain circulating supply data - no burns / conversions made yet?");
+    } else {
       throw1(DB_ERROR(lmdb_error("Failed to locate circulating supply for removal: ", result).c_str()));
+    }
+  } else {
     result = mdb_cursor_del(m_cur_circ_supply, 0);
     if (result)
       throw1(DB_ERROR(lmdb_error("Failed to add removal of circulating supply to db transaction: ", result).c_str()));
-
-    LOG_PRINT_L1("tx ID " << tip->data.tx_id << "\nSource tally before undoing burn =" << source_tally.str() << "\nSource tally after undoing burn =" << final_source_tally.str() <<
-       "\nDest tally before undoing mint =" << dest_tally.str() << "\nDest tally after undoing mint =" << final_dest_tally.str());
   }
-
   remove_tx_outputs(tip->data.tx_id, tx);
 
   result = mdb_cursor_get(m_cur_tx_outputs, &val_tx_id, NULL, MDB_SET);
@@ -1763,6 +1797,8 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
   lmdb_db_open(txn, LMDB_CIRC_SUPPLY, MDB_INTEGERKEY | MDB_CREATE, m_circ_supply, "Failed to open db handle for m_circ_supply");
   lmdb_db_open(txn, LMDB_CIRC_SUPPLY_TALLY, MDB_CREATE, m_circ_supply_tally, "Failed to open db handle for m_circ_supply_tally");
 
+  lmdb_db_open(txn, LMDB_YIELD_TXS, MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_yield_txs, "Failed to open db handle for m_yield_txs");
+
   mdb_set_dupsort(txn, m_spent_keys, compare_hash32);
   mdb_set_dupsort(txn, m_block_heights, compare_hash32);
   mdb_set_dupsort(txn, m_tx_indices, compare_hash32);
@@ -1784,6 +1820,8 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
   mdb_set_compare(txn, m_circ_supply, compare_uint64);
   mdb_set_compare(txn, m_circ_supply_tally, compare_uint64);
 
+  mdb_set_dupsort(txn, m_yield_txs, compare_uint64);
+  
   if (!(mdb_flags & MDB_RDONLY))
   {
     result = mdb_drop(txn, m_hf_starting_heights, 1);
@@ -1960,6 +1998,8 @@ void BlockchainLMDB::reset()
     throw0(DB_ERROR(lmdb_error("Failed to drop m_hf_versions: ", result).c_str()));
   if (auto result = mdb_drop(txn, m_properties, 0))
     throw0(DB_ERROR(lmdb_error("Failed to drop m_properties: ", result).c_str()));
+  if (auto result = mdb_drop(txn, m_yield_txs, 0))
+    throw0(DB_ERROR(lmdb_error("Failed to drop m_yield_txs: ", result).c_str()));
 
   // init with current version
   MDB_val_str(k, "version");
@@ -3287,7 +3327,7 @@ std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
     // Push the data into the circulating supply return struct
     const uint64_t currency_type = *(const uint64_t*)k.mv_data;
     circ_supply_tally *cst = (circ_supply_tally*)v.mv_data;
-    const std::string currency_label = oracle::ASSET_TYPES.at(currency_type);
+    const std::string currency_label = cryptonote::asset_type_from_id(currency_type);
     boost::multiprecision::int128_t amount = import_tally_from_cst(cst);
 
     // Check for FULM - we need to adjust the total for them
@@ -3592,12 +3632,24 @@ bool BlockchainLMDB::get_blocks_from(uint64_t start_height, size_t min_block_cou
         if (result)
           throw0(DB_ERROR(lmdb_error("Error attempting to retrieve transaction data from the db: ", result).c_str()));
       }
+
+      // Skip the protocol TX as well?
+      op = MDB_NEXT;
+      result = mdb_cursor_get(m_cur_txs_pruned, &val_tx_id, &v, op);
+      if (result)
+        throw0(DB_ERROR(lmdb_error("Error attempting to retrieve transaction data from the db: ", result).c_str()));
+      if (!pruned)
+      {
+        result = mdb_cursor_get(m_cur_txs_prunable, &val_tx_id, &v, op);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Error attempting to retrieve transaction data from the db: ", result).c_str()));
+      }
     }
 
     op = MDB_NEXT;
 
     current_block.second.reserve(b.tx_hashes.size());
-    num_txes += b.tx_hashes.size() + (skip_coinbase ? 0 : 1);
+    num_txes += b.tx_hashes.size() + (skip_coinbase ? 0 : 2);
     for (const auto &tx_hash: b.tx_hashes)
     {
       // get pruned data

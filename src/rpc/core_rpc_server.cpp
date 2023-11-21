@@ -649,8 +649,8 @@ namespace cryptonote
       res.output_indices.push_back(COMMAND_RPC_GET_BLOCKS_FAST::block_output_indices());
       res.asset_type_output_indices.push_back(COMMAND_RPC_GET_BLOCKS_FAST::block_asset_type_output_indices());
       ntxes += bd.second.size();
-      res.output_indices.back().indices.reserve(1 + bd.second.size());
-      res.asset_type_output_indices.back().indices.reserve(1 + bd.second.size());
+      res.output_indices.back().indices.reserve(2 + bd.second.size());
+      res.asset_type_output_indices.back().indices.reserve(2 + bd.second.size());
       if (req.no_miner_tx)
       {
         res.output_indices.back().indices.push_back(COMMAND_RPC_GET_BLOCKS_FAST::tx_output_indices());
@@ -665,7 +665,7 @@ namespace cryptonote
         size += res.blocks.back().txs.back().blob.size();
       }
 
-      const size_t n_txes_to_lookup = bd.second.size() + (req.no_miner_tx ? 0 : 1);
+      const size_t n_txes_to_lookup = bd.second.size() + (req.no_miner_tx ? 0 : 2);
       if (n_txes_to_lookup > 0)
       {
         std::vector<std::vector<std::pair<uint64_t, uint64_t>>> indices;
@@ -675,7 +675,7 @@ namespace cryptonote
           res.status = "Failed";
           return true;
         }
-        if (indices.size() != n_txes_to_lookup || res.output_indices.back().indices.size() != (req.no_miner_tx ? 1 : 0))
+        if (indices.size() != n_txes_to_lookup || res.output_indices.back().indices.size() != (req.no_miner_tx ? 2 : 0))
         {
           res.status = "Failed";
           return true;

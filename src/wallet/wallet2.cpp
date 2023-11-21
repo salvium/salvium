@@ -2045,12 +2045,14 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   if (!miner_tx && !pool)
     process_unconfirmed(txid, tx, height);
 
-  std::string source_asset;
-  std::string dest_asset;
-  cryptonote::transaction_type tx_type;
-  THROW_WALLET_EXCEPTION_IF(!cryptonote::get_tx_asset_types(tx, txid, source_asset, dest_asset, miner_tx), error::wallet_internal_error, "Fail to get asset types");
-  THROW_WALLET_EXCEPTION_IF(!cryptonote::get_tx_type(source_asset, dest_asset, tx_type), error::wallet_internal_error, "Failed to get TX type");
-
+  std::string source_asset = tx.source_asset_type;
+  std::string dest_asset = tx.destination_asset_type;
+  cryptonote::transaction_type tx_type_verify = tx.type;
+  if (!miner_tx) {
+    THROW_WALLET_EXCEPTION_IF(!cryptonote::get_tx_type(source_asset, dest_asset, tx_type_verify), error::wallet_internal_error, "Failed to get TX type");
+    THROW_WALLET_EXCEPTION_IF(tx_type_verify != tx.type, error::wallet_internal_error, "Incorrect TX type");
+  }
+  
   // per receiving subaddress index
   std::unordered_map<cryptonote::subaddress_index, std::map<std::string, uint64_t>> tx_money_got_in_outs;
   std::unordered_map<cryptonote::subaddress_index, amounts_container> tx_amounts_individual_outs;
@@ -2699,7 +2701,7 @@ bool wallet2::should_skip_block(const cryptonote::block &b, uint64_t height) con
 //----------------------------------------------------------------------------------------------------
 void wallet2::process_new_blockchain_entry(const cryptonote::block& b, const cryptonote::block_complete_entry& bche, const parsed_block &parsed_block, const crypto::hash& bl_id, uint64_t height, const std::vector<tx_cache_data> &tx_cache_data, size_t tx_cache_data_offset, std::map<std::pair<uint64_t, uint64_t>, size_t> *output_tracker_cache)
 {
-  THROW_WALLET_EXCEPTION_IF(bche.txs.size() + 1 != parsed_block.o_indices.indices.size(), error::wallet_internal_error,
+  THROW_WALLET_EXCEPTION_IF(bche.txs.size() + 2 != parsed_block.o_indices.indices.size(), error::wallet_internal_error,
       "block transactions=" + std::to_string(bche.txs.size()) +
       " not match with daemon response size=" + std::to_string(parsed_block.o_indices.indices.size()));
 
@@ -2714,12 +2716,17 @@ void wallet2::process_new_blockchain_entry(const cryptonote::block& b, const cry
     ++tx_cache_data_offset;
     TIME_MEASURE_FINISH(miner_tx_handle_time);
 
+    TIME_MEASURE_START(protocol_tx_handle_time);
+    process_new_transaction(get_transaction_hash(b.protocol_tx), b.protocol_tx, parsed_block.o_indices.indices[1].indices, parsed_block.asset_type_output_indices.indices[1].indices, height, b.major_version, b.timestamp, true, false, false, tx_cache_data[tx_cache_data_offset], output_tracker_cache);
+    ++tx_cache_data_offset;
+    TIME_MEASURE_FINISH(protocol_tx_handle_time);
+
     TIME_MEASURE_START(txs_handle_time);
     THROW_WALLET_EXCEPTION_IF(bche.txs.size() != b.tx_hashes.size(), error::wallet_internal_error, "Wrong amount of transactions for block");
     THROW_WALLET_EXCEPTION_IF(bche.txs.size() != parsed_block.txes.size(), error::wallet_internal_error, "Wrong amount of transactions for block");
     for (size_t idx = 0; idx < b.tx_hashes.size(); ++idx)
     {
-      process_new_transaction(b.tx_hashes[idx], parsed_block.txes[idx], parsed_block.o_indices.indices[idx+1].indices, parsed_block.asset_type_output_indices.indices[idx+1].indices, height, b.major_version, b.timestamp, false, false, false, tx_cache_data[tx_cache_data_offset++], output_tracker_cache);
+      process_new_transaction(b.tx_hashes[idx], parsed_block.txes[idx], parsed_block.o_indices.indices[idx+2].indices, parsed_block.asset_type_output_indices.indices[idx+2].indices, height, b.major_version, b.timestamp, false, false, false, tx_cache_data[tx_cache_data_offset++], output_tracker_cache);
     }
     TIME_MEASURE_FINISH(txs_handle_time);
     m_last_block_reward = cryptonote::get_outs_money_amount(b.miner_tx);
@@ -2859,7 +2866,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
   size_t num_txes = 0;
   std::vector<tx_cache_data> tx_cache_data;
   for (size_t i = 0; i < blocks.size(); ++i)
-    num_txes += 1 + parsed_blocks[i].txes.size();
+    num_txes += 2 + parsed_blocks[i].txes.size();
   tx_cache_data.resize(num_txes);
   size_t txidx = 0;
   for (size_t i = 0; i < blocks.size(); ++i)
@@ -2868,11 +2875,13 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
         error::wallet_internal_error, "Mismatched parsed_blocks[i].txes.size() and parsed_blocks[i].block.tx_hashes.size()");
     if (should_skip_block(parsed_blocks[i].block, start_height + i))
     {
-      txidx += 1 + parsed_blocks[i].block.tx_hashes.size();
+      txidx += 2 + parsed_blocks[i].block.tx_hashes.size();
       continue;
     }
     if (m_refresh_type != RefreshNoCoinbase)
       tpool.submit(&waiter, [&, i, txidx](){ cache_tx_data(parsed_blocks[i].block.miner_tx, get_transaction_hash(parsed_blocks[i].block.miner_tx), tx_cache_data[txidx]); });
+    ++txidx;
+    tpool.submit(&waiter, [&, i, txidx](){ cache_tx_data(parsed_blocks[i].block.protocol_tx, get_transaction_hash(parsed_blocks[i].block.protocol_tx), tx_cache_data[txidx]); });
     ++txidx;
     for (size_t idx = 0; idx < parsed_blocks[i].txes.size(); ++idx)
     {
@@ -2947,7 +2956,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
   {
     if (should_skip_block(parsed_blocks[i].block, start_height + i))
     {
-      txidx += 1 + parsed_blocks[i].block.tx_hashes.size();
+      txidx += 2 + parsed_blocks[i].block.tx_hashes.size();
       continue;
     }
 
@@ -2961,6 +2970,14 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
       else
         tpool.submit(&waiter, [&, n_vouts, txidx](){ geniod(tx, n_vouts, txidx); }, true);
     }
+    ++txidx;
+    THROW_WALLET_EXCEPTION_IF(txidx >= tx_cache_data.size(), error::wallet_internal_error, "txidx out of range");
+    const cryptonote::transaction& tx = parsed_blocks[i].block.protocol_tx;
+    const size_t n_vouts = tx.vout.size();
+    if (parsed_blocks[i].block.major_version >= hf_version_view_tags)
+      geniods.push_back(geniod_params{ tx, n_vouts, txidx });
+    else
+      tpool.submit(&waiter, [&, n_vouts, txidx](){ geniod(tx, n_vouts, txidx); }, true);
     ++txidx;
     for (size_t j = 0; j < parsed_blocks[i].txes.size(); ++j)
     {
@@ -3035,7 +3052,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
       LOG_PRINT_L2("Block is already in blockchain: " << string_tools::pod_to_hex(bl_id));
     }
     ++current_index;
-    tx_cache_data_offset += 1 + parsed_blocks[i].txes.size();
+    tx_cache_data_offset += 2 + parsed_blocks[i].txes.size();
   }
 }
 //----------------------------------------------------------------------------------------------------
