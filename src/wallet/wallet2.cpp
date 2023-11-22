@@ -2716,10 +2716,9 @@ void wallet2::process_new_blockchain_entry(const cryptonote::block& b, const cry
     ++tx_cache_data_offset;
     TIME_MEASURE_FINISH(miner_tx_handle_time);
 
-    TIME_MEASURE_START(protocol_tx_handle_time);
-    process_new_transaction(get_transaction_hash(b.protocol_tx), b.protocol_tx, parsed_block.o_indices.indices[1].indices, parsed_block.asset_type_output_indices.indices[1].indices, height, b.major_version, b.timestamp, true, false, false, tx_cache_data[tx_cache_data_offset], output_tracker_cache);
+    // Store the current cache offset for later use
+    size_t protocol_tx_cache_data_offset = tx_cache_data_offset;
     ++tx_cache_data_offset;
-    TIME_MEASURE_FINISH(protocol_tx_handle_time);
 
     TIME_MEASURE_START(txs_handle_time);
     THROW_WALLET_EXCEPTION_IF(bche.txs.size() != b.tx_hashes.size(), error::wallet_internal_error, "Wrong amount of transactions for block");
@@ -2729,6 +2728,11 @@ void wallet2::process_new_blockchain_entry(const cryptonote::block& b, const cry
       process_new_transaction(b.tx_hashes[idx], parsed_block.txes[idx], parsed_block.o_indices.indices[idx+2].indices, parsed_block.asset_type_output_indices.indices[idx+2].indices, height, b.major_version, b.timestamp, false, false, false, tx_cache_data[tx_cache_data_offset++], output_tracker_cache);
     }
     TIME_MEASURE_FINISH(txs_handle_time);
+
+    TIME_MEASURE_START(protocol_tx_handle_time);
+    process_new_transaction(get_transaction_hash(b.protocol_tx), b.protocol_tx, parsed_block.o_indices.indices[1].indices, parsed_block.asset_type_output_indices.indices[1].indices, height, b.major_version, b.timestamp, true, false, false, tx_cache_data[tx_cache_data_offset], output_tracker_cache);
+    TIME_MEASURE_FINISH(protocol_tx_handle_time);
+
     m_last_block_reward = cryptonote::get_outs_money_amount(b.miner_tx);
     LOG_PRINT_L2("Processed block: " << bl_id << ", height " << height << ", " <<  miner_tx_handle_time + txs_handle_time << "(" << miner_tx_handle_time << "/" << txs_handle_time <<")ms");
   }else

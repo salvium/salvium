@@ -208,7 +208,7 @@ namespace
   const char* USAGE_SWEEP_BELOW("sweep_below <amount_threshold> [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> [<payment_id (obsolete)>]");
   const char* USAGE_SWEEP_SINGLE("sweep_single [<priority>] [<ring_size>] [outputs=<N>] <key_image> <address> [<payment_id (obsolete)>]");
   const char* USAGE_BURN("burn <amount> <asset_type>");
-  const char* USAGE_CONVERT("convert [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <source_amount>) <source_asset> <dest_asset> [<payment_id>]");
+  const char* USAGE_CONVERT("convert <source_amount> <source_asset> <dest_asset>");
   const char* USAGE_LOCK_FOR_YIELD("lock_for_yield <amount>");
   const char* USAGE_PRICE_INFO("price_info");
   const char* USAGE_SUPPLY_INFO("supply_info");
@@ -3153,7 +3153,7 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
     message_writer() << tr("\"address new\" - Create new subaddress.");
     message_writer() << tr("\"transfer <address> <amount> [<asset_type>]\" - Send FULM or F$ to an address.");
     message_writer() << tr("\"burn <amount> <asset_type>\" - destroy coins forever.");
-    message_writer() << tr("\"convert <address> <amount> <source_asset> <dest_asset>\" - convert between coin types and send to address.");
+    message_writer() << tr("\"convert <amount> <source_asset> <dest_asset>\" - convert between coin types.");
     message_writer() << tr("\"lock_for_tield <amount>\" - lock FULM in order to earn yield.");
     message_writer() << tr("\"price_info\" - Display current pricing information for supported assets.");
     message_writer() << tr("\"supply_info\" - Display circulating supply information.");
@@ -3338,7 +3338,7 @@ simple_wallet::simple_wallet()
   m_cmd_binder.set_handler("convert",
                            boost::bind(&simple_wallet::convert, this, _1),
                            tr(USAGE_CONVERT),
-                           tr("Converts <amount> <source_asset> into <dest_asset>, with optional <priority> [0-5]"));
+                           tr("Converts <amount> <source_asset> into <dest_asset>"));
   m_cmd_binder.set_handler("lock_for_yield",
                            boost::bind(&simple_wallet::lock_for_yield, this, _1),
                            tr(USAGE_LOCK_FOR_YIELD),
@@ -6593,37 +6593,41 @@ bool simple_wallet::transfer_main(
   std::vector<std::string> local_args = args_;
 
   std::set<uint32_t> subaddr_indices;
-  if (local_args.size() > 0 && local_args[0].substr(0, 6) == "index=")
-  {
-    if (!parse_subaddress_indices(local_args[0], subaddr_indices))
-      return false;
-    local_args.erase(local_args.begin());
-  }
+  if (transfer_type == TransferLocked)
+    if (local_args.size() > 0 && local_args[0].substr(0, 6) == "index=")
+    {
+      if (!parse_subaddress_indices(local_args[0], subaddr_indices))
+        return false;
+      local_args.erase(local_args.begin());
+    }
 
   uint32_t priority = 0;
-  if (local_args.size() > 0 && parse_priority(local_args[0], priority))
-    local_args.erase(local_args.begin());
+  if (transfer_type == TransferLocked)
+    if (local_args.size() > 0 && parse_priority(local_args[0], priority))
+      local_args.erase(local_args.begin());
 
   priority = m_wallet->adjust_priority(priority);
 
   const size_t min_ring_size = m_wallet->get_min_ring_size();
   size_t fake_outs_count = min_ring_size - 1;
-  if(local_args.size() > 0) {
-    size_t ring_size;
-    if(!epee::string_tools::get_xtype_from_string(ring_size, local_args[0]))
-    {
+  if (transfer_type == TransferLocked)
+    if(local_args.size() > 0) {
+      size_t ring_size;
+      if(!epee::string_tools::get_xtype_from_string(ring_size, local_args[0]))
+      {
+      }
+      else if (ring_size == 0)
+      {
+        fail_msg_writer() << tr("Ring size must not be 0");
+        return false;
+      }
+      else
+      {
+        fake_outs_count = ring_size - 1;
+        local_args.erase(local_args.begin());
+      }
     }
-    else if (ring_size == 0)
-    {
-      fail_msg_writer() << tr("Ring size must not be 0");
-      return false;
-    }
-    else
-    {
-      fake_outs_count = ring_size - 1;
-      local_args.erase(local_args.begin());
-    }
-  }
+  
   uint64_t adjusted_fake_outs_count = m_wallet->adjust_mixin(fake_outs_count);
   if (adjusted_fake_outs_count > fake_outs_count)
   {
@@ -6645,21 +6649,22 @@ bool simple_wallet::transfer_main(
 
   std::vector<uint8_t> extra;
   bool payment_id_seen = false;
-  if (!local_args.empty())
-  {
-    std::string payment_id_str = local_args.back();
-    crypto::hash payment_id;
-    bool r = true;
-    if (tools::wallet2::parse_long_payment_id(payment_id_str, payment_id))
+  if (transfer_type == TransferLocked)
+    if (!local_args.empty())
     {
-      LONG_PAYMENT_ID_SUPPORT_CHECK();
+      std::string payment_id_str = local_args.back();
+      crypto::hash payment_id;
+      bool r = true;
+      if (tools::wallet2::parse_long_payment_id(payment_id_str, payment_id))
+      {
+        LONG_PAYMENT_ID_SUPPORT_CHECK();
+      }
+      if(!r)
+      {
+        fail_msg_writer() << tr("payment id failed to encode");
+        return false;
+      }
     }
-    if(!r)
-    {
-      fail_msg_writer() << tr("payment id failed to encode");
-      return false;
-    }
-  }
 
   uint64_t locked_blocks = 0;
   if (transfer_type == TransferLocked)
@@ -6734,11 +6739,23 @@ bool simple_wallet::transfer_main(
     }
     else
     {
-      if (boost::starts_with(local_args[i], "fulmo:"))
-        fail_msg_writer() << tr("Invalid last argument: ") << local_args.back() << ": " << error;
-      else
-        fail_msg_writer() << tr("Invalid last argument: ") << local_args.back();
-      return false;
+      if (transfer_type == Convert) {
+        bool ok = cryptonote::parse_amount(de.amount, local_args[i]);
+        if(!ok || 0 == de.amount)
+        {
+          fail_msg_writer() << tr("amount is wrong: ") << local_args[i] << 
+            ", " << tr("expected number from 0 to ") << print_money(std::numeric_limits<uint64_t>::max());
+          return false;
+        }
+        de.asset_type = source_asset;
+        ++i;
+      } else {
+        if (boost::starts_with(local_args[i], "fulmo:"))
+          fail_msg_writer() << tr("Invalid last argument: ") << local_args.back() << ": " << error;
+        else
+          fail_msg_writer() << tr("Invalid last argument: ") << local_args.back();
+        return false;
+      }
     }
 
     if (!r)
@@ -7870,25 +7887,14 @@ bool simple_wallet::burn(const std::vector<std::string> &args_)
 bool simple_wallet::convert(const std::vector<std::string> &args_)
 {
   // TODO: add locked versions
-  if (args_.size() < 4)
+  if (args_.size() != 3)
   {
-    fail_msg_writer() << tr("missing argument(s)");
+    fail_msg_writer() << tr("missing / extraneous argument(s)");
     PRINT_USAGE(USAGE_CONVERT);
     return true;
   }
 
   std::vector<std::string> local_args = args_;
-  
-  // get payment id and pop
-  std::string payment_id_str;
-  crypto::hash payment_id;
-  crypto::hash8 payment_id8;
-  if (tools::wallet2::parse_long_payment_id (local_args.back(), payment_id ) or
-      tools::wallet2::parse_short_payment_id(local_args.back(), payment_id8))
-  {
-    payment_id_str = local_args.back();
-    local_args.pop_back();
-  }
   
   // Get the destination asset type
   std::string source_asset, dest_asset;
