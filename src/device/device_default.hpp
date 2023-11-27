@@ -80,7 +80,7 @@ namespace hw {
             /* ======================================================================= */
             /*                               SUB ADDRESS                               */
             /* ======================================================================= */
-            bool  derive_subaddress_public_key(const crypto::public_key &pub, const crypto::key_derivation &derivation, const std::size_t output_index,  crypto::public_key &derived_pub) override;
+            bool  derive_subaddress_public_key(const crypto::public_key &pub, const crypto::key_derivation &derivation, const crypto::hash& uniqueness,  crypto::public_key &derived_pub) override;
             crypto::public_key  get_subaddress_spend_public_key(const cryptonote::account_keys& keys, const cryptonote::subaddress_index& index) override;
             std::vector<crypto::public_key>  get_subaddress_spend_public_keys(const cryptonote::account_keys &keys, uint32_t account, uint32_t begin, uint32_t end) override;
             cryptonote::account_public_address  get_subaddress(const cryptonote::account_keys& keys, const cryptonote::subaddress_index &index) override;
@@ -96,9 +96,9 @@ namespace hw {
             crypto::secret_key  generate_keys(crypto::public_key &pub, crypto::secret_key &sec, const crypto::secret_key& recovery_key = crypto::secret_key(), bool recover = false) override;
             bool  generate_key_derivation(const crypto::public_key &pub, const crypto::secret_key &sec, crypto::key_derivation &derivation) override;
             bool  conceal_derivation(crypto::key_derivation &derivation, const crypto::public_key &tx_pub_key, const std::vector<crypto::public_key> &additional_tx_pub_keys, const crypto::key_derivation &main_derivation, const std::vector<crypto::key_derivation> &additional_derivations) override;
-            bool  derivation_to_scalar(const crypto::key_derivation &derivation, const size_t output_index, crypto::ec_scalar &res) override;
-            bool  derive_secret_key(const crypto::key_derivation &derivation, const std::size_t output_index, const crypto::secret_key &sec,  crypto::secret_key &derived_sec) override;
-            bool  derive_public_key(const crypto::key_derivation &derivation, const std::size_t output_index, const crypto::public_key &pub,  crypto::public_key &derived_pub) override;
+            bool  derivation_to_scalar(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, crypto::ec_scalar &res) override;
+            bool  derive_secret_key(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, const crypto::secret_key &sec,  crypto::secret_key &derived_sec) override;
+            bool  derive_public_key(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, const crypto::public_key &pub,  crypto::public_key &derived_pub) override;
             bool  secret_key_to_public_key(const crypto::secret_key &sec, crypto::public_key &pub) override;
             bool  generate_key_image(const crypto::public_key &pub, const crypto::secret_key &sec, crypto::key_image &image) override;
             bool  derive_view_tag(const crypto::key_derivation &derivation, const std::size_t output_index, crypto::view_tag &view_tag) override;
@@ -128,7 +128,8 @@ namespace hw {
                                                  std::vector<crypto::public_key> &additional_tx_public_keys,
                                                  std::vector<rct::key> &amount_keys,
                                                  crypto::public_key &out_eph_public_key,
-                                                 bool use_view_tags, crypto::view_tag &view_tag) override;
+                                                 bool use_view_tags, crypto::view_tag &view_tag,
+                                                 const crypto::hash& uniqueness) override;
 
             bool  mlsag_prehash(const std::string &blob, size_t inputs_size, size_t outputs_size, const rct::keyV &hashes, const rct::ctkeyV &outPk, rct::key &prehash) override;
             bool  mlsag_prepare(const rct::key &H, const rct::key &xx, rct::key &a, rct::key &aG, rct::key &aHP, rct::key &rvII) override;

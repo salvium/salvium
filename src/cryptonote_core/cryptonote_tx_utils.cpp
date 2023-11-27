@@ -285,8 +285,18 @@ namespace cryptonote
     bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
     CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << txkey.sec << ")");
     
-    r = crypto::derive_public_key(derivation, 0, miner_address.m_spend_public_key, out_eph_public_key);
+    // Calculate the uniqueness
+    size_t output_index = 0;
+    crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index), sizeof(size_t));
+    r = crypto::derive_public_key(derivation, /*output_index*/uniqueness, miner_address.m_spend_public_key, out_eph_public_key);
     CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
+    
+    LOG_ERROR("*****************************************************************************");
+    LOG_ERROR("derivation: " << derivation);
+    LOG_ERROR("uniqueness: " << uniqueness);
+    LOG_ERROR("txkey_pub : " << txkey.pub);
+    LOG_ERROR("output_key: " << out_eph_public_key);
+    LOG_ERROR("*****************************************************************************");
     
     uint64_t amount = block_reward;
     summary_amounts += amount;
@@ -336,6 +346,28 @@ namespace cryptonote
     if (count == 0 && change_addr)
       return change_addr->m_view_public_key;
     return addr.m_view_public_key;
+  }
+  //---------------------------------------------------------------
+  bool get_protocol_destination_address(const size_t tx_version, const crypto::key_image& ki, const cryptonote::account_keys &sender_account_keys, const crypto::public_key &txkey_pub,  const crypto::secret_key &tx_key, crypto::public_key& tx_destination_address, hw::device& hwdev) {
+
+    // With a protocol destination address, you are always sending the payment to yourself; derivation = a*R
+    crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+    bool r = hwdev.generate_key_derivation(txkey_pub, sender_account_keys.m_view_secret_key, derivation);
+    CHECK_AND_ASSERT_MES(r, false, "at get_protocol_destination_address: failed to generate_key_derivation(" << txkey_pub << ", " << sender_account_keys.m_view_secret_key << ")");
+
+    crypto::hash uniqueness = cn_fast_hash(&ki.data[0], 32);
+    r = hwdev.derive_public_key(derivation, uniqueness, sender_account_keys.m_account_address.m_spend_public_key, tx_destination_address);
+    CHECK_AND_ASSERT_MES(r, false, "at get_protocol_destination_address: failed to derive_public_key()");
+
+    LOG_ERROR("*****************************************************************************");
+    LOG_ERROR("derivation: " << derivation);
+    LOG_ERROR("key_image : " << ki);
+    LOG_ERROR("uniqueness: " << uniqueness);
+    LOG_ERROR("txkey_pub : " << txkey_pub);
+    LOG_ERROR("tx_address: " << tx_destination_address);
+    LOG_ERROR("*****************************************************************************");
+    
+    return true;
   }
   //---------------------------------------------------------------
   bool get_tx_type(const std::string& source, const std::string& destination, transaction_type& type) {
@@ -410,15 +442,6 @@ namespace cryptonote
     crypto::public_key txkey_pub;
 
     tx.type = tx_type;
-    
-    // Is this a CONVERT tx?
-    if (tx_type == cryptonote::transaction_type::CONVERT) {
-      // Set the destination address to be something only our wallet can identify
-      // This is where Fulmo gets interesting... we need to include the input key images
-      // so that we get uniqueness and prevent either Monero burning bug or key leakage.
-      // tx.d_a = Hs("convert" || input_key_images || 8rAG) + B
-      tx.destination_address = get_destination_view_key_pub(destinations, change_addr);
-    }
     
     // Set the source and destination asset_type values
     tx.source_asset_type = source_asset;
@@ -523,8 +546,13 @@ namespace cryptonote
       in_contexts.push_back(input_generation_context_data());
       keypair& in_ephemeral = in_contexts.back().in_ephemeral;
       crypto::key_image img;
+
+      // Calculate the uniqueness
+      size_t output_index_wrapper = src_entr.real_output_in_tx_index;
+      crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
+
       const auto& out_key = reinterpret_cast<const crypto::public_key&>(src_entr.outputs[src_entr.real_output].second.dest);
-      if(!generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, in_ephemeral,img, hwdev))
+      if(!generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, uniqueness, in_ephemeral,img, hwdev))
       {
         LOG_ERROR("Key image generation failed!");
         return false;
@@ -602,6 +630,16 @@ namespace cryptonote
     if (need_additional_txkeys)
       CHECK_AND_ASSERT_MES(destinations.size() == additional_tx_keys.size(), false, "Wrong amount of additional tx keys");
 
+    // Is this a CONVERT tx?
+    if (tx_type == cryptonote::transaction_type::CONVERT) {
+      // Set the destination address to be something only our wallet can identify
+      // This is where Fulmo gets interesting... we need to include the input key images
+      // so that we get uniqueness and prevent either Monero burning bug or key leakage.
+      // tx.d_a = Hs("convert" || input_key_images || 8rAG) + B
+      const txin_to_key &in = boost::get<txin_to_key>(tx.vin[0]);
+      CHECK_AND_ASSERT_MES(get_protocol_destination_address(tx.version, in.k_image, sender_account_keys, txkey_pub, tx_key, tx.destination_address, hwdev), false, "Failed to get protocol destination address");
+    }
+    
     uint64_t summary_outs_money = 0;
     //fill outputs
     size_t output_index = 0;
@@ -611,11 +649,14 @@ namespace cryptonote
       crypto::public_key out_eph_public_key;
       crypto::view_tag view_tag;
 
+      // Calculate the uniqueness
+      crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index), sizeof(size_t));
+      
       hwdev.generate_output_ephemeral_keys(tx.version,sender_account_keys, txkey_pub, tx_key,
                                            dst_entr, change_addr, output_index,
                                            need_additional_txkeys, additional_tx_keys,
                                            additional_tx_public_keys, amount_keys, out_eph_public_key,
-                                           use_view_tags, view_tag);
+                                           use_view_tags, view_tag, uniqueness);
 
       // Is this a BURN or CONVERT TX?
       if (tx_type == cryptonote::transaction_type::BURN || tx_type == cryptonote::transaction_type::CONVERT) {
@@ -630,7 +671,7 @@ namespace cryptonote
         }
       }
       tx_out out;
-      cryptonote::set_tx_out(dst_entr.amount, dst_entr.asset_type, unlock_time, out_eph_public_key, use_view_tags, view_tag, out);
+      cryptonote::set_tx_out(dst_entr.amount, dst_entr.asset_type, dst_entr.is_change ? 0 : unlock_time, out_eph_public_key, use_view_tags, view_tag, out);
       tx.vout.push_back(out);
       output_index++;
       summary_outs_money += dst_entr.amount;

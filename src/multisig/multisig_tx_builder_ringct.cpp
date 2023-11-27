@@ -31,6 +31,7 @@
 #include "int-util.h"
 #include "memwipe.h"
 
+#include "crypto/hash.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
@@ -107,6 +108,8 @@ static bool compute_keys_for_sources(
     cryptonote::keypair tmp_keys;
     if (src.real_output >= src.outputs.size())
       return false;
+    size_t real_output_wrapper = src.real_output_in_tx_index;
+    crypto::hash uniqueness = crypto::cn_fast_hash(reinterpret_cast<void*>(&real_output_wrapper), sizeof(size_t));
     if (not cryptonote::generate_key_image_helper(
       account_keys,
       subaddresses,
@@ -114,6 +117,7 @@ static bool compute_keys_for_sources(
       src.real_out_tx_key,
       src.real_out_additional_tx_keys,
       src.real_output_in_tx_index,
+      uniqueness,
       tmp_keys,
       tmp_key_image,
       hwdev
@@ -422,6 +426,8 @@ static bool compute_keys_for_destinations(
   crypto::public_key temp_output_public_key;
 
   for (std::size_t i = 0; i < num_destinations; ++i) {
+
+    crypto::hash uniqueness = crypto::cn_fast_hash(reinterpret_cast<void*>(&i), sizeof(size_t));
     if (not hwdev.generate_output_ephemeral_keys(
       unsigned_tx.version,
       account_keys,
@@ -436,7 +442,8 @@ static bool compute_keys_for_destinations(
       output_amount_secret_keys,
       temp_output_public_key,
       use_view_tags,
-      view_tags[i]  //unused variable if use_view_tags is not set
+      view_tags[i], //unused variable if use_view_tags is not set
+      uniqueness
     )) {
       return false;
     }

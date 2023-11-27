@@ -43,10 +43,10 @@ namespace crypto {
       }
 
       inline
-      bool derive_subaddress_public_key(const public_key &output_pub, const key_derivation &d, std::size_t index, public_key &out)
+      bool derive_subaddress_public_key(const public_key &output_pub, const key_derivation &d, const crypto::hash& uniqueness, public_key &out)
       {
         ec_scalar scalar;
-        derivation_to_scalar(d, index, scalar);
+        derivation_to_scalar(d, uniqueness, scalar);
         return monero_crypto_generate_subaddress_public_key(out.data, output_pub.data, scalar.data) == 0;
       }
 #else
