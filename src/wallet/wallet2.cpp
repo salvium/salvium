@@ -3973,7 +3973,10 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
 
   m_first_refresh_done = true;
 
-  LOG_PRINT_L1("Refresh done, blocks received: " << blocks_fetched << ", balance (all accounts): " << print_money(balance_all(false)) << ", unlocked: " << print_money(unlocked_balance_all(false)));
+  LOG_PRINT_L1("Refresh done, blocks received: " << blocks_fetched << ", balance (all accounts): ");
+  for(const auto& asset: m_transfers_indices) {
+    LOG_PRINT_L1(asset.first << " : balance " << print_money(balance_all(false, asset.first)) << ", unlocked: " << print_money(unlocked_balance_all(false, asset.first)));
+  }
 }
 //----------------------------------------------------------------------------------------------------
 bool wallet2::refresh(bool trusted_daemon, uint64_t & blocks_fetched, bool& received_money, bool& ok)
@@ -6240,22 +6243,31 @@ boost::optional<wallet2::cache_file_data> wallet2::get_cache_file_data(const epe
   }
 }
 //----------------------------------------------------------------------------------------------------
-uint64_t wallet2::balance(uint32_t index_major, bool strict) const
+std::vector<std::string> wallet2::list_asset_types() const
+{
+  std::vector<std::string> asset_types;
+  for (const auto& entry: m_transfers_indices) {
+    asset_types.push_back(entry.first);
+  }
+  return asset_types;
+}
+//----------------------------------------------------------------------------------------------------
+uint64_t wallet2::balance(uint32_t index_major, const std::string& asset_type, bool strict) const
 {
   uint64_t amount = 0;
-  for (const auto& i : balance_per_subaddress(index_major, strict))
+  for (const auto& i : balance_per_subaddress(index_major, asset_type, strict))
     amount += i.second;
   return amount;
 }
 //----------------------------------------------------------------------------------------------------
-uint64_t wallet2::unlocked_balance(uint32_t index_major, bool strict, uint64_t *blocks_to_unlock, uint64_t *time_to_unlock)
+uint64_t wallet2::unlocked_balance(uint32_t index_major, const std::string& asset_type, bool strict, uint64_t *blocks_to_unlock, uint64_t *time_to_unlock)
 {
   uint64_t amount = 0;
   if (blocks_to_unlock)
     *blocks_to_unlock = 0;
   if (time_to_unlock)
     *time_to_unlock = 0;
-  for (const auto& i : unlocked_balance_per_subaddress(index_major, strict))
+  for (const auto& i : unlocked_balance_per_subaddress(index_major, asset_type, strict))
   {
     amount += i.second.first;
     if (blocks_to_unlock && i.second.second.first > *blocks_to_unlock)
@@ -6266,11 +6278,12 @@ uint64_t wallet2::unlocked_balance(uint32_t index_major, bool strict, uint64_t *
   return amount;
 }
 //----------------------------------------------------------------------------------------------------
-std::map<uint32_t, uint64_t> wallet2::balance_per_subaddress(uint32_t index_major, bool strict) const
+std::map<uint32_t, uint64_t> wallet2::balance_per_subaddress(uint32_t index_major, const std::string& asset_type, bool strict) const
 {
   std::map<uint32_t, uint64_t> amount_per_subaddr;
-  for (const auto& td: m_transfers)
+  for (const auto& idx: m_transfers_indices.at(asset_type))
   {
+    const transfer_details& td = m_transfers[idx];
     if (td.m_subaddr_index.major == index_major && !is_spent(td, strict) && !td.m_frozen)
     {
       auto found = amount_per_subaddr.find(td.m_subaddr_index.minor);
@@ -6319,13 +6332,14 @@ std::map<uint32_t, uint64_t> wallet2::balance_per_subaddress(uint32_t index_majo
   return amount_per_subaddr;
 }
 //----------------------------------------------------------------------------------------------------
-std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> wallet2::unlocked_balance_per_subaddress(uint32_t index_major, bool strict)
+std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> wallet2::unlocked_balance_per_subaddress(uint32_t index_major, const std::string& asset_type, bool strict)
 {
   std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> amount_per_subaddr;
   const uint64_t blockchain_height = get_blockchain_current_height();
   const uint64_t now = time(NULL);
-  for(const transfer_details& td: m_transfers)
+  for(const auto& idx: m_transfers_indices[asset_type])
   {
+    transfer_details& td = m_transfers[idx];
     if(td.m_subaddr_index.major == index_major && !is_spent(td, strict) && !td.m_frozen)
     {
       uint64_t amount = 0, blocks_to_unlock = 0, time_to_unlock = 0;
@@ -6359,15 +6373,33 @@ std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> wallet2::
   return amount_per_subaddr;
 }
 //----------------------------------------------------------------------------------------------------
-uint64_t wallet2::balance_all(bool strict) const
+std::map<std::string, uint64_t> wallet2::balance_all(bool strict) const
+{
+  std::map<std::string, uint64_t> res;
+  for (const auto& val: m_transfers_indices) {
+    res[val.first] = balance_all(strict, val.first);
+  }
+  return res;
+}
+//----------------------------------------------------------------------------------------------------
+std::map<std::string, uint64_t> wallet2::unlocked_balance_all(bool strict, uint64_t *blocks_to_unlock, uint64_t *time_to_unlock)
+{
+  std::map<std::string, uint64_t> res;
+  for (const auto& val: m_transfers_indices) {
+    res[val.first] = unlocked_balance_all(strict, val.first, blocks_to_unlock, time_to_unlock);
+  }
+  return res;
+}
+//----------------------------------------------------------------------------------------------------
+uint64_t wallet2::balance_all(bool strict, const std::string& asset_type) const
 {
   uint64_t r = 0;
   for (uint32_t index_major = 0; index_major < get_num_subaddress_accounts(); ++index_major)
-    r += balance(index_major, strict);
+    r += balance(index_major, asset_type, strict);
   return r;
 }
 //----------------------------------------------------------------------------------------------------
-uint64_t wallet2::unlocked_balance_all(bool strict, uint64_t *blocks_to_unlock, uint64_t *time_to_unlock)
+uint64_t wallet2::unlocked_balance_all(bool strict, const std::string& asset_type, uint64_t *blocks_to_unlock, uint64_t *time_to_unlock)
 {
   uint64_t r = 0;
   if (blocks_to_unlock)
@@ -6377,7 +6409,7 @@ uint64_t wallet2::unlocked_balance_all(bool strict, uint64_t *blocks_to_unlock, 
   for (uint32_t index_major = 0; index_major < get_num_subaddress_accounts(); ++index_major)
   {
     uint64_t local_blocks_to_unlock, local_time_to_unlock;
-    r += unlocked_balance(index_major, strict, blocks_to_unlock ? &local_blocks_to_unlock : NULL, time_to_unlock ? &local_time_to_unlock : NULL);
+    r += unlocked_balance(index_major, asset_type, strict, blocks_to_unlock ? &local_blocks_to_unlock : NULL, time_to_unlock ? &local_time_to_unlock : NULL);
     if (blocks_to_unlock)
       *blocks_to_unlock = std::max(*blocks_to_unlock, local_blocks_to_unlock);
     if (time_to_unlock)
@@ -6821,6 +6853,8 @@ void wallet2::commit_tx(pending_tx& ptx)
     {
       THROW_WALLET_EXCEPTION_IF(idx >= m_transfers.size(), error::wallet_internal_error,
           "Bad output index in selected transfers: " + boost::lexical_cast<std::string>(idx));
+      THROW_WALLET_EXCEPTION_IF(m_transfers[idx].asset_type >= source_asset, error::wallet_internal_error,
+          "Bad output asset_type in selected transfers: " + boost::lexical_cast<std::string>(idx));
     }
   }
   crypto::hash txid;
@@ -6857,8 +6891,8 @@ void wallet2::commit_tx(pending_tx& ptx)
   //fee includes dust if dust policy specified it.
   LOG_PRINT_L1("Transaction successfully sent. <" << txid << ">" << ENDL
             << "Commission: " << print_money(ptx.fee) << " (dust sent to dust addr: " << print_money((ptx.dust_added_to_fee ? 0 : ptx.dust)) << ")" << ENDL
-            << "Balance: " << print_money(balance(ptx.construction_data.subaddr_account, false)) << ENDL
-            << "Unlocked: " << print_money(unlocked_balance(ptx.construction_data.subaddr_account, false)) << ENDL
+               << "Balance: " << print_money(balance(ptx.construction_data.subaddr_account, source_asset, false)) << ENDL
+               << "Unlocked: " << print_money(unlocked_balance(ptx.construction_data.subaddr_account, source_asset, false)) << ENDL
             << "Please, wait for confirmation for your balance to be unlocked.");
 }
 
@@ -9793,8 +9827,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(
   // throw if attempting a transaction with no money
   THROW_WALLET_EXCEPTION_IF(needed_money == 0, error::zero_amount);
 
-  std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddr = unlocked_balance_per_subaddress(subaddr_account, false);
-  std::map<uint32_t, uint64_t> balance_per_subaddr = balance_per_subaddress(subaddr_account, false);
+  std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddr = unlocked_balance_per_subaddress(subaddr_account, source_asset, false);
+  std::map<uint32_t, uint64_t> balance_per_subaddr = balance_per_subaddress(subaddr_account, source_asset, false);
 
   if (subaddr_indices.empty()) // "index=<N1>[,<N2>,...]" wasn't specified -> use all the indices with non-zero unlocked balance
   {
@@ -9969,7 +10003,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(
     // if we need to spend money and don't have any left, we fail
     if (unused_dust_indices->empty() && unused_transfers_indices->empty()) {
       LOG_PRINT_L2("No more outputs to choose from");
-      THROW_WALLET_EXCEPTION_IF(1, error::tx_not_possible, unlocked_balance(subaddr_account, false), needed_money, accumulated_fee + needed_fee);
+      THROW_WALLET_EXCEPTION_IF(1, error::tx_not_possible, unlocked_balance(subaddr_account, source_asset, false), needed_money, accumulated_fee + needed_fee);
     }
 
     // get a random unspent output and use it to pay part (or all) of the current destination (and maybe next one, etc)
@@ -10214,7 +10248,7 @@ skip_tx:
   if (adding_fee)
   {
     LOG_PRINT_L1("We ran out of outputs while trying to gather final fee");
-    THROW_WALLET_EXCEPTION_IF(1, error::tx_not_possible, unlocked_balance(subaddr_account, false), needed_money, accumulated_fee + needed_fee);
+    THROW_WALLET_EXCEPTION_IF(1, error::tx_not_possible, unlocked_balance(subaddr_account, source_asset, false), needed_money, accumulated_fee + needed_fee);
   }
 
   LOG_PRINT_L1("Done creating " << txes.size() << " transactions, " << print_money(accumulated_fee) <<
@@ -10353,13 +10387,13 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
   const uint64_t fractional_threshold = (base_fee * tx_weight_per_ring) / (use_per_byte_fee ? 1 : 1024);
   std::unordered_set<crypto::public_key> valid_public_keys_cache;
 
-  THROW_WALLET_EXCEPTION_IF(unlocked_balance(subaddr_account, false) == 0, error::wallet_internal_error, "No unlocked balance in the specified account");
+  THROW_WALLET_EXCEPTION_IF(unlocked_balance(subaddr_account, asset_type, false) == 0, error::wallet_internal_error, "No unlocked balance in the specified account");
 
   std::map<uint32_t, std::pair<std::vector<size_t>, std::vector<size_t>>> unused_transfer_dust_indices_per_subaddr;
 
   // gather all dust and non-dust outputs of specified subaddress (if any) and below specified threshold (if any)
   bool fund_found = false;
-  for (size_t i = 0; i < m_transfers.size(); ++i)
+  for (size_t& i: m_transfers_indices[asset_type])
   {
     const transfer_details& td = m_transfers[i];
     if (m_ignore_fractional_outputs && td.amount() < fractional_threshold)
@@ -11814,13 +11848,13 @@ bool wallet2::check_tx_proof(const cryptonote::transaction &tx, const cryptonote
 std::string wallet2::get_reserve_proof(const boost::optional<std::pair<uint32_t, uint64_t>> &account_minreserve, const std::string &message)
 {
   THROW_WALLET_EXCEPTION_IF(m_watch_only || m_multisig, error::wallet_internal_error, "Reserve proof can only be generated by a full wallet");
-  THROW_WALLET_EXCEPTION_IF(balance_all(true) == 0, error::wallet_internal_error, "Zero balance");
-  THROW_WALLET_EXCEPTION_IF(account_minreserve && balance(account_minreserve->first, true) < account_minreserve->second, error::wallet_internal_error,
+  THROW_WALLET_EXCEPTION_IF(balance_all(true, "FULM") == 0, error::wallet_internal_error, "Zero balance");
+  THROW_WALLET_EXCEPTION_IF(account_minreserve && balance(account_minreserve->first, "FULM", true) < account_minreserve->second, error::wallet_internal_error,
     "Not enough balance in this account for the requested minimum reserve amount");
 
   // determine which outputs to include in the proof
   std::vector<size_t> selected_transfers;
-  for (size_t i = 0; i < m_transfers.size(); ++i)
+  for (const auto& i: m_transfers_indices["FULM"])
   {
     const transfer_details &td = m_transfers[i];
     if (!is_spent(td, true) && !td.m_frozen && (!account_minreserve || account_minreserve->first == td.m_subaddr_index.major))

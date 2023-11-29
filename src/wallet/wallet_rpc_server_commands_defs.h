@@ -63,12 +63,16 @@ namespace wallet_rpc
     {
       uint32_t account_index;
       std::set<uint32_t> address_indices;
+      std::string asset_type;
       bool all_accounts;
+      bool all_assets;
       bool strict;
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(address_indices)
+        KV_SERIALIZE(asset_type)
         KV_SERIALIZE_OPT(all_accounts, false);
+        KV_SERIALIZE_OPT(all_assets, false);
         KV_SERIALIZE_OPT(strict, false);
       END_KV_SERIALIZE_MAP()
     };
@@ -99,14 +103,14 @@ namespace wallet_rpc
       END_KV_SERIALIZE_MAP()
     };
 
-    struct response_t
-    {
+    struct balance_info {
       uint64_t 	 balance;
       uint64_t 	 unlocked_balance;
       bool       multisig_import_needed;
       std::vector<per_subaddress_info> per_subaddress;
       uint64_t   blocks_to_unlock;
       uint64_t   time_to_unlock;
+      std::string asset_type;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(balance)
@@ -115,6 +119,15 @@ namespace wallet_rpc
         KV_SERIALIZE(per_subaddress)
         KV_SERIALIZE(blocks_to_unlock)
         KV_SERIALIZE(time_to_unlock)
+        KV_SERIALIZE(asset_type)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response_t
+    {
+      std::vector<balance_info> balances;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(balances)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<response_t> response;

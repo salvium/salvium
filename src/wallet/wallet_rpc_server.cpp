@@ -449,58 +449,76 @@ namespace tools
   bool wallet_rpc_server::on_getbalance(const wallet_rpc::COMMAND_RPC_GET_BALANCE::request& req, wallet_rpc::COMMAND_RPC_GET_BALANCE::response& res, epee::json_rpc::error& er, const connection_context *ctx)
   {
     if (!m_wallet) return not_open(er);
+
+    std::vector<std::string> assets_in_wallet = m_wallet->list_asset_types();
+    std::string asset_type = req.asset_type.empty() ? "FULM" : boost::algorithm::to_upper_copy(req.asset_type);
+    // verify that the asset is in the list of in-wallet assets
+    if (std::find(assets_in_wallet.begin(), assets_in_wallet.end(), asset_type) == assets_in_wallet.end()) {
+      er.message = std::string("Invalid source asset specified: ") + asset_type; 
+      return false;
+    }
+    std::vector<std::string> assets = req.all_assets ? assets_in_wallet : std::vector<std::string>{asset_type};
+    
     try
     {
-      res.balance = req.all_accounts ? m_wallet->balance_all(req.strict) : m_wallet->balance(req.account_index, req.strict);
-      res.unlocked_balance = req.all_accounts ? m_wallet->unlocked_balance_all(req.strict, &res.blocks_to_unlock, &res.time_to_unlock) : m_wallet->unlocked_balance(req.account_index, req.strict, &res.blocks_to_unlock, &res.time_to_unlock);
-      res.multisig_import_needed = m_wallet->multisig() && m_wallet->has_multisig_partial_key_images();
-      std::map<uint32_t, std::map<uint32_t, uint64_t>> balance_per_subaddress_per_account;
-      std::map<uint32_t, std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>>> unlocked_balance_per_subaddress_per_account;
-      if (req.all_accounts)
-      {
-        for (uint32_t account_index = 0; account_index < m_wallet->get_num_subaddress_accounts(); ++account_index)
+      for (const auto& asset: assets) {
+        wallet_rpc::COMMAND_RPC_GET_BALANCE::balance_info balance_info;
+        balance_info.balance = req.all_accounts ? m_wallet->balance_all(req.strict, asset) : m_wallet->balance(req.account_index, asset, req.strict);
+        if (!balance_info.balance)
+          continue;
+        balance_info.unlocked_balance = req.all_accounts ? m_wallet->unlocked_balance_all(req.strict, asset, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock) : m_wallet->unlocked_balance(req.account_index, "XHV", req.strict, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock);
+        balance_info.multisig_import_needed = m_wallet->multisig() && m_wallet->has_multisig_partial_key_images();
+        std::map<uint32_t, std::map<uint32_t, uint64_t>> balance_per_subaddress_per_account;
+        std::map<uint32_t, std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>>> unlocked_balance_per_subaddress_per_account;
+        if (req.all_accounts)
         {
-          balance_per_subaddress_per_account[account_index] = m_wallet->balance_per_subaddress(account_index, req.strict);
-          unlocked_balance_per_subaddress_per_account[account_index] = m_wallet->unlocked_balance_per_subaddress(account_index, req.strict);
-        }
-      }
-      else
-      {
-        balance_per_subaddress_per_account[req.account_index] = m_wallet->balance_per_subaddress(req.account_index, req.strict);
-        unlocked_balance_per_subaddress_per_account[req.account_index] = m_wallet->unlocked_balance_per_subaddress(req.account_index, req.strict);
-      }
-      std::vector<tools::wallet2::transfer_details> transfers;
-      m_wallet->get_transfers(transfers);
-      for (const auto& p : balance_per_subaddress_per_account)
-      {
-        uint32_t account_index = p.first;
-        std::map<uint32_t, uint64_t> balance_per_subaddress = p.second;
-        std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddress = unlocked_balance_per_subaddress_per_account[account_index];
-        std::set<uint32_t> address_indices;
-        if (!req.all_accounts && !req.address_indices.empty())
-        {
-          address_indices = req.address_indices;
+          for (uint32_t account_index = 0; account_index < m_wallet->get_num_subaddress_accounts(); ++account_index)
+          {
+            balance_per_subaddress_per_account[account_index] = m_wallet->balance_per_subaddress(account_index, asset, req.strict);
+            unlocked_balance_per_subaddress_per_account[account_index] = m_wallet->unlocked_balance_per_subaddress(account_index, asset, req.strict);
+          }
         }
         else
         {
-          for (const auto& i : balance_per_subaddress)
-            address_indices.insert(i.first);
+          balance_per_subaddress_per_account[req.account_index] = m_wallet->balance_per_subaddress(req.account_index, asset, req.strict);
+          unlocked_balance_per_subaddress_per_account[req.account_index] = m_wallet->unlocked_balance_per_subaddress(req.account_index, asset, req.strict);
         }
-        for (uint32_t i : address_indices)
+        //SRCG: need to work this out
+        //tools::wallet2::transfers_iterator_container transfers = m_wallet->get_specific_transfers(asset);
+        for (const auto& p : balance_per_subaddress_per_account)
         {
-          wallet_rpc::COMMAND_RPC_GET_BALANCE::per_subaddress_info info;
-          info.account_index = account_index;
-          info.address_index = i;
-          cryptonote::subaddress_index index = {info.account_index, info.address_index};
-          info.address = m_wallet->get_subaddress_as_str(index);
-          info.balance = balance_per_subaddress[i];
-          info.unlocked_balance = unlocked_balance_per_subaddress[i].first;
-          info.blocks_to_unlock = unlocked_balance_per_subaddress[i].second.first;
-          info.time_to_unlock = unlocked_balance_per_subaddress[i].second.second;
-          info.label = m_wallet->get_subaddress_label(index);
-          info.num_unspent_outputs = std::count_if(transfers.begin(), transfers.end(), [&](const tools::wallet2::transfer_details& td) { return !td.m_spent && td.m_subaddr_index == index; });
-          res.per_subaddress.emplace_back(std::move(info));
+          uint32_t account_index = p.first;
+          std::map<uint32_t, uint64_t> balance_per_subaddress = p.second;
+          std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddress = unlocked_balance_per_subaddress_per_account[account_index];
+          std::set<uint32_t> address_indices;
+          if (!req.all_accounts && !req.address_indices.empty())
+          {
+            address_indices = req.address_indices;
+          }
+          else
+          {
+            for (const auto& i : balance_per_subaddress)
+              address_indices.insert(i.first);
+          }
+          for (uint32_t i : address_indices)
+          {
+            wallet_rpc::COMMAND_RPC_GET_BALANCE::per_subaddress_info info;
+            info.account_index = account_index;
+            info.address_index = i;
+            cryptonote::subaddress_index index = {info.account_index, info.address_index};
+            info.address = m_wallet->get_subaddress_as_str(index);
+            info.balance = balance_per_subaddress[i];
+            info.unlocked_balance = unlocked_balance_per_subaddress[i].first;
+            info.blocks_to_unlock = unlocked_balance_per_subaddress[i].second.first;
+            info.time_to_unlock = unlocked_balance_per_subaddress[i].second.second;
+            info.label = m_wallet->get_subaddress_label(index);
+            // SRCG: need to work this out
+            //info.num_unspent_outputs = std::count_if(transfers.begin(), transfers.end(), [&](const auto& td) { return !td->m_spent && td->m_subaddr_index == index; });
+            balance_info.per_subaddress.emplace_back(std::move(info));
+          }
         }
+        balance_info.asset_type = asset;
+        res.balances.emplace_back(std::move(balance_info));
       }
     }
     catch (const std::exception& e)
@@ -629,8 +647,6 @@ namespace tools
     if (!m_wallet) return not_open(er);
     try
     {
-      res.total_balance = 0;
-      res.total_unlocked_balance = 0;
       cryptonote::subaddress_index subaddr_index = {0,0};
       const std::pair<std::map<std::string, std::string>, std::vector<std::string>> account_tags = m_wallet->get_account_tags();
       if (!req.tag.empty() && account_tags.first.count(req.tag) == 0 && !req.regexp)
@@ -639,6 +655,7 @@ namespace tools
         er.message = (boost::format(tr("Tag %s is unregistered.")) % req.tag).str();
         return false;
       }
+      std::vector<std::string> asset_types = m_wallet->list_asset_types();
       for (; subaddr_index.major < m_wallet->get_num_subaddress_accounts(); ++subaddr_index.major)
       {
         bool no_match = !req.regexp ? (!req.tag.empty() && req.tag != account_tags.second[subaddr_index.major])
@@ -648,13 +665,18 @@ namespace tools
         wallet_rpc::COMMAND_RPC_GET_ACCOUNTS::subaddress_account_info info;
         info.account_index = subaddr_index.major;
         info.base_address = m_wallet->get_subaddress_as_str(subaddr_index);
-        info.balance = m_wallet->balance(subaddr_index.major, req.strict_balances);
-        info.unlocked_balance = m_wallet->unlocked_balance(subaddr_index.major, req.strict_balances);
+
+        //for (const auto& asset: asset_types) {
+          info.balance = m_wallet->balance(subaddr_index.major, "FULM", req.strict_balances);
+          info.unlocked_balance = m_wallet->unlocked_balance(subaddr_index.major, "FULM", req.strict_balances);
+          //}
         info.label = m_wallet->get_subaddress_label(subaddr_index);
         info.tag = account_tags.second[subaddr_index.major];
         res.subaddress_accounts.push_back(info);
-        res.total_balance += info.balance;
-        res.total_unlocked_balance += info.unlocked_balance;
+        //for (const auto& asset: asset_types) {
+          res.total_balance += info.balance;
+          res.total_unlocked_balance += info.unlocked_balance;
+          //}
       }
       if (res.subaddress_accounts.size() == 0 && req.regexp)
       {

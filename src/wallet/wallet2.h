@@ -1039,15 +1039,20 @@ private:
     hw::device::device_type get_device_type() const { return m_key_device_type; }
     bool reconnect_device();
 
+    // Get the list of asset types we have in our wallet
+    std::vector<std::string> list_asset_types() const;
+    
     // locked & unlocked balance of given or current subaddress account
-    uint64_t balance(uint32_t subaddr_index_major, bool strict) const;
-    uint64_t unlocked_balance(uint32_t subaddr_index_major, bool strict, uint64_t *blocks_to_unlock = NULL, uint64_t *time_to_unlock = NULL);
+    uint64_t balance(uint32_t subaddr_index_major, const std::string& asset_type, bool strict) const;
+    uint64_t unlocked_balance(uint32_t subaddr_index_major, const std::string& asset_type, bool strict, uint64_t *blocks_to_unlock = NULL, uint64_t *time_to_unlock = NULL);
     // locked & unlocked balance per subaddress of given or current subaddress account
-    std::map<uint32_t, uint64_t> balance_per_subaddress(uint32_t subaddr_index_major, bool strict) const;
-    std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddress(uint32_t subaddr_index_major, bool strict);
+    std::map<uint32_t, uint64_t> balance_per_subaddress(uint32_t subaddr_index_major, const std::string& asset_type, bool strict) const;
+    std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddress(uint32_t subaddr_index_major, const std::string& asset_type, bool strict);
     // all locked & unlocked balances of all subaddress accounts
-    uint64_t balance_all(bool strict) const;
-    uint64_t unlocked_balance_all(bool strict, uint64_t *blocks_to_unlock = NULL, uint64_t *time_to_unlock = NULL);
+    std::map<std::string, uint64_t> balance_all(bool strict) const;
+    std::map<std::string, uint64_t> unlocked_balance_all(bool strict, uint64_t *blocks_to_unlock = NULL, uint64_t *time_to_unlock = NULL);
+    uint64_t balance_all(bool strict, const std::string& asset_type) const;
+    uint64_t unlocked_balance_all(bool strict, const std::string& asset_type, uint64_t *blocks_to_unlock = NULL, uint64_t *time_to_unlock = NULL);
     template<typename T>
     void transfer_selected(const std::vector<cryptonote::tx_destination_entry>& dsts, const std::vector<size_t>& selected_transfers, size_t fake_outputs_count,
       std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs, std::unordered_set<crypto::public_key> &valid_public_keys_cache,
@@ -1149,6 +1154,7 @@ private:
         a & m_blockchain;
       }
       a & m_transfers;
+      a & m_transfers_indices;
       a & m_account_public_address;
       a & m_key_images.parent();
       if(ver < 6)
