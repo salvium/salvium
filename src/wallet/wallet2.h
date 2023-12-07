@@ -602,7 +602,7 @@ private:
     };
 
     typedef std::vector<transfer_details> transfer_container;
-    typedef std::map<std::string, std::vector<size_t>> transfer_details_indices;
+    typedef serializable_unordered_map<std::string, std::vector<size_t>> transfer_details_indices;
     typedef serializable_unordered_multimap<crypto::hash, payment_details> payment_container;
 
     struct multisig_sig
@@ -1265,6 +1265,7 @@ private:
       VERSION_FIELD(1)
       FIELD(m_blockchain)
       FIELD(m_transfers)
+      FIELD(m_transfers_indices)
       FIELD(m_account_public_address)
       FIELD(m_key_images)
       FIELD(m_unconfirmed_txs)
@@ -1733,7 +1734,7 @@ private:
     std::vector<uint64_t> get_unspent_amounts_vector(bool strict);
     uint64_t get_dynamic_base_fee_estimate();
     float get_output_relatedness(const transfer_details &td0, const transfer_details &td1) const;
-    std::vector<size_t> pick_preferred_rct_inputs(uint64_t needed_money, uint32_t subaddr_account, const std::set<uint32_t> &subaddr_indices);
+    std::vector<size_t> pick_preferred_rct_inputs(uint64_t needed_money, uint32_t subaddr_account, const std::set<uint32_t> &subaddr_indices, const std::string& asset_type);
     void set_spent(size_t idx, uint64_t height);
     void set_unspent(size_t idx);
     bool is_spent(const transfer_details &td, bool strict = true) const;

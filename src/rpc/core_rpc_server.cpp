@@ -847,6 +847,7 @@ namespace cryptonote
     cryptonote::COMMAND_RPC_GET_OUTPUTS_BIN::request req_bin;
     req_bin.outputs = req.outputs;
     req_bin.get_txid = req.get_txid;
+    req_bin.asset_type = req.asset_type;
     cryptonote::COMMAND_RPC_GET_OUTPUTS_BIN::response res_bin;
     if(!m_core.get_outs(req_bin, res_bin))
     {

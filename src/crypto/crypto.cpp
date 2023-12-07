@@ -212,6 +212,7 @@ namespace crypto {
     tools::write_varint(end, output_index);
     assert(end <= buf.output_index + sizeof buf.output_index);
     hash_to_scalar(&buf, end - reinterpret_cast<char *>(&buf), res);
+    assert(false);
   }
 
   bool crypto_ops::derive_public_key(const key_derivation &derivation, size_t output_index,

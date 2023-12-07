@@ -316,7 +316,7 @@ namespace cryptonote
     tx.version = 2;
 
     //lock
-    tx.unlock_time = height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
+    tx.unlock_time = 0;//height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
     tx.vin.push_back(in);
 
     tx.invalidate_hashes();
@@ -436,7 +436,7 @@ namespace cryptonote
     } else {
       tx.version = 2;
     }
-    tx.unlock_time = unlock_time;
+    tx.unlock_time = 0;//unlock_time;
 
     tx.extra = extra;
     crypto::public_key txkey_pub;
@@ -552,7 +552,7 @@ namespace cryptonote
       crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
 
       const auto& out_key = reinterpret_cast<const crypto::public_key&>(src_entr.outputs[src_entr.real_output].second.dest);
-      if(!generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, uniqueness, in_ephemeral,img, hwdev))
+      if(!generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, src_entr.uniqueness, in_ephemeral,img, hwdev))
       {
         LOG_ERROR("Key image generation failed!");
         return false;

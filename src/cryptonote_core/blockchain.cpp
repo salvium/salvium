@@ -1386,7 +1386,6 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, 
     return false;
   }
   MDEBUG("Miner tx hash: " << get_transaction_hash(b.miner_tx));
-  CHECK_AND_ASSERT_MES(b.miner_tx.unlock_time == height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "coinbase transaction transaction has the wrong unlock time=" << b.miner_tx.unlock_time << ", expected " << height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
 
   //check outs overflow
   if(!check_outs_overflow(b.miner_tx))
@@ -2483,6 +2482,36 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
   res.outs.clear();
   res.outs.reserve(req.outputs.size());
 
+  // if an asset type is provided in the request, most indexes provided in the request are asset type output id's.
+  // need to use the asset type output id's provided to retrieve the respective global output id's
+  std::map<uint64_t, uint64_t> global_outs_by_asset_type_output_id;
+  if (!req.asset_type.empty())
+  {
+    std::vector<uint64_t> asset_type_output_indices;
+    for (const auto &i: req.outputs)
+    {
+      // some inputs in the request have already been used in attempted rings in the past. These inputs will
+      // have the is_global_out flag set to true, since they already have the global output id saved
+      if (!i.is_global_out)
+        asset_type_output_indices.push_back(i.index);
+    }
+
+    std::vector<uint64_t> global_out_ids;
+    global_out_ids.reserve(asset_type_output_indices.size());
+
+    m_db->get_output_id_from_asset_type_output_index(req.asset_type, asset_type_output_indices, global_out_ids);
+
+    uint64_t global_outs = 0;
+    for (const auto &i: req.outputs)
+    {
+      if (!i.is_global_out)
+      {
+        global_outs_by_asset_type_output_id[i.index] = global_out_ids[global_outs];
+        ++global_outs;
+      }
+    }
+  }
+
   std::vector<cryptonote::output_data_t> data;
   try
   {
@@ -2492,7 +2521,11 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
     for (const auto &i: req.outputs)
     {
       amounts.push_back(i.amount);
-      offsets.push_back(i.index);
+      // if no asset type provided, the offsets provided are already global output id's unless specifically set
+      if (req.asset_type.empty() || i.is_global_out)
+        offsets.push_back(i.index);
+      else
+        offsets.push_back(global_outs_by_asset_type_output_id[i.index]);
     }
     m_db->get_output_key(epee::span<const uint64_t>(amounts.data(), amounts.size()), offsets, data);
     if (data.size() != req.outputs.size())
@@ -2511,6 +2544,11 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
         tx_out_index toi = m_db->get_output_tx_and_index(req.outputs[i].amount, req.outputs[i].index);
         res.outs[i].txid = toi.first;
       }
+    }
+    if (!req.asset_type.empty())
+    {
+      for (size_t i = 0; i < req.outputs.size(); ++i)
+        res.outs[i].output_id = offsets[i];
     }
   }
   catch (const std::exception &e)

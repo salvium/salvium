@@ -81,6 +81,7 @@ namespace cryptonote
     rct::multisig_kLRki multisig_kLRki; //multisig info
     oracle::pricing_record pr;
     std::string asset_type;
+    crypto::hash uniqueness;            //the uniqueness needed to prove ownership of the consumed output
 
     void push_output(uint64_t idx, const crypto::public_key &k, uint64_t amount) { outputs.push_back(std::make_pair(idx, rct::ctkey({rct::pk2rct(k), rct::zeroCommit(amount)}))); }
 
