@@ -49,6 +49,14 @@ namespace crypto {
         derivation_to_scalar(d, uniqueness, scalar);
         return monero_crypto_generate_subaddress_public_key(out.data, output_pub.data, scalar.data) == 0;
       }
+
+      inline
+      bool derive_subaddress_public_key(const public_key &output_pub, const key_derivation &d, std::size_t output_index, public_key &out)
+      {
+        ec_scalar scalar;
+        derivation_to_scalar(d, output_index, scalar);
+        return monero_crypto_generate_subaddress_public_key(out.data, output_pub.data, scalar.data) == 0;
+      }
 #else
     using ::crypto::generate_key_derivation;
     using ::crypto::derive_subaddress_public_key;

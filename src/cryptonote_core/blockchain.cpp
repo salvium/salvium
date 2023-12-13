@@ -1528,9 +1528,9 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
       // Only conversion (and failed conversion, aka refund) TXs need to be verified - skip this TX
       continue;
     }
-
+    /*
     // Verify that the TX has an output in the protocol_tx to verify
-    if (outputs.count(tx->destination_address) != 1) {
+    if (outputs.count(tx->return_address) != 1) {
       LOG_ERROR("Failed to locate output for conversion TX id " << tx->hash << " - rejecting block");
       return false;
     }
@@ -1539,7 +1539,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
     std::string output_asset_type;
     uint64_t output_amount;
     uint64_t output_unlock_time;
-    std::tie(output_asset_type, output_amount, output_unlock_time) = outputs[tx->destination_address];
+    std::tie(output_asset_type, output_amount, output_unlock_time) = outputs[tx->return_address];
 
     // Verify the asset_type
     if (tx->source_asset_type == output_asset_type) {
@@ -1566,6 +1566,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
       LOG_ERROR("Output asset type incorrect: source " << tx->source_asset_type << ", dest " << tx->destination_asset_type << ", got " << output_asset_type << " - rejecting block");
       return false;
     }
+    */
   }
   
   return true;
@@ -1817,7 +1818,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
    * Here is where the magic happens - determination of the payments for the protocol_tx
    *
    * We need to know the following:
-   *   - address to send the funds to ("destination_address")
+   *   - address to send the funds to ("return_address")
    *   - asset_type being burnt
    *   - amount being burnt
    *   - asset_type being minted
@@ -1842,7 +1843,9 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
     entry.amount_slippage_limit = meta.amount_slippage_limit;
     entry.source_asset = asset_type_from_id(meta.source_asset_id);
     entry.destination_asset = asset_type_from_id(meta.destination_asset_id);
-    entry.destination_address = meta.destination_address;
+    entry.return_address = meta.return_address;
+    entry.P_change = meta.one_time_public_key;
+    entry.input_k_image = meta.input_k_image;
     protocol_entries.push_back(entry);
   }
 

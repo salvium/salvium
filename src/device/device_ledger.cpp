@@ -735,6 +735,60 @@ namespace hw {
       return true;
     }
 
+    bool device_ledger::derive_subaddress_public_key(const crypto::public_key &pub, const crypto::key_derivation &derivation, const std::size_t output_index, crypto::public_key &derived_pub){
+        #ifdef DEBUG_HWDEVICE
+        const crypto::public_key pub_x = pub;
+        crypto::key_derivation derivation_x;
+         if ((this->mode == TRANSACTION_PARSE) && has_view_key) {    
+          derivation_x = derivation;
+        } else {
+          derivation_x = hw::ledger::decrypt(derivation);
+        }
+        const std::size_t output_index_x = output_index;
+        crypto::public_key derived_pub_x;
+        log_hexbuffer("derive_subaddress_public_key: [[IN]]  pub       ", pub_x.data, 32);
+        log_hexbuffer("derive_subaddress_public_key: [[IN]]  derivation", derivation_x.data, 32);
+        log_message  ("derive_subaddress_public_key: [[IN]]  index     ", std::to_string((int)output_index_x));
+        if (!this->controle_device->derive_subaddress_public_key(pub_x, derivation_x,output_index_x,derived_pub_x))
+          return false;
+        log_hexbuffer("derive_subaddress_public_key: [[OUT]] derived_pub", derived_pub_x.data, 32);
+        #endif
+
+      if ((this->mode == TRANSACTION_PARSE) && has_view_key) {     
+        //If we are in TRANSACTION_PARSE, the given derivation has been retrieved uncrypted (wihtout the help
+        //of the device), so continue that way.
+        MDEBUG( "derive_subaddress_public_key  : PARSE mode with known viewkey");     
+        if (!crypto::derive_subaddress_public_key(pub, derivation, output_index,derived_pub))
+          return false;
+      } else {
+        AUTO_LOCK_CMD();
+        int offset = set_command_header_noopt(INS_DERIVE_SUBADDRESS_PUBLIC_KEY);
+        //pub
+        memmove(this->buffer_send+offset, pub.data, 32);
+        offset += 32;
+        //derivation
+        this->send_secret((unsigned char*)derivation.data, offset);
+        //index
+        this->buffer_send[offset+0] = output_index>>24;
+        this->buffer_send[offset+1] = output_index>>16;
+        this->buffer_send[offset+2] = output_index>>8;
+        this->buffer_send[offset+3] = output_index>>0;
+        offset += 4;
+
+        this->buffer_send[4] = offset-5;
+        this->length_send = offset;
+        this->exchange();
+
+        //pub key
+        memmove(derived_pub.data, &this->buffer_recv[0], 32);
+      }
+      #ifdef DEBUG_HWDEVICE
+      hw::ledger::check32("derive_subaddress_public_key", "derived_pub", derived_pub_x.data, derived_pub.data);
+      #endif
+
+      return true;
+    }
+
     crypto::public_key device_ledger::get_subaddress_spend_public_key(const cryptonote::account_keys& keys, const cryptonote::subaddress_index &index) {
         if (has_view_key) {
             cryptonote::account_keys keys_{keys};
@@ -1116,6 +1170,132 @@ namespace hw {
       ASSERT_X(pkey, "Mismatched derivation on scan info");
       return this->generate_key_derivation(*pkey,  crypto::null_skey, derivation);
     } 
+
+    bool device_ledger::derivation_to_scalar(const crypto::key_derivation &derivation, const size_t output_index, crypto::ec_scalar &res) {
+        AUTO_LOCK_CMD();
+
+        #ifdef DEBUG_HWDEVICE
+        const crypto::key_derivation derivation_x = hw::ledger::decrypt(derivation);
+        const size_t output_index_x               = output_index;
+        crypto::ec_scalar res_x;
+        log_hexbuffer("derivation_to_scalar: [[IN]]  derivation    ", derivation_x.data, 32);
+        log_message  ("derivation_to_scalar: [[IN]]  output_index  ", std::to_string(output_index_x));
+        this->controle_device->derivation_to_scalar(derivation_x, output_index_x, res_x);
+        log_hexbuffer("derivation_to_scalar: [[OUT]] res          ", res_x.data, 32);
+        #endif
+
+        int offset = set_command_header_noopt(INS_DERIVATION_TO_SCALAR);
+        //derivation
+        this->send_secret((unsigned char*)derivation.data, offset);
+
+        //index
+        this->buffer_send[offset+0] = output_index>>24;
+        this->buffer_send[offset+1] = output_index>>16;
+        this->buffer_send[offset+2] = output_index>>8;
+        this->buffer_send[offset+3] = output_index>>0;
+        offset += 4;
+
+        this->buffer_send[4] = offset-5;
+        this->length_send = offset;
+        this->exchange();
+
+        //derivation data
+        offset = 0;
+        this->receive_secret((unsigned char*)res.data, offset);
+
+        #ifdef DEBUG_HWDEVICE
+        crypto::ec_scalar res_clear  = hw::ledger::decrypt(res);
+        hw::ledger::check32("derivation_to_scalar", "res", res_x.data, res_clear.data);
+        #endif
+
+        return true;
+    }
+
+    bool device_ledger::derive_secret_key(const crypto::key_derivation &derivation, const std::size_t output_index, const crypto::secret_key &sec, crypto::secret_key &derived_sec) {
+        AUTO_LOCK_CMD();
+
+        #ifdef DEBUG_HWDEVICE
+        const crypto::key_derivation derivation_x   = hw::ledger::decrypt(derivation);
+        const std::size_t            output_index_x = output_index;
+        const crypto::secret_key     sec_x          = hw::ledger::decrypt(sec);
+        crypto::secret_key           derived_sec_x;
+        log_hexbuffer("derive_secret_key: [[IN]]  derivation ", derivation_x.data, 32);
+        log_message  ("derive_secret_key: [[IN]]  index      ", std::to_string(output_index_x));
+        log_hexbuffer("derive_secret_key: [[IN]]  sec        ", sec_x.data, 32);
+        this->controle_device->derive_secret_key(derivation_x, output_index_x, sec_x, derived_sec_x);
+        log_hexbuffer("derive_secret_key: [[OUT]] derived_sec", derived_sec_x.data, 32);
+        #endif
+
+        int offset = set_command_header_noopt(INS_DERIVE_SECRET_KEY);
+        //derivation
+        this->send_secret((unsigned char*)derivation.data, offset);
+        //index
+        this->buffer_send[offset+0] = output_index>>24;
+        this->buffer_send[offset+1] = output_index>>16;
+        this->buffer_send[offset+2] = output_index>>8;
+        this->buffer_send[offset+3] = output_index>>0;
+        offset += 4;
+        //sec
+        this->send_secret((unsigned char*)sec.data, offset);
+
+        this->buffer_send[4] = offset-5;
+        this->length_send = offset;
+        this->exchange();
+
+        offset = 0;
+        //sec key
+        this->receive_secret((unsigned char*)derived_sec.data, offset);
+
+        #ifdef DEBUG_HWDEVICE
+        crypto::secret_key derived_sec_clear = hw::ledger::decrypt(derived_sec);
+        hw::ledger::check32("derive_secret_key", "derived_sec", derived_sec_x.data, derived_sec_clear.data);
+        #endif
+
+        return true;
+    }
+
+    bool device_ledger::derive_public_key(const crypto::key_derivation &derivation, const std::size_t output_index, const crypto::public_key &pub, crypto::public_key &derived_pub){
+        AUTO_LOCK_CMD();
+      
+        #ifdef DEBUG_HWDEVICE
+        const crypto::key_derivation derivation_x   = hw::ledger::decrypt(derivation);
+        const std::size_t            output_index_x = output_index;
+        const crypto::public_key     pub_x        = pub;
+        crypto::public_key           derived_pub_x;
+        log_hexbuffer("derive_public_key: [[IN]]  derivation  ", derivation_x.data, 32);
+        log_message  ("derive_public_key: [[IN]]  output_index", std::to_string(output_index_x));
+        log_hexbuffer("derive_public_key: [[IN]]  pub         ", pub_x.data, 32);
+        if (!this->controle_device->derive_public_key(derivation_x, output_index_x, pub_x, derived_pub_x))
+          return false;
+        log_hexbuffer("derive_public_key: [[OUT]] derived_pub ", derived_pub_x.data, 32);
+        #endif
+
+        int offset = set_command_header_noopt(INS_DERIVE_PUBLIC_KEY);
+        //derivation
+        this->send_secret((unsigned char*)derivation.data, offset);
+        //index
+        this->buffer_send[offset+0] = output_index>>24;
+        this->buffer_send[offset+1] = output_index>>16;
+        this->buffer_send[offset+2] = output_index>>8;
+        this->buffer_send[offset+3] = output_index>>0;
+        offset += 4;
+        //pub
+        memmove(this->buffer_send+offset, pub.data, 32);
+        offset += 32;
+
+        this->buffer_send[4] = offset-5;
+        this->length_send = offset;
+        this->exchange();
+
+        //pub key
+        memmove(derived_pub.data, &this->buffer_recv[0], 32);
+
+        #ifdef DEBUG_HWDEVICE
+        hw::ledger::check32("derive_public_key", "derived_pub", derived_pub_x.data, derived_pub.data);
+        #endif
+
+        return true;
+    }
 
     bool device_ledger::derivation_to_scalar(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, crypto::ec_scalar &res) {
         AUTO_LOCK_CMD();

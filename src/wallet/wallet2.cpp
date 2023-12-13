@@ -1788,13 +1788,13 @@ void wallet2::check_acc_out_precomp(const tx_out &o, const crypto::key_derivatio
      LOG_ERROR("wrong type id in transaction out");
      return;
   }
-
+  /*
   // Check for presence in the map of protocol_tx entries we are expecting
   if (auto search = m_protocol_txs.find(output_public_key); search != m_protocol_txs.end())
   {
     LOG_ERROR("********************** FOUND A PROTOCOL_TX - WHAT TO DO NEXT??? **********************");
   }
-  
+  */
   tx_scan_info.received = is_out_to_acc_precomp(m_subaddresses, output_public_key, derivation, additional_derivations, i, hwdev, get_output_view_tag(o));
   if(tx_scan_info.received)
   {
@@ -1820,7 +1820,7 @@ void wallet2::check_acc_out_precomp(const tx_out &o, const crypto::key_derivatio
      LOG_ERROR("wrong type id in transaction out");
      return;
   }
-
+  /*
   // Check for presence in the map of protocol_tx entries we are expecting
   if (auto search = m_protocol_txs.find(output_public_key); search != m_protocol_txs.end())
   {
@@ -1903,7 +1903,10 @@ void wallet2::check_acc_out_precomp(const tx_out &o, const crypto::key_derivatio
       tx_scan_info.error = true;
       return;
     }
-  } else {
+  }
+  else
+  */
+  {
     tx_scan_info.received = is_out_data->received[i];
     tx_scan_info.uniqueness = cn_fast_hash(reinterpret_cast<void*>(&i), sizeof(size_t));
   }
@@ -1978,85 +1981,6 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
   crypto::public_key output_public_key;
   THROW_WALLET_EXCEPTION_IF(!get_output_public_key(tx.vout[i], output_public_key), error::wallet_internal_error, "Failed to get output public key");
 
-  if (m_multisig)
-  {
-    tx_scan_info.in_ephemeral.pub = output_public_key;
-    tx_scan_info.in_ephemeral.sec = crypto::null_skey;
-    tx_scan_info.ki = rct::rct2ki(rct::zero());
-  }
-  else
-  {
-    bool r = cryptonote::generate_key_image_helper_precomp(m_account.get_keys(), output_public_key, tx_scan_info.received->derivation, i, tx_scan_info.uniqueness, tx_scan_info.received->index, tx_scan_info.in_ephemeral, tx_scan_info.ki, m_account.get_device());
-    THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to generate key image");
-    THROW_WALLET_EXCEPTION_IF(tx_scan_info.in_ephemeral.pub != output_public_key,
-        error::wallet_internal_error, "key_image generated ephemeral public key not matched with output_key");
-  }
-
-  THROW_WALLET_EXCEPTION_IF(std::find(outs.begin(), outs.end(), i) != outs.end(), error::wallet_internal_error, "Same output cannot be added twice");
-  if (tx_scan_info.money_transfered == 0 && !miner_tx)
-  {
-    tx_scan_info.money_transfered = tools::decodeRct(tx.rct_signatures, tx_scan_info.received->derivation, i, tx_scan_info.uniqueness, tx_scan_info.mask, m_account.get_device());
-  }
-  if (tx_scan_info.money_transfered == 0)
-  {
-    MERROR("Invalid output amount, skipping");
-    tx_scan_info.error = true;
-    return;
-  }
-  outs.push_back(i);
-  THROW_WALLET_EXCEPTION_IF(tx_money_got_in_outs[tx_scan_info.received->index][tx_scan_info.asset_type] >= std::numeric_limits<uint64_t>::max() - tx_scan_info.money_transfered,
-      error::wallet_internal_error, "Overflow in received amounts");
-  tx_money_got_in_outs[tx_scan_info.received->index][tx_scan_info.asset_type] += tx_scan_info.money_transfered;
-  tx_scan_info.amount = tx_scan_info.money_transfered;
-  ++num_vouts_received;
-}
-//----------------------------------------------------------------------------------------------------
-void wallet2::scan_protocol_tx_output(const cryptonote::transaction &tx, bool miner_tx, const crypto::public_key &tx_pub_key, size_t i, tx_scan_info_t &tx_scan_info, int &num_vouts_received, std::unordered_map<cryptonote::subaddress_index, std::map<std::string, uint64_t>> &tx_money_got_in_outs, std::vector<size_t> &outs, bool pool)
-{
-  THROW_WALLET_EXCEPTION_IF(tx.type != cryptonote::transaction_type::PROTOCOL, error::wallet_internal_error, "Only PROTOCOL transactions may use the scan_protocol_tx_output() method");
-  THROW_WALLET_EXCEPTION_IF(i >= tx.vout.size(), error::wallet_internal_error, "Invalid vout index");
-
-  // if keys are encrypted, ask for password
-  if (m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only && !m_multisig_rescan_k)
-  {
-    static critical_section password_lock;
-    CRITICAL_REGION_LOCAL(password_lock);
-    if (!m_encrypt_keys_after_refresh)
-    {
-      boost::optional<epee::wipeable_string> pwd = m_callback->on_get_password(pool ? "output found in pool" : "output received");
-      THROW_WALLET_EXCEPTION_IF(!pwd, error::password_needed, tr("Password is needed to compute key image for incoming monero"));
-      THROW_WALLET_EXCEPTION_IF(!verify_password(*pwd), error::password_needed, tr("Invalid password: password is needed to compute key image for incoming monero"));
-      m_encrypt_keys_after_refresh.reset(new wallet_keys_unlocker(*this, m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only, *pwd));
-    }
-  }
-
-  // Scan our map of protocol_tx entries for the appropriate progenitor for this TX
-  crypto::public_key output_public_key;
-  THROW_WALLET_EXCEPTION_IF(!get_output_public_key(tx.vout[i], output_public_key), error::wallet_internal_error, "Failed to get output public key");
-
-  // Check for presence in the map of protocol_tx entries we are expecting
-  auto search = m_protocol_txs.find(output_public_key);
-  if (search == m_protocol_txs.end())
-  {
-     tx_scan_info.error = true;
-     MERROR("failed to locate progenitor for specified output_public_key" << output_public_key);
-     return;
-  }
-  
-  size_t idx = search->second;
-  if (idx >= get_num_transfer_details()) {
-    MERROR("cannot locate protocol_txs index in m_transfers - idx = " << idx);
-    tx_scan_info.error = true;
-    return;
-  }
-  const transfer_details& td = get_transfer_details(idx);
-  if (td.m_tx.type != cryptonote::transaction_type::CONVERT && td.m_tx.type != cryptonote::transaction_type::YIELD) {
-    // We can only accept CONVERT & YIELD payments
-    MERROR("incorrect TX type for protocol_tx origin in m_transfers - idx = " << idx);
-    tx_scan_info.error = true;
-    return;
-  }
-  
   if (m_multisig)
   {
     tx_scan_info.in_ephemeral.pub = output_public_key;
@@ -2280,7 +2204,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     std::vector<crypto::key_derivation> additional_derivations;
     tx_extra_additional_pub_keys additional_tx_pub_keys;
     const wallet2::is_out_data *is_out_data_ptr = NULL;
-    if (tx_cache_data.primary.empty())
+    if (tx_cache_data.primary.empty() || tx.type == cryptonote::PROTOCOL)
     {
       hw::device &hwdev = m_account.get_device();
       boost::unique_lock<hw::device> hwdev_lock (hwdev);
@@ -2301,6 +2225,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         {
           for (size_t i = 0; i < additional_tx_pub_keys.data.size(); ++i)
           {
+            crypto::public_key aR = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(additional_tx_pub_keys.data[i]), rct::sk2rct(keys.m_view_secret_key)));
             additional_derivations.push_back({});
             if (!hwdev.generate_key_derivation(additional_tx_pub_keys.data[i], keys.m_view_secret_key, additional_derivations.back()))
             {
@@ -2378,11 +2303,11 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
           boost::unique_lock<hw::device> hwdev_lock (hwdev);
           hwdev.set_mode(hw::device::NONE);
           hwdev.conceal_derivation(tx_scan_info[i].received->derivation, tx_pub_key, additional_tx_pub_keys.data, derivation, additional_derivations);
-          if (tx.type == cryptonote::transaction_type::PROTOCOL) {
-            scan_protocol_tx_output(tx, miner_tx, tx_pub_key, i, tx_scan_info[i], num_vouts_received, tx_money_got_in_outs, outs, pool);
-          } else {
+          //if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+          //  scan_protocol_tx_output(tx, miner_tx, tx_pub_key, i, tx_scan_info[i], num_vouts_received, tx_money_got_in_outs, outs, pool);
+          //} else {
             scan_output(tx, miner_tx, tx_pub_key, i, tx_scan_info[i], num_vouts_received, tx_money_got_in_outs, outs, pool);
-          }
+            //}
           if (!tx_scan_info[i].error)
           {
             tx_amounts_individual_outs[tx_scan_info[i].received->index].push_back(tx_scan_info[i].money_transfered);
@@ -2663,8 +2588,14 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   {
     // The CONVERT/YIELD TX was created by us - therefore we need to expect an output in the PROTOCOL_TX
     // It could be a refund or a conversion
-    m_protocol_txs.insert({tx.destination_address, m_transfers.size()-1});
-  }    
+    //m_protocol_txs.insert({tx.return_address, m_transfers.size()-1});
+
+    // Add the change output_public_key to the list of subaddresses to check
+    crypto::public_key P_change = crypto::null_pkey;
+    THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[0], P_change), error::wallet_internal_error, "Failed to get change output public key");
+    m_subaddresses[P_change] = {0,0};
+    m_protocol_txs.insert({P_change, m_transfers.size()-1});
+  }
   
   if (tx_money_spent_in_ins > 0 && !pool)
   {
@@ -3109,8 +3040,13 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
       auto &slot = tx_cache_data[i];
       for (auto &iod: slot.primary)
         gender(iod);
-      for (auto &iod: slot.additional)
+      for (auto &iod: slot.additional) {
         gender(iod);
+        LOG_ERROR("*****************************************************************************");
+        LOG_ERROR("public_key      : " << iod.pkey);
+        LOG_ERROR("der. (aR)       : " << iod.derivation);
+        LOG_ERROR("*****************************************************************************");
+      }
     }, true);
   }
   THROW_WALLET_EXCEPTION_IF(!waiter.wait(), error::wallet_internal_error, "Exception in thread pool");

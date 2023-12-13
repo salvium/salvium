@@ -358,6 +358,7 @@ namespace cryptonote
       // computes Hs(a*R || uniqueness) + b
       //crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&real_output_index), sizeof(size_t));
       hwdev.derive_secret_key(recv_derivation, uniqueness, spend_skey, scalar_step1);
+      //hwdev.derive_secret_key(recv_derivation, real_output_index, spend_skey, scalar_step1);
 
       // step 2: add Hs(a || index_major || index_minor)
       crypto::secret_key subaddr_sk;
@@ -1278,6 +1279,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   boost::optional<subaddress_receive_info> is_out_to_acc_precomp(const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::key_derivation& derivation, const std::vector<crypto::key_derivation>& additional_derivations, size_t output_index, hw::device &hwdev, const boost::optional<crypto::view_tag>& view_tag_opt)
   {
+    LOG_ERROR("Cryptonote::" << __func__ << ":" << __LINE__);
     // Calculate the uniqueness
     crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index), sizeof(size_t));
 
@@ -1297,7 +1299,18 @@ namespace cryptonote
       CHECK_AND_ASSERT_MES(output_index < additional_derivations.size(), boost::none, "wrong number of additional derivations");
       if (out_can_be_to_acc(view_tag_opt, additional_derivations[output_index], output_index, &hwdev))
       {
-        CHECK_AND_ASSERT_MES(hwdev.derive_subaddress_public_key(out_key, additional_derivations[output_index], uniqueness, subaddress_spendkey), boost::none, "Failed to derive subaddress public key");
+        CHECK_AND_ASSERT_MES(hwdev.derive_subaddress_public_key(out_key, additional_derivations[output_index], output_index, subaddress_spendkey), boost::none, "Failed to derive subaddress public key");
+
+        LOG_ERROR("*****************************************************************************");
+        LOG_ERROR("derivation: " << additional_derivations[output_index]);
+        LOG_ERROR("output_ind: " << output_index);
+        LOG_ERROR("uniqueness: " << uniqueness);
+        LOG_ERROR("output_key: " << out_key);
+        LOG_ERROR("subaddr_sp: " << subaddress_spendkey);
+        LOG_ERROR("*****************************************************************************");
+
+
+
         auto found = subaddresses.find(subaddress_spendkey);
         if (found != subaddresses.end())
           return subaddress_receive_info{ found->second, additional_derivations[output_index] };

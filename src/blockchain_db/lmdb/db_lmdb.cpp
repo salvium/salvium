@@ -382,7 +382,7 @@ typedef struct circ_supply_tally {
   
 typedef struct yield_tx_data {
   crypto::hash tx_hash;
-  crypto::public_key destination_address;
+  crypto::public_key return_address;
   uint64_t amount;
 } yield_tx_data;    
   
@@ -1156,7 +1156,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
     // Create the object we are going to write to the database
     yield_tx_data yield_data;
     yield_data.tx_hash = tx_hash;
-    yield_data.destination_address = tx.destination_address;
+    yield_data.return_address = tx.return_address;
     yield_data.amount = tx.amount_burnt; // SRCG - this feels as though we are bastardising the variable for an invalid purpose
     MDB_val_set(val_height, m_height);
     MDB_val_set(val_yield_tx_data, yield_data);

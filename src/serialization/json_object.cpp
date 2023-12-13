@@ -275,7 +275,7 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
   INSERT_INTO_JSON_OBJECT(dest, outputs, tx.vout);
   INSERT_INTO_JSON_OBJECT(dest, extra, tx.extra);
   INSERT_INTO_JSON_OBJECT(dest, type, static_cast<uint8_t>(tx.type));
-  INSERT_INTO_JSON_OBJECT(dest, destination_address, tx.destination_address);
+  INSERT_INTO_JSON_OBJECT(dest, return_address, tx.return_address);
   INSERT_INTO_JSON_OBJECT(dest, source_asset_type, tx.source_asset_type);
   INSERT_INTO_JSON_OBJECT(dest, destination_asset_type, tx.destination_asset_type);
   INSERT_INTO_JSON_OBJECT(dest, amount_burnt, tx.amount_burnt);
@@ -303,7 +303,7 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
   GET_FROM_JSON_OBJECT(val, tx.vout, outputs);
   GET_FROM_JSON_OBJECT(val, tx.extra, extra);
   GET_FROM_JSON_OBJECT(val, tx.type, type);
-  GET_FROM_JSON_OBJECT(val, tx.destination_address, destination_address);
+  GET_FROM_JSON_OBJECT(val, tx.return_address, return_address);
   GET_FROM_JSON_OBJECT(val, tx.source_asset_type, source_asset_type);
   GET_FROM_JSON_OBJECT(val, tx.destination_asset_type, destination_asset_type);
   GET_FROM_JSON_OBJECT(val, tx.amount_burnt, amount_burnt);

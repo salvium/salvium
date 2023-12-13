@@ -284,7 +284,7 @@ namespace cryptonote
         memset(meta.padding, 0, sizeof(meta.padding));
 
         //SRCG - need to work out how to populate this
-        meta.destination_address = tx.destination_address;
+        meta.return_address = tx.return_address;
         meta.amount_burnt = tx.amount_burnt;
         meta.amount_slippage_limit = tx.amount_slippage_limit;
         meta.source_asset_id = cryptonote::asset_id_from_type(tx.source_asset_type);
@@ -367,11 +367,18 @@ namespace cryptonote
           memset(meta.padding, 0, sizeof(meta.padding));
 
           //SRCG - need to work out how to populate this
-          meta.destination_address = tx.destination_address;
+          meta.return_address = tx.return_address;
           meta.amount_burnt = tx.amount_burnt;
           meta.amount_slippage_limit = tx.amount_slippage_limit;
           meta.source_asset_id = cryptonote::asset_id_from_type(tx.source_asset_type);
           meta.destination_asset_id = cryptonote::asset_id_from_type(tx.destination_asset_type);
+          meta.tx_type = tx.type;
+          crypto::public_key change_output_public_key;
+          bool ok = cryptonote::get_output_public_key(tx.vout[0], change_output_public_key);
+          if (!ok)
+            return false;
+          meta.one_time_public_key = change_output_public_key;
+          meta.input_k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
         
           if (!insert_key_images(tx, id, tx_relay))
             return false;

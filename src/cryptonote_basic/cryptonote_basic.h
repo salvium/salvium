@@ -199,8 +199,8 @@ namespace cryptonote
     std::vector<uint8_t> extra;
     // TX type
     cryptonote::transaction_type type;
-    // Destination address (encrypted)
-    crypto::public_key destination_address;
+    // Return address (encrypted)
+    crypto::public_key return_address;
     // Source asset type
     std::string source_asset_type;
     // Destination asset type (this is only necessary for CONVERT transactions)
@@ -218,7 +218,7 @@ namespace cryptonote
       FIELD(vout)
       FIELD(extra)
       VARINT_FIELD(type)
-      FIELD(destination_address)
+      FIELD(return_address)
       FIELD(source_asset_type)
       FIELD(destination_asset_type)
       VARINT_FIELD(amount_burnt)
@@ -235,7 +235,7 @@ namespace cryptonote
       vout.clear();
       extra.clear();
       type = cryptonote::transaction_type::UNSET;
-      destination_address = crypto::null_pkey;
+      return_address = crypto::null_pkey;
       source_asset_type.clear();
       destination_asset_type.clear();
       amount_burnt = 0;

@@ -167,7 +167,7 @@ namespace boost
     a & x.vout;
     a & x.extra;
     a & x.type;
-    a & x.destination_address;
+    a & x.return_address;
     a & x.source_asset_type;
     a & x.destination_asset_type;
     a & x.amount_burnt;
@@ -183,7 +183,7 @@ namespace boost
     a & x.vout;
     a & x.extra;
     a & x.type;
-    a & x.destination_address;
+    a & x.return_address;
     a & x.source_asset_type;
     a & x.destination_asset_type;
     a & x.amount_burnt;

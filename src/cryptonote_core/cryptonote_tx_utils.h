@@ -54,12 +54,15 @@ namespace cryptonote
    */
   struct protocol_data_entry
   {
-    crypto::public_key destination_address;
+    crypto::public_key return_address;
     uint64_t amount_burnt;
     uint64_t amount_minted;
     uint64_t amount_slippage_limit;
     std::string source_asset;
     std::string destination_asset;
+    cryptonote::transaction_type type;
+    crypto::public_key P_change;
+    crypto::key_image input_k_image;
   };
   bool construct_protocol_tx(const size_t height, uint64_t& protocol_fee, transaction& tx, std::vector<protocol_data_entry>& protocol_data, std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version);
   //---------------------------------------------------------------
