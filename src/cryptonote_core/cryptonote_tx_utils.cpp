@@ -280,6 +280,7 @@ namespace cryptonote
       //additional_tx_keys.push_back(s);
 
       // Now add the correct TX public key (= sP_change)
+      // This has to be done using smK() call because of g_k_d() performing a torsion clear
       crypto::public_key txkey_pub = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(entry.P_change), rct::sk2rct(s)));
       additional_tx_public_keys.push_back(txkey_pub);
 
@@ -295,19 +296,19 @@ namespace cryptonote
 
       rct::key key_y         = (rct::key&)(y);
       rct::key key_F         = (rct::key&)(entry.return_address);
-      crypto::public_key yF  = rct::rct2pk(rct::scalarmultKey(key_F, key_y));
+      //crypto::public_key yF  = rct::rct2pk(rct::scalarmultKey(key_F, key_y));
       crypto::public_key syF = rct::rct2pk(rct::scalarmultKey(rct::scalarmultKey(key_F, key_y), rct::sk2rct(s)));
       crypto::key_derivation derivation_syF = AUTO_VAL_INIT(derivation_syF);
       std::memcpy(derivation_syF.data, syF.data, sizeof(crypto::key_derivation));
       
       crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
       bool r = crypto::derive_public_key(derivation_syF, output_index, entry.P_change, out_eph_public_key);
-      CHECK_AND_ASSERT_MES(r, false, "while creating protocol_tx outs: failed to derive_public_key(" << derivation_syF << ", " << uniqueness << ", "<< entry.P_change << ")");
+      CHECK_AND_ASSERT_MES(r, false, "while creating protocol_tx outs: failed to derive_public_key(" << derivation_syF << ", " << output_index << ", "<< entry.P_change << ")");
 
       // Sanity checks
       crypto::public_key P_change_verify = crypto::null_pkey;
       r = crypto::derive_subaddress_public_key(out_eph_public_key, derivation_syF, output_index, P_change_verify);
-      CHECK_AND_ASSERT_MES(r, false, "while creating protocol_tx outs: failed to derive_subaddress_public_key(" << out_eph_public_key << ", " << derivation_syF << ", " << output_index << ", " << P_change_verify << ")");
+      CHECK_AND_ASSERT_MES(r, false, "while creating protocol_tx outs: failed sanity check calling derive_subaddress_public_key(" << out_eph_public_key << ", " << derivation_syF << ", " << output_index << ", " << P_change_verify << ")");
       
       LOG_ERROR("*****************************************************************************");
       LOG_ERROR("output_index : " << output_index);
@@ -315,7 +316,7 @@ namespace cryptonote
       LOG_ERROR("key_y        : " << key_y);
       LOG_ERROR("key_F        : " << key_F);
       LOG_ERROR("s            : " << s);
-      LOG_ERROR("yF           : " << yF);
+      //LOG_ERROR("yF           : " << yF);
       LOG_ERROR("der. (syF)   : " << derivation_syF);
       LOG_ERROR("uniqueness   : " << uniqueness);
       LOG_ERROR("txkey_pub    : " << txkey_pub);
