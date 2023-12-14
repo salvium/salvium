@@ -1981,6 +1981,25 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
   crypto::public_key output_public_key;
   THROW_WALLET_EXCEPTION_IF(!get_output_public_key(tx.vout[i], output_public_key), error::wallet_internal_error, "Failed to get output public key");
 
+  // Is this a payout from a PROTOCOL_TX?
+  crypto::public_key pk_change_tx = crypto::null_pkey;
+  if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+
+    // Calculate the subaddress public_key (P_change)
+    crypto::public_key pk_change = crypto::null_pkey;
+    bool ok = m_account.get_device().derive_subaddress_public_key(output_public_key, tx_scan_info.received->derivation, i, pk_change);
+    THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to derive subaddress public key for CONVERT/YIELD TX");
+    
+    // Find the TX public key for P_change
+    auto search = m_protocol_txs.find(pk_change);
+    THROW_WALLET_EXCEPTION_IF(search == m_protocol_txs.end(), error::wallet_internal_error, "failed to locate protocol_tx entry to permit source usage");
+    size_t idx = search->second;
+    THROW_WALLET_EXCEPTION_IF(idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate protocol_txs index in m_transfers");
+    const transfer_details& td = get_transfer_details(idx);
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.type != cryptonote::transaction_type::CONVERT && td.m_tx.type != cryptonote::transaction_type::YIELD, error::wallet_internal_error, "incorrect TX type for protocol_tx origin in m_transfers");
+    pk_change_tx = get_tx_pub_key_from_extra(td.m_tx);
+  }
+  
   if (m_multisig)
   {
     tx_scan_info.in_ephemeral.pub = output_public_key;
@@ -1989,12 +2008,12 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
   }
   else
   {
-    bool r = cryptonote::generate_key_image_helper_precomp(m_account.get_keys(), output_public_key, tx_scan_info.received->derivation, i, tx_scan_info.uniqueness, tx_scan_info.received->index, tx_scan_info.in_ephemeral, tx_scan_info.ki, m_account.get_device());
+    bool r = cryptonote::generate_key_image_helper_precomp(m_account.get_keys(), output_public_key, tx_scan_info.received->derivation, i, tx_scan_info.uniqueness, tx_scan_info.received->index, tx_scan_info.in_ephemeral, tx_scan_info.ki, m_account.get_device(), tx.type, pk_change_tx);
     THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to generate key image");
     THROW_WALLET_EXCEPTION_IF(tx_scan_info.in_ephemeral.pub != output_public_key,
-        error::wallet_internal_error, "key_image generated ephemeral public key not matched with output_key");
+                              error::wallet_internal_error, "key_image generated ephemeral public key not matched with output_key");
   }
-
+  
   THROW_WALLET_EXCEPTION_IF(std::find(outs.begin(), outs.end(), i) != outs.end(), error::wallet_internal_error, "Same output cannot be added twice");
   if (tx_scan_info.money_transfered == 0 && !miner_tx)
   {
@@ -2593,7 +2612,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     // Add the change output_public_key to the list of subaddresses to check
     crypto::public_key P_change = crypto::null_pkey;
     THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[0], P_change), error::wallet_internal_error, "Failed to get change output public key");
-    m_subaddresses[P_change] = {0,0};
+    m_subaddresses[P_change] = {0x50524F54,0x4F434F4C};
     m_protocol_txs.insert({P_change, m_transfers.size()-1});
   }
   
