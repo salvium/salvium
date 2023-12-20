@@ -120,7 +120,7 @@ namespace hw {
         /*                               SUB ADDRESS                               */
         /* ======================================================================= */
 
-      bool device_default::derive_subaddress_public_key(const crypto::public_key &out_key, const crypto::key_derivation &derivation, const crypto::hash& uniqueness, crypto::public_key &derived_key) {
+      bool device_default::derive_subaddress_public_key(const crypto::public_key &out_key, const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, crypto::public_key &derived_key) {
             return crypto::wallet::derive_subaddress_public_key(out_key, derivation, uniqueness, derived_key);
         }
 
@@ -258,17 +258,17 @@ namespace hw {
             return crypto::derive_public_key(derivation, output_index, base, derived_key);
         }
       
-      bool device_default::derivation_to_scalar(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, crypto::ec_scalar &res){
+      bool device_default::derivation_to_scalar(const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, crypto::ec_scalar &res){
             crypto::derivation_to_scalar(derivation, uniqueness, res);
             return true;
         }
 
-      bool device_default::derive_secret_key(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, const crypto::secret_key &base, crypto::secret_key &derived_key){
+      bool device_default::derive_secret_key(const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, const crypto::secret_key &base, crypto::secret_key &derived_key){
             crypto::derive_secret_key(derivation, uniqueness, base, derived_key);
             return true;
         }
 
-      bool device_default::derive_public_key(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, const crypto::public_key &base, crypto::public_key &derived_key){
+      bool device_default::derive_public_key(const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, const crypto::public_key &base, crypto::public_key &derived_key){
             return crypto::derive_public_key(derivation, uniqueness, base, derived_key);
         }
 
@@ -316,7 +316,7 @@ namespace hw {
                                                             std::vector<crypto::public_key> &additional_tx_public_keys,
                                                             std::vector<rct::key> &amount_keys,  crypto::public_key &out_eph_public_key,
                                                             const bool use_view_tags, crypto::view_tag &view_tag,
-                                                            const crypto::hash& uniqueness) {
+                                                            const crypto::ec_scalar& uniqueness) {
 
             crypto::key_derivation derivation;
 
@@ -363,7 +363,7 @@ namespace hw {
             }
 
             r = derive_public_key(derivation, uniqueness, dst_entr.addr.m_spend_public_key, out_eph_public_key);
-            CHECK_AND_ASSERT_MES(r, false, "at creation outs: failed to derive_public_key(" << derivation << ", " << uniqueness << ", "<< dst_entr.addr.m_spend_public_key << ")");
+            CHECK_AND_ASSERT_MES(r, false, "at creation outs: failed to derive_public_key(" << derivation << ", " << uniqueness.data << ", "<< dst_entr.addr.m_spend_public_key << ")");
 
             return r;
         }

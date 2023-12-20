@@ -1863,7 +1863,7 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
         mdb_env_close(m_env);
         m_open = false;
         MFATAL("Existing lmdb database needs to be converted, which cannot be done on a read-only database.");
-        MFATAL("Please run elbowd once to convert the database.");
+        MFATAL("Please run fulmod once to convert the database.");
         return;
       }
       // Note that there was a schema change within version 0 as well.
@@ -5027,13 +5027,6 @@ uint64_t BlockchainLMDB::get_database_size() const
   if (!epee::file_io_utils::get_file_size(datafile.string(), size))
     size = 0;
   return size;
-}
-
-void BlockchainLMDB::fixup()
-{
-  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  // Always call parent as well
-  BlockchainDB::fixup();
 }
 
 #define RENAME_DB(name) do { \

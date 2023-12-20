@@ -682,7 +682,7 @@ namespace hw {
     /*                               SUB ADDRESS                               */
     /* ======================================================================= */
 
-    bool device_ledger::derive_subaddress_public_key(const crypto::public_key &pub, const crypto::key_derivation &derivation, const crypto::hash& uniqueness, crypto::public_key &derived_pub){
+    bool device_ledger::derive_subaddress_public_key(const crypto::public_key &pub, const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, crypto::public_key &derived_pub){
         #ifdef DEBUG_HWDEVICE
         const crypto::public_key pub_x = pub;
         crypto::key_derivation derivation_x;
@@ -691,7 +691,7 @@ namespace hw {
         } else {
           derivation_x = hw::ledger::decrypt(derivation);
         }
-        const crypto::hash uniqueness_x = uniqueness;
+        const crypto::ec_scalar uniqueness_x = uniqueness;
         const std::size_t output_index_x = output_index;
         crypto::public_key derived_pub_x;
         log_hexbuffer("derive_subaddress_public_key: [[IN]]  pub       ", pub_x.data, 32);
@@ -1297,12 +1297,12 @@ namespace hw {
         return true;
     }
 
-    bool device_ledger::derivation_to_scalar(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, crypto::ec_scalar &res) {
+    bool device_ledger::derivation_to_scalar(const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, crypto::ec_scalar &res) {
         AUTO_LOCK_CMD();
 
         #ifdef DEBUG_HWDEVICE
         const crypto::key_derivation derivation_x = hw::ledger::decrypt(derivation);
-        const crypto::hash uniqueness_x           = uniqueness;
+        const crypto::ec_scalar uniqueness_x      = uniqueness;
         crypto::ec_scalar res_x;
         log_hexbuffer("derivation_to_scalar: [[IN]]  derivation   ", derivation_x.data, 32);
         log_message  ("derivation_to_scalar: [[IN]]  uniqueness   ", uniqueness_x.data, 32);
@@ -1334,12 +1334,12 @@ namespace hw {
         return true;
     }
 
-    bool device_ledger::derive_secret_key(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, const crypto::secret_key &sec, crypto::secret_key &derived_sec) {
+    bool device_ledger::derive_secret_key(const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, const crypto::secret_key &sec, crypto::secret_key &derived_sec) {
         AUTO_LOCK_CMD();
 
         #ifdef DEBUG_HWDEVICE
         const crypto::key_derivation derivation_x   = hw::ledger::decrypt(derivation);
-        const crypto::hash uniqueness_x             = uniqueness;
+        const crypto::ec_scalar uniqueness_x        = uniqueness;
         const crypto::secret_key     sec_x          = hw::ledger::decrypt(sec);
         crypto::secret_key           derived_sec_x;
         log_hexbuffer("derive_secret_key: [[IN]]  derivation ", derivation_x.data, 32);
@@ -1375,12 +1375,12 @@ namespace hw {
         return true;
     }
 
-    bool device_ledger::derive_public_key(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, const crypto::public_key &pub, crypto::public_key &derived_pub){
+    bool device_ledger::derive_public_key(const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, const crypto::public_key &pub, crypto::public_key &derived_pub){
         AUTO_LOCK_CMD();
       
         #ifdef DEBUG_HWDEVICE
         const crypto::key_derivation derivation_x   = hw::ledger::decrypt(derivation);
-        const crypto::hash uniqueness_x             = uniqueness;
+        const crypto::ec_scalar uniqueness_x        = uniqueness;
         const crypto::public_key     pub_x        = pub;
         crypto::public_key           derived_pub_x;
         log_hexbuffer("derive_public_key: [[IN]]  derivation  ", derivation_x.data, 32);
@@ -1755,7 +1755,7 @@ namespace hw {
                                                        std::vector<rct::key> &amount_keys,
                                                        crypto::public_key &out_eph_public_key,
                                                        bool use_view_tags, crypto::view_tag &view_tag,
-                                                       const crypto::hash& uniqueness) {
+                                                       const crypto::ec_scalar& uniqueness) {
       AUTO_LOCK_CMD();
 
       #ifdef DEBUG_HWDEVICE
@@ -1770,7 +1770,7 @@ namespace hw {
       const size_t                             output_index_x                 = output_index;
       const bool                               need_additional_txkeys_x       = need_additional_txkeys;
       const bool                               use_view_tags_x                = use_view_tags;
-      const crypto::hash                       uniqueness_x                   = uniqueness;
+      const crypto::ec_scalar                  uniqueness_x                   = uniqueness;
       std::vector<crypto::secret_key>    additional_tx_keys_x;
       for (const auto &k: additional_tx_keys) {
         additional_tx_keys_x.push_back(hw::ledger::decrypt(k));

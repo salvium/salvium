@@ -284,6 +284,7 @@ namespace cryptonote
         memset(meta.padding, 0, sizeof(meta.padding));
 
         //SRCG - need to work out how to populate this
+        meta.tx_type = (uint8_t)(tx.type);
         meta.return_address = tx.return_address;
         meta.amount_burnt = tx.amount_burnt;
         meta.amount_slippage_limit = tx.amount_slippage_limit;

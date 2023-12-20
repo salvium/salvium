@@ -43,7 +43,7 @@ namespace crypto {
       }
 
       inline
-      bool derive_subaddress_public_key(const public_key &output_pub, const key_derivation &d, const crypto::hash& uniqueness, public_key &out)
+      bool derive_subaddress_public_key(const public_key &output_pub, const key_derivation &d, const ec_scalar& uniqueness, public_key &out)
       {
         ec_scalar scalar;
         derivation_to_scalar(d, uniqueness, scalar);

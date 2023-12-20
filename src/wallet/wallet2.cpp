@@ -1788,18 +1788,11 @@ void wallet2::check_acc_out_precomp(const tx_out &o, const crypto::key_derivatio
      LOG_ERROR("wrong type id in transaction out");
      return;
   }
-  /*
-  // Check for presence in the map of protocol_tx entries we are expecting
-  if (auto search = m_protocol_txs.find(output_public_key); search != m_protocol_txs.end())
-  {
-    LOG_ERROR("********************** FOUND A PROTOCOL_TX - WHAT TO DO NEXT??? **********************");
-  }
-  */
-  tx_scan_info.received = is_out_to_acc_precomp(m_subaddresses, output_public_key, derivation, additional_derivations, i, hwdev, get_output_view_tag(o));
+
+  tx_scan_info.received = is_out_to_acc_precomp(m_subaddresses, output_public_key, derivation, additional_derivations, i, tx_scan_info.uniqueness, hwdev, get_output_view_tag(o));
   if(tx_scan_info.received)
   {
     tx_scan_info.money_transfered = o.amount; // may be 0 for ringct outputs
-    tx_scan_info.uniqueness = cn_fast_hash(reinterpret_cast<void*>(&i), sizeof(size_t));
   }
   else
   {
@@ -1810,107 +1803,10 @@ void wallet2::check_acc_out_precomp(const tx_out &o, const crypto::key_derivatio
 //----------------------------------------------------------------------------------------------------
 void wallet2::check_acc_out_precomp(const tx_out &o, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, size_t i, const is_out_data *is_out_data, tx_scan_info_t &tx_scan_info) const
 {
-  if (!is_out_data || i >= is_out_data->received.size())
+  //if (!is_out_data || i >= is_out_data->received.size())
     return check_acc_out_precomp(o, derivation, additional_derivations, i, tx_scan_info);
 
-  crypto::public_key output_public_key;
-  if (!get_output_public_key(o, output_public_key))
-  {
-     tx_scan_info.error = true;
-     LOG_ERROR("wrong type id in transaction out");
-     return;
-  }
-  /*
-  // Check for presence in the map of protocol_tx entries we are expecting
-  if (auto search = m_protocol_txs.find(output_public_key); search != m_protocol_txs.end())
-  {
-    LOG_ERROR("********************** FOUND A PROTOCOL_TX - WHAT TO DO NEXT??? **********************");
-
-    size_t idx = search->second;
-    if (idx >= get_num_transfer_details()) {
-      LOG_ERROR("cannot locate protocol_txs index in m_transfers - idx = " << idx);
-      tx_scan_info.error = true;
-      return;
-    }
-    const transfer_details& td = get_transfer_details(idx);
-    if (td.m_tx.type != cryptonote::transaction_type::CONVERT && td.m_tx.type != cryptonote::transaction_type::YIELD) {
-      // We can only accept CONVERT & YIELD payments
-      LOG_ERROR("incorrect TX type for protocol_tx origin in m_transfers - idx = " << idx);
-      tx_scan_info.error = true;
-      return;
-    }
-    
-    // We now have access to the sorted tx.vin vector - we need the key_image from the first entry to decode the public_key
-    if (td.m_tx.vin[0].type() != typeid(cryptonote::txin_to_key)) {
-      // We can only accept txin_to_key inputs for our KI
-      LOG_ERROR("incorrect TX vin[0] type for protocol_tx origin in m_transfers - idx = " << idx);
-      tx_scan_info.error = true;
-      return;
-    }
-    const txin_to_key &in = boost::get<txin_to_key>(td.m_tx.vin[0]);
-    crypto::key_image ki = in.k_image;
-
-    crypto::public_key tx_pub_key = get_tx_pub_key_from_extra(td.m_tx);
-    if (tx_pub_key == null_pkey) {
-      LOG_ERROR("Tx pubkey was not found");
-      tx_scan_info.error = true;
-      return;
-    }
-
-    // Generate a derivation using the _correct_ TX pubkey
-    crypto::key_derivation convert_tx_derivation;
-    bool ok = generate_key_derivation(tx_pub_key, get_account().get_keys().m_view_secret_key, convert_tx_derivation);
-    if (!ok) {
-      // Failed to generate a derivation
-      LOG_ERROR("Failed to generate a derivation image - idx = " << idx);
-      tx_scan_info.error = true;
-      return;
-    }
-    
-    // Derive a public key now, using the information we have
-    crypto::hash uniqueness = cn_fast_hash(&ki.data[0], 32);
-    crypto::public_key pk = crypto::null_pkey;
-    ok = m_account.get_device().derive_public_key(convert_tx_derivation, uniqueness, get_account().get_keys().m_account_address.m_spend_public_key, pk);
-    if (!ok) {
-      // Failed to derive a public key
-      LOG_ERROR("Failed to derive a public key given the necessary key image - idx = " << idx);
-      tx_scan_info.error = true;
-      return;
-    }
-
-    LOG_ERROR("*****************************************************************************");
-    LOG_ERROR("derivation: " << derivation);
-    LOG_ERROR("key_image : " << ki);
-    LOG_ERROR("uniqueness: " << uniqueness);
-    LOG_ERROR("txkey_pub : " << tx_pub_key);
-    LOG_ERROR("tx_address: " << output_public_key);
-    LOG_ERROR("*****************************************************************************");
-
-    // Do the public keys match?
-    if (pk == output_public_key) {
-      LOG_ERROR("********************** DECODED A PROTOCOL_TX - CAN WE SPEND IT??? **********************");
-      auto index = m_subaddresses.find(get_account().get_keys().m_account_address.m_spend_public_key);
-      if (index == m_subaddresses.end()) {
-        // Failed to find the subaddress for this account
-        LOG_ERROR("Failed to find subaddress");
-        tx_scan_info.error = true;
-        return;
-      }
-      tx_scan_info.received = subaddress_receive_info{ index->second, convert_tx_derivation };
-      tx_scan_info.uniqueness = uniqueness;
-    } else {
-      LOG_ERROR("Public keys do not match");
-      tx_scan_info.error = true;
-      return;
-    }
-  }
-  else
-  */
-  {
-    tx_scan_info.received = is_out_data->received[i];
-    tx_scan_info.uniqueness = cn_fast_hash(reinterpret_cast<void*>(&i), sizeof(size_t));
-  }
-  
+  tx_scan_info.received = is_out_data->received[i];
   if(tx_scan_info.received)
   {
     tx_scan_info.money_transfered = o.amount; // may be 0 for ringct outputs
@@ -1932,7 +1828,7 @@ void wallet2::check_acc_out_precomp_once(const tx_out &o, const crypto::key_deri
     already_seen = true;
 }
 //----------------------------------------------------------------------------------------------------
-static uint64_t decodeRct(const rct::rctSig & rv, const crypto::key_derivation &derivation, size_t output_index, crypto::hash& uniqueness, rct::key & mask, hw::device &hwdev)
+static uint64_t decodeRct(const rct::rctSig & rv, const crypto::key_derivation &derivation, size_t output_index, crypto::ec_scalar& uniqueness, rct::key & mask, hw::device &hwdev)
 {
   crypto::secret_key scalar1;
   hwdev.derivation_to_scalar(derivation, uniqueness, scalar1);
@@ -1998,6 +1894,17 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
     const transfer_details& td = get_transfer_details(idx);
     THROW_WALLET_EXCEPTION_IF(td.m_tx.type != cryptonote::transaction_type::CONVERT && td.m_tx.type != cryptonote::transaction_type::YIELD, error::wallet_internal_error, "incorrect TX type for protocol_tx origin in m_transfers");
     pk_change_tx = get_tx_pub_key_from_extra(td.m_tx);
+    
+    // Create a "uniqueness" value - both CONVERT and YIELD use the same uniqueness format, based on the first input key_image
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.vin.empty(), error::wallet_internal_error, "no tx.vin[] provided");
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.vin[0].type() != typeid(cryptonote::txin_to_key), error::wallet_internal_error, "tx.vin[0] in origin TX must be of type txin_to_key");
+    crypto::key_image k_image = boost::get<cryptonote::txin_to_key>(td.m_tx.vin[0]).k_image;
+    THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td.m_tx.type, k_image, td.m_block_height, i, tx_scan_info.uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
+
+  } else {
+
+    // Expect a uniqueness value to have been provided by tx_scan_info
+    LOG_ERROR("DEBUG HERE");
   }
   
   if (m_multisig)
@@ -2008,7 +1915,7 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
   }
   else
   {
-    bool r = cryptonote::generate_key_image_helper_precomp(m_account.get_keys(), output_public_key, tx_scan_info.received->derivation, i, tx_scan_info.uniqueness, tx_scan_info.received->index, tx_scan_info.in_ephemeral, tx_scan_info.ki, m_account.get_device(), tx.type, pk_change_tx);
+    bool r = cryptonote::generate_key_image_helper_precomp(m_account.get_keys(), output_public_key, tx_scan_info.received->derivation, i, tx_scan_info.received->index, tx_scan_info.in_ephemeral, tx_scan_info.ki, m_account.get_device(), tx.type, tx_scan_info.uniqueness, pk_change_tx);
     THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to generate key image");
     THROW_WALLET_EXCEPTION_IF(tx_scan_info.in_ephemeral.pub != output_public_key,
                               error::wallet_internal_error, "key_image generated ephemeral public key not matched with output_key");
@@ -2313,6 +2220,48 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     {
       for (size_t i = 0; i < tx.vout.size(); ++i)
       {
+        if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+
+          // If we get here, we should already HAVE the derivation(s) we need - PROTOCOL_TXs will have them in "additional_derivations"
+          
+          crypto::public_key output_public_key = crypto::null_pkey;
+          THROW_WALLET_EXCEPTION_IF(!get_output_public_key(tx.vout[i], output_public_key), error::wallet_internal_error, "Failed to get output public key");
+          
+          // Calculate the subaddress public_key (P_change)
+          crypto::public_key pk_change = crypto::null_pkey;
+          bool ok = m_account.get_device().derive_subaddress_public_key(output_public_key, additional_derivations[i], i, pk_change);
+          THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to derive subaddress public key for CONVERT/YIELD TX");
+    
+          // Find the TX public key for P_change
+          auto search = m_protocol_txs.find(pk_change);
+          THROW_WALLET_EXCEPTION_IF(search == m_protocol_txs.end(), error::wallet_internal_error, "failed to locate protocol_tx entry to permit source usage");
+          size_t idx = search->second;
+          THROW_WALLET_EXCEPTION_IF(idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate protocol_txs index in m_transfers");
+          const transfer_details& td_origin = get_transfer_details(idx);
+          THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.type != cryptonote::transaction_type::CONVERT && td_origin.m_tx.type != cryptonote::transaction_type::YIELD,
+                                    error::wallet_internal_error,
+                                    "incorrect TX type for protocol_tx origin in m_transfers");
+          crypto::public_key pk_change_tx = get_tx_pub_key_from_extra(td_origin.m_tx);
+
+          // Create a "uniqueness" value - both CONVERT and YIELD use the same uniqueness format, based on the first input key_image
+          THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.vin.empty(), error::wallet_internal_error, "no tx.vin[] provided");
+          THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.vin[0].type() != typeid(cryptonote::txin_to_key), error::wallet_internal_error, "tx.vin[0] in origin TX must be of type txin_to_key");
+          crypto::key_image k_image = boost::get<cryptonote::txin_to_key>(td_origin.m_tx.vin[0]).k_image;
+          THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td_origin.m_tx.type, k_image, td_origin.m_block_height, i, tx_scan_info[i].uniqueness),
+                                    error::wallet_internal_error,
+                                    "Failed to calculate uniqueness from origin TX");
+        } else {
+        
+          // Get the uniqueness value
+          THROW_WALLET_EXCEPTION_IF(tx.vin.empty(), error::wallet_internal_error, "no tx.vin[] provided");
+          crypto::key_image k_image;
+          if (tx.vin[0].type() == typeid(cryptonote::txin_to_key)) {
+            k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
+          }
+          THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(tx.type, k_image, height, i, tx_scan_info[i].uniqueness), error::wallet_internal_error, "Failed to calculate TX output uniqueness");
+          //assert(false);
+        }
+        
         THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_asset_type(tx.vout[i], tx_scan_info[i].asset_type), error::wallet_internal_error, "Failed to get output asset type for tx_scan_info");
         check_acc_out_precomp_once(tx.vout[i], derivation, additional_derivations, i, is_out_data_ptr, tx_scan_info[i], output_found[i]);
         THROW_WALLET_EXCEPTION_IF(tx_scan_info[i].error, error::acc_outs_lookup_error, tx, tx_pub_key, m_account.get_keys());
@@ -2322,11 +2271,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
           boost::unique_lock<hw::device> hwdev_lock (hwdev);
           hwdev.set_mode(hw::device::NONE);
           hwdev.conceal_derivation(tx_scan_info[i].received->derivation, tx_pub_key, additional_tx_pub_keys.data, derivation, additional_derivations);
-          //if (tx.type == cryptonote::transaction_type::PROTOCOL) {
-          //  scan_protocol_tx_output(tx, miner_tx, tx_pub_key, i, tx_scan_info[i], num_vouts_received, tx_money_got_in_outs, outs, pool);
-          //} else {
-            scan_output(tx, miner_tx, tx_pub_key, i, tx_scan_info[i], num_vouts_received, tx_money_got_in_outs, outs, pool);
-            //}
+          scan_output(tx, miner_tx, tx_pub_key, i, tx_scan_info[i], num_vouts_received, tx_money_got_in_outs, outs, pool);
           if (!tx_scan_info[i].error)
           {
             tx_amounts_individual_outs[tx_scan_info[i].received->index].push_back(tx_scan_info[i].money_transfered);
@@ -2434,14 +2379,28 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
               if (m_multisig_rescan_info && m_multisig_rescan_info->front().size() >= m_transfers.size())
                 update_multisig_rescan_info(*m_multisig_rescan_k, *m_multisig_rescan_info, m_transfers.size() - 1);
             }
-	    LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
-	    if (0 != m_callback)
-	      m_callback->on_money_received(height, txid, tx, td.m_amount, 0, td.asset_type, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time);
+            LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
+            if (0 != m_callback)
+              m_callback->on_money_received(height, txid, tx, td.m_amount, 0, td.asset_type, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time);
           }
           total_received_1 += amount;
           notify = true;
+
+          if (tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::YIELD)
+          {
+            // The CONVERT/YIELD TX was created by us - therefore we need to expect an output in the PROTOCOL_TX
+            // It could be a refund or a conversion
+            THROW_WALLET_EXCEPTION_IF(tx.vout.size() != 1, error::wallet_internal_error, "Incorrect number of outputs from CONVERT/YIELD TX");
+            
+            // Add the change output_public_key to the list of subaddresses to check
+            crypto::public_key P_change = crypto::null_pkey;
+            THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[0], P_change), error::wallet_internal_error, "Failed to get change output public key");
+            //m_subaddresses[P_change] = {0x50524F54,0x4F434F4C};
+            m_subaddresses[P_change] = {0,0};
+            m_protocol_txs.insert({P_change, m_transfers.size()-1});
+          }
         }
-	else if (m_transfers[kit->second].m_spent || m_transfers[kit->second].amount() >= tx_scan_info[o].amount)
+        else if (m_transfers[kit->second].m_spent || m_transfers[kit->second].amount() >= tx_scan_info[o].amount)
         {
 	  LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
               << " from received " << print_money(tx_scan_info[o].amount) << " output already exists with "
@@ -2510,14 +2469,28 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
                 update_multisig_rescan_info(*m_multisig_rescan_k, *m_multisig_rescan_info, m_transfers.size() - 1);
             }
             THROW_WALLET_EXCEPTION_IF(td.get_public_key() != tx_scan_info[o].in_ephemeral.pub, error::wallet_internal_error, "Inconsistent public keys");
-	    THROW_WALLET_EXCEPTION_IF(td.m_spent, error::wallet_internal_error, "Inconsistent spent status");
+            THROW_WALLET_EXCEPTION_IF(td.m_spent, error::wallet_internal_error, "Inconsistent spent status");
 
-	    LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
-	    if (0 != m_callback)
-	      m_callback->on_money_received(height, txid, tx, td.m_amount, burnt, td.asset_type, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time);
+            LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
+            if (0 != m_callback)
+              m_callback->on_money_received(height, txid, tx, td.m_amount, burnt, td.asset_type, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time);
           }
           total_received_1 += extra_amount;
           notify = true;
+          
+          if (tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::YIELD)
+          {
+            // The CONVERT/YIELD TX was created by us - therefore we need to expect an output in the PROTOCOL_TX
+            // It could be a refund or a conversion
+            THROW_WALLET_EXCEPTION_IF(tx.vout.size() != 1, error::wallet_internal_error, "Incorrect number of outputs from CONVERT/YIELD TX");
+            
+            // Add the change output_public_key to the list of subaddresses to check
+            crypto::public_key P_change = crypto::null_pkey;
+            THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[0], P_change), error::wallet_internal_error, "Failed to get change output public key");
+            //m_subaddresses[P_change] = {0x50524F54,0x4F434F4C};
+            m_subaddresses[P_change] = {0,0};
+            m_protocol_txs.insert({P_change, m_transfers.size()-1});
+          }
         }
       }
     }
@@ -2603,19 +2576,6 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
 
   uint64_t fee = miner_tx ? 0 : tx.version == 1 ? tx_money_spent_in_ins - get_outs_money_amount(tx) : tx.rct_signatures.txnFee;
 
-  if (tx_money_spent_in_ins > 0 && (tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::YIELD))
-  {
-    // The CONVERT/YIELD TX was created by us - therefore we need to expect an output in the PROTOCOL_TX
-    // It could be a refund or a conversion
-    //m_protocol_txs.insert({tx.return_address, m_transfers.size()-1});
-
-    // Add the change output_public_key to the list of subaddresses to check
-    crypto::public_key P_change = crypto::null_pkey;
-    THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[0], P_change), error::wallet_internal_error, "Failed to get change output public key");
-    m_subaddresses[P_change] = {0x50524F54,0x4F434F4C};
-    m_protocol_txs.insert({P_change, m_transfers.size()-1});
-  }
-  
   if (tx_money_spent_in_ins > 0 && !pool)
   {
     std::map<std::string, uint64_t> self_received;
@@ -3070,9 +3030,19 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
   }
   THROW_WALLET_EXCEPTION_IF(!waiter.wait(), error::wallet_internal_error, "Exception in thread pool");
 
-  auto geniod = [&](const cryptonote::transaction &tx, size_t n_vouts, size_t txidx) {
+  auto geniod = [&](const cryptonote::transaction &tx, size_t n_vouts, size_t txidx, size_t blkidx) {
+
     for (size_t k = 0; k < n_vouts; ++k)
     {
+      // SRCG: Calculate the correct uniqueness value here
+      THROW_WALLET_EXCEPTION_IF(tx.vin.empty(), error::wallet_internal_error, "no tx.vin[] provided");
+      crypto::key_image k_image;
+      if (tx.vin[0].type() == typeid(cryptonote::txin_to_key)) {
+        k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
+      }
+      crypto::ec_scalar uniqueness;
+      THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(tx.type, k_image, start_height + blkidx, k, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
+
       const auto &o = tx.vout[k];
       crypto::public_key output_public_key;
       if (get_output_public_key(o, output_public_key))
@@ -3085,7 +3055,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
         {
           THROW_WALLET_EXCEPTION_IF(tx_cache_data[txidx].primary[l].received.size() != n_vouts,
               error::wallet_internal_error, "Unexpected received array size");
-          tx_cache_data[txidx].primary[l].received[k] = is_out_to_acc_precomp(m_subaddresses, output_public_key, tx_cache_data[txidx].primary[l].derivation, additional_derivations, k, hwdev, get_output_view_tag(o));
+          tx_cache_data[txidx].primary[l].received[k] = is_out_to_acc_precomp(m_subaddresses, output_public_key, tx_cache_data[txidx].primary[l].derivation, additional_derivations, k, uniqueness, hwdev, get_output_view_tag(o));
           additional_derivations.clear();
         }
       }
@@ -3096,6 +3066,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
     const cryptonote::transaction &tx;
     size_t n_outs;
     size_t txidx;
+    size_t blkidx;
   };
   std::vector<geniod_params> geniods;
   geniods.reserve(num_txes);
@@ -3116,26 +3087,26 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
       const cryptonote::transaction& tx = parsed_blocks[i].block.miner_tx;
       const size_t n_vouts = (m_refresh_type == RefreshType::RefreshOptimizeCoinbase && tx.version < 2) ? 1 : tx.vout.size();
       if (parsed_blocks[i].block.major_version >= hf_version_view_tags)
-        geniods.push_back(geniod_params{ tx, n_vouts, txidx });
+        geniods.push_back(geniod_params{ tx, n_vouts, txidx, start_height+i });
       else
-        tpool.submit(&waiter, [&, n_vouts, txidx](){ geniod(tx, n_vouts, txidx); }, true);
+        tpool.submit(&waiter, [&, n_vouts, txidx](){ geniod(tx, n_vouts, txidx, start_height+i); }, true);
     }
     ++txidx;
     THROW_WALLET_EXCEPTION_IF(txidx >= tx_cache_data.size(), error::wallet_internal_error, "txidx out of range");
     const cryptonote::transaction& tx = parsed_blocks[i].block.protocol_tx;
     const size_t n_vouts = tx.vout.size();
     if (parsed_blocks[i].block.major_version >= hf_version_view_tags)
-      geniods.push_back(geniod_params{ tx, n_vouts, txidx });
+      geniods.push_back(geniod_params{ tx, n_vouts, txidx, start_height+i });
     else
-      tpool.submit(&waiter, [&, n_vouts, txidx](){ geniod(tx, n_vouts, txidx); }, true);
+      tpool.submit(&waiter, [&, n_vouts, txidx](){ geniod(tx, n_vouts, txidx, start_height+i); }, true);
     ++txidx;
     for (size_t j = 0; j < parsed_blocks[i].txes.size(); ++j)
     {
       THROW_WALLET_EXCEPTION_IF(txidx >= tx_cache_data.size(), error::wallet_internal_error, "txidx out of range");
       if (parsed_blocks[i].block.major_version >= hf_version_view_tags)
-        geniods.push_back(geniod_params{ parsed_blocks[i].txes[j], parsed_blocks[i].txes[j].vout.size(), txidx });
+        geniods.push_back(geniod_params{ parsed_blocks[i].txes[j], parsed_blocks[i].txes[j].vout.size(), txidx, start_height+i });
       else
-        tpool.submit(&waiter, [&, i, j, txidx](){ geniod(parsed_blocks[i].txes[j], parsed_blocks[i].txes[j].vout.size(), txidx); }, true);
+        tpool.submit(&waiter, [&, i, j, txidx](){ geniod(parsed_blocks[i].txes[j], parsed_blocks[i].txes[j].vout.size(), txidx, start_height+i); }, true);
       ++txidx;
     }
   }
@@ -3158,7 +3129,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
         for (size_t i = batch_start; i < batch_end; ++i)
         {
           const geniod_params &gp = geniods[i];
-          geniod(gp.tx, gp.n_outs, gp.txidx);
+          geniod(gp.tx, gp.n_outs, gp.txidx, gp.blkidx);
         }
       }, true);
       num_batch_txes += batch_end - batch_start;
@@ -6524,7 +6495,11 @@ void wallet2::rescan_blockchain(bool hard, bool refresh, bool keep_key_images)
 //----------------------------------------------------------------------------------------------------
 bool wallet2::is_transfer_unlocked(const transfer_details& td)
 {
-  return is_transfer_unlocked(td.m_tx.unlock_time, td.m_block_height);
+  // Get the unlock time for the appropriate output
+  uint64_t unlock_time = 0;
+  if (!cryptonote::get_output_unlock_time(td.m_tx.vout[td.m_internal_output_index], unlock_time))
+    return false;
+  return is_transfer_unlocked(unlock_time, td.m_block_height);
 }
 //----------------------------------------------------------------------------------------------------
 bool wallet2::is_transfer_unlocked(uint64_t unlock_time, uint64_t block_height)
@@ -7125,12 +7100,35 @@ bool wallet2::sign_tx(unsigned_tx_set &exported_txs, std::vector<wallet2::pendin
       if (!get_output_public_key(tx.vout[i], output_public_key))
         continue;
 
+      // SRCG: Calculate the correct uniqueness value here
+      THROW_WALLET_EXCEPTION_IF(tx.vin.empty(), error::wallet_internal_error, "no tx.vin[] provided");
+      crypto::key_image k_image;
+      if (tx.vin[0].type() == typeid(cryptonote::txin_to_key)) {
+        k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
+      }
+      crypto::ec_scalar uniqueness;
+      THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(tx.type, k_image, ((size_t)(-1)), i, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
+      //assert(false);
+      /*      
+      crypto::hash uniqueness = crypto::null_hash;
+      if (tx.type == cryptonote::transaction_type::MINER) {
+        uniqueness = cn_fast_hash(reinterpret_cast<void*>(&i), sizeof(size_t));
+      } else if (tx.type == cryptonote::transaction_type::TRANSFER) {
+        const txin_to_key &in = boost::get<txin_to_key>(tx.vin[0]);
+        uniqueness = cn_fast_hash(reinterpret_cast<const void*>(&in.k_image.data[0]), 32);
+      } else if (tx.type == cryptonote::transaction_type::CONVERT) {
+        const txin_to_key &in = boost::get<txin_to_key>(tx.vin[0]);
+        uniqueness = cn_fast_hash(reinterpret_cast<const void*>(&in.k_image.data[0]), 32);
+      } else {
+        uniqueness = cn_fast_hash(reinterpret_cast<void*>(&i), sizeof(size_t));
+      }
+      */
       // if this output is back to this wallet, we can calculate its key image already
-      if (!is_out_to_acc_precomp(m_subaddresses, output_public_key, derivation, additional_derivations, i, hwdev, get_output_view_tag(tx.vout[i])))
+      if (!is_out_to_acc_precomp(m_subaddresses, output_public_key, derivation, additional_derivations, i, uniqueness, hwdev, get_output_view_tag(tx.vout[i])))
         continue;
       crypto::key_image ki;
       cryptonote::keypair in_ephemeral;
-      crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&i), sizeof(size_t));
+      //crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&i), sizeof(size_t));
       if (generate_key_image_helper(keys, m_subaddresses, output_public_key, tx_pub_key, additional_tx_pub_keys, i, uniqueness, in_ephemeral, ki, hwdev))
         signed_txes.tx_key_images[output_public_key] = ki;
       else
@@ -9274,14 +9272,31 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
       THROW_WALLET_EXCEPTION_IF(!generate_key_derivation(tx_pub_key, get_account().get_keys().m_view_secret_key, convert_tx_derivation), error::wallet_internal_error, "Failed to generate a derivation image");
     
       // Derive a public key now, using the information we have
-      crypto::hash uniqueness = cn_fast_hash(&ki.data[0], 32);
+      // SRCG: Calculate the correct uniqueness value here
+      THROW_WALLET_EXCEPTION_IF(td2.m_tx.vin.empty(), error::wallet_internal_error, "no tx.vin[] provided");
+      crypto::key_image k_image;
+      if (td2.m_tx.vin[0].type() == typeid(cryptonote::txin_to_key)) {
+        k_image = boost::get<cryptonote::txin_to_key>(td2.m_tx.vin[0]).k_image;
+      }
+      crypto::ec_scalar uniqueness;
+      THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td2.m_tx.type, k_image, td2.m_block_height, i, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
+      assert(false);
       crypto::public_key pk = crypto::null_pkey;
       THROW_WALLET_EXCEPTION_IF(!m_account.get_device().derive_public_key(convert_tx_derivation, uniqueness, get_account().get_keys().m_account_address.m_spend_public_key, pk), error::wallet_internal_error, "Failed to derive a public key given the necessary key image");
       THROW_WALLET_EXCEPTION_IF(pk != output_public_key, error::wallet_internal_error, "public key derived from CONVERT_TX uniqueness does not match");
       src.uniqueness = uniqueness;
     } else {
-      size_t output_index_wrapper = td.m_internal_output_index;
-      src.uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
+      //size_t output_index_wrapper = td.m_internal_output_index;
+      //src.uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
+      // SRCG: Calculate the correct uniqueness value here
+      THROW_WALLET_EXCEPTION_IF(td.m_tx.vin.empty(), error::wallet_internal_error, "no tx.vin[] provided");
+      crypto::key_image k_image;
+      if (td.m_tx.vin[0].type() == typeid(cryptonote::txin_to_key)) {
+        k_image = boost::get<cryptonote::txin_to_key>(td.m_tx.vin[0]).k_image;
+      }
+      THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td.m_tx.type, k_image, td.m_block_height, td.m_internal_output_index, src.uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
+      LOG_ERROR("BREAK HERE");
+      //assert(false);
     }
     //paste mixin transaction
 
@@ -11210,12 +11225,14 @@ std::string wallet2::get_spend_proof(const crypto::hash &txid, const std::string
       THROW_WALLET_EXCEPTION_IF(true, error::wallet_internal_error, "This tx wasn't generated by this wallet!");
     }
 
-    // SRCG: We KNOW it's a txin_to_key, so it's an RCT transaction, NOT a PROTOCOL transaction.
-    // The uniqueness value will therefore ALWAYS be a hash of the output_index
-    crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&i), sizeof(size_t));
-    
     // derive the real output keypair
     const transfer_details& in_td = m_transfers[found->second];
+
+    // SRCG: We KNOW it's a txin_to_key, so it's an RCT transaction, NOT a PROTOCOL transaction.
+    crypto::ec_scalar uniqueness;
+    assert(false);
+    //THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(tx, in_td.m_block_height, 0, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
+    
     crypto::public_key in_tx_out_pkey = in_td.get_public_key();
     const crypto::public_key in_tx_pub_key = get_tx_pub_key_from_extra(in_td.m_tx, in_td.m_pk_index);
     const std::vector<crypto::public_key> in_additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(in_td.m_tx);
@@ -11424,8 +11441,18 @@ void wallet2::check_tx_key_helper(const cryptonote::transaction &tx, const crypt
     if (!get_output_public_key(tx.vout[n], output_public_key))
       continue;
 
+    // SRCG: Calculate the correct uniqueness value here
+    THROW_WALLET_EXCEPTION_IF(tx.vin.empty(), error::wallet_internal_error, "no tx.vin[] provided");
+    crypto::key_image k_image;
+    if (tx.vin[0].type() == typeid(cryptonote::txin_to_key)) {
+      k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
+    }
+    crypto::ec_scalar uniqueness;
+    THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(tx.type, k_image, ((size_t)(-1)), 0, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
+    LOG_ERROR("Break here");
+
     crypto::key_derivation found_derivation;
-    if (is_out_to_acc(address, output_public_key, derivation, additional_derivations, n, get_output_view_tag(tx.vout[n]), found_derivation))
+    if (is_out_to_acc(address, output_public_key, derivation, additional_derivations, n, uniqueness, get_output_view_tag(tx.vout[n]), found_derivation))
     {
       uint64_t amount;
       if (tx.version == 1 || tx.rct_signatures.type == rct::RCTTypeNull)
@@ -11435,7 +11462,7 @@ void wallet2::check_tx_key_helper(const cryptonote::transaction &tx, const crypt
       else
       {
         crypto::secret_key scalar1;
-        crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&n), sizeof(size_t));
+        //crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&n), sizeof(size_t));
         crypto::derivation_to_scalar(found_derivation, uniqueness, scalar1);
         rct::ecdhTuple ecdh_info = tx.rct_signatures.ecdhInfo[n];
         rct::ecdhDecode(ecdh_info, rct::sk2rct(scalar1), tx.rct_signatures.type == rct::RCTTypeBulletproof2 || tx.rct_signatures.type == rct::RCTTypeCLSAG || tx.rct_signatures.type == rct::RCTTypeBulletproofPlus);
@@ -11518,29 +11545,28 @@ void wallet2::check_tx_key_helper(const crypto::hash &txid, const crypto::key_de
   }
 }
 
-bool wallet2::is_out_to_acc(const cryptonote::account_public_address &address, const crypto::public_key& out_key, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const size_t output_index, const boost::optional<crypto::view_tag> &view_tag_opt, crypto::key_derivation &found_derivation) const
+bool wallet2::is_out_to_acc(const cryptonote::account_public_address &address, const crypto::public_key& out_key, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const size_t output_index, const crypto::ec_scalar& uniqueness, const boost::optional<crypto::view_tag> &view_tag_opt, crypto::key_derivation &found_derivation) const
 {
+  LOG_ERROR("Wallet2::" << __func__ << ":" << __LINE__);
+  LOG_ERROR("Break here");
+  
   crypto::public_key derived_out_key;
   bool found = false;
   bool r;
   // first run quick check if output has matching view tag, otherwise output should not belong to account
   if (out_can_be_to_acc(view_tag_opt, derivation, output_index))
   {
-    /*
     // if view tag match, run slower check deriving output pub key and comparing to expected
-    r = crypto::derive_public_key(derivation, output_index, address.m_spend_public_key, derived_out_key);
+    r = crypto::derive_public_key(derivation, uniqueness, address.m_spend_public_key, derived_out_key);
     THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to derive public key");
     if (out_key == derived_out_key)
     {
       found = true;
       found_derivation = derivation;
     }
-    */
     if (!found) {
       // SRCG: We KNOW it's a txin_to_key, so it's an RCT transaction, NOT a PROTOCOL transaction.
-      // The uniqueness value will therefore ALWAYS be a hash of the output_index
-      size_t output_index_wrapper = output_index;
-      crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
+      LOG_ERROR("Break here");
       
       // if view tag match, run slower check deriving output pub key and comparing to expected
       r = crypto::derive_public_key(derivation, uniqueness, address.m_spend_public_key, derived_out_key);
@@ -11974,9 +12000,15 @@ std::string wallet2::get_reserve_proof(const boost::optional<std::pair<uint32_t,
     THROW_WALLET_EXCEPTION_IF(td.m_tx.type == cryptonote::PROTOCOL, error::wallet_internal_error, "Cannot obtain uniqueness for PROTOCOL_TX");
     
     // SRCG: We KNOW it's a txin_to_key, so it's an RCT transaction, NOT a PROTOCOL transaction.
-    // The uniqueness value will therefore ALWAYS be a hash of the output_index
-    size_t output_index_wrapper = td.m_internal_output_index;
-    crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
+    // SRCG: Calculate the correct uniqueness value here
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.vin.empty(), error::wallet_internal_error, "no tx.vin[] provided");
+    crypto::key_image k_image;
+    if (td.m_tx.vin[0].type() == typeid(cryptonote::txin_to_key)) {
+      k_image = boost::get<cryptonote::txin_to_key>(td.m_tx.vin[0]).k_image;
+    }
+    crypto::ec_scalar uniqueness;
+    THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td.m_tx.type, k_image, td.m_block_height, td.m_internal_output_index, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
+    assert(false);
 
     // derive ephemeral secret key
     crypto::key_image ki;
@@ -12609,10 +12641,22 @@ std::pair<uint64_t, std::vector<std::pair<crypto::key_image, crypto::signature>>
     const std::vector<crypto::public_key> additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(td.m_tx);
 
     // SRCG: Calculate the correct uniqueness hash
-    crypto::hash uniqueness = crypto::null_hash;
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.type == cryptonote::MINER, error::wallet_internal_error, "Cannot obtain uniqueness for MINER_TX");
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.type == cryptonote::PROTOCOL, error::wallet_internal_error, "Cannot obtain uniqueness for PROTOCOL_TX");
+    
+    // SRCG: We KNOW it's a txin_to_key, so it's an RCT transaction, NOT a PROTOCOL transaction.
+    // SRCG: Calculate the correct uniqueness value here
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.vin.empty(), error::wallet_internal_error, "no tx.vin[] provided");
+    crypto::key_image k_image;
+    if (td.m_tx.vin[0].type() == typeid(cryptonote::txin_to_key)) {
+      k_image = boost::get<cryptonote::txin_to_key>(td.m_tx.vin[0]).k_image;
+    }
+    crypto::ec_scalar uniqueness;
     if (td.m_tx.type == cryptonote::MINER) {
-      size_t uniqueness_wrapper = td.m_block_height;
-      uniqueness = cn_fast_hash(reinterpret_cast<void*>(&uniqueness_wrapper), sizeof(size_t));
+      THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td.m_tx.type, k_image, td.m_block_height, td.m_internal_output_index, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness (MINER)");
+      assert(false);
+      //size_t uniqueness_wrapper = td.m_block_height;
+      //uniqueness = cn_fast_hash(reinterpret_cast<void*>(&uniqueness_wrapper), sizeof(size_t));
     } else if (td.m_tx.type == cryptonote::PROTOCOL) {
       /**
        * SRCG: we now need to find the following, in the given order:
@@ -12622,8 +12666,10 @@ std::pair<uint64_t, std::vector<std::pair<crypto::key_image, crypto::signature>>
        */
       THROW_WALLET_EXCEPTION_IF(true, error::wallet_internal_error, "Failed to generate uniqueness - wallet2::export_key_images()");
     } else {
-      size_t output_index_wrapper = td.m_internal_output_index;
-      uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
+      THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td.m_tx.type, k_image, td.m_block_height, td.m_internal_output_index, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness (OTHER)");
+      assert(false);
+      //size_t output_index_wrapper = td.m_internal_output_index;
+      //uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
     }
     
     // generate ephemeral secret key
@@ -13214,10 +13260,22 @@ size_t wallet2::import_outputs(const std::tuple<uint64_t, uint64_t, std::vector<
 process:
 
     // SRCG: Calculate the correct uniqueness hash
-    crypto::hash uniqueness = crypto::null_hash;
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.type == cryptonote::MINER, error::wallet_internal_error, "Cannot obtain uniqueness for MINER_TX");
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.type == cryptonote::PROTOCOL, error::wallet_internal_error, "Cannot obtain uniqueness for PROTOCOL_TX");
+    
+    // SRCG: We KNOW it's a txin_to_key, so it's an RCT transaction, NOT a PROTOCOL transaction.
+    // SRCG: Calculate the correct uniqueness value here
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.vin.empty(), error::wallet_internal_error, "no tx.vin[] provided");
+    crypto::key_image k_image;
+    if (td.m_tx.vin[0].type() == typeid(cryptonote::txin_to_key)) {
+      k_image = boost::get<cryptonote::txin_to_key>(td.m_tx.vin[0]).k_image;
+    }
+    crypto::ec_scalar uniqueness;
     if (td.m_tx.type == cryptonote::MINER) {
-      size_t uniqueness_wrapper = td.m_block_height;
-      uniqueness = cn_fast_hash(reinterpret_cast<void*>(&uniqueness_wrapper), sizeof(size_t));
+      THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td.m_tx.type, k_image, td.m_block_height, td.m_internal_output_index, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness (MINER)");
+      assert(false);
+      //size_t uniqueness_wrapper = td.m_block_height;
+      //uniqueness = cn_fast_hash(reinterpret_cast<void*>(&uniqueness_wrapper), sizeof(size_t));
     } else if (td.m_tx.type == cryptonote::PROTOCOL) {
       /**
        * SRCG: we now need to find the following, in the given order:
@@ -13227,8 +13285,10 @@ process:
        */
       THROW_WALLET_EXCEPTION_IF(true, error::wallet_internal_error, "Failed to generate uniqueness - wallet2::import_outputs()");
     } else {
-      size_t output_index_wrapper = td.m_internal_output_index;
-      uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
+      THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td.m_tx.type, k_image, td.m_block_height, td.m_internal_output_index, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness (MINER)");
+      assert(false);
+      //size_t output_index_wrapper = td.m_internal_output_index;
+      //uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
     }
     
     // the hot wallet wouldn't have known about key images (except if we already exported them)
@@ -13340,10 +13400,20 @@ size_t wallet2::import_outputs(const std::tuple<uint64_t, uint64_t, std::vector<
       add_additional_tx_pub_keys_to_extra(td.m_tx.extra, etd.m_additional_tx_keys);
 
     // SRCG: Calculate the correct uniqueness hash
-    crypto::hash uniqueness = crypto::null_hash;
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.type == cryptonote::MINER, error::wallet_internal_error, "Cannot obtain uniqueness for MINER_TX");
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.type == cryptonote::PROTOCOL, error::wallet_internal_error, "Cannot obtain uniqueness for PROTOCOL_TX");
+    
+    // SRCG: We KNOW it's a txin_to_key, so it's an RCT transaction, NOT a PROTOCOL transaction.
+    // SRCG: Calculate the correct uniqueness value here
+    THROW_WALLET_EXCEPTION_IF(td.m_tx.vin.empty(), error::wallet_internal_error, "no tx.vin[] provided");
+    crypto::key_image k_image;
+    if (td.m_tx.vin[0].type() == typeid(cryptonote::txin_to_key)) {
+      k_image = boost::get<cryptonote::txin_to_key>(td.m_tx.vin[0]).k_image;
+    }
+    crypto::ec_scalar uniqueness;
     if (td.m_tx.type == cryptonote::MINER) {
-      size_t uniqueness_wrapper = td.m_block_height;
-      uniqueness = cn_fast_hash(reinterpret_cast<void*>(&uniqueness_wrapper), sizeof(size_t));
+      THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td.m_tx.type, k_image, td.m_block_height, td.m_internal_output_index, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
+      assert(false);
     } else if (td.m_tx.type == cryptonote::PROTOCOL) {
       /**
        * SRCG: we now need to find the following, in the given order:
@@ -13353,8 +13423,10 @@ size_t wallet2::import_outputs(const std::tuple<uint64_t, uint64_t, std::vector<
        */
       THROW_WALLET_EXCEPTION_IF(true, error::wallet_internal_error, "Failed to generate uniqueness - wallet2::import_outputs()");
     } else {
-      size_t output_index_wrapper = td.m_internal_output_index;
-      uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
+      //THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td.m_tx.type, k_image, td.m_block_height, td.m_internal_output_index, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
+      assert(false);
+      //size_t output_index_wrapper = td.m_internal_output_index;
+      //uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
     }
     
     // the hot wallet wouldn't have known about key images (except if we already exported them)

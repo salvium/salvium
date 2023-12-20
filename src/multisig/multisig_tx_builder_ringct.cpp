@@ -108,8 +108,10 @@ static bool compute_keys_for_sources(
     cryptonote::keypair tmp_keys;
     if (src.real_output >= src.outputs.size())
       return false;
-    size_t real_output_wrapper = src.real_output_in_tx_index;
-    crypto::hash uniqueness = crypto::cn_fast_hash(reinterpret_cast<void*>(&real_output_wrapper), sizeof(size_t));
+
+    // Get the uniqueness for this TX
+    crypto::ec_scalar uniqueness;
+    assert(false);
     if (not cryptonote::generate_key_image_helper(
       account_keys,
       subaddresses,
@@ -427,7 +429,9 @@ static bool compute_keys_for_destinations(
 
   for (std::size_t i = 0; i < num_destinations; ++i) {
 
-    crypto::hash uniqueness = crypto::cn_fast_hash(reinterpret_cast<void*>(&i), sizeof(size_t));
+    crypto::ec_scalar uniqueness;
+    assert(false);
+
     if (not hwdev.generate_output_ephemeral_keys(
       unsigned_tx.version,
       account_keys,

@@ -98,7 +98,9 @@ namespace multisig
     // - the 'multisig priv keys' here are those held by the local account
     // - later, we add in the components held by other participants
     cryptonote::keypair in_ephemeral;
-    crypto::hash uniqueness = crypto::cn_fast_hash(reinterpret_cast<void*>(&real_output_index), sizeof(size_t));
+    //crypto::hash uniqueness = crypto::cn_fast_hash(reinterpret_cast<void*>(&real_output_index), sizeof(size_t));
+    crypto::ec_scalar uniqueness;
+    assert(false);
     if (!cryptonote::generate_key_image_helper(keys, subaddresses, out_key, tx_public_key, additional_tx_public_keys, real_output_index, uniqueness, in_ephemeral, ki, keys.get_device()))
       return false;
     std::unordered_set<crypto::key_image> used;

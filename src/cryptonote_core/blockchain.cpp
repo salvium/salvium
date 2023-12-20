@@ -155,6 +155,8 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   // #1 plus relative offset #2.
   // TODO: Investigate if this is necessary / why this is done.
   std::vector<uint64_t> absolute_offsets = relative_output_offsets_to_absolute(tx_in_to_key.key_offsets);
+  //std::vector<uint64_t> absolute_offsets;
+  //m_db->get_output_id_from_asset_type_output_index(tx_in_to_key.asset_type, asset_offsets, absolute_offsets);
   std::vector<output_data_t> outputs;
 
   bool found = false;
@@ -359,12 +361,6 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
   //       hard-coded and runtime-loaded (and enforced) checkpoints.
   else
   {
-  }
-
-  if (m_nettype != FAKECHAIN)
-  {
-    // ensure we fixup anything we found and fix in the future
-    m_db->fixup();
   }
 
   db_rtxn_guard rtxn_guard(m_db);
@@ -1844,6 +1840,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
     entry.source_asset = asset_type_from_id(meta.source_asset_id);
     entry.destination_asset = asset_type_from_id(meta.destination_asset_id);
     entry.return_address = meta.return_address;
+    entry.type = meta.tx_type;
     entry.P_change = meta.one_time_public_key;
     entry.input_k_image = meta.input_k_image;
     protocol_entries.push_back(entry);

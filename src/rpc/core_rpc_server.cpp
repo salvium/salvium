@@ -2284,6 +2284,7 @@ namespace cryptonote
     response.pow_hash = fill_pow_hash ? string_tools::pod_to_hex(get_block_longhash(&(m_core.get_blockchain_storage()), blk, height, 0)) : "";
     response.long_term_weight = m_core.get_blockchain_storage().get_db().get_block_long_term_weight(height);
     response.miner_tx_hash = string_tools::pod_to_hex(cryptonote::get_transaction_hash(blk.miner_tx));
+    response.protocol_tx_hash = string_tools::pod_to_hex(cryptonote::get_transaction_hash(blk.protocol_tx));
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -2628,6 +2629,7 @@ namespace cryptonote
       return false;
     }
     res.miner_tx_hash = res.block_header.miner_tx_hash;
+    res.protocol_tx_hash = res.block_header.protocol_tx_hash;
     for (size_t n = 0; n < blk.tx_hashes.size(); ++n)
     {
       res.tx_hashes.push_back(epee::string_tools::pod_to_hex(blk.tx_hashes[n]));
