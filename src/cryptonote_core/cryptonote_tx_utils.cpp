@@ -554,11 +554,12 @@ namespace cryptonote
       assert(false);
     }
 
+    /*
     // Print out the uniqueness
     crypto::public_key pk_uniq;
     std::memcpy(pk_uniq.data, uniqueness.data, sizeof(crypto::public_key));
     LOG_ERROR("*** UNIQUENESS : " << pk_uniq);
-    
+    */
     return true;
   }
   //---------------------------------------------------------------
@@ -580,8 +581,8 @@ namespace cryptonote
     CHECK_AND_ASSERT_MES(r, false, "at get_return_address: failed to generate_key_derivation(" << txkey_pub << ", " << sender_account_keys.m_view_secret_key << ")");
 
     ec_scalar y = uniqueness;
-    LOG_ERROR("Break here");
     /*
+    LOG_ERROR("Break here");
     if (type == cryptonote::TRANSFER) {
       // TRANSFER relies on a shared secret (the key_derivation Z_i) between sender and recipient
       // y = Hs(uniqueness || z_i)
@@ -619,7 +620,8 @@ namespace cryptonote
     rct::key key_verify    = rct::scalarmultKey(key_test, key_y);
     CHECK_AND_ASSERT_MES(key_verify == key_aP_change, false, "at get_return_address: failed to verify invert() function with smK() approach");
     F = rct::rct2pk(key_test);
-    
+
+    /*
     LOG_ERROR("*****************************************************************************");
     LOG_ERROR("uniqueness: " << uniqueness.data);
     LOG_ERROR("txkey_pub : " << txkey_pub);
@@ -629,6 +631,7 @@ namespace cryptonote
     LOG_ERROR("aP_change : " << pk_aP_change);
     LOG_ERROR("F         : " << F);
     LOG_ERROR("*****************************************************************************");
+    */
     
     return true;
   }
@@ -809,13 +812,9 @@ namespace cryptonote
       in_contexts.push_back(input_generation_context_data());
       keypair& in_ephemeral = in_contexts.back().in_ephemeral;
       crypto::key_image img;
-      /*
-      // Calculate the uniqueness
-      size_t output_index_wrapper = src_entr.real_output_in_tx_index;
-      crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
-      */
+
       const auto& out_key = reinterpret_cast<const crypto::public_key&>(src_entr.outputs[src_entr.real_output].second.dest);
-      if(!generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, src_entr.uniqueness, in_ephemeral,img, hwdev))
+      if(!generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, in_ephemeral,img, hwdev, src_entr.origin_tx_data))
       {
         LOG_ERROR("Key image generation failed!");
         return false;

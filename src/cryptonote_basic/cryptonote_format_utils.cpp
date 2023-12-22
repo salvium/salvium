@@ -289,7 +289,7 @@ namespace cryptonote
     return is_v1_tx(blobdata_ref{tx_blob.data(), tx_blob.size()});
   }
   //---------------------------------------------------------------
-  bool generate_key_image_helper(const account_keys& ack, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::public_key& tx_public_key, const std::vector<crypto::public_key>& additional_tx_public_keys, size_t real_output_index, const crypto::ec_scalar& uniqueness, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev)
+  bool generate_key_image_helper(const account_keys& ack, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::public_key& tx_public_key, const std::vector<crypto::public_key>& additional_tx_public_keys, size_t real_output_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const origin_data& origin_tx_data)
   {
     crypto::key_derivation recv_derivation = AUTO_VAL_INIT(recv_derivation);
     bool r = hwdev.generate_key_derivation(tx_public_key, ack.m_view_secret_key, recv_derivation);
@@ -314,13 +314,14 @@ namespace cryptonote
       }
     }
 
-    boost::optional<subaddress_receive_info> subaddr_recv_info = is_out_to_acc_precomp(subaddresses, out_key, recv_derivation, additional_recv_derivations, uniqueness,hwdev);
+    boost::optional<subaddress_receive_info> subaddr_recv_info = is_out_to_acc_precomp(subaddresses, out_key, recv_derivation, additional_recv_derivations, real_output_index, origin_tx_data.uniqueness, hwdev);
     CHECK_AND_ASSERT_MES(subaddr_recv_info, false, "key image helper: given output pubkey doesn't seem to belong to this address");
 
-    return generate_key_image_helper_precomp(ack, out_key, subaddr_recv_info->derivation, real_output_index, uniqueness, subaddr_recv_info->index, in_ephemeral, ki, hwdev);
+    //assert(false);
+    return generate_key_image_helper_precomp(ack, out_key, subaddr_recv_info->derivation, real_output_index, subaddr_recv_info->index, in_ephemeral, ki, hwdev, origin_tx_data);
   }
   //---------------------------------------------------------------
-  bool generate_key_image_helper_precomp(const account_keys& ack, const crypto::public_key& out_key, const crypto::key_derivation& recv_derivation, size_t real_output_index, const subaddress_index& received_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const cryptonote::transaction_type& tx_type, const crypto::ec_scalar& uniqueness, const crypto::public_key& pk_change_tx)
+  bool generate_key_image_helper_precomp(const account_keys& ack, const crypto::public_key& out_key, const crypto::key_derivation& recv_derivation, size_t real_output_index, const subaddress_index& received_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const origin_data& origin_tx_data)
   {
     if (hwdev.compute_key_image(ack, out_key, recv_derivation, real_output_index, received_index, in_ephemeral, ki))
     {
@@ -355,8 +356,7 @@ namespace cryptonote
         }
       }
 
-      if (tx_type == cryptonote::transaction_type::PROTOCOL) {
-
+      if (origin_tx_data.tx_type == (uint8_t)(cryptonote::transaction_type::PROTOCOL)) {
         /**
          * Okay so PROTOCOL_TX payments are triggered by a previously-made CONVERT or YIELD transaction.
          * The math works as follows (I will use a CONVERT TX as an example):
@@ -396,11 +396,11 @@ namespace cryptonote
         // 2. Obtain a separate key_derivation for the _original_ P_change output
         //    (using the TX public key from the CONVERT TX and the sender's private view key)
         crypto::key_derivation derivation_P_change_tx = AUTO_VAL_INIT(derivation_P_change_tx);
-        CHECK_AND_ASSERT_MES(hwdev.generate_key_derivation(pk_change_tx, ack.m_view_secret_key, derivation_P_change_tx), false, "Failed to generate key_derivation for P_change");
+        CHECK_AND_ASSERT_MES(hwdev.generate_key_derivation(origin_tx_data.tx_pub_key, ack.m_view_secret_key, derivation_P_change_tx), false, "Failed to generate key_derivation for P_change");
 
         // 3. Calculate the secret spend key "x_change" for the change output of the CONVERT TX
         crypto::secret_key sk_spend = crypto::null_skey;
-        CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(derivation_P_change_tx, uniqueness, spend_skey, sk_spend), false, "Failed to derive secret key for P_change");
+        CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(derivation_P_change_tx, origin_tx_data.uniqueness, spend_skey, sk_spend), false, "Failed to derive secret key for P_change");
 
         // 4. Derive the public key from the secret key for verification purposes
         crypto::public_key change_pk;
@@ -409,7 +409,6 @@ namespace cryptonote
 
         // 5. Calculate the secret spend key "x_return"
         CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, real_output_index, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
-        //CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, uniqueness, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
         in_ephemeral.sec = scalar_step1;
         CHECK_AND_ASSERT_MES(hwdev.secret_key_to_public_key(in_ephemeral.sec, in_ephemeral.pub), false, "Failed to derive one-time output public key 'P_return'");
         CHECK_AND_ASSERT_MES(in_ephemeral.pub == out_key,
@@ -418,12 +417,10 @@ namespace cryptonote
         // 6. Create the key_image needed to be able to spend the output
         hwdev.generate_key_image(in_ephemeral.pub, in_ephemeral.sec, ki);
         return true;
-        
-      } else {
-      
-        // computes Hs(a*R || uniqueness) + b
-        hwdev.derive_secret_key(recv_derivation, uniqueness, spend_skey, scalar_step1);
       }
+      
+      // computes Hs(a*R || uniqueness) + b
+      hwdev.derive_secret_key(recv_derivation, origin_tx_data.uniqueness, spend_skey, scalar_step1);
       
       // step 2: add Hs(a || index_major || index_minor)
       crypto::secret_key subaddr_sk;
@@ -448,7 +445,7 @@ namespace cryptonote
       else
       {
         // when in multisig, we only know the partial spend secret key. but we do know the full spend public key, so the output pubkey can be obtained by using the standard CN key derivation
-        CHECK_AND_ASSERT_MES(hwdev.derive_public_key(recv_derivation, uniqueness, ack.m_account_address.m_spend_public_key, in_ephemeral.pub), false, "Failed to derive public key");
+        CHECK_AND_ASSERT_MES(hwdev.derive_public_key(recv_derivation, origin_tx_data.uniqueness, ack.m_account_address.m_spend_public_key, in_ephemeral.pub), false, "Failed to derive public key");
         // and don't forget to add the contribution from the subaddress part
         if (!received_index.is_zero())
         {
@@ -465,6 +462,7 @@ namespace cryptonote
     hwdev.generate_key_image(in_ephemeral.pub, in_ephemeral.sec, ki);
     return true;
   }
+  /*
   //---------------------------------------------------------------
   bool generate_key_image_helper_precomp(const account_keys& ack, const crypto::public_key& out_key, const crypto::key_derivation& recv_derivation, size_t real_output_index, const crypto::ec_scalar& uniqueness, const subaddress_index& received_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev)
   {
@@ -503,8 +501,6 @@ namespace cryptonote
 
       // computes Hs(a*R || uniqueness) + b
       hwdev.derive_secret_key(recv_derivation, uniqueness, spend_skey, scalar_step1);
-      LOG_ERROR("Cryptonote::" << __func__ << ":" << __LINE__);
-      LOG_ERROR("Break here");
       
       // step 2: add Hs(a || index_major || index_minor)
       crypto::secret_key subaddr_sk;
@@ -546,6 +542,7 @@ namespace cryptonote
     hwdev.generate_key_image(in_ephemeral.pub, in_ephemeral.sec, ki);
     return true;
   }
+  */
   //---------------------------------------------------------------
   uint64_t power_integral(uint64_t a, uint64_t b)
   {
@@ -1386,20 +1383,11 @@ namespace cryptonote
     bool r = acc.get_device().generate_key_derivation(tx_pub_key, acc.m_view_secret_key, derivation);
     CHECK_AND_ASSERT_MES(r, false, "Failed to generate key derivation");
 
-    LOG_ERROR("*****************************************************************************");
-    LOG_ERROR("derivation: " << derivation);
-    LOG_ERROR("uniqueness: " << uniqueness.data);
-    LOG_ERROR("txkey_pub : " << tx_pub_key);
-    
     crypto::public_key pk;
     if (out_can_be_to_acc(view_tag_opt, derivation, output_index, &acc.get_device()))
     {
       r = acc.get_device().derive_public_key(derivation, uniqueness, acc.m_account_address.m_spend_public_key, pk);
       CHECK_AND_ASSERT_MES(r, false, "Failed to derive public key");
-
-      LOG_ERROR("output_key: " << pk);
-      LOG_ERROR("*****************************************************************************");
-    
       if (pk == output_public_key)
         return true;
     }
@@ -1423,13 +1411,6 @@ namespace cryptonote
   boost::optional<subaddress_receive_info> is_out_to_acc_precomp(const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::key_derivation& derivation, const std::vector<crypto::key_derivation>& additional_derivations, size_t output_index, const crypto::ec_scalar& uniqueness, hw::device &hwdev, const boost::optional<crypto::view_tag>& view_tag_opt)
   {
     LOG_ERROR("Cryptonote::" << __func__ << ":" << __LINE__);
-    //assert(false);
-    
-    LOG_ERROR("*****************************************************************************");
-    LOG_ERROR("derivation: " << derivation);
-    //LOG_ERROR("uniqueness: " << uniqueness.data);
-    LOG_ERROR("out_key   : " << out_key);
-    LOG_ERROR("*****************************************************************************");
     
     // try the shared tx pubkey
     crypto::public_key subaddress_spendkey;
@@ -1448,17 +1429,6 @@ namespace cryptonote
       if (out_can_be_to_acc(view_tag_opt, additional_derivations[output_index], output_index, &hwdev))
       {
         CHECK_AND_ASSERT_MES(hwdev.derive_subaddress_public_key(out_key, additional_derivations[output_index], output_index, subaddress_spendkey), boost::none, "Failed to derive subaddress public key");
-
-        LOG_ERROR("*****************************************************************************");
-        LOG_ERROR("derivation: " << additional_derivations[output_index]);
-        LOG_ERROR("output_ind: " << output_index);
-        LOG_ERROR("uniqueness: " << string_tools::pod_to_hex(uniqueness.data));
-        LOG_ERROR("output_key: " << out_key);
-        LOG_ERROR("subaddr_sp: " << subaddress_spendkey);
-        LOG_ERROR("*****************************************************************************");
-
-
-
         auto found = subaddresses.find(subaddress_spendkey);
         if (found != subaddresses.end())
           return subaddress_receive_info{ found->second, additional_derivations[output_index] };
@@ -1469,6 +1439,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   boost::optional<subaddress_receive_info> is_out_to_acc_precomp(const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::key_derivation& derivation, const std::vector<crypto::key_derivation>& additional_derivations, const crypto::ec_scalar& uniqueness, hw::device &hwdev, const boost::optional<crypto::view_tag>& view_tag_opt)
   {
+    assert(false);
     LOG_ERROR("Cryptonote::" << __func__ << ":" << __LINE__);
     LOG_ERROR("Break here");
     

@@ -2556,6 +2556,7 @@ namespace cryptonote
         else
           KV_SERIALIZE_N(data.distribution, "distribution")
         KV_SERIALIZE_N(data.base, "base")
+        KV_SERIALIZE_N(data.num_spendable_global_outs, "num_spendable_global_outs")
       END_KV_SERIALIZE_MAP()
     };
 

@@ -2534,9 +2534,16 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
       return false;
     }
     const uint8_t hf_version = m_hardfork->get_current_version();
-    for (const auto &t: data)
+    for (const auto &t: data) {
+      if (!req.asset_type.empty()) {
+        if (t.asset_type not_eq cryptonote::asset_id_from_type(req.asset_type)) {
+          MERROR("Invalid asset type - expected " << req.asset_type << ", but output is " << cryptonote::asset_type_from_id(t.asset_type));
+          return false;
+        }
+      }
       res.outs.push_back({t.pubkey, t.commitment, is_tx_spendtime_unlocked(t.unlock_time, hf_version), t.height, crypto::null_hash});
-
+    }
+    
     if (req.get_txid)
     {
       for (size_t i = 0; i < req.outputs.size(); ++i)

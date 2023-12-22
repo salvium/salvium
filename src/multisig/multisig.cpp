@@ -99,9 +99,12 @@ namespace multisig
     // - later, we add in the components held by other participants
     cryptonote::keypair in_ephemeral;
     //crypto::hash uniqueness = crypto::cn_fast_hash(reinterpret_cast<void*>(&real_output_index), sizeof(size_t));
-    crypto::ec_scalar uniqueness;
+
+    // Populate this struct if you want to make use of multisig for Fulmo!!!
     assert(false);
-    if (!cryptonote::generate_key_image_helper(keys, subaddresses, out_key, tx_public_key, additional_tx_public_keys, real_output_index, uniqueness, in_ephemeral, ki, keys.get_device()))
+    cryptonote::origin_data origin_tx_data;
+    
+    if (!cryptonote::generate_key_image_helper(keys, subaddresses, out_key, tx_public_key, additional_tx_public_keys, real_output_index, in_ephemeral, ki, keys.get_device(), origin_tx_data))
       return false;
     std::unordered_set<crypto::key_image> used;
 

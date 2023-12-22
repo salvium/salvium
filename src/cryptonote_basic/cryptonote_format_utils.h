@@ -107,9 +107,9 @@ namespace cryptonote
   */
   bool get_tx_fee(const transaction& tx, uint64_t & fee);
   uint64_t get_tx_fee(const transaction& tx);
-  bool generate_key_image_helper(const account_keys& ack, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::public_key& tx_public_key, const std::vector<crypto::public_key>& additional_tx_public_keys, size_t real_output_index, const crypto::ec_scalar& uniqueness, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev);
-  bool generate_key_image_helper_precomp(const account_keys& ack, const crypto::public_key& out_key, const crypto::key_derivation& recv_derivation, size_t real_output_index, const crypto::ec_scalar& uniqueness, const subaddress_index& received_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev);
-  bool generate_key_image_helper_precomp(const account_keys& ack, const crypto::public_key& out_key, const crypto::key_derivation& recv_derivation, size_t real_output_index, const subaddress_index& received_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const cryptonote::transaction_type& tx_type, const crypto::ec_scalar& uniqueness, const crypto::public_key& pk_change_tx = crypto::null_pkey);
+  bool generate_key_image_helper(const account_keys& ack, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::public_key& tx_public_key, const std::vector<crypto::public_key>& additional_tx_public_keys, size_t real_output_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const origin_data& origin_tx_data);
+  bool generate_key_image_helper_precomp(const account_keys& ack, const crypto::public_key& out_key, const crypto::key_derivation& recv_derivation, size_t real_output_index, const subaddress_index& received_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const cryptonote::origin_data& origin_tx_data);
+  //  bool generate_key_image_helper_precomp(const account_keys& ack, const crypto::public_key& out_key, const crypto::key_derivation& recv_derivation, size_t real_output_index, const crypto::ec_scalar& uniqueness, const subaddress_index& received_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev);
   void get_blob_hash(const blobdata& blob, crypto::hash& res);
   void get_blob_hash(const blobdata_ref& blob, crypto::hash& res);
   crypto::hash get_blob_hash(const blobdata& blob);

@@ -6422,7 +6422,7 @@ bool simple_wallet::process_ring_members(const std::vector<tools::wallet2::pendi
       COMMAND_RPC_GET_OUTPUTS_BIN::response res = AUTO_VAL_INIT(res);
       req.get_txid = true;
       req.client = cryptonote::make_rpc_payment_signature(m_wallet->get_rpc_client_secret_key());
-      req.asset_type = td.asset_type;
+      //req.asset_type = td.asset_type;
       bool r = m_wallet->invoke_http_bin("/get_outs.bin", req, res);
       err = interpret_rpc_response(r, res.status);
       if (!err.empty())

@@ -109,9 +109,10 @@ static bool compute_keys_for_sources(
     if (src.real_output >= src.outputs.size())
       return false;
 
-    // Get the uniqueness for this TX
-    crypto::ec_scalar uniqueness;
+    // Populate this struct if you want to make use of multisig for Fulmo!!!
     assert(false);
+    cryptonote::origin_data origin_tx_data;
+    
     if (not cryptonote::generate_key_image_helper(
       account_keys,
       subaddresses,
@@ -119,10 +120,10 @@ static bool compute_keys_for_sources(
       src.real_out_tx_key,
       src.real_out_additional_tx_keys,
       src.real_output_in_tx_index,
-      uniqueness,
       tmp_keys,
       tmp_key_image,
-      hwdev
+      hwdev,
+      origin_tx_data
     )) {
       return false;
     }

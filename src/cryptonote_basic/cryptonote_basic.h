@@ -645,6 +645,20 @@ namespace cryptonote
   };
   //---------------------------------------------------------------
 
+  struct origin_data
+  {
+    uint8_t tx_type;
+    crypto::public_key tx_pub_key;
+    crypto::key_image input_k_image;
+    crypto::ec_scalar uniqueness;
+
+    BEGIN_SERIALIZE_OBJECT()
+      VARINT_FIELD(tx_type)
+      FIELD(tx_pub_key)
+      FIELD(input_k_image)
+    //FIELD(uniqueness)
+    END_SERIALIZE()
+  };  
 }
 
 namespace std {

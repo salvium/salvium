@@ -64,6 +64,7 @@ namespace cryptonote
     crypto::public_key P_change;
     crypto::key_image input_k_image;
   };
+
   bool construct_protocol_tx(const size_t height, uint64_t& protocol_fee, transaction& tx, std::vector<protocol_data_entry>& protocol_data, std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version);
   //---------------------------------------------------------------
   bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, const blobdata& extra_nonce = blobdata(), size_t max_outs = 999, uint8_t hard_fork_version = 1);
@@ -84,7 +85,7 @@ namespace cryptonote
     rct::multisig_kLRki multisig_kLRki; //multisig info
     oracle::pricing_record pr;
     std::string asset_type;
-    crypto::ec_scalar uniqueness;       //the uniqueness needed to prove ownership of the consumed output
+    origin_data origin_tx_data;
 
     void push_output(uint64_t idx, const crypto::public_key &k, uint64_t amount) { outputs.push_back(std::make_pair(idx, rct::ctkey({rct::pk2rct(k), rct::zeroCommit(amount)}))); }
 
@@ -99,6 +100,7 @@ namespace cryptonote
       FIELD(mask)
       FIELD(multisig_kLRki)
       FIELD(asset_type)
+      FIELD(origin_tx_data)
 
       if (real_output >= outputs.size())
         return false;
