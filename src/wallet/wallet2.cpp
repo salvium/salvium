@@ -875,21 +875,6 @@ uint64_t estimate_tx_weight(bool use_rct, int n_inputs, int mixin, int n_outputs
   return size;
 }
 
-uint8_t get_bulletproof_fork()
-{
-  return 8;
-}
-
-uint8_t get_bulletproof_plus_fork()
-{
-  return HF_VERSION_BULLETPROOF_PLUS;
-}
-
-uint8_t get_clsag_fork()
-{
-  return HF_VERSION_CLSAG;
-}
-
 uint8_t get_view_tag_fork()
 {
   return HF_VERSION_VIEW_TAGS;
@@ -2263,7 +2248,6 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
           }
           THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(tx.type, k_image, height, i, tx_scan_info[i].uniqueness), error::wallet_internal_error, "Failed to calculate TX output uniqueness");
-          //assert(false);
         }
         
         THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_asset_type(tx.vout[i], tx_scan_info[i].asset_type), error::wallet_internal_error, "Failed to get output asset type for tx_scan_info");
@@ -11449,7 +11433,6 @@ void wallet2::check_tx_key_helper(const cryptonote::transaction &tx, const crypt
     }
     crypto::ec_scalar uniqueness;
     THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(tx.type, k_image, ((size_t)(-1)), 0, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
-    LOG_ERROR("Break here");
 
     crypto::key_derivation found_derivation;
     if (is_out_to_acc(address, output_public_key, derivation, additional_derivations, n, uniqueness, get_output_view_tag(tx.vout[n]), found_derivation))
@@ -11547,8 +11530,7 @@ void wallet2::check_tx_key_helper(const crypto::hash &txid, const crypto::key_de
 
 bool wallet2::is_out_to_acc(const cryptonote::account_public_address &address, const crypto::public_key& out_key, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const size_t output_index, const crypto::ec_scalar& uniqueness, const boost::optional<crypto::view_tag> &view_tag_opt, crypto::key_derivation &found_derivation) const
 {
-  LOG_ERROR("Wallet2::" << __func__ << ":" << __LINE__);
-  LOG_ERROR("Break here");
+  LOG_PRINT_L3("Wallet2::" << __func__ << ":" << __LINE__);
   
   crypto::public_key derived_out_key;
   bool found = false;
@@ -11566,7 +11548,6 @@ bool wallet2::is_out_to_acc(const cryptonote::account_public_address &address, c
     }
     if (!found) {
       // SRCG: We KNOW it's a txin_to_key, so it's an RCT transaction, NOT a PROTOCOL transaction.
-      LOG_ERROR("Break here");
       
       // if view tag match, run slower check deriving output pub key and comparing to expected
       r = crypto::derive_public_key(derivation, uniqueness, address.m_spend_public_key, derived_out_key);
@@ -14572,9 +14553,9 @@ std::pair<size_t, uint64_t> wallet2::estimate_tx_size_and_weight(bool use_rct, i
   if (n_outputs == 1)
     n_outputs = 2; // extra dummy output
 
-  const bool bulletproof = use_fork_rules(get_bulletproof_fork(), 0);
-  const bool bulletproof_plus = use_fork_rules(get_bulletproof_plus_fork(), 0);
-  const bool clsag = use_fork_rules(get_clsag_fork(), 0);
+  const bool bulletproof = true;
+  const bool bulletproof_plus = true;
+  const bool clsag = true;
   const bool use_view_tags = use_fork_rules(get_view_tag_fork(), 0);
   size_t size = estimate_tx_size(use_rct, n_inputs, ring_size - 1, n_outputs, extra_size, bulletproof, clsag, bulletproof_plus, use_view_tags);
   uint64_t weight = estimate_tx_weight(use_rct, n_inputs, ring_size - 1, n_outputs, extra_size, bulletproof, clsag, bulletproof_plus, use_view_tags);

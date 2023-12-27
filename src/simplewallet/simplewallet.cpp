@@ -3154,7 +3154,7 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
     message_writer() << tr("\"transfer <address> <amount> [<asset_type>]\" - Send FULM or F$ to an address.");
     message_writer() << tr("\"burn <amount> <asset_type>\" - destroy coins forever.");
     message_writer() << tr("\"convert <amount> <source_asset> <dest_asset>\" - convert between coin types.");
-    message_writer() << tr("\"lock_for_tield <amount>\" - lock FULM in order to earn yield.");
+    message_writer() << tr("\"lock_for_yield <amount>\" - lock FULM in order to earn yield.");
     message_writer() << tr("\"price_info\" - Display current pricing information for supported assets.");
     message_writer() << tr("\"supply_info\" - Display circulating supply information.");
     message_writer() << tr("\"yield_info\" - Display current stats on Fulmo yield.");

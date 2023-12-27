@@ -211,7 +211,8 @@ namespace
  *
  * alt_blocks       block hash   {block data, block blob}
  *
- * yield_txs        block height {txn hash, dest address, amount}
+ * yield_block_data block height {}
+ * yield_tx_data    block height {txn hash, dest address, amount}
  *
  * Note: where the data items are of uniform size, DUPFIXED tables have
  * been used to save space. In most of these cases, a dummy "zerokval"
@@ -252,33 +253,39 @@ const char* const LMDB_CIRC_SUPPLY = "circ_supply";
 const char* const LMDB_CIRC_SUPPLY_TALLY = "circ_supply_tally";
 
   /**
-   * We have the following information that will go into a table in the blockchain:
-   * block_height    (this is the key field)
-   * -----------------------------------------
-   * txn_hash        (so we can verify)
-   * dest_address    (where to send the yield)
-   * amount          (how much was locked)
+   * We have the following information that will go into a "yield_txs" table in the blockchain:
    *
+   * block_height    (uint64_t)     (this is the key field)
+   * ---------------------------------------------------------
+   * txn_hash         (crypto:hash)  (so we can verify)
+   * dest_address     (crypto::key)  (where to send the yield)
+   * amount_locked    (uint64_t)     (how much was locked)
    *
-   * If we only allow a 30-day (actually 21,600 block) lock, and no variation on that period, then the code
-   * to identify locks that are earning yield in a given block is probably pretty simple. It gets a LOT more
-   * complicated if you can lock for a variable period, of course.
+   * We also have the following information that will go into a "yield_blocks" table:
+   *
+   * block_height     (uint64_t)     (this is the key field)
+   * --------------------------------------------------------
+   * slippage_amount  (uint64_t)     (amount needed to determine yield payout for the block)
+   * coins_locked     (uint64_t)     (total number of coins locked at this height)
+   * network_health   (uint8_t)      (a fudge factor used to adjust the slippage:yield ratio dynamically)
    *
    * So, let's say that we have a block height h for which we want to assess the yield payments. First off,
    * we are ONLY interested in making ANY payment if we have YIELD.block_height == h + 21600 (i.e. the yield
    * TX has matured).
    *
    * Now, to calculate the payable yield, we need to know:
-   * # how much slippage accrued in each of the last 21600 blocks
-   *   (call this slippage_amounts, which is a vector of slippage_height and slippage_amount tuples)
-   * # the list of all yield TXs that fulfil the criteria
-   *   (YIELD.block_height > (h - 21600)) and (YIELD.block_height <= h) (call this yield_txs)
+   * # how much slippage is burnt from each of the (21,600) blocks (and therefore how much yield is payable)
+   *   (this is "slippage_amount")
+   * # the total number of coins that are locked for yield for each of the (21,600) blocks
+   *   (this is "coins_locked")
    *
-   * Given this information, we would sort yield_txs by block_height. Then we iterate over slippage_amounts,
-   * and for each entry, we look to see which of the yield_txs overlaps the height for the given slippage_height.
-   * This allows us to work out the % of the slippage_amount that should be paid to the maturing yield TX.
+   * Given this information, we would (for _each_ yield TX that matures in the current block)
+   * 1. perform the sum "yield_amount" = "slippage_amount" * "network_health" / "100" for each block
+   * 2. perform the sum "result" = "yield_amount" * "amount_locked" / "coins_locked" for each block
+   * 3. perform the aggregation of all "result" values to determine the total yield payable
    */
 const char* const LMDB_YIELD_TXS = "yield_txs";
+const char* const LMDB_YIELD_BLOCKS = "yield_blocks";
 
 const char zerokey[8] = {0};
 const MDB_val zerokval = { sizeof(zerokey), (void *)zerokey };
@@ -385,6 +392,12 @@ typedef struct yield_tx_data {
   crypto::public_key return_address;
   uint64_t amount;
 } yield_tx_data;    
+
+typedef struct yield_block_data {
+  uint64_t slippage_total;
+  uint64_t locked_coins_total;
+  uint8_t network_health_percentage;
+} yield_block_data;
   
 std::atomic<uint64_t> mdb_txn_safe::num_active_txns{0};
 std::atomic_flag mdb_txn_safe::creation_gate = ATOMIC_FLAG_INIT;

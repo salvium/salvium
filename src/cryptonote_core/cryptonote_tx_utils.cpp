@@ -308,7 +308,7 @@ namespace cryptonote
       r = crypto::derive_subaddress_public_key(out_eph_public_key, derivation_syF, output_index, P_change_verify);
       CHECK_AND_ASSERT_MES(r, false, "while creating protocol_tx outs: failed sanity check calling derive_subaddress_public_key(" << out_eph_public_key << ", " << derivation_syF << ", " << key_y << ", " << P_change_verify << ")");
       CHECK_AND_ASSERT_MES(entry.P_change == P_change_verify, false, "while creating protocol_tx outs: failed sanity check (keys do not match)");
-      
+      /*
       LOG_ERROR("***************************************************************************************");
       LOG_ERROR("output_index : " << output_index);
       LOG_ERROR("P_change     : " << entry.P_change);
@@ -320,7 +320,7 @@ namespace cryptonote
       LOG_ERROR("output_key   : " << out_eph_public_key << " (derivation_syF, output_index, P_change)");
       LOG_ERROR("P_change_ver : " << P_change_verify);
       LOG_ERROR("***************************************************************************************");
-    
+      */
       // Now calculate the slippage, and decide if it is going to be converted or refunded
       uint64_t amount_slippage = 0, amount_minted = 0;
       bool ok = cryptonote::calculate_conversion(entry.source_asset, entry.destination_asset, entry.amount_burnt, entry.amount_slippage_limit, amount_minted, amount_slippage, circ_supply, pr, hf_version);
@@ -408,7 +408,7 @@ namespace cryptonote
 
     r = crypto::derive_public_key(derivation, uniqueness, miner_address.m_spend_public_key, out_eph_public_key);
     CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
-    
+    /*
     LOG_ERROR("*****************************************************************************");
     LOG_ERROR("txkey_pub : " << txkey.sec);
     LOG_ERROR("a         : " << miner_address.m_view_public_key);
@@ -417,7 +417,7 @@ namespace cryptonote
     LOG_ERROR("uniqueness: " << uniqueness.data);
     LOG_ERROR("out_key   : " << out_eph_public_key);
     LOG_ERROR("*****************************************************************************");
-    
+    */
     uint64_t amount = block_reward;
     summary_amounts += amount;
     
