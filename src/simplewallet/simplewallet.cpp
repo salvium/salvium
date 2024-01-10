@@ -1,5 +1,5 @@
-// Copyright (c) 2023, The Fulmo Project
 // Copyright (c) 2014-2022, The Monero Project
+// Portions Copyright (c) 2023, Fulmo (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -7969,12 +7969,9 @@ bool simple_wallet::price_info(const std::vector<std::string> &args) {
   }
 
   // Print the latest spot and MA prices
-  message_writer(console_color_default, false) << boost::format(tr("FULMO\n\tSPOT:\t%d\n\tMA:\t%d")) % print_money(pr.spot) % print_money(pr.moving_average);
-  /*
   for (auto &asset: pr.assets) {
-    message_writer(console_color_default, false) << boost::format(tr("%s\n\tSPOT:\t%d\n\tMA:\t%d")) % asset.first % print_money(asset.second.first) % print_money(asset.second.second);
+    message_writer(console_color_default, false) << boost::format(tr("%s\n\tSPOT:\t%d\n\tMA:\t%d")) % asset.asset_type % print_money(asset.spot_price) % print_money(asset.ma_price);
   }
-  */
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -7998,6 +7995,9 @@ bool simple_wallet::supply_info(const std::vector<std::string> &args) {
   // For each asset, print the circulating supply and value
   boost::multiprecision::uint128_t total_supply = 0;
   for (auto supply_asset: supply_amounts) {
+    // SRCG: fix the following code
+    assert(false);
+    /*
     // get price
     uint64_t spot = pr.spot;
     uint64_t ma = pr.moving_average;
@@ -8012,6 +8012,7 @@ bool simple_wallet::supply_info(const std::vector<std::string> &args) {
     // get mcap
     uint64_t mcap = price * supply;
     message_writer(console_color_default, false) << boost::format(tr("%s\n\tSUPPLY:\t%d\n\tPRICE:\t$%d\n\tMCAP:\t$%d")) % supply_asset.first % supply % price % mcap;
+    */
   }
 
   

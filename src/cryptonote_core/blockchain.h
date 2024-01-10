@@ -268,7 +268,7 @@ namespace cryptonote
      *
      * @return false if method failed to obtain pricing record from oracle, otherwise true
      */
-    bool get_pricing_record(oracle::pricing_record& pr, uint64_t timestamp);
+    bool get_pricing_record(oracle::pricing_record &pr, std::map<std::string, uint64_t> &circ_supply, uint64_t timestamp);
 
     /**
      * @brief gets the latest pricing record that was in the last 10 block.

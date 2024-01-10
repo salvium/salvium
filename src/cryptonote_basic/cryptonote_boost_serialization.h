@@ -201,6 +201,23 @@ namespace boost
   }
 
   template <class Archive>
+  inline void serialize(Archive &a, oracle::asset_data &ad, const boost::serialization::version_type ver)
+  {
+    a & ad.asset_type;
+    a & ad.spot_price;
+    a & ad.ma_price;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, oracle::pricing_record &pr, const boost::serialization::version_type ver)
+  {
+    a & pr.pr_version;
+    a & pr.assets;
+    a & pr.timestamp;
+    a & pr.signature;
+  }
+
+  template <class Archive>
   inline void serialize(Archive &a, cryptonote::block &b, const boost::serialization::version_type ver)
   {
     a & b.major_version;
@@ -434,16 +451,6 @@ namespace boost
       v = x_.convert_to<uint64_t>();
       a & v;
     }
-  }
-
-  template <class Archive>
-  inline void serialize(Archive &a, oracle::pricing_record &x, const boost::serialization::version_type ver)
-  {
-    a & x.pr_version;
-    a & x.timestamp;
-    a & x.spot;
-    a & x.moving_average;
-    a & x.signature;
   }
 
 }

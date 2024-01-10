@@ -1,4 +1,5 @@
 // Copyright (c) 2014-2022, The Monero Project
+// Portions Copyright (c) 2023, Fulmo (author: SRCG)
 // 
 // All rights reserved.
 // 

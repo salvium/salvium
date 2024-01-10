@@ -1,4 +1,5 @@
-/// Copyright (c) 2014-2022, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
+// Portions Copyright (c) 2023, Fulmo (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -1981,7 +1982,6 @@ bool wallet2::spends_one_of_ours(const cryptonote::transaction &tx) const
 //----------------------------------------------------------------------------------------------------
 bool wallet2::get_pricing_record(oracle::pricing_record& pr, const uint64_t height)
 {
-  /*
   // Issue an RPC call to get the block header (and thus the pricing record) at the specified height
   cryptonote::COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::request req = AUTO_VAL_INIT(req);
   cryptonote::COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::response res = AUTO_VAL_INIT(res);
@@ -1992,9 +1992,8 @@ bool wallet2::get_pricing_record(oracle::pricing_record& pr, const uint64_t heig
   if (r && res.status == CORE_RPC_STATUS_OK)
   {
     // Got the block header - verify the pricing record
-    oracle::pricing_record pr2;// = res.block_header.pricing_record;
-    if (pr2.empty()) {
-      MERROR("Invalid pricing record in block header - conversions are temporarily disabled. Please try again later.");
+    if (res.block_header.pricing_record.empty()) {
+      MERROR("Invalid pricing record in block header response - conversions are temporarily disabled. Please try again later.");
       return false;
     }
 
@@ -2007,24 +2006,8 @@ bool wallet2::get_pricing_record(oracle::pricing_record& pr, const uint64_t heig
     MERROR("Failed to request block header from daemon");
     return false;
   }
-  */
 
-  /**
-   * Ok so until the oracle is written, this will have to be a placeholder that returns a fixed price.
-   * To make things a little more interesting, this can return variable amounts for the exchange rate
-   * by looking at the height parameter.
-   *
-   *   (height % 4)  |  FULM PRICE
-   * ================|==============
-   *         0       |    $2.00
-   *         1       |    $1.50
-   *         2       |    $1.00
-   *         3       |    $0.75
-   *
-   * This should give the system at least representative changes in MCAP etc
-   */
-  std::vector<uint64_t> prices = {200000000, 150000000, 100000000, 75000000};
-  pr.spot = pr.moving_average = prices[height % 4];
+  assert(false);
   return true;
 }
 //----------------------------------------------------------------------------------------------------

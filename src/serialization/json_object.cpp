@@ -1104,7 +1104,7 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::rpc::error& error)
   GET_FROM_JSON_OBJECT(val, error.error_str, error_str);
   GET_FROM_JSON_OBJECT(val, error.message, message);
 }
-
+/*
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const std::pair<std::string, std::pair<uint64_t, uint64_t>>& pr_entry)
 {
   dest.StartObject();
@@ -1127,14 +1127,57 @@ void fromJsonValue(const rapidjson::Value& val, std::pair<std::string, std::pair
   GET_FROM_JSON_OBJECT(val, pr_entry.second.first, spot);
   GET_FROM_JSON_OBJECT(val, pr_entry.second.second, ma);
 }
+*/
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::supply_data& supply_data)
+{
+  dest.StartObject();
+
+  INSERT_INTO_JSON_OBJECT(dest, fulm, supply_data.fulm);
+  INSERT_INTO_JSON_OBJECT(dest, fusd, supply_data.fusd);
+
+  dest.EndObject();
+}
+
+void fromJsonValue(const rapidjson::Value& val, oracle::supply_data& supply_data)
+{  
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, supply_data.fulm, fulm);
+  GET_FROM_JSON_OBJECT(val, supply_data.fusd, fusd);
+}
+
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::asset_data& asset_data)
+{
+  dest.StartObject();
+
+  INSERT_INTO_JSON_OBJECT(dest, asset_type, asset_data.asset_type);
+  INSERT_INTO_JSON_OBJECT(dest, spot, asset_data.spot_price);
+  INSERT_INTO_JSON_OBJECT(dest, ma, asset_data.ma_price);
+
+  dest.EndObject();
+}
+
+void fromJsonValue(const rapidjson::Value& val, oracle::asset_data& asset_data)
+{  
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, asset_data.asset_type, asset_type);
+  GET_FROM_JSON_OBJECT(val, asset_data.spot_price, spot);
+  GET_FROM_JSON_OBJECT(val, asset_data.ma_price, ma);
+}
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::pricing_record& pricing_record)
 {
   dest.StartObject();
 
   INSERT_INTO_JSON_OBJECT(dest, pr_version, pricing_record.pr_version);
-  INSERT_INTO_JSON_OBJECT(dest, spot, pricing_record.spot);
-  INSERT_INTO_JSON_OBJECT(dest, moving_average, pricing_record.moving_average);
+  INSERT_INTO_JSON_OBJECT(dest, assets, pricing_record.assets);
   INSERT_INTO_JSON_OBJECT(dest, timestamp, pricing_record.timestamp);
   INSERT_INTO_JSON_OBJECT(dest, signature, pricing_record.signature);
 
@@ -1149,10 +1192,14 @@ void fromJsonValue(const rapidjson::Value& val, oracle::pricing_record& pricing_
   }
 
   GET_FROM_JSON_OBJECT(val, pricing_record.pr_version, pr_version);
-  GET_FROM_JSON_OBJECT(val, pricing_record.spot, spot);
-  GET_FROM_JSON_OBJECT(val, pricing_record.moving_average, moving_average);
+  GET_FROM_JSON_OBJECT(val, pricing_record.assets, assets);
   GET_FROM_JSON_OBJECT(val, pricing_record.timestamp, timestamp);
-  GET_FROM_JSON_OBJECT(val, boost::lexical_cast<std::string>(pricing_record.signature), signature);
+  std::string sig_hex;
+  std::ostringstream oss;
+  for (size_t i=0; i<pricing_record.signature.size(); ++i) {
+    oss << std::hex << std::setfill('0') << std::setw(2) << std::uppercase << (int)(pricing_record.signature[i]);
+  }
+  GET_FROM_JSON_OBJECT(val, oss.str(), signature);
 }
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::rpc::BlockHeaderResponse& response)

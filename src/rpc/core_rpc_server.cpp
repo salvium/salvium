@@ -2935,6 +2935,7 @@ namespace cryptonote
       COMMAND_RPC_GET_CIRCULATING_SUPPLY::supply_entry se(i.first, std::to_string(i.second));
       res.supply_tally.push_back(se);
     }
+    res.height = m_core.get_current_blockchain_height();
     res.status = CORE_RPC_STATUS_OK;
     return true;    
   }

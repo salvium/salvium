@@ -1,4 +1,5 @@
 // Copyright (c) 2014-2022, The Monero Project
+// Portions Copyright (c) 2023, Fulmo (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -293,16 +294,26 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
     }
   }
 
+  std::map<std::string, int64_t> slippage_counts;
   if (blk.protocol_tx.version == 2)
   {
     num_rct_outs += blk.protocol_tx.vout.size();
 
     // count the current block's rct outs by asset type
     for (auto& vout: blk.protocol_tx.vout) {
+
+      // Get the output asset type
       std::string asset_type;
       if (!get_output_asset_type(vout, asset_type))
         throw std::runtime_error("Failed to get output asset type");
+      
+      // Update the RCT outs
       num_rct_outs_by_asset_type.add(asset_type, 1);
+
+      // Update the amount tallies by DEDUCTING the minted amount
+      if (slippage_counts.count(asset_type) == 0)
+        slippage_counts[asset_type] = 0;
+      slippage_counts[asset_type] -= vout.amount;
     }
   }
 
@@ -314,16 +325,46 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
     add_transaction(blk_hash, tx, &tx_hash);
     for (const auto &vout: tx.first.vout)
     {
+      std::string asset_type;
+      if (!get_output_asset_type(vout, asset_type))
+        throw std::runtime_error("Failed to get output asset type");
       if (vout.amount == 0) {
         ++num_rct_outs;
-        std::string asset_type;
-        if (!get_output_asset_type(vout, asset_type))
-          throw std::runtime_error("Failed to get output asset type");
         num_rct_outs_by_asset_type.add(asset_type, 1);
+      }
+
+      // Update the amount tallies by ADDING the burnt amount
+      if (tx.first.type == cryptonote::transaction_type::CONVERT) {
+        if (slippage_counts.count(asset_type) == 0)
+          slippage_counts[asset_type] = 0;
+        slippage_counts[asset_type] += tx.first.amount_burnt;
       }
     }
     ++tx_i;
   }
+
+  // SRCG: This is the code that calculates the total slippage for the block
+  // Now convert all of the residual balances into FULM
+  /*
+  uint64_t slippage_total = 0;
+  for (const auto& tally: slippage_counts) {
+    if (tally.second < 0)
+      throw std::runtime_error("Found a negative tally when summing the burnt/minted amounts");
+    uint64_t slippage_amount = 0;
+    if (tally.first == "FULM") {
+      slippage_amount = tally.second;
+    } else {
+      // Sanity check - do we have a price for this asset type in the PR?
+      if (blk.pricing_record.count(tally.first) == 0) {
+        // No price available - bail out, because block is invalid
+        throw std::runtime_error("Asset type is not present in available pricing record:" + tally.first);
+      }
+      // Convert the amount
+      //boost::multiprecision::uint128_t tally_128 = tally.second;
+    }
+  }
+  */
+  
   TIME_MEASURE_FINISH(time1);
   time_add_transaction += time1;
 

@@ -42,6 +42,7 @@
 #include <cstdint>
 #include <string>
 #include <cstring>
+#include <serialization/containers.h>
 
 #include "cryptonote_config.h"
 #include "crypto/hash.h"
@@ -64,34 +65,69 @@ namespace oracle
     uint64_t timestamp;
   };
   #pragma pack(pop)
+
+  struct supply_data {
+    uint64_t fulm;
+    uint64_t fusd;
+
+    //! Load from epee p2p format
+    bool _load(epee::serialization::portable_storage& src, epee::serialization::section* hparent);
+    //! Store in epee p2p format
+    bool store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const;
+  };
+
+  inline bool operator==(const supply_data& a, const supply_data& b) noexcept
+  {
+    return (a.fulm == b.fulm &&
+            a.fusd == b.fusd);
+  }
+  
+  struct asset_data {
+    std::string asset_type;
+    uint64_t spot_price;
+    uint64_t ma_price;
+
+    //! Load from epee p2p format
+    bool _load(epee::serialization::portable_storage& src, epee::serialization::section* hparent);
+    //! Store in epee p2p format
+    bool store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const;
+  };
+  
+  inline bool operator==(const asset_data& a, const asset_data& b) noexcept
+  {
+    return (a.asset_type == b.asset_type &&
+            a.spot_price == b.spot_price &&
+            a.ma_price == b.ma_price);
+  }
+
   class pricing_record
   {
 
-    public:
+  public:
 
-      // Fields 
-      uint64_t pr_version;
-      uint64_t spot;
-      uint64_t moving_average;
-      uint64_t timestamp;
-      unsigned char signature[64];
+    // Fields 
+    uint64_t pr_version;
+    uint64_t height;
+    supply_data supply; 
+    std::vector<asset_data> assets;
+    uint64_t timestamp;
+    std::vector<uint8_t> signature;
 
-      // Default c'tor
-      pricing_record() noexcept;
-      //! Load from epee p2p format
-      bool _load(epee::serialization::portable_storage& src, epee::serialization::section* hparent);
-      //! Store in epee p2p format
-      bool store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const;
-      pricing_record(const pricing_record& orig) noexcept;
-      ~pricing_record() = default;
-      bool equal(const pricing_record& other) const noexcept;
-      bool empty() const noexcept;
-      bool verifySignature(const std::string& public_key) const;
-      bool has_missing_rates() const noexcept;
-      bool valid(cryptonote::network_type nettype, uint32_t hf_version, uint64_t bl_timestamp, uint64_t last_bl_timestamp) const;
+    // Default c'tor
+    pricing_record() noexcept;
+    //! Load from epee p2p format
+    bool _load(epee::serialization::portable_storage& src, epee::serialization::section* hparent);
+    //! Store in epee p2p format
+    bool store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const;
+    pricing_record(const pricing_record& orig) noexcept;
+    ~pricing_record() = default;
+    bool equal(const pricing_record& other) const noexcept;
+    bool empty() const noexcept;
+    bool verifySignature(const std::string& public_key) const;
+    bool valid(cryptonote::network_type nettype, uint32_t hf_version, uint64_t bl_timestamp, uint64_t last_bl_timestamp) const;
 
-      pricing_record& operator=(const pricing_record& orig) noexcept;
-      uint64_t operator[](const std::string& asset_type) const;
+    pricing_record& operator=(const pricing_record& orig) noexcept;
+    uint64_t operator[](const std::string& asset_type) const;
   };
 
   inline bool operator==(const pricing_record& a, const pricing_record& b) noexcept
@@ -103,32 +139,5 @@ namespace oracle
   {
    return !a.equal(b);
   }
-
-  class pricing_record_v1
-  {
-
-  public:
-    uint8_t pr_version;
-    uint64_t price;
-    uint64_t timestamp;
-
-    bool write_to_pr(oracle::pricing_record &pr)
-    {
-      pr.pr_version = 0;
-      pr.spot = 0;
-      pr.moving_average = 0;
-      pr.timestamp = 0;
-      std::memset(pr.signature, 0, sizeof(oracle::pricing_record::signature));
-      return true;
-    };
-
-    bool read_from_pr(oracle::pricing_record &pr)
-    {
-      pr_version = 0;
-      price = 0;
-      timestamp = 0;
-      return true;
-    };
-  };
 
 } // oracle

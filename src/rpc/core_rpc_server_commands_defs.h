@@ -1371,10 +1371,12 @@ namespace cryptonote
     struct response_t
     {
       std::string status;
+      uint64_t height;
       std::vector<supply_entry> supply_tally;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(status)
+        KV_SERIALIZE(height)
         KV_SERIALIZE(supply_tally)
       END_KV_SERIALIZE_MAP()
     };
