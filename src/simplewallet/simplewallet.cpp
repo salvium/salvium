@@ -1,5 +1,5 @@
-// Copyright (c) 2023, The Fulmo Project
 // Copyright (c) 2014-2022, The Monero Project
+// Portions Copyright (c) 2023, Fulmo (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -3154,7 +3154,7 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
     message_writer() << tr("\"transfer <address> <amount> [<asset_type>]\" - Send FULM or F$ to an address.");
     message_writer() << tr("\"burn <amount> <asset_type>\" - destroy coins forever.");
     message_writer() << tr("\"convert <amount> <source_asset> <dest_asset>\" - convert between coin types.");
-    message_writer() << tr("\"lock_for_tield <amount>\" - lock FULM in order to earn yield.");
+    message_writer() << tr("\"lock_for_yield <amount>\" - lock FULM in order to earn yield.");
     message_writer() << tr("\"price_info\" - Display current pricing information for supported assets.");
     message_writer() << tr("\"supply_info\" - Display circulating supply information.");
     message_writer() << tr("\"yield_info\" - Display current stats on Fulmo yield.");
@@ -6422,6 +6422,7 @@ bool simple_wallet::process_ring_members(const std::vector<tools::wallet2::pendi
       COMMAND_RPC_GET_OUTPUTS_BIN::response res = AUTO_VAL_INIT(res);
       req.get_txid = true;
       req.client = cryptonote::make_rpc_payment_signature(m_wallet->get_rpc_client_secret_key());
+      //req.asset_type = td.asset_type;
       bool r = m_wallet->invoke_http_bin("/get_outs.bin", req, res);
       err = interpret_rpc_response(r, res.status);
       if (!err.empty())
@@ -7968,12 +7969,9 @@ bool simple_wallet::price_info(const std::vector<std::string> &args) {
   }
 
   // Print the latest spot and MA prices
-  message_writer(console_color_default, false) << boost::format(tr("FULMO\n\tSPOT:\t%d\n\tMA:\t%d")) % print_money(pr.spot) % print_money(pr.moving_average);
-  /*
   for (auto &asset: pr.assets) {
-    message_writer(console_color_default, false) << boost::format(tr("%s\n\tSPOT:\t%d\n\tMA:\t%d")) % asset.first % print_money(asset.second.first) % print_money(asset.second.second);
+    message_writer(console_color_default, false) << boost::format(tr("%s\n\tSPOT:\t%d\n\tMA:\t%d")) % asset.asset_type % print_money(asset.spot_price) % print_money(asset.ma_price);
   }
-  */
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -7997,6 +7995,9 @@ bool simple_wallet::supply_info(const std::vector<std::string> &args) {
   // For each asset, print the circulating supply and value
   boost::multiprecision::uint128_t total_supply = 0;
   for (auto supply_asset: supply_amounts) {
+    // SRCG: fix the following code
+    assert(false);
+    /*
     // get price
     uint64_t spot = pr.spot;
     uint64_t ma = pr.moving_average;
@@ -8011,6 +8012,7 @@ bool simple_wallet::supply_info(const std::vector<std::string> &args) {
     // get mcap
     uint64_t mcap = price * supply;
     message_writer(console_color_default, false) << boost::format(tr("%s\n\tSUPPLY:\t%d\n\tPRICE:\t$%d\n\tMCAP:\t$%d")) % supply_asset.first % supply % price % mcap;
+    */
   }
 
   

@@ -156,7 +156,7 @@ namespace hw {
         /* ======================================================================= */
         /*                               SUB ADDRESS                               */
         /* ======================================================================= */
-        virtual bool  derive_subaddress_public_key(const crypto::public_key &pub, const crypto::key_derivation &derivation, const crypto::hash& uniqueness,  crypto::public_key &derived_pub) = 0;
+        virtual bool  derive_subaddress_public_key(const crypto::public_key &pub, const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness,  crypto::public_key &derived_pub) = 0;
         virtual bool  derive_subaddress_public_key(const crypto::public_key &pub, const crypto::key_derivation &derivation, std::size_t output_index,  crypto::public_key &derived_pub) = 0;
         virtual crypto::public_key  get_subaddress_spend_public_key(const cryptonote::account_keys& keys, const cryptonote::subaddress_index& index) = 0;
         virtual std::vector<crypto::public_key>  get_subaddress_spend_public_keys(const cryptonote::account_keys &keys, uint32_t account, uint32_t begin, uint32_t end) = 0;
@@ -176,9 +176,9 @@ namespace hw {
         virtual bool  derivation_to_scalar(const crypto::key_derivation &derivation, const size_t output_index, crypto::ec_scalar &res) = 0;
         virtual bool  derive_secret_key(const crypto::key_derivation &derivation, const std::size_t output_index, const crypto::secret_key &sec,  crypto::secret_key &derived_sec) = 0;
         virtual bool  derive_public_key(const crypto::key_derivation &derivation, const std::size_t output_index, const crypto::public_key &pub,  crypto::public_key &derived_pub) = 0;
-        virtual bool  derivation_to_scalar(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, crypto::ec_scalar &res) = 0;
-        virtual bool  derive_secret_key(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, const crypto::secret_key &sec,  crypto::secret_key &derived_sec) = 0;
-        virtual bool  derive_public_key(const crypto::key_derivation &derivation, const crypto::hash& uniqueness, const crypto::public_key &pub,  crypto::public_key &derived_pub) = 0;
+        virtual bool  derivation_to_scalar(const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, crypto::ec_scalar &res) = 0;
+        virtual bool  derive_secret_key(const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, const crypto::secret_key &sec,  crypto::secret_key &derived_sec) = 0;
+        virtual bool  derive_public_key(const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, const crypto::public_key &pub,  crypto::public_key &derived_pub) = 0;
         virtual bool  secret_key_to_public_key(const crypto::secret_key &sec, crypto::public_key &pub) = 0;
         virtual bool  generate_key_image(const crypto::public_key &pub, const crypto::secret_key &sec, crypto::key_image &image) = 0;
         virtual bool  derive_view_tag(const crypto::key_derivation &derivation, const std::size_t output_index, crypto::view_tag &view_tag) = 0;
@@ -229,7 +229,7 @@ namespace hw {
                                                      std::vector<rct::key> &amount_keys,
                                                      crypto::public_key &out_eph_public_key,
                                                      const bool use_view_tags, crypto::view_tag &view_tag,
-                                                     const crypto::hash& uniqueness) = 0;
+                                                     const crypto::ec_scalar& uniqueness) = 0;
 
         virtual bool  mlsag_prehash(const std::string &blob, size_t inputs_size, size_t outputs_size, const rct::keyV &hashes, const rct::ctkeyV &outPk, rct::key &prehash) = 0;
         virtual bool  mlsag_prepare(const rct::key &H, const rct::key &xx, rct::key &a, rct::key &aG, rct::key &aHP, rct::key &rvII) = 0;

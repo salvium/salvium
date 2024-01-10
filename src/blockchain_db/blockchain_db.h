@@ -127,7 +127,7 @@ struct output_data_t
   crypto::public_key pubkey;       //!< the output's public key (for spend verification)
   uint64_t           unlock_time;  //!< the output's unlock time (or height)
   uint64_t           height;       //!< the height of the block which created the output
-  char               asset_type[8];   //!< the asset type of the output
+  uint32_t           asset_type;   //!< the asset type of the output
   rct::key           commitment;   //!< the output's amount commitment (for spend verification)
 };
 #pragma pack(pop)
@@ -1897,13 +1897,6 @@ public:
    * @return the size required
    */
   virtual uint64_t get_database_size() const = 0;
-
-  // TODO: this should perhaps be (or call) a series of functions which
-  // progressively update through version updates
-  /**
-   * @brief fix up anything that may be wrong due to past bugs
-   */
-  virtual void fixup();
 
   /**
    * @brief set whether or not to automatically remove logs

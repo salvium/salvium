@@ -491,7 +491,69 @@ namespace cryptonote
     return boost::apply_visitor(txin_signature_size_visitor(), tx_in);
   }
 
+  /************************************************************************/
+  /*                                                                      */
+  /************************************************************************/
+  /*
+  struct asset_data {
+    std::string asset_type;
+    uint64_t spot_price;
+    uint64_t ma_price;
 
+  public:
+
+    BEGIN_SERIALIZE_OBJECT()
+      FIELD(asset_type)
+      VARINT_FIELD(spot_price)
+      VARINT_FIELD(ma_price)
+    END_SERIALIZE()
+  };
+  
+  inline bool operator==(const asset_data& a, const asset_data& b) noexcept
+  {
+    return (a.asset_type == b.asset_type &&
+            a.spot_price == b.spot_price &&
+            a.ma_price == b.ma_price);
+  }
+  
+  struct pricing_record
+  {
+    uint64_t pr_version;
+    std::vector<asset_data> assets;
+    uint64_t timestamp;
+    std::string signature;
+
+  public:
+
+    //! Load from epee p2p format
+    bool _load(epee::serialization::portable_storage& src, epee::serialization::section* hparent);
+    
+    //! Store in epee p2p format
+    bool store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const;
+    
+    inline uint64_t operator[](const std::string& asset_type) const
+    {
+      return 0;
+    }
+  
+    inline bool operator==(const pricing_record& other) noexcept
+    {
+      return ((pr_version == other.pr_version) &&
+              (assets == other.assets) &&
+              (timestamp == other.timestamp) &&
+              (signature == other.signature));
+    }
+  
+    
+    BEGIN_SERIALIZE_OBJECT()
+      VARINT_FIELD(pr_version)
+      FIELD(assets)
+      VARINT_FIELD(timestamp)
+      FIELD(signature)
+    END_SERIALIZE()
+  };
+  */
+  
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
@@ -645,6 +707,20 @@ namespace cryptonote
   };
   //---------------------------------------------------------------
 
+  struct origin_data
+  {
+    uint8_t tx_type;
+    crypto::public_key tx_pub_key;
+    crypto::key_image input_k_image;
+    crypto::ec_scalar uniqueness;
+
+    BEGIN_SERIALIZE_OBJECT()
+      VARINT_FIELD(tx_type)
+      FIELD(tx_pub_key)
+      FIELD(input_k_image)
+    //FIELD(uniqueness)
+    END_SERIALIZE()
+  };  
 }
 
 namespace std {

@@ -155,6 +155,8 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   // #1 plus relative offset #2.
   // TODO: Investigate if this is necessary / why this is done.
   std::vector<uint64_t> absolute_offsets = relative_output_offsets_to_absolute(tx_in_to_key.key_offsets);
+  //std::vector<uint64_t> absolute_offsets;
+  //m_db->get_output_id_from_asset_type_output_index(tx_in_to_key.asset_type, asset_offsets, absolute_offsets);
   std::vector<output_data_t> outputs;
 
   bool found = false;
@@ -359,12 +361,6 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
   //       hard-coded and runtime-loaded (and enforced) checkpoints.
   else
   {
-  }
-
-  if (m_nettype != FAKECHAIN)
-  {
-    // ensure we fixup anything we found and fix in the future
-    m_db->fixup();
   }
 
   db_rtxn_guard rtxn_guard(m_db);
@@ -1798,8 +1794,10 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
     b.timestamp = median_ts;
   }
 
-    oracle::pricing_record pr;
-  if (!get_pricing_record(pr, b.timestamp)) {
+  std::map<std::string, uint64_t> circ_supply = get_db().get_circulating_supply();
+ 
+  oracle::pricing_record pr;
+  if (!get_pricing_record(pr, circ_supply, b.timestamp)) {
     LOG_ERROR("Creating block template: error: failed to get pricing record");
     return false;
   }
@@ -1809,8 +1807,6 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   
   CHECK_AND_ASSERT_MES(diffic, false, "difficulty overhead.");
 
-  std::map<std::string, uint64_t> circ_supply = get_db().get_circulating_supply();
- 
   size_t txs_weight;
   uint64_t fee;
   
@@ -1844,6 +1840,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
     entry.source_asset = asset_type_from_id(meta.source_asset_id);
     entry.destination_asset = asset_type_from_id(meta.destination_asset_id);
     entry.return_address = meta.return_address;
+    entry.type = meta.tx_type;
     entry.P_change = meta.one_time_public_key;
     entry.input_k_image = meta.input_k_image;
     protocol_entries.push_back(entry);
@@ -2537,9 +2534,16 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
       return false;
     }
     const uint8_t hf_version = m_hardfork->get_current_version();
-    for (const auto &t: data)
+    for (const auto &t: data) {
+      if (!req.asset_type.empty()) {
+        if (t.asset_type not_eq cryptonote::asset_id_from_type(req.asset_type)) {
+          MERROR("Invalid asset type - expected " << req.asset_type << ", but output is " << cryptonote::asset_type_from_id(t.asset_type));
+          return false;
+        }
+      }
       res.outs.push_back({t.pubkey, t.commitment, is_tx_spendtime_unlocked(t.unlock_time, hf_version), t.height, crypto::null_hash});
-
+    }
+    
     if (req.get_txid)
     {
       for (size_t i = 0; i < req.outputs.size(); ++i)
@@ -2669,11 +2673,12 @@ bool Blockchain::find_blockchain_supplement(const std::list<crypto::hash>& qbloc
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::get_pricing_record(oracle::pricing_record& pr, uint64_t timestamp)
+bool Blockchain::get_pricing_record(oracle::pricing_record &pr, std::map<std::string, uint64_t> &circ_supply, uint64_t timestamp)
 {
   LOG_PRINT_L1("Requesting pricing record from Oracle - time : " << timestamp);
-  /*
+
   bool r = false;
+  const uint64_t height = get_current_blockchain_height();
   const uint8_t hf_version = m_hardfork->get_current_version();
 
   epee::net_utils::http::http_simple_client http_client;
@@ -2682,7 +2687,10 @@ bool Blockchain::get_pricing_record(oracle::pricing_record& pr, uint64_t timesta
   
   std::array<std::string, 3> oracle_urls = get_config(m_nettype).ORACLE_URLS;
   std::shuffle(oracle_urls.begin(), oracle_urls.end(), std::default_random_engine(crypto::rand<unsigned>()));
-  std::string url = "/price/?timestamp=" + boost::lexical_cast<std::string>(timestamp) + "&version=" + std::to_string(hf_version);
+  std::string url = "/price?height=" + std::to_string(height);
+  //url += "&timestamp=" + boost::lexical_cast<std::string>(timestamp) + "&version=" + std::to_string(hf_version);
+  url += "&fulm=" + (circ_supply.count("FULM") ? std::to_string(circ_supply["FULM"]) : "0");
+  url += "&fusd=" + (circ_supply.count("FUSD") ? std::to_string(circ_supply["FUSD"]) : "0");
   for (size_t n = 0; n < oracle_urls.size(); n++) {
     http_client.set_server(oracle_urls[n], boost::none, epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
     r = epee::net_utils::invoke_http_json(url, req, res, http_client, std::chrono::seconds(10), "GET");
@@ -2714,12 +2722,6 @@ bool Blockchain::get_pricing_record(oracle::pricing_record& pr, uint64_t timesta
     sig_hex += ss.str();
   }
   LOG_PRINT_L1("Received pricing record - signature = " << sig_hex);
-  */
-  
-  uint64_t height = get_current_blockchain_height();
-  std::vector<uint64_t> prices = {200000000, 150000000, 100000000, 75000000};
-  pr.spot = pr.moving_average = prices[height % 4];
-
   return true;
 }
 //------------------------------------------------------------------

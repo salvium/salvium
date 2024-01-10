@@ -1,4 +1,5 @@
 // Copyright (c) 2014-2023, The Monero Project
+// Portions Copyright (c) 2023, Fulmo (author: SRCG)
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without modification, are
@@ -71,7 +72,7 @@ struct pre_rct_output_data_t
   crypto::public_key pubkey;       //!< the output's public key (for spend verification)
   uint64_t           unlock_time;  //!< the output's unlock time (or height)
   uint64_t           height;       //!< the height of the block which created the output
-  char               asset_type[8];   //!< the asset type of the output
+  uint32_t           asset_type;   //!< the asset type of the output
 };
 #pragma pack(pop)
 
@@ -211,7 +212,8 @@ namespace
  *
  * alt_blocks       block hash   {block data, block blob}
  *
- * yield_txs        block height {txn hash, dest address, amount}
+ * yield_block_data block height {}
+ * yield_tx_data    block height {txn hash, dest address, amount}
  *
  * Note: where the data items are of uniform size, DUPFIXED tables have
  * been used to save space. In most of these cases, a dummy "zerokval"
@@ -252,33 +254,39 @@ const char* const LMDB_CIRC_SUPPLY = "circ_supply";
 const char* const LMDB_CIRC_SUPPLY_TALLY = "circ_supply_tally";
 
   /**
-   * We have the following information that will go into a table in the blockchain:
-   * block_height    (this is the key field)
-   * -----------------------------------------
-   * txn_hash        (so we can verify)
-   * dest_address    (where to send the yield)
-   * amount          (how much was locked)
+   * We have the following information that will go into a "yield_txs" table in the blockchain:
    *
+   * block_height    (uint64_t)     (this is the key field)
+   * ---------------------------------------------------------
+   * txn_hash         (crypto:hash)  (so we can verify)
+   * dest_address     (crypto::key)  (where to send the yield)
+   * amount_locked    (uint64_t)     (how much was locked)
    *
-   * If we only allow a 30-day (actually 21,600 block) lock, and no variation on that period, then the code
-   * to identify locks that are earning yield in a given block is probably pretty simple. It gets a LOT more
-   * complicated if you can lock for a variable period, of course.
+   * We also have the following information that will go into a "yield_blocks" table:
+   *
+   * block_height     (uint64_t)     (this is the key field)
+   * --------------------------------------------------------
+   * slippage_amount  (uint64_t)     (amount needed to determine yield payout for the block)
+   * coins_locked     (uint64_t)     (total number of coins locked at this height)
+   * network_health   (uint8_t)      (a fudge factor used to adjust the slippage:yield ratio dynamically)
    *
    * So, let's say that we have a block height h for which we want to assess the yield payments. First off,
    * we are ONLY interested in making ANY payment if we have YIELD.block_height == h + 21600 (i.e. the yield
    * TX has matured).
    *
    * Now, to calculate the payable yield, we need to know:
-   * # how much slippage accrued in each of the last 21600 blocks
-   *   (call this slippage_amounts, which is a vector of slippage_height and slippage_amount tuples)
-   * # the list of all yield TXs that fulfil the criteria
-   *   (YIELD.block_height > (h - 21600)) and (YIELD.block_height <= h) (call this yield_txs)
+   * # how much slippage is burnt from each of the (21,600) blocks (and therefore how much yield is payable)
+   *   (this is "slippage_amount")
+   * # the total number of coins that are locked for yield for each of the (21,600) blocks
+   *   (this is "coins_locked")
    *
-   * Given this information, we would sort yield_txs by block_height. Then we iterate over slippage_amounts,
-   * and for each entry, we look to see which of the yield_txs overlaps the height for the given slippage_height.
-   * This allows us to work out the % of the slippage_amount that should be paid to the maturing yield TX.
+   * Given this information, we would (for _each_ yield TX that matures in the current block)
+   * 1. perform the sum "yield_amount" = "slippage_amount" * "network_health" / "100" for each block
+   * 2. perform the sum "result" = "yield_amount" * "amount_locked" / "coins_locked" for each block
+   * 3. perform the aggregation of all "result" values to determine the total yield payable
    */
 const char* const LMDB_YIELD_TXS = "yield_txs";
+const char* const LMDB_YIELD_BLOCKS = "yield_blocks";
 
 const char zerokey[8] = {0};
 const MDB_val zerokval = { sizeof(zerokey), (void *)zerokey };
@@ -385,6 +393,12 @@ typedef struct yield_tx_data {
   crypto::public_key return_address;
   uint64_t amount;
 } yield_tx_data;    
+
+typedef struct yield_block_data {
+  uint64_t slippage_total;
+  uint64_t locked_coins_total;
+  uint8_t network_health_percentage;
+} yield_block_data;
   
 std::atomic<uint64_t> mdb_txn_safe::num_active_txns{0};
 std::atomic_flag mdb_txn_safe::creation_gate = ATOMIC_FLAG_INIT;
@@ -1075,19 +1089,6 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
 
   if (tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::BURN) {
 
-    /*
-    // Conversion TX - update our records
-    circ_supply cs;
-    cs.tx_hash = tx_hash;
-    cs.asset_type = cryptonote::asset_id_from_type(tx.source_asset_type);
-    cs.amount_burnt = tx.amount_burnt;
-    cs.amount_minted = 0;
-
-    MDB_val_set(val_circ_supply, cs);
-    result = mdb_cursor_put(m_cur_circ_supply, &val_tx_id, &val_circ_supply, MDB_APPEND);
-    if (result)
-      throw0(DB_ERROR(  lmdb_error("Failed to add tx circulating supply to db transaction: ", result).c_str()  ));
-    */
     // Get the current tally value for the source currency type
     MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
     boost::multiprecision::int128_t source_tally = 0;
@@ -1116,20 +1117,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       bool ok = cryptonote::get_output_asset_type(out, asset_type);
       if (!ok)
         throw0(DB_ERROR("failed to get output asset type (needed to update the circulating supply data for the PROTOCOL_TX)"));
-      /*
-      circ_supply cs;
-      cs.tx_hash = tx_hash;
-      cs.asset_type = cryptonote::asset_id_from_type(asset_type);
-      cs.amount_burnt = 0;
-      cs.amount_minted = out.amount;
-      */
       minted_amounts[cryptonote::asset_id_from_type(asset_type)] += out.amount;
-      /*
-      MDB_val_set(val_circ_supply, cs);
-      result = mdb_cursor_put(m_cur_circ_supply, &val_tx_id, &val_circ_supply, MDB_APPENDDUP);
-      if (result)
-      throw0(DB_ERROR(  lmdb_error("Failed to add tx circulating supply to db transaction: ", result).c_str()  ));
-      */
     }
 
     // Now update the overall tally entries
@@ -1360,6 +1348,8 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to add output tx hash to db transaction: ", result).c_str()));
 
+  uint32_t asset_type = cryptonote::asset_id_from_type(output_asset_type);
+  
   outkey ok;
   MDB_val data;
   MDB_val_copy<uint64_t> val_amount(tx_output.amount);
@@ -1380,11 +1370,7 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
   ok.data.pubkey = output_public_key;
   ok.data.unlock_time = unlock_time;
   ok.data.height = m_height;
-
-  if(output_asset_type.length() >= sizeof(ok.data.asset_type))
-    throw0(DB_ERROR(lmdb_error("Invalid asset_type " + output_asset_type, result).c_str()));
-  memset(ok.data.asset_type, 0, sizeof(ok.data.asset_type));
-  memcpy(ok.data.asset_type, output_asset_type.c_str(), output_asset_type.length());
+  ok.data.asset_type = asset_type;
 
   if (tx_output.amount == 0)
   {
@@ -1401,7 +1387,7 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
       throw0(DB_ERROR(lmdb_error("Failed to add output pubkey to db transaction: ", result).c_str()));
 
   
-  MDB_val_copy<const char *> k(output_asset_type.c_str());
+  MDB_val_copy<uint32_t> k(asset_type);
   MDB_val v;
   
   mdb_size_t num_outputs_of_asset_type = 0;
@@ -1420,7 +1406,7 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
   oat.output_id = ok.output_id;
   MDB_val_set(voat, oat);
 
-  MDB_val_copy<const char *> koat(output_asset_type.c_str());
+  MDB_val_copy<uint32_t> koat(asset_type);
   if ((result = mdb_cursor_put(m_cur_output_types, &koat, &voat, MDB_APPENDDUP)))
     throw0(DB_ERROR(lmdb_error("Failed to add output type to db transaction: ", result).c_str()));
 
@@ -1469,14 +1455,14 @@ void BlockchainLMDB::remove_tx_outputs(const uint64_t tx_id, const transaction& 
   for (size_t i = tx.vout.size(); i-- > 0;)
   {
     uint64_t amount = is_pseudo_rct ? 0 : tx.vout[i].amount;
-    std::string output_asset_type;
-    if (!get_output_asset_type(tx.vout[i], output_asset_type))
+    std::string output_asset_type_str;
+    if (!get_output_asset_type(tx.vout[i], output_asset_type_str))
       throw0(DB_ERROR("Could not get an output asset_type from a tx output (removing)."));
-    remove_output(amount, amount_output_indices[i].first, output_asset_type, amount_output_indices[i].second);
+    remove_output(amount, amount_output_indices[i].first, output_asset_type_str, amount_output_indices[i].second);
   }
 }
 
-void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_index, const std::string& output_asset_type, const uint64_t& asset_type_output_id)
+void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_index, const std::string& output_asset_type_str, const uint64_t& asset_type_output_id)
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -1506,8 +1492,8 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
     throw1(DB_ERROR(lmdb_error("Error adding removal of output tx to db transaction", result).c_str()));
   }
 
-  
-  MDB_val_copy<const char *> koat(output_asset_type.c_str());
+  uint32_t output_asset_type = cryptonote::asset_id_from_type(output_asset_type_str);
+  MDB_val_copy<uint32_t> koat(output_asset_type);
   MDB_val_set(voat, asset_type_output_id);
   
   result = mdb_cursor_get(m_cur_output_types, &koat, &voat, MDB_GET_BOTH);
@@ -1863,7 +1849,7 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
         mdb_env_close(m_env);
         m_open = false;
         MFATAL("Existing lmdb database needs to be converted, which cannot be done on a read-only database.");
-        MFATAL("Please run elbowd once to convert the database.");
+        MFATAL("Please run fulmod once to convert the database.");
         return;
       }
       // Note that there was a schema change within version 0 as well.
@@ -2913,7 +2899,10 @@ std::pair<std::vector<uint64_t>, uint64_t> BlockchainLMDB::get_block_cumulative_
     }
     const mdb_block_info *bi = ((const mdb_block_info *)v.mv_data) + (height - range_begin);
 
-    res.push_back(bi->bi_cum_rct_by_asset_type[asset_type]);
+    // if no asset type is provided in the request, an old client is requesting the cumulative outputs,
+    // and is expecting the global output distribution that isn't bucketed by asset type in response
+    res.push_back(asset_type.empty() ? bi->bi_cum_rct : bi->bi_cum_rct_by_asset_type[asset_type]);
+
     if (height == heights[heights.size() - CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE])
       num_spendable_global_outs = bi->bi_cum_rct;
 
@@ -3822,7 +3811,7 @@ uint64_t BlockchainLMDB::get_num_outputs(const uint64_t& amount) const
   return num_elems;
 }
 
-uint64_t BlockchainLMDB::get_num_outputs_of_asset_type(const std::string asset_type) const
+uint64_t BlockchainLMDB::get_num_outputs_of_asset_type(const std::string asset_type_str) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -3830,7 +3819,8 @@ uint64_t BlockchainLMDB::get_num_outputs_of_asset_type(const std::string asset_t
   TXN_PREFIX_RDONLY();
   RCURSOR(output_types);
 
-  MDB_val_copy<const char *> k(asset_type.c_str());
+  uint32_t asset_type = cryptonote::asset_id_from_type(asset_type_str);
+  MDB_val_copy<uint32_t> k(asset_type);
   MDB_val v;
   mdb_size_t num_outputs_of_asset_type = 0;
   auto result = mdb_cursor_get(m_cur_output_types, &k, &v, MDB_SET);
@@ -3882,7 +3872,7 @@ output_data_t BlockchainLMDB::get_output_key(const uint64_t& amount, const uint6
   return ret;
 }
 
-void BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const
+void BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::string asset_type_str, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -3893,7 +3883,8 @@ void BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::strin
 
   RCURSOR(output_types);
 
-  MDB_val_copy<const char *> k_type(asset_type.c_str());
+  uint32_t asset_type = cryptonote::asset_id_from_type(asset_type_str);
+  MDB_val_copy<uint32_t> k_type(asset_type);
 
   for (size_t i = 0; i < asset_type_output_indices.size(); ++i)
   {
@@ -3902,7 +3893,7 @@ void BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::strin
     auto get_result = mdb_cursor_get(m_cur_output_types, &k_type, &v, MDB_GET_BOTH);
     if (get_result == MDB_NOTFOUND)
     {
-      throw1(OUTPUT_DNE((std::string("Attempting to get output id by asset type output id (asset type " + asset_type + " asset type ouput id " + boost::lexical_cast<std::string>(asset_type_output_indices[i]) + "), but key does not exist (current height " + boost::lexical_cast<std::string>(height()) + ")").c_str())));
+      throw1(OUTPUT_DNE((std::string("Attempting to get output id by asset type output id (asset type " + asset_type_str + " asset type ouput id " + boost::lexical_cast<std::string>(asset_type_output_indices[i]) + "), but key does not exist (current height " + boost::lexical_cast<std::string>(height()) + ")").c_str())));
     }
     else if (get_result)
       throw0(DB_ERROR(lmdb_error("Error attempting to retrieve an output id by asset type output id from the db", get_result).c_str()));
@@ -3914,7 +3905,7 @@ void BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::strin
   TXN_POSTFIX_RDONLY();
 }
 
-uint64_t BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const
+uint64_t BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::string asset_type_str, const uint64_t &asset_type_output_index) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -3922,13 +3913,14 @@ uint64_t BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::s
   TXN_PREFIX_RDONLY();
   RCURSOR(output_types);
 
-  MDB_val_copy<const char *> k_type(asset_type.c_str());
+  uint32_t asset_type = cryptonote::asset_id_from_type(asset_type_str);
+  MDB_val_copy<uint32_t> k_type(asset_type);
   MDB_val_set(v, asset_type_output_index);
 
   auto get_result = mdb_cursor_get(m_cur_output_types, &k_type, &v, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw1(OUTPUT_DNE((std::string("Attempting to get output id by asset type output id (asset type " + asset_type + " asset type output id " + boost::lexical_cast<std::string>(asset_type_output_index) + "), but key does not exist (current height " + boost::lexical_cast<std::string>(height()) + ")").c_str())));
+    throw1(OUTPUT_DNE((std::string("Attempting to get output id by asset type output id (asset type " + asset_type_str + " asset type output id " + boost::lexical_cast<std::string>(asset_type_output_index) + "), but key does not exist (current height " + boost::lexical_cast<std::string>(height()) + ")").c_str())));
   }
   else if (get_result)
     throw0(DB_ERROR(lmdb_error("Error attempting to retrieve an output id by asset type output id from the db", get_result).c_str()));
@@ -5027,13 +5019,6 @@ uint64_t BlockchainLMDB::get_database_size() const
   if (!epee::file_io_utils::get_file_size(datafile.string(), size))
     size = 0;
   return size;
-}
-
-void BlockchainLMDB::fixup()
-{
-  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  // Always call parent as well
-  BlockchainDB::fixup();
 }
 
 #define RENAME_DB(name) do { \

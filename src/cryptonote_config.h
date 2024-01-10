@@ -261,7 +261,11 @@ namespace config
     } }; // Bender's nightmare
 
   //std::string const GENESIS_TX = "023c01ff000180c09e90acbb1402ba4fcfcff0d4a91441c87615e514be3938e173179ac34a7fc98c0286e7320fdc0446554c4d3c0000000000000021019e809607ceda9ae7ae6755e05bcdc9c555acc8e95dcaede402eca1166a032e1a0100000000000000000000000000000000000000000000000000000000000000000000000000";
-  std::string const GENESIS_TX = "023c01ff000180c09e90acbb1402ae6cfc932cab508d92455942efbb2ec5a8632e33ff6bcac04a8e31be271efb8c0446554c4d3c0000000000000021015a71ac0441d4ee3f321df5ffd4bd3d0f04755152e7e6485a3b6c965356cb92ed0100000000000000000000000000000000000000000000000000000000000000000000000000";
+  //M2
+  //std::string const GENESIS_TX = "023c01ff000180c09e90acbb1402ae6cfc932cab508d92455942efbb2ec5a8632e33ff6bcac04a8e31be271efb8c0446554c4d3c0000000000000021015a71ac0441d4ee3f321df5ffd4bd3d0f04755152e7e6485a3b6c965356cb92ed0100000000000000000000000000000000000000000000000000000000000000000000000000";
+  //M3
+  std::string const GENESIS_TX = "020001ff000180c09e90acbb1402fd5c232c394e6ea4e99672cae46d28b0dc56e1883637fc9445018b1e282901000446554c4d3c0000000000000021017c46e0a3f65ec0de58a78350f6dceddd77a9a1bebf94685009a7c7e5e2cdc8ce0100000000000000000000000000000000000000000000000000000000000000000000000000";
+
   uint32_t const GENESIS_NONCE = 10000;
 
   // Hash domain separators
@@ -291,13 +295,34 @@ namespace config
   // Multisig
   const uint32_t MULTISIG_MAX_SIGNERS{16};
 
-  std::array<std::string, 3> const ORACLE_URLS = {{"oracle.havenprotocol.org:443", "oracle2.havenprotocol.org:443", "oracle3.havenprotocol.org:443"}};
-
+  std::array<std::string, 3> const ORACLE_URLS = {{"oracle.fulmo.network:8443", "oracle.fulmo.network:8443", "oracle.fulmo.network:8443"}};
+  
   std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
-    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5YBxWx1AZCA9jTUk8Pr2uZ9jpfRt\n"
-    "KWv3Vo1/Gny+1vfaxsXhBQiG1KlHkafNGarzoL0WHW4ocqaaqF5iv8i35A==\n"
+    "MIIDRDCCAjYGByqGSM44BAEwggIpAoIBAQCZP7IJ5PcNvGbWiEqAioKF9wViVxEN\n"
+    "ZBDHvhr8IR6KoSYUXMU154DC6NDiSr6FtPBWuw9LcXlfWdG0l3hd6zObg0GpEQig\n"
+    "jEeOEeBm45ug9lMBSZiaiCHeU8ats1YIQBYDO8m7iAj9Q9/N1nJHDpypsVu5WGLm\n"
+    "+xSmcNULTbqwJ4Sr49TD++sv2MZEJeYRwmmxlqeFFtZlxguwJ90Y5U7aSi4w4vaU\n"
+    "pu/Ce6EWi8pVhUlM5xBBk3tc+Z6FMMgKFN/kHyu3SbxFaRQppbsTo0N3yDAr3sN3\n"
+    "4JmXpRmDidd3czfKlFko11YwK9lohjrgBnStuFRBxDACx4NRfvRfwPqnAh0AhKyn\n"
+    "pbe2No+7lLGSWuQvIEz+2o6coQ3ZWPbxqQKCAQEAkErfS61wvKxbMwPuuqhCpZG/\n"
+    "uQ+WYHwRwyxpU7ImKiH6ubqModIvZoHrRD8MIJhbRmBlA58SSnBWrEcAUIaaDM6Z\n"
+    "xX/VyOFy2mJH3TJJa83oZe275w1JMVrVq1ZybXSYF595zAHNiJcYsskqTbZP8S30\n"
+    "i3Bq//HMUaRhmB60BLmPpmgF3FVsRkCyEL/yH9cUQWdUcuxIG3C7EzgxGUCaR42J\n"
+    "cu+NN8z6W/m/joEe6QkFT3tLh1yXIFBK1MamWC0EZ6YCMcozZfGQ15P3rMrGptKN\n"
+    "+YQRNusTDSqBky+f40dLiYcT28ePQWNPLdsZTqoGWGawqCyWWCh5eWJZSqJPfQOC\n"
+    "AQYAAoIBAQCE+8kHJmagnDPQWiuHziNha5yia7viwasxcsKhYGx+Z3wVbMrDPwLo\n"
+    "CUgljEEsOKXLZsg/EmfVQu9nYoTcMa0hNq0/0bEV9oZ0t4O8gLp2Y4URLngR9zxE\n"
+    "WaVgFLlNtndHUQA2kquP3XLkv/TZVQaqne6tO6p4gLC4ky0YH0vZhWXMOH/4Xfgf\n"
+    "FZHC7SBC3oYsK9UKX3tJoibcL9L18GOe27pIw70x0280IB/C+TBnAXjslNgJe5ZU\n"
+    "rSdr1h2nXji0rXL9DoypVC40QGIzzjCGMsSBnSYgVuITeqX8/o/w5LBK8Dl5wXFt\n"
+    "F9dg9A0deyw/3CA3gwB32zkfi4MEH+il\n"
     "-----END PUBLIC KEY-----\n";
-
+    /*
+      std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
+      "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5YBxWx1AZCA9jTUk8Pr2uZ9jpfRt\n"
+      "KWv3Vo1/Gny+1vfaxsXhBQiG1KlHkafNGarzoL0WHW4ocqaaqF5iv8i35A==\n"
+      "-----END PUBLIC KEY-----\n";
+    */
   namespace testnet
   {
     uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 0xa8bfa4a68; // fuLMot
@@ -312,7 +337,7 @@ namespace config
     std::string const GENESIS_TX = "013c01ff0001ffffffffffff03029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd08807121017767aafcde9be00dcfd098715ebcf7f410daebc582fda69d24a28e9d0bc890d1";
     uint32_t const GENESIS_NONCE = 10001;
 
-    std::array<std::string, 3> const ORACLE_URLS = {{"oracle.havenprotocol.org:443", "oracle2.havenprotocol.org:443", "oracle3.havenprotocol.org:443"}};
+    std::array<std::string, 3> const ORACLE_URLS = {{"oracle.fulmo.network:8443", "oracle.fulmo.network:8443", "oracle.fulmo.network:8443"}};
 
     std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
       "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5YBxWx1AZCA9jTUk8Pr2uZ9jpfRt\n"
@@ -334,7 +359,7 @@ namespace config
     std::string const GENESIS_TX = "013c01ff0001ffffffffffff0302df5d56da0c7d643ddd1ce61901c7bdc5fb1738bfe39fbe69c28a3a7032729c0f2101168d0c4ca86fb55a4cf6a36d31431be1c53a3bd7411bb24e8832410289fa6f3b";
     uint32_t const GENESIS_NONCE = 10002;
 
-    std::array<std::string, 3> const ORACLE_URLS = {{"oracle..org:443", "oracle2.havenprotocol.org:443", "oracle3.havenprotocol.org:443"}};
+    std::array<std::string, 3> const ORACLE_URLS = {{"oracle.fulmo.network:8443", "oracle.fulmo.network:8443", "oracle.fulmo.network:8443"}};
 
     std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
       "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5YBxWx1AZCA9jTUk8Pr2uZ9jpfRt\n"

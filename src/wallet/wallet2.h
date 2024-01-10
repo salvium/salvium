@@ -315,11 +315,11 @@ private:
       uint64_t amount;
       uint64_t money_transfered;
       std::string asset_type;
-      crypto::hash uniqueness;
+      crypto::ec_scalar uniqueness;
       bool error;
       boost::optional<cryptonote::subaddress_receive_info> received;
 
-      tx_scan_info_t(): amount(0), asset_type(""), money_transfered(0), uniqueness(crypto::null_hash), error(true) {}
+      tx_scan_info_t(): amount(0), asset_type(""), money_transfered(0), uniqueness(), error(true) {}
     };
 
     struct transfer_details
@@ -1391,7 +1391,7 @@ private:
     void check_tx_key(const crypto::hash &txid, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const cryptonote::account_public_address &address, uint64_t &received, bool &in_pool, uint64_t &confirmations);
     void check_tx_key_helper(const crypto::hash &txid, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const cryptonote::account_public_address &address, uint64_t &received, bool &in_pool, uint64_t &confirmations);
     void check_tx_key_helper(const cryptonote::transaction &tx, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const cryptonote::account_public_address &address, uint64_t &received) const;
-    bool is_out_to_acc(const cryptonote::account_public_address &address, const crypto::public_key& out_key, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const size_t output_index, const boost::optional<crypto::view_tag> &view_tag_opt, crypto::key_derivation &found_derivation) const;
+    bool is_out_to_acc(const cryptonote::account_public_address &address, const crypto::public_key& out_key, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const size_t output_index, const crypto::ec_scalar& uniqueness, const boost::optional<crypto::view_tag> &view_tag_opt, crypto::key_derivation &found_derivation) const;
     std::string get_tx_proof(const crypto::hash &txid, const cryptonote::account_public_address &address, bool is_subaddress, const std::string &message);
     std::string get_tx_proof(const cryptonote::transaction &tx, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const cryptonote::account_public_address &address, bool is_subaddress, const std::string &message) const;
     bool check_tx_proof(const crypto::hash &txid, const cryptonote::account_public_address &address, bool is_subaddress, const std::string &message, const std::string &sig_str, uint64_t &received, bool &in_pool, uint64_t &confirmations);
@@ -1740,7 +1740,7 @@ private:
     bool is_spent(const transfer_details &td, bool strict = true) const;
     bool is_spent(size_t idx, bool strict = true) const;
     void get_outs(std::vector<std::vector<get_outs_entry>> &outs, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, bool rct, std::unordered_set<crypto::public_key> &valid_public_keys_cache);
-    void get_outs(std::vector<std::vector<get_outs_entry>> &outs, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, std::vector<uint64_t> &rct_offsets, std::unordered_set<crypto::public_key> &valid_public_keys_cache);
+    void get_outs(std::vector<std::vector<get_outs_entry>> &outs, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, std::vector<uint64_t> &rct_offsets, std::unordered_set<crypto::public_key> &valid_public_keys_cache, uint64_t &num_spendable_global_outs, uint64_t &num_outs);
     bool tx_add_fake_output(std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs, uint64_t global_index, const crypto::public_key& tx_public_key, const rct::key& mask, uint64_t real_index, bool unlocked, std::unordered_set<crypto::public_key> &valid_public_keys_cache) const;
     bool should_pick_a_second_output(bool use_rct, size_t n_transfers, const std::vector<size_t> &unused_transfers_indices, const std::vector<size_t> &unused_dust_indices) const;
     std::vector<size_t> get_only_rct(const std::vector<size_t> &unused_dust_indices, const std::vector<size_t> &unused_transfers_indices) const;
@@ -1763,7 +1763,7 @@ private:
     void register_devices();
     hw::device& lookup_device(const std::string & device_descriptor);
 
-    bool get_rct_distribution(const std::string &rct_asset_type, uint64_t &start_height, std::vector<uint64_t> &distribution);
+    bool get_rct_distribution(const bool use_global_outs, const std::string &rct_asset_type, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &num_spendable_global_outs);
 
     uint64_t get_segregation_fork_height() const;
 

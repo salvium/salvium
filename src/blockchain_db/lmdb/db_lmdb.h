@@ -77,6 +77,7 @@ typedef struct mdb_txn_cursors
   MDB_cursor *m_txc_circ_supply;
   MDB_cursor *m_txc_circ_supply_tally;
   MDB_cursor *m_txc_yield_txs;
+  MDB_cursor *m_txc_yield_blocks;
 
 } mdb_txn_cursors;
 
@@ -102,6 +103,7 @@ typedef struct mdb_txn_cursors
 #define m_cur_circ_supply       m_cursors->m_txc_circ_supply
 #define m_cur_circ_supply_tally m_cursors->m_txc_circ_supply_tally
 #define m_cur_yield_txs		m_cursors->m_txc_yield_txs
+#define m_cur_yield_blocks	m_cursors->m_txc_yield_blocks
 
 typedef struct mdb_rflags
 {
@@ -128,6 +130,7 @@ typedef struct mdb_rflags
   bool m_rf_circ_supply;
   bool m_rf_circ_supply_tally;
   bool m_rf_yield_txs;
+  bool m_rf_yield_blocks;
 } mdb_rflags;
 
 typedef struct mdb_threadinfo
@@ -442,9 +445,6 @@ private:
 
   uint64_t get_max_block_size();
   void add_max_block_size(uint64_t sz);
-
-  // fix up anything that may be wrong due to past bugs
-  virtual void fixup();
 
   // migrate from older DB version to current
   void migrate(const uint32_t oldversion);

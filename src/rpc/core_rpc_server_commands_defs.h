@@ -1171,6 +1171,7 @@ namespace cryptonote
       std::string pow_hash;
       uint64_t long_term_weight;
       std::string miner_tx_hash;
+      std::string protocol_tx_hash;
       
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(major_version)
@@ -1196,6 +1197,7 @@ namespace cryptonote
         KV_SERIALIZE(pow_hash)
         KV_SERIALIZE_OPT(long_term_weight, (uint64_t)0)
         KV_SERIALIZE(miner_tx_hash)
+        KV_SERIALIZE(protocol_tx_hash)
       END_KV_SERIALIZE_MAP()
   };
 
@@ -1325,6 +1327,7 @@ namespace cryptonote
     {
       block_header_response block_header;
       std::string miner_tx_hash;
+      std::string protocol_tx_hash;
       std::vector<std::string> tx_hashes;
       std::string blob;
       std::string json;
@@ -1333,6 +1336,7 @@ namespace cryptonote
         KV_SERIALIZE_PARENT(rpc_access_response_base)
         KV_SERIALIZE(block_header)
         KV_SERIALIZE(miner_tx_hash)
+        KV_SERIALIZE(protocol_tx_hash)
         KV_SERIALIZE(tx_hashes)
         KV_SERIALIZE(blob)
         KV_SERIALIZE(json)
@@ -1367,10 +1371,12 @@ namespace cryptonote
     struct response_t
     {
       std::string status;
+      uint64_t height;
       std::vector<supply_entry> supply_tally;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(status)
+        KV_SERIALIZE(height)
         KV_SERIALIZE(supply_tally)
       END_KV_SERIALIZE_MAP()
     };
@@ -2552,6 +2558,7 @@ namespace cryptonote
         else
           KV_SERIALIZE_N(data.distribution, "distribution")
         KV_SERIALIZE_N(data.base, "base")
+        KV_SERIALIZE_N(data.num_spendable_global_outs, "num_spendable_global_outs")
       END_KV_SERIALIZE_MAP()
     };
 

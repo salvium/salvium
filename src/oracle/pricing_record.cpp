@@ -39,18 +39,44 @@ namespace oracle
 
   namespace
   {
+    struct asset_data_serialized
+    {
+      std::string asset_type;
+      uint64_t spot_price;
+      uint64_t ma_price;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(asset_type)
+        KV_SERIALIZE(spot_price)
+        KV_SERIALIZE(ma_price)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct supply_data_serialized
+    {
+      uint64_t FULM;
+      uint64_t FUSD;
+      
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(FULM)
+        KV_SERIALIZE(FUSD)
+      END_KV_SERIALIZE_MAP()
+    };
+
     struct pr_serialized
     {
       uint64_t pr_version;
-      uint64_t spot;
-      uint64_t moving_average;
+      uint64_t height;
+      supply_data supply;
+      std::vector<asset_data> assets;
       uint64_t timestamp;
       std::string signature;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(pr_version)
-        KV_SERIALIZE(spot)
-        KV_SERIALIZE(moving_average)
+        KV_SERIALIZE(height)
+        KV_SERIALIZE(supply)
+        KV_SERIALIZE(assets)
         KV_SERIALIZE(timestamp)
         KV_SERIALIZE(signature)
       END_KV_SERIALIZE_MAP()
@@ -59,13 +85,53 @@ namespace oracle
   
   pricing_record::pricing_record() noexcept
     : pr_version(0)
-    , spot(0)
-    , moving_average(0)
+    , assets()
     , timestamp(0)
+    , signature()
   {
-    std::memset(signature, 0, sizeof(signature));
   }
 
+  bool supply_data::_load(epee::serialization::portable_storage& src, epee::serialization::section* hparent)
+  {
+    supply_data_serialized in{};
+    if (in._load(src, hparent))
+    {
+      // Copy everything into the local instance
+      fulm = in.FULM;
+      fusd = in.FUSD;
+      return true;
+    }
+    // Report error here?
+    return false;
+  }
+
+  bool supply_data::store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const
+  {
+    assert(false);
+    return true;
+  }
+  
+  bool asset_data::_load(epee::serialization::portable_storage& src, epee::serialization::section* hparent)
+  {
+    asset_data_serialized in{};
+    if (in._load(src, hparent))
+    {
+      // Copy everything into the local instance
+      asset_type = in.asset_type;
+      spot_price = in.spot_price;
+      ma_price   = in.ma_price;
+      return true;
+    }
+    // Report error here?
+    return false;
+  }
+
+  bool asset_data::store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const
+  {
+    assert(false);
+    return true;
+  }
+  
   bool pricing_record::_load(epee::serialization::portable_storage& src, epee::serialization::section* hparent)
   {
     pr_serialized in{};
@@ -73,9 +139,13 @@ namespace oracle
     {
       // Copy everything into the local instance
       pr_version = in.pr_version;
-      spot = in.spot;
-      moving_average = in.moving_average;
+      height = in.height;
+      supply = in.supply;
+      assets = in.assets;
       timestamp = in.timestamp;
+
+      // Signature arrives in HEX format, but needs to be used in BINARY format - convert it here
+      signature.resize(in.signature.length() >> 1);
       for (unsigned int i = 0; i < in.signature.length(); i += 2) {
         std::string byteString = in.signature.substr(i, 2);
         signature[i>>1] = (char) strtol(byteString.c_str(), NULL, 16);
@@ -95,37 +165,42 @@ namespace oracle
       ss << std::hex << std::setw(2) << std::setfill('0') << (0xff & signature[i]);
       sig_hex += ss.str();
     }
-    const pr_serialized out{pr_version,spot,moving_average,timestamp,sig_hex};
+    const pr_serialized out{pr_version, height, supply, assets, timestamp, sig_hex};
     return out.store(dest, hparent);
   }
-
+  
   pricing_record::pricing_record(const pricing_record& orig) noexcept
     : pr_version(orig.pr_version)
-    , spot(orig.spot)
-    , moving_average(orig.moving_average)
+    , height(orig.height)
+    , supply(orig.supply)
+    , assets(orig.assets)
     , timestamp(orig.timestamp)
+    , signature(orig.signature)
   {
-    std::memcpy(signature, orig.signature, sizeof(signature));
   }
 
   pricing_record& pricing_record::operator=(const pricing_record& orig) noexcept
   {
     pr_version = orig.pr_version;
-    spot = orig.spot;
-    moving_average = orig.moving_average;
+    height = orig.height;
+    supply = orig.supply;
+    assets = orig.assets;
     timestamp = orig.timestamp;
-    ::memcpy(signature, orig.signature, sizeof(signature));
+    signature = orig.signature;
     return *this;
   }
 
   uint64_t pricing_record::operator[](const std::string& asset_type) const
   {
-    if (asset_type == "FULM") return spot;
-    if (asset_type == "FUSD") {
-      boost::multiprecision::uint128_t exchange_128 = COIN;
-      exchange_128 *= COIN;
-      exchange_128 /= spot;
-      return exchange_128.convert_to<uint64_t>();
+    for (const auto& asset: assets) {
+      if (asset.asset_type != asset_type) continue;
+      if (asset_type == "FULM") return asset.spot_price;
+      if (asset_type == "FUSD") {
+        boost::multiprecision::uint128_t exchange_128 = COIN;
+        exchange_128 *= COIN;
+        exchange_128 /= asset.spot_price;
+        return exchange_128.convert_to<uint64_t>();
+      }
     }
     return 0;
   }
@@ -133,10 +208,11 @@ namespace oracle
   bool pricing_record::equal(const pricing_record& other) const noexcept
   {
     return ((pr_version == other.pr_version) &&
-            (spot == other.spot) &&
-            (moving_average == other.moving_average) &&
+            (height == other.height) &&
+            (supply == other.supply) &&
+            (assets == other.assets) &&
             (timestamp == other.timestamp) &&
-            (!::memcmp(signature, other.signature, sizeof(signature))));
+            (signature == other.signature));
   }
 
   bool pricing_record::empty() const noexcept
@@ -147,7 +223,7 @@ namespace oracle
 
   bool pricing_record::verifySignature(const std::string& public_key) const
   {
-    CHECK_AND_ASSERT_THROW_MES(!public_key.empty(), "Pricing record verification failed. NULL public key. PK Size: " << public_key.size()); // TODO: is this necessary or the one below already covers this case, meannin it will produce empty pubkey?
+    CHECK_AND_ASSERT_THROW_MES(!public_key.empty(), "Pricing record verification failed. NULL public key. PK Size: " << public_key.size());
 
     // extract the key
     EVP_PKEY* pubkey;
@@ -159,19 +235,21 @@ namespace oracle
     BIO_free(bio);
     CHECK_AND_ASSERT_THROW_MES(pubkey != NULL, "Pricing record verification failed. NULL public key.");
 
-    // Convert our internal 64-byte binary representation into 128-byte hex string
-    std::string sig_hex;
-    for (unsigned int i=0; i<64; i++) {
-      std::stringstream ss;
-      ss << std::hex << std::setw(2) << std::setfill('0') << (0xff & signature[i]);
-      sig_hex += ss.str();
-    }
-
     // Build the JSON string, so that we can verify the signature
     std::ostringstream oss;
     oss << "{\"pr_version\":" << pr_version;
-    oss << ",\"spot\":" << spot;
-    oss << ",\"moving_average\":" << moving_average;
+    oss << ",\"height\":" << height;
+    oss << ",\"supply\":{\"FULM\":" << supply.fulm <<",\"FUSD\":" << supply.fusd << "}";
+    oss << ",\"assets\":[";
+    bool first = true;
+    for (const auto& asset: assets) {
+      if (first)
+        first=false;
+      else
+        oss << ",";
+      oss << "{\"asset_type\":\"" << asset.asset_type << "\",\"spot_price\":" << asset.spot_price << ",\"ma_price\":" << asset.ma_price << "}";
+    }
+    oss << "]";
     oss << ",\"timestamp\":" << timestamp;
     oss << "}";
     std::string message = oss.str();
@@ -184,7 +262,7 @@ namespace oracle
       if (ret == 1) {
         ret = EVP_DigestVerifyUpdate(ctx, message.data(), message.length());
         if (ret == 1) {
-          ret = EVP_DigestVerifyFinal(ctx, (const unsigned char *)signature, 64);
+          ret = EVP_DigestVerifyFinal(ctx, (const unsigned char *)signature.data(), signature.size());
         }
       }
     }
@@ -203,11 +281,6 @@ namespace oracle
     return false;
   }
 
-  bool pricing_record::has_missing_rates() const noexcept
-  {
-    return (spot == 0) || (moving_average == 0);
-  }
-
   // overload for pr validation for block
   bool pricing_record::valid(cryptonote::network_type nettype, uint32_t hf_version, uint64_t bl_timestamp, uint64_t last_bl_timestamp) const 
   {
@@ -218,11 +291,6 @@ namespace oracle
 
     if (this->empty())
         return true;
-
-    if (this->has_missing_rates()) {
-      LOG_ERROR("Pricing record has missing rates.");
-      return false;
-    }
 
     if (!verifySignature(get_config(nettype).ORACLE_PUBLIC_KEY)) {
       LOG_ERROR("Invalid pricing record signature.");
