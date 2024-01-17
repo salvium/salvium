@@ -95,7 +95,6 @@ namespace oracle
 
   pricing_record::~pricing_record() noexcept
   {
-    pr_version = 99;
   }
   
   bool supply_data::_load(epee::serialization::portable_storage& src, epee::serialization::section* hparent)
@@ -114,8 +113,8 @@ namespace oracle
 
   bool supply_data::store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const
   {
-    assert(false);
-    return true;
+    const supply_data_serialized out{fulm, fusd};
+    return out.store(dest, hparent);
   }
   
   bool asset_data::_load(epee::serialization::portable_storage& src, epee::serialization::section* hparent)
@@ -135,8 +134,8 @@ namespace oracle
 
   bool asset_data::store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const
   {
-    assert(false);
-    return true;
+    const asset_data_serialized out{asset_type, spot_price, ma_price};
+    return out.store(dest, hparent);
   }
   
   bool pricing_record::_load(epee::serialization::portable_storage& src, epee::serialization::section* hparent)
