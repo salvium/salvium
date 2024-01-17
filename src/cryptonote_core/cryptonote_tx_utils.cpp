@@ -483,8 +483,6 @@ namespace cryptonote
       buf.height = height;
       crypto::hash_to_scalar(&buf, sizeof(buf), uniqueness);
 
-      LOG_ERROR("*** DOMAIN = " << buf.domain_separator << ", HEIGHT = " << height);
-
     } else if (type == cryptonote::transaction_type::PROTOCOL) {
 
       // Sanity checks

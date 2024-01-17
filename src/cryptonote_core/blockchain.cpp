@@ -2706,19 +2706,19 @@ bool Blockchain::get_pricing_record(oracle::pricing_record &pr, std::map<std::st
     res.pr = oracle::pricing_record();
   }
 
-  // Copy the PR
-  pr = res.pr;
   // Verify the signature
-  if (pr.verifySignature(get_config(m_nettype).ORACLE_PUBLIC_KEY)) {
+  if (res.pr.verifySignature(get_config(m_nettype).ORACLE_PUBLIC_KEY)) {
+    // Copy the PR
+    pr = res.pr;
   } else {
     LOG_PRINT_L0("Failed to verify signature of pricing record from Oracle - returning empty PR");
     pr = oracle::pricing_record();
   }
 
   std::string sig_hex;
-  for (size_t i = 0; i < 64; i++) {
+  for (size_t i = 0; i < pr.signature.size(); i++) {
     std::stringstream ss;
-    ss << std::hex << std::setw(2) << std::setfill('0') << (0xff & pr.signature[i]);
+    ss << std::hex << std::setw(2) << std::setfill('0') << (0xff & pr.signature.at(i));
     sig_hex += ss.str();
   }
   LOG_PRINT_L1("Received pricing record - signature = " << sig_hex);

@@ -39,21 +39,27 @@
 
 // read
 template <template <bool> class Archive>
-bool do_serialize(Archive<false> &ar, oracle::supply_data &ad, uint8_t version)
+bool do_serialize(Archive<false> &ar, oracle::supply_data &sd, uint8_t version)
 {
-  assert(false);
-  return false;
+  ar.serialize_varint(sd.fulm);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(sd.fusd);
+  if (!ar.good())
+    return false;
+  return true;
 }
 
 // write
 template <template <bool> class Archive>
 bool do_serialize(Archive<true> &ar, oracle::supply_data &sd, uint8_t version)
 {
-  ar.begin_string();
-  ar.serialize_blob(&sd, sizeof(oracle::supply_data), "");
   if (!ar.good())
     return false;
-  ar.end_string();
+  ar.serialize_varint(sd.fulm);
+  ar.serialize_varint(sd.fusd);
+  if (!ar.good())
+    return false;
   return true;
 }
 
@@ -61,19 +67,33 @@ bool do_serialize(Archive<true> &ar, oracle::supply_data &sd, uint8_t version)
 template <template <bool> class Archive>
 bool do_serialize(Archive<false> &ar, oracle::asset_data &ad, uint8_t version)
 {
-  assert(false);
-  return false;
+  ar.serialize_string(ad.asset_type);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(ad.spot_price);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(ad.ma_price);
+  if (!ar.good())
+    return false;
+  return true;
 }
 
 // write
 template <template <bool> class Archive>
 bool do_serialize(Archive<true> &ar, oracle::asset_data &ad, uint8_t version)
 {
-  ar.begin_string();
-  ar.serialize_blob(&ad, sizeof(oracle::asset_data), "");
   if (!ar.good())
     return false;
-  ar.end_string();
+  ar.serialize_string(ad.asset_type);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(ad.spot_price);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(ad.ma_price);
+  if (!ar.good())
+    return false;
   return true;
 }
 
@@ -81,15 +101,40 @@ bool do_serialize(Archive<true> &ar, oracle::asset_data &ad, uint8_t version)
 template <template <bool> class Archive>
 bool do_serialize(Archive<false> &ar, oracle::pricing_record &pr, uint8_t version)
 {
-  // very basic sanity check
-  if (ar.remaining_bytes() < sizeof(oracle::pricing_record)) {
-    return false;
-  }
-  
-  ar.serialize_blob(&pr, sizeof(oracle::pricing_record), "");
+  // very basic sanity checks
   if (!ar.good())
     return false;
-
+  ar.serialize_varint(pr.pr_version);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(pr.height);
+  if (!ar.good())
+    return false;
+  if (!do_serialize(ar, pr.supply, version))
+    return false;
+  /*
+  // The next line should never do anything, but better safe than sorry
+  pr.asset_data.empty();
+  size_t asset_count;
+  ar.begin_array(asset_count);
+  if (!ar.good())
+    return false;
+  for (size_t idx=0; idx<asset_count; idx++) {
+    if (idx > 0) ar.delimit_array();
+    asset_data ad;
+    if (!do_serialize(ar, ad, version))
+      return false;
+    pr.asset_data.emplace_back(ad);
+  }
+  ar.end_array();
+  */
+  if (!do_serialize_container(ar, pr.assets))
+    return false;
+  ar.serialize_varint(pr.timestamp);
+  if (!ar.good())
+    return false;
+  if (!do_serialize_container(ar, pr.signature))
+    return false;
   return true;
 }
 
@@ -97,14 +142,28 @@ bool do_serialize(Archive<false> &ar, oracle::pricing_record &pr, uint8_t versio
 template <template <bool> class Archive>
 bool do_serialize(Archive<true> &ar, oracle::pricing_record &pr, uint8_t version)
 {
-  ar.begin_string();
-  ar.serialize_blob(&pr, sizeof(oracle::pricing_record), "");
+  // very basic sanity checks
   if (!ar.good())
     return false;
-  ar.end_string();
+  ar.serialize_varint(pr.pr_version);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(pr.height);
+  if (!ar.good())
+    return false;
+  if (!do_serialize(ar, pr.supply, version))
+    return false;
+  if (!do_serialize_container(ar, pr.assets))
+    return false;
+  ar.serialize_varint(pr.timestamp);
+  if (!ar.good())
+    return false;
+  pr.signature.empty();
+  if (!do_serialize_container(ar, pr.signature))
+    return false;
   return true;
 }
 
-BLOB_SERIALIZER(oracle::supply_data);
-BLOB_SERIALIZER(oracle::asset_data);
-BLOB_SERIALIZER(oracle::pricing_record);
+//BLOB_SERIALIZER(oracle::supply_data);
+//BLOB_SERIALIZER(oracle::asset_data);
+//BLOB_SERIALIZER(oracle::pricing_record);

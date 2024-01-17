@@ -74,6 +74,11 @@ namespace oracle
     bool _load(epee::serialization::portable_storage& src, epee::serialization::section* hparent);
     //! Store in epee p2p format
     bool store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const;
+
+    BEGIN_SERIALIZE_OBJECT()
+      VARINT_FIELD(fulm)
+      VARINT_FIELD(fusd)
+    END_SERIALIZE()
   };
 
   inline bool operator==(const supply_data& a, const supply_data& b) noexcept
@@ -91,6 +96,12 @@ namespace oracle
     bool _load(epee::serialization::portable_storage& src, epee::serialization::section* hparent);
     //! Store in epee p2p format
     bool store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const;
+
+    BEGIN_SERIALIZE_OBJECT()
+      FIELD(asset_type)
+      VARINT_FIELD(spot_price)
+      VARINT_FIELD(ma_price)
+    END_SERIALIZE()
   };
   
   inline bool operator==(const asset_data& a, const asset_data& b) noexcept
@@ -100,11 +111,8 @@ namespace oracle
             a.ma_price == b.ma_price);
   }
 
-  class pricing_record
+  struct pricing_record
   {
-
-  public:
-
     // Fields 
     uint64_t pr_version;
     uint64_t height;
@@ -120,7 +128,7 @@ namespace oracle
     //! Store in epee p2p format
     bool store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const;
     pricing_record(const pricing_record& orig) noexcept;
-    ~pricing_record() = default;
+    ~pricing_record() noexcept;
     bool equal(const pricing_record& other) const noexcept;
     bool empty() const noexcept;
     bool verifySignature(const std::string& public_key) const;
@@ -128,6 +136,15 @@ namespace oracle
 
     pricing_record& operator=(const pricing_record& orig) noexcept;
     uint64_t operator[](const std::string& asset_type) const;
+
+    BEGIN_SERIALIZE_OBJECT()
+      VARINT_FIELD(pr_version)
+      VARINT_FIELD(height)
+      FIELD(supply)
+      FIELD(assets)
+      VARINT_FIELD(timestamp)
+      FIELD(signature)
+    END_SERIALIZE()
   };
 
   inline bool operator==(const pricing_record& a, const pricing_record& b) noexcept

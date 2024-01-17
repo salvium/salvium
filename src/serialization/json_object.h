@@ -197,8 +197,6 @@ void fromJsonValue(const rapidjson::Value& val, long& i);
 
 // end integers
 
-//void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const std::pair<std::string, std::pair<uint64_t, uint64_t>>& entry);
-//void fromJsonValue(const rapidjson::Value& val, std::pair<std::string, std::pair<uint64_t, uint64_t>>& entry);
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::supply_data& supply_data);
 void fromJsonValue(const rapidjson::Value& val, oracle::supply_data& supply_data);
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::asset_data& asset_data);

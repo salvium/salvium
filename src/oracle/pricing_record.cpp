@@ -85,12 +85,19 @@ namespace oracle
   
   pricing_record::pricing_record() noexcept
     : pr_version(0)
+    , height(0)
+    , supply()
     , assets()
     , timestamp(0)
     , signature()
   {
   }
 
+  pricing_record::~pricing_record() noexcept
+  {
+    pr_version = 99;
+  }
+  
   bool supply_data::_load(epee::serialization::portable_storage& src, epee::serialization::section* hparent)
   {
     supply_data_serialized in{};
@@ -145,10 +152,12 @@ namespace oracle
       timestamp = in.timestamp;
 
       // Signature arrives in HEX format, but needs to be used in BINARY format - convert it here
-      signature.resize(in.signature.length() >> 1);
-      for (unsigned int i = 0; i < in.signature.length(); i += 2) {
+      signature.resize(0);
+      assert(in.signature.size()%2 == 0);
+      signature.reserve(in.signature.size() >> 1);
+      for (unsigned int i = 0; i < in.signature.size(); i += 2) {
         std::string byteString = in.signature.substr(i, 2);
-        signature[i>>1] = (char) strtol(byteString.c_str(), NULL, 16);
+        signature.emplace_back((uint8_t)strtol(byteString.c_str(), NULL, 16));
       }
       return true;
     }
@@ -160,9 +169,9 @@ namespace oracle
   bool pricing_record::store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const
   {
     std::string sig_hex;
-    for (unsigned int i=0; i<64; i++) {
+    for (size_t i=0; i<signature.size(); ++i) {
       std::stringstream ss;
-      ss << std::hex << std::setw(2) << std::setfill('0') << (0xff & signature[i]);
+      ss << std::hex << std::setw(2) << std::setfill('0') << (0xff & signature.at(i));
       sig_hex += ss.str();
     }
     const pr_serialized out{pr_version, height, supply, assets, timestamp, sig_hex};

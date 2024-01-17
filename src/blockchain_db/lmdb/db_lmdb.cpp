@@ -389,12 +389,14 @@ typedef struct circ_supply_tally {
 } circ_supply_tally;
   
 typedef struct yield_tx_data {
+  uint64_t block_height;
   crypto::hash tx_hash;
   crypto::public_key return_address;
   uint64_t amount;
 } yield_tx_data;    
 
 typedef struct yield_block_data {
+  uint64_t block_height;
   uint64_t slippage_total;
   uint64_t locked_coins_total;
   uint8_t network_health_percentage;

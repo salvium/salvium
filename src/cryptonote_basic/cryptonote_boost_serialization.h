@@ -201,6 +201,13 @@ namespace boost
   }
 
   template <class Archive>
+  inline void serialize(Archive &a, oracle::supply_data &sd, const boost::serialization::version_type ver)
+  {
+    a & sd.fulm;
+    a & sd.fusd;
+  }
+
+  template <class Archive>
   inline void serialize(Archive &a, oracle::asset_data &ad, const boost::serialization::version_type ver)
   {
     a & ad.asset_type;
@@ -212,6 +219,8 @@ namespace boost
   inline void serialize(Archive &a, oracle::pricing_record &pr, const boost::serialization::version_type ver)
   {
     a & pr.pr_version;
+    a & pr.height;
+    a & pr.supply;
     a & pr.assets;
     a & pr.timestamp;
     a & pr.signature;

@@ -1177,6 +1177,8 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::prici
   dest.StartObject();
 
   INSERT_INTO_JSON_OBJECT(dest, pr_version, pricing_record.pr_version);
+  INSERT_INTO_JSON_OBJECT(dest, height, pricing_record.height);
+  INSERT_INTO_JSON_OBJECT(dest, supply, pricing_record.supply);
   INSERT_INTO_JSON_OBJECT(dest, assets, pricing_record.assets);
   INSERT_INTO_JSON_OBJECT(dest, timestamp, pricing_record.timestamp);
   INSERT_INTO_JSON_OBJECT(dest, signature, pricing_record.signature);
@@ -1186,12 +1188,15 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::prici
 
 void fromJsonValue(const rapidjson::Value& val, oracle::pricing_record& pricing_record)
 {  
+  LOG_ERROR("Oracle::" << __func__ << ":" << __LINE__);
   if (!val.IsObject())
   {
     throw WRONG_TYPE("json object");
   }
 
   GET_FROM_JSON_OBJECT(val, pricing_record.pr_version, pr_version);
+  GET_FROM_JSON_OBJECT(val, pricing_record.height, height);
+  GET_FROM_JSON_OBJECT(val, pricing_record.supply, supply);
   GET_FROM_JSON_OBJECT(val, pricing_record.assets, assets);
   GET_FROM_JSON_OBJECT(val, pricing_record.timestamp, timestamp);
   std::string sig_hex;
