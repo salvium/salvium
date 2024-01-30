@@ -197,6 +197,20 @@ struct txpool_tx_meta_t
   }
 };
 
+typedef struct yield_block_info {
+  uint64_t block_height;
+  uint64_t slippage_total;
+  uint64_t locked_coins;
+  uint64_t locked_coins_tally;
+  uint8_t network_health_percentage;
+} yield_block_info;
+
+typedef struct yield_tx_info {
+  uint64_t block_height;
+  crypto::hash tx_hash;
+  uint64_t locked_coins;
+  crypto::public_key return_address;
+} yield_tx_info;
 
 #define DBF_SAFE       1
 #define DBF_FAST       2
@@ -408,16 +422,21 @@ private:
    * @param cumulative_difficulty the accumulated difficulty after this block
    * @param coins_generated the number of coins generated total after this block
    * @param blk_hash the hash of the block
+   * @param slippage_total the total value (expressed in FULM coins) of all slippage for this block
+   * @param yield_total the total of FULM coins that have been locked for yield in this block
    */
-  virtual void add_block( const block& blk
-                , size_t block_weight
-                , uint64_t long_term_block_weight
-                , const difficulty_type& cumulative_difficulty
-                , const uint64_t& coins_generated
-                , uint64_t num_rct_outs
-                , oracle::asset_type_counts& cum_rct_by_asset_type
-                , const crypto::hash& blk_hash
-                ) = 0;
+  virtual void add_block( const block& blk,
+                          size_t block_weight,
+                          uint64_t long_term_block_weight,
+                          const difficulty_type& cumulative_difficulty,
+                          const uint64_t& coins_generated,
+                          uint64_t num_rct_outs,
+                          oracle::asset_type_counts& cum_rct_by_asset_type,
+                          const crypto::hash& blk_hash,
+                          uint64_t slippage_total,
+                          uint64_t yield_total,
+                          const cryptonote::network_type& nettype
+                          ) = 0;
 
   /**
    * @brief remove data about the top block
@@ -869,7 +888,8 @@ public:
                             , const difficulty_type& cumulative_difficulty
                             , const uint64_t& coins_generated
                             , const std::vector<std::pair<transaction, blobdata>>& txs
-                            );
+                            , const cryptonote::network_type& nettype
+                              );
 
   /**
    * @brief checks if a block exists
@@ -1898,6 +1918,10 @@ public:
    */
   virtual uint64_t get_database_size() const = 0;
 
+  virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi) = 0;
+  virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) = 0;
+
+  
   /**
    * @brief set whether or not to automatically remove logs
    *

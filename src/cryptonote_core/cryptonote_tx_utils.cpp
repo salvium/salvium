@@ -553,12 +553,6 @@ namespace cryptonote
       assert(false);
     }
 
-    /*
-    // Print out the uniqueness
-    crypto::public_key pk_uniq;
-    std::memcpy(pk_uniq.data, uniqueness.data, sizeof(crypto::public_key));
-    LOG_ERROR("*** UNIQUENESS : " << pk_uniq);
-    */
     return true;
   }
   //---------------------------------------------------------------
@@ -907,6 +901,12 @@ namespace cryptonote
           tx.amount_burnt += dst_entr.amount;
           continue;
         }
+      } else if (tx_type == cryptonote::transaction_type::YIELD) {
+        // Do not create outputs that are staked for yield - discard them as unused
+        if (!dst_entr.is_change) {
+          tx.amount_burnt += dst_entr.amount;
+          continue;
+        }
       }
       
       // Get the uniqueness for this TX
@@ -941,10 +941,29 @@ namespace cryptonote
       CHECK_AND_ASSERT_MES(calculate_uniqueness(tx.type, k_image, 0, 0, uniqueness), false, "Failed to calculate uniqueness for the transaction");
 
       // Get the output public key for the change output
-      crypto::public_key P_change;
+      crypto::public_key P_change = crypto::null_pkey;
       CHECK_AND_ASSERT_MES(tx.vout.size() == 1, false, "Internal error - too many outputs for CONVERT tx");
       CHECK_AND_ASSERT_MES(cryptonote::get_output_public_key(tx.vout[0], P_change), false, "Internal error - failed to get TX change output public key");
+      CHECK_AND_ASSERT_MES(P_change != crypto::null_pkey, false, "Internal error - not found TX change output for CONVERT tx");
 
+      // Now generate the return address
+      CHECK_AND_ASSERT_MES(get_return_address(tx.version, uniqueness, sender_account_keys, P_change, txkey_pub, tx.return_address, hwdev), false, "Failed to get protocol destination address");
+      
+    } else if (tx_type == cryptonote::transaction_type::YIELD) {
+      
+      // Get the uniqueness for this TX - must be output zero we are interested in for a CONVERT or YIELD TX
+      CHECK_AND_ASSERT_MES(!tx.vin.empty(), false, "tx.vin[] is empty");
+      CHECK_AND_ASSERT_MES(tx.vin[0].type() == typeid(cryptonote::txin_to_key), false, "incorrect tx.vin[0] type for YIELD TX");
+      crypto::key_image k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
+      ec_scalar uniqueness;
+      CHECK_AND_ASSERT_MES(calculate_uniqueness(tx.type, k_image, 0, 0, uniqueness), false, "Failed to calculate uniqueness for the transaction");
+
+      // Get the output public key for the change output
+      crypto::public_key P_change = crypto::null_pkey;
+      CHECK_AND_ASSERT_MES(tx.vout.size() == 1, false, "Internal error - incorrect number of outputs for YIELD tx");
+      CHECK_AND_ASSERT_MES(cryptonote::get_output_public_key(tx.vout[0], P_change), false, "Internal error - failed to get TX change output public key");
+      CHECK_AND_ASSERT_MES(P_change != crypto::null_pkey, false, "Internal error - not found TX change output for YIELD tx");
+      
       // Now generate the return address
       CHECK_AND_ASSERT_MES(get_return_address(tx.version, uniqueness, sender_account_keys, P_change, txkey_pub, tx.return_address, hwdev), false, "Failed to get protocol destination address");
     }
@@ -1125,9 +1144,29 @@ namespace cryptonote
         if (sources[i].rct)
           boost::get<txin_to_key>(tx.vin[i]).amount = 0;
       }
-      for (size_t i = 0; i < tx.vout.size(); ++i)
-        tx.vout[i].amount = 0;
+      std::vector<bool> zero_masks;
+      zero_masks.reserve(tx.vout.size());
+      for (size_t i = 0; i < tx.vout.size(); ++i) {
+        if (tx.type == cryptonote::transaction_type::YIELD) {
+          uint64_t unlock_time = 0;
+          bool ok = get_output_unlock_time(tx.vout[i], unlock_time);
+          if (!ok) {
+            LOG_ERROR("failed to get output asset type for tx.vout[" << i << "]");
+            return false;
+          }
+          if (unlock_time == 0) {
+            zero_masks.emplace_back(false);
+          } else {
+            zero_masks.emplace_back(true);
+          }
+        } else {
+          zero_masks.emplace_back(false);
+        }
 
+        // Clear the amount in the output
+        tx.vout[i].amount = 0;
+      }
+      
       crypto::hash tx_prefix_hash;
       get_transaction_prefix_hash(tx, tx_prefix_hash, hwdev);
       rct::ctkeyV outSk;
@@ -1139,6 +1178,7 @@ namespace cryptonote
           tx_type,
           source_asset,
           destination_asset_types,
+          zero_masks,
           inamounts,
           outamounts,
           fee,

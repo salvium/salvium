@@ -471,6 +471,17 @@ private:
       END_SERIALIZE()
     };
 
+    struct locked_yield_details
+    {
+      uint32_t m_index_major;
+      uint64_t m_amount;
+
+      BEGIN_SERIALIZE_OBJECT()
+        VARINT_FIELD(m_index_major)
+        VARINT_FIELD(m_amount)
+      END_SERIALIZE()
+    };
+    
     struct unconfirmed_transfer_details
     {
       cryptonote::transaction_prefix m_tx;
@@ -1155,6 +1166,7 @@ private:
       }
       a & m_transfers;
       a & m_transfers_indices;
+      a & m_locked_coins;
       a & m_account_public_address;
       a & m_key_images.parent();
       if(ver < 6)
@@ -1266,6 +1278,7 @@ private:
       FIELD(m_blockchain)
       FIELD(m_transfers)
       FIELD(m_transfers_indices)
+      FIELD(m_locked_coins)
       FIELD(m_account_public_address)
       FIELD(m_key_images)
       FIELD(m_unconfirmed_txs)
@@ -1807,6 +1820,7 @@ private:
 
     transfer_container m_transfers;
     transfer_details_indices m_transfers_indices;
+    serializable_unordered_map<crypto::public_key, locked_yield_details> m_locked_coins;
     payment_container m_payments;
     serializable_unordered_map<crypto::key_image, size_t> m_key_images;
     serializable_unordered_map<crypto::public_key, size_t> m_pub_keys;
@@ -2127,6 +2141,13 @@ namespace boost
       a & x.m_signers;
     }
 
+    template <class Archive>
+    inline void serialize(Archive &a, tools::wallet2::locked_yield_details &x, const boost::serialization::version_type ver)
+    {
+      a & x.m_index_major;
+      a & x.m_amount;
+    }
+    
     template <class Archive>
     inline void serialize(Archive &a, tools::wallet2::unconfirmed_transfer_details &x, const boost::serialization::version_type ver)
     {

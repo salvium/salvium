@@ -2044,11 +2044,6 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
 
   std::string source_asset = tx.source_asset_type;
   std::string dest_asset = tx.destination_asset_type;
-  cryptonote::transaction_type tx_type_verify = tx.type;
-  if (!miner_tx) {
-    THROW_WALLET_EXCEPTION_IF(!cryptonote::get_tx_type(source_asset, dest_asset, tx_type_verify), error::wallet_internal_error, "Failed to get TX type");
-    THROW_WALLET_EXCEPTION_IF(tx_type_verify != tx.type, error::wallet_internal_error, "Incorrect TX type");
-  }
   
   // per receiving subaddress index
   std::unordered_map<cryptonote::subaddress_index, std::map<std::string, uint64_t>> tx_money_got_in_outs;
@@ -2257,20 +2252,20 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
       //usually we have only one transfer for user in transaction
       if (!pool)
       {
-            THROW_WALLET_EXCEPTION_IF(tx.vout.size() != o_indices.size() || tx.vout.size() != asset_type_output_indices.size(), error::wallet_internal_error,
-            "transactions outputs size=" + std::to_string(tx.vout.size()) +
-            " not match with daemon response size=" + std::to_string(o_indices.size())
-            + " or with asset outputs size=" + std::to_string(asset_type_output_indices.size()));
+        THROW_WALLET_EXCEPTION_IF(tx.vout.size() != o_indices.size() || tx.vout.size() != asset_type_output_indices.size(), error::wallet_internal_error,
+                                  "transactions outputs size=" + std::to_string(tx.vout.size()) +
+                                  " not match with daemon response size=" + std::to_string(o_indices.size())
+                                  + " or with asset outputs size=" + std::to_string(asset_type_output_indices.size()));
       }
 
       for(size_t o: outs)
       {
-	THROW_WALLET_EXCEPTION_IF(tx.vout.size() <= o, error::wallet_internal_error, "wrong out in transaction: internal index=" +
-				  std::to_string(o) + ", total_outs=" + std::to_string(tx.vout.size()));
+        THROW_WALLET_EXCEPTION_IF(tx.vout.size() <= o, error::wallet_internal_error, "wrong out in transaction: internal index=" +
+                                  std::to_string(o) + ", total_outs=" + std::to_string(tx.vout.size()));
 
         auto kit = m_pub_keys.find(tx_scan_info[o].in_ephemeral.pub);
         
-	THROW_WALLET_EXCEPTION_IF(kit != m_pub_keys.end() && kit->second >= m_transfers.size(),
+        THROW_WALLET_EXCEPTION_IF(kit != m_pub_keys.end() && kit->second >= m_transfers.size(),
             error::wallet_internal_error, std::string("Unexpected transfer index from public key: ")
             + "got " + (kit == m_pub_keys.end() ? "<none>" : boost::lexical_cast<std::string>(kit->second))
             + ", m_transfers.size() is " + boost::lexical_cast<std::string>(m_transfers.size()));
@@ -2337,10 +2332,10 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
               td.m_rct = false;
             }
             td.m_frozen = false;
-	    set_unspent(m_transfers.size()-1);
+            set_unspent(m_transfers.size()-1);
             if (td.m_key_image_known)
-	      m_key_images[td.m_key_image] = m_transfers.size()-1;
-	    m_pub_keys[tx_scan_info[o].in_ephemeral.pub] = m_transfers.size()-1;
+              m_key_images[td.m_key_image] = m_transfers.size()-1;
+            m_pub_keys[tx_scan_info[o].in_ephemeral.pub] = m_transfers.size()-1;
             if (output_tracker_cache)
               (*output_tracker_cache)[std::make_pair(tx.vout[o].amount, td.m_global_output_index)] = m_transfers.size() - 1;
             if (m_multisig)
@@ -2366,14 +2361,21 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             // Add the change output_public_key to the list of subaddresses to check
             crypto::public_key P_change = crypto::null_pkey;
             THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[0], P_change), error::wallet_internal_error, "Failed to get change output public key");
-            //m_subaddresses[P_change] = {0x50524F54,0x4F434F4C};
+            //m_subaddresses[P_change] = {0x50524F54,0x4F434F4C};  /* {PROT,OCOL} - seemed like a good idea at the time, but harder to implement! */
             m_subaddresses[P_change] = {0,0};
             m_protocol_txs.insert({P_change, m_transfers.size()-1});
+
+            if (tx.type == cryptonote::transaction_type::YIELD) {
+              // Additionally, with YIELD TXs, we need to update our "balance staked" subtotal, because otherwise our balance is out by the staked coins until they mature!
+              // SRCG: must remember to deduct the number of staked coins when they mature!!
+              LOG_ERROR("***** STAKED COINS : " << tx.amount_burnt << " *****");
+              m_locked_coins.insert({P_change, {0, tx.amount_burnt}});
+            }
           }
         }
         else if (m_transfers[kit->second].m_spent || m_transfers[kit->second].amount() >= tx_scan_info[o].amount)
         {
-	  LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
+          LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
               << " from received " << print_money(tx_scan_info[o].amount) << " output already exists with "
               << (m_transfers[kit->second].m_spent ? "spent" : "unspent") << " "
               << print_money(m_transfers[kit->second].amount()) << " in tx " << m_transfers[kit->second].m_txid << ", received output ignored");
@@ -2389,7 +2391,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         }
         else
         {
-	  LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
+          LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
               << " from received " << print_money(tx_scan_info[o].amount) << " output already exists with "
               << print_money(m_transfers[kit->second].amount()) << ", replacing with new output");
           // The new larger output replaced a previous smaller one
@@ -4031,6 +4033,7 @@ bool wallet2::clear()
   m_blockchain.clear();
   m_transfers.clear();
   m_transfers_indices.clear();
+  m_locked_coins.clear();
   m_key_images.clear();
   m_pub_keys.clear();
   m_unconfirmed_txs.clear();
@@ -4054,6 +4057,7 @@ void wallet2::clear_soft(bool keep_key_images)
   m_blockchain.clear();
   m_transfers.clear();
   m_transfers_indices.clear();
+  m_locked_coins.clear();
   if (!keep_key_images)
     m_key_images.clear();
   m_pub_keys.clear();
@@ -6163,6 +6167,11 @@ uint64_t wallet2::balance(uint32_t index_major, const std::string& asset_type, b
   uint64_t amount = 0;
   for (const auto& i : balance_per_subaddress(index_major, asset_type, strict))
     amount += i.second;
+  if (asset_type == "FULM") {
+    // Iterate over the locked coins, adding them to the _locked_ balance
+    for (const auto& i : m_locked_coins)
+      amount += i.second.m_amount;
+  }
   return amount;
 }
 //----------------------------------------------------------------------------------------------------
@@ -9329,6 +9338,7 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
 
   // we still keep a copy, since we want to keep dsts free of change for user feedback purposes
   std::vector<cryptonote::tx_destination_entry> splitted_dsts = dsts;
+
   cryptonote::tx_destination_entry change_dts = AUTO_VAL_INIT(change_dts);
   change_dts.amount = found_money - needed_money;
   change_dts.asset_type = source_asset;
@@ -10351,7 +10361,12 @@ bool wallet2::sanity_check(const std::vector<wallet2::pending_tx> &ptx_vector, s
         check_tx_proof(ptx.tx, address, r.second.second, "automatic-sanity-check", proof, received);
       }
       catch (const std::exception &e) { received = 0; }
-      received += ptx.tx.amount_burnt;
+
+      if (ptx.tx.type == cryptonote::transaction_type::CONVERT)
+        received += ptx.tx.amount_burnt;
+      else if (ptx.tx.type == cryptonote::transaction_type::YIELD)
+        received += ptx.tx.amount_burnt;
+      
       total_received += received;
     }
 
@@ -11415,7 +11430,7 @@ void wallet2::check_tx_key_helper(const cryptonote::transaction &tx, const crypt
       k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
     }
     crypto::ec_scalar uniqueness;
-    THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(tx.type, k_image, ((size_t)(-1)), 0, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
+    THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(tx.type, k_image, ((size_t)(-1)), n, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
 
     crypto::key_derivation found_derivation;
     if (is_out_to_acc(address, output_public_key, derivation, additional_derivations, n, uniqueness, get_output_view_tag(tx.vout[n]), found_derivation))
@@ -11431,7 +11446,13 @@ void wallet2::check_tx_key_helper(const cryptonote::transaction &tx, const crypt
         //crypto::hash uniqueness = cn_fast_hash(reinterpret_cast<void*>(&n), sizeof(size_t));
         crypto::derivation_to_scalar(found_derivation, uniqueness, scalar1);
         rct::ecdhTuple ecdh_info = tx.rct_signatures.ecdhInfo[n];
-        rct::ecdhDecode(ecdh_info, rct::sk2rct(scalar1), tx.rct_signatures.type == rct::RCTTypeBulletproof2 || tx.rct_signatures.type == rct::RCTTypeCLSAG || tx.rct_signatures.type == rct::RCTTypeBulletproofPlus);
+        rct::ecdhDecode(ecdh_info, rct::sk2rct(scalar1), tx.rct_signatures.type == rct::RCTTypeBulletproof2 || tx.rct_signatures.type == rct::RCTTypeCLSAG || tx.rct_signatures.type == rct::RCTTypeBulletproofPlus);        
+        if (tx.type == cryptonote::transaction_type::YIELD) {
+          uint64_t unlock_time = 0;
+          THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_unlock_time(tx.vout[n], unlock_time), error::wallet_internal_error, "Failed to get output unlock time");
+          if (unlock_time == get_config(m_nettype).YIELD_LOCK_PERIOD)
+            ecdh_info.mask = rct::identity();
+        }
         const rct::key C = tx.rct_signatures.outPk[n].mask;
         rct::key Ctmp;
         THROW_WALLET_EXCEPTION_IF(sc_check(ecdh_info.mask.bytes) != 0, error::wallet_internal_error, "Bad ECDH input mask");

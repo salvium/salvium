@@ -466,6 +466,18 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
       rx_set_main_seedhash(seedhash.data, tools::get_max_concurrency());
   }
 
+  // Preload the yield_block_info cache
+  uint64_t yield_lock_period = get_config(m_nettype).YIELD_LOCK_PERIOD;
+  m_yield_block_info_cache.clear();
+  uint64_t end_height = m_db->height();
+  uint64_t start_height = (end_height > yield_lock_period) ? (end_height - yield_lock_period) : 0;
+  for (uint64_t idx = start_height; idx < end_height; idx++) {
+    yield_block_info ybi;
+    int result = m_db->get_yield_block_info(idx, ybi);
+    if (result)
+      return false;
+    m_yield_block_info_cache[idx] = ybi;
+  }
   return true;
 }
 //------------------------------------------------------------------
@@ -1846,6 +1858,35 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
     protocol_entries.push_back(entry);
   }
 
+  // Get the YIELD TX information for matured staked coins
+  uint64_t yield_lock_period = get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t start_height = height - yield_lock_period - 1;
+  std::vector<cryptonote::yield_tx_info> yield_entries;
+  int yield_tx_result = m_db->get_yield_tx_info(start_height, yield_entries);
+  if (yield_entries.size()) {
+
+    // Get the YBI information for the 21,600 blocks that the matured TX(s), we can calculate yield
+    std::vector<std::pair<yield_tx_info, uint64_t>> yield_payouts;
+    for (const auto& entry: yield_entries) {
+      yield_payouts.emplace_back(std::make_pair(entry, 0));
+    }
+
+    // Make sure the cache is fully populated and up to date
+    if (!validate_ybi_cache()) {
+      LOG_PRINT_L1("yield information cache is invalid - rebuilding cache");
+      if (!rebuild_ybi_cache()) {
+        LOG_ERROR("Failed to rebuild yield information cache - aborting");
+        return false;
+      }
+    }
+    
+    // Iterate over the cached data for block yield, calculating the yield payouts due
+    if (!calculate_yield_payouts(start_height, yield_payouts)) {
+      LOG_ERROR("Failed to obtain yield payout information - aborting");
+      return false;
+    }
+  }
+  
   // Time to construct the protocol_tx
   uint64_t protocol_fee = 0;
   bool ok = construct_protocol_tx(height, protocol_fee, b.protocol_tx, protocol_entries, circ_supply, pr, b.major_version);
@@ -4227,6 +4268,104 @@ uint64_t Blockchain::get_adjusted_time(uint64_t height) const
   return (adjusted_current_block_ts < median_ts ? adjusted_current_block_ts : median_ts);
 }
 //------------------------------------------------------------------
+bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& yield_container)
+{
+  LOG_PRINT_L3("Blockchain::" << __func__);
+
+  // Iterate over the cached yield_block_info data
+  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).YIELD_LOCK_PERIOD;
+  for (uint64_t idx = start_height; idx < start_height + yield_lock_period; ++idx) {
+    // Get the next block
+    if (m_yield_block_info_cache.count(idx) == 0) {
+      LOG_ERROR("failed to locate yield information for block height " << idx <<"  - aborting");
+      return false;
+    }
+    yield_block_info ybi = m_yield_block_info_cache[idx];
+    boost::multiprecision::int128_t slippage_128 = ybi.slippage_total;
+    slippage_128 = (slippage_128 * 3) / 10;
+
+    // Get the total number of coins locked at this height
+    boost::multiprecision::int128_t locked_total_128 = ybi.locked_coins_tally;
+    
+    // Iterate over the yield_container, adding each proportion of the yield
+    for (const auto& entry: yield_container) {
+      
+      boost::multiprecision::int128_t locked_coins_128 = entry.first.locked_coins;
+      boost::multiprecision::int128_t yield_128 = (slippage_128 * locked_coins_128) / locked_total_128;
+    }
+    
+  }
+  
+  // Return success to caller
+  return true;
+}
+//------------------------------------------------------------------
+bool Blockchain::rebuild_ybi_cache()
+{
+  LOG_PRINT_L3("Blockchain::" << __func__);
+  
+  // If we need to (re)build the cache, we need to pull the data from the blockchain directly
+
+  // Clear the existing cache
+  m_yield_block_info_cache.clear();
+  
+  // Get the size that the cache should be when fully populated (could be less than the lock period if the chain is young)
+  uint64_t height = m_db->height();
+  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t ybi_cache_expected_size = std::min(height, yield_lock_period);
+
+  // Now get this number of entries from the blockchain
+  for (uint64_t idx = height - ybi_cache_expected_size; idx < height; ++idx) {
+
+    // Get the specified YBI entry
+    yield_block_info ybi;
+    int result = m_db->get_yield_block_info(idx, ybi);
+    if (result) {
+      // Request failed - report error and bail out
+      LOG_ERROR("failed to retrieve YBI entry for height " << idx << " - aborting");
+      return false;
+    }
+
+    // Store in the map
+    m_yield_block_info_cache[idx] = ybi;
+  }
+
+  // Return success to caller
+  return true;
+}
+//------------------------------------------------------------------
+bool Blockchain::validate_ybi_cache()
+{
+  LOG_PRINT_L3("Blockchain::" << __func__);
+  
+  // Get the size that the cache should be if fully populated
+  uint64_t height = m_db->height();
+  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t ybi_cache_expected_size = std::min(height, yield_lock_period);
+  if (m_yield_block_info_cache.size() != ybi_cache_expected_size) {
+    // It's not the right size - report error and bail out
+    LOG_ERROR("YBI cache is incorrect size - should be " << ybi_cache_expected_size << ", but found " << m_yield_block_info_cache.size() << " - aborting");
+    return false;
+  }
+    
+  // It's the right size - check we have the correct limits
+  if (m_yield_block_info_cache.count(height - 1) == 0) {
+    // Missing the latest block - report error and bail out
+    LOG_ERROR("Failed to locate YBI entry for height " << (height - 1) << " - aborting");
+    return false;
+  }
+  
+  if (m_yield_block_info_cache.count(height - ybi_cache_expected_size - 1) == 0) {
+    // Missing the latest block - report error and bail out
+    LOG_ERROR("Failed to locate YBI entry for height " << (height - ybi_cache_expected_size - 1) << " - aborting");
+    return false;
+  }
+
+  return true;
+}
+
+
+//------------------------------------------------------------------
 //TODO: revisit, has changed a bit on upstream
 bool Blockchain::check_block_timestamp(std::vector<uint64_t>& timestamps, const block& b, uint64_t& median_ts) const
 {
@@ -4675,7 +4814,7 @@ leave:
     {
       uint64_t long_term_block_weight = get_next_long_term_block_weight(block_weight);
       cryptonote::blobdata bd = cryptonote::block_to_blob(bl);
-      new_height = m_db->add_block(std::make_pair(std::move(bl), std::move(bd)), block_weight, long_term_block_weight, cumulative_difficulty, already_generated_coins, txs);
+      new_height = m_db->add_block(std::make_pair(std::move(bl), std::move(bd)), block_weight, long_term_block_weight, cumulative_difficulty, already_generated_coins, txs, m_nettype);
     }
     catch (const KEY_IMAGE_EXISTS& e)
     {

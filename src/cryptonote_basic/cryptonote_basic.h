@@ -218,11 +218,13 @@ namespace cryptonote
       FIELD(vout)
       FIELD(extra)
       VARINT_FIELD(type)
-      FIELD(return_address)
-      FIELD(source_asset_type)
-      FIELD(destination_asset_type)
-      VARINT_FIELD(amount_burnt)
-      VARINT_FIELD(amount_slippage_limit)
+      if (type != cryptonote::transaction_type::MINER && type != cryptonote::transaction_type::PROTOCOL) {
+        FIELD(return_address)
+        FIELD(source_asset_type)
+        FIELD(destination_asset_type)
+        VARINT_FIELD(amount_burnt)
+        VARINT_FIELD(amount_slippage_limit)
+      }
     END_SERIALIZE()
 
   public:

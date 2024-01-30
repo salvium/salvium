@@ -167,11 +167,13 @@ namespace boost
     a & x.vout;
     a & x.extra;
     a & x.type;
-    a & x.return_address;
-    a & x.source_asset_type;
-    a & x.destination_asset_type;
-    a & x.amount_burnt;
-    a & x.amount_slippage_limit;
+    if (x.type != cryptonote::transaction_type::MINER && x.type != cryptonote::transaction_type::PROTOCOL) {
+      a & x.return_address;
+      a & x.source_asset_type;
+      a & x.destination_asset_type;
+      a & x.amount_burnt;
+      a & x.amount_slippage_limit;
+    }
   }
 
   template <class Archive>
@@ -183,20 +185,22 @@ namespace boost
     a & x.vout;
     a & x.extra;
     a & x.type;
-    a & x.return_address;
-    a & x.source_asset_type;
-    a & x.destination_asset_type;
-    a & x.amount_burnt;
-    a & x.amount_slippage_limit;
-    if (x.version == 1)
-    {
-      a & x.signatures;
-    }
-    else
-    {
-      a & (rct::rctSigBase&)x.rct_signatures;
-      if (x.rct_signatures.type != rct::RCTTypeNull)
-        a & x.rct_signatures.p;
+    if (x.type != cryptonote::transaction_type::MINER && x.type != cryptonote::transaction_type::PROTOCOL) {
+      a & x.return_address;
+      a & x.source_asset_type;
+      a & x.destination_asset_type;
+      a & x.amount_burnt;
+      a & x.amount_slippage_limit;
+      if (x.version == 1)
+      {
+        a & x.signatures;
+      }
+      else
+      {
+        a & (rct::rctSigBase&)x.rct_signatures;
+        if (x.rct_signatures.type != rct::RCTTypeNull)
+          a & x.rct_signatures.p;
+      }
     }
   }
 

@@ -212,8 +212,8 @@ namespace
  *
  * alt_blocks       block hash   {block data, block blob}
  *
- * yield_block_data block height {}
- * yield_tx_data    block height {txn hash, dest address, amount}
+ * yield_block_data block height {slippage_coins, locked_coins, lc_total, network_health}
+ * yield_tx_data    block height {txn hash, locked_coins, return_address}
  *
  * Note: where the data items are of uniform size, DUPFIXED tables have
  * been used to save space. In most of these cases, a dummy "zerokval"
@@ -223,6 +223,7 @@ namespace
  *
  * The output_amounts table doesn't use a dummy key, but uses DUPSORT.
  */
+
 const char* const LMDB_BLOCKS = "blocks";
 const char* const LMDB_BLOCK_HEIGHTS = "block_heights";
 const char* const LMDB_BLOCK_INFO = "block_info";
@@ -258,17 +259,18 @@ const char* const LMDB_CIRC_SUPPLY_TALLY = "circ_supply_tally";
    *
    * block_height    (uint64_t)     (this is the key field)
    * ---------------------------------------------------------
-   * txn_hash         (crypto:hash)  (so we can verify)
-   * dest_address     (crypto::key)  (where to send the yield)
-   * amount_locked    (uint64_t)     (how much was locked)
+   * txn_hash            (crypto:hash)  (so we can verify)
+   * dest_address        (crypto::key)  (where to send the yield)
+   * amount_locked       (uint64_t)     (how much was locked)
    *
    * We also have the following information that will go into a "yield_blocks" table:
    *
-   * block_height     (uint64_t)     (this is the key field)
+   * block_height        (uint64_t)     (this is the key field)
    * --------------------------------------------------------
-   * slippage_amount  (uint64_t)     (amount needed to determine yield payout for the block)
-   * coins_locked     (uint64_t)     (total number of coins locked at this height)
-   * network_health   (uint8_t)      (a fudge factor used to adjust the slippage:yield ratio dynamically)
+   * slippage_amount     (uint64_t)     (amount needed to determine yield payout for the block)
+   * locked_coins        (uint64_t)     (total number of coins locked at this height)
+   * locked_coins_total  (uint64_t)     (total number of coins locked at this height)
+   * network_health      (uint8_t)      (a fudge factor used to adjust the slippage:yield ratio dynamically)
    *
    * So, let's say that we have a block height h for which we want to assess the yield payments. First off,
    * we are ONLY interested in making ANY payment if we have YIELD.block_height == h + 21600 (i.e. the yield
@@ -375,32 +377,11 @@ typedef struct outassettype {
   uint64_t output_id;
 } outassettype;
 
-typedef struct circ_supply {
-  crypto::hash tx_hash;
-  uint32_t asset_type;
-  uint64_t amount_burnt;
-  uint64_t amount_minted;
-} circ_supply;
-
 typedef struct circ_supply_tally {
   bool is_negative;
   uint64_t amount_hi;
   uint64_t amount_lo;
 } circ_supply_tally;
-  
-typedef struct yield_tx_data {
-  uint64_t block_height;
-  crypto::hash tx_hash;
-  crypto::public_key return_address;
-  uint64_t amount;
-} yield_tx_data;    
-
-typedef struct yield_block_data {
-  uint64_t block_height;
-  uint64_t slippage_total;
-  uint64_t locked_coins_total;
-  uint8_t network_health_percentage;
-} yield_block_data;
   
 std::atomic<uint64_t> mdb_txn_safe::num_active_txns{0};
 std::atomic_flag mdb_txn_safe::creation_gate = ATOMIC_FLAG_INIT;
@@ -819,7 +800,66 @@ estim:
   return threshold_size;
 }
 
-void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t long_term_block_weight, const difficulty_type& cumulative_difficulty, const uint64_t& coins_generated, uint64_t num_rct_outs, oracle::asset_type_counts& cum_rct_by_asset_type, const crypto::hash& blk_hash)
+int BlockchainLMDB::get_yield_block_info(const uint64_t height, yield_block_info& ybi)
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  mdb_txn_cursors *m_cursors = &m_wcursors;
+  
+  // Clear the YBI, just in case
+  std::memset(&ybi, 0, sizeof(struct yield_block_info));
+
+  // Query for the matured YIELD_BLOCK_INFO information
+  CURSOR(yield_blocks)
+  MDB_val v;
+  MDB_val_set(k, height);
+  int ret = mdb_cursor_get(m_cur_yield_blocks, &k, &v, MDB_SET);
+  if (ret == MDB_NOTFOUND) {
+    LOG_ERROR("Failed to locate YBI for block height " << height);
+    return ret;
+  }
+  if (ret)
+    throw0(DB_ERROR(lmdb_error("Failed to enumerate yield block info: ", ret).c_str()));
+
+  yield_block_info *p = (yield_block_info*)v.mv_data;
+  ybi = *p;
+
+  // Return success to caller
+  return ret;
+}
+
+int BlockchainLMDB::get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container)
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  mdb_txn_cursors *m_cursors = &m_wcursors;
+
+  // Clear the container
+  yti_container.clear();
+
+  CURSOR(yield_txs)
+  MDB_val v;
+  MDB_val_set(k, height);
+  MDB_cursor_op op = MDB_FIRST_DUP;
+  while (1)
+  {
+    int ret = mdb_cursor_get(m_cur_yield_txs, &k, &v, op);
+    op = MDB_NEXT_DUP;
+    if (ret == MDB_NOTFOUND)
+      break;
+    if (ret)
+      throw0(DB_ERROR(lmdb_error("Failed to enumerate yield TX info: ", ret).c_str()));
+
+    // Push result back into the container
+    yield_tx_info *p = (yield_tx_info*)v.mv_data;
+    yti_container.emplace_back(*p);
+  }
+
+  // Return success to caller
+  return 0;
+}
+
+void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t long_term_block_weight, const difficulty_type& cumulative_difficulty, const uint64_t& coins_generated, uint64_t num_rct_outs, oracle::asset_type_counts& cum_rct_by_asset_type, const crypto::hash& blk_hash, uint64_t slippage_total, uint64_t yield_total, const cryptonote::network_type& nettype)
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -849,11 +889,50 @@ void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t l
 
   int result = 0;
 
+  CURSOR(yield_blocks)
+  yield_block_info ybi_matured, ybi_prev, ybi;
+  uint64_t yield_lock_period = cryptonote::get_config(nettype).YIELD_LOCK_PERIOD;
+  if (m_height >= yield_lock_period) {
+    uint64_t height_matured = m_height - yield_lock_period - 1;
+    result = get_yield_block_info(height_matured, ybi_matured);
+    if (result)
+    {
+      throw0(DB_ERROR(lmdb_error("Failed to get YBI for matured height: ", result).c_str()));
+    }
+  } else {
+    // Chain is too new - just clear the memory of the "matured" YBI struct
+    std::memset(&ybi_matured, 0, sizeof(struct yield_block_info));
+    ybi_prev.network_health_percentage = 100;
+  }
+  if (m_height >= 1) {
+    // Query for the latest YIELD_BLOCK_INFO information
+    result = get_yield_block_info(m_height - 1, ybi_prev);
+    if (result)
+    {
+      throw0(DB_ERROR(lmdb_error("Failed to get YBI for last block: ", result).c_str()));
+    }
+  } else {
+    // Chain is too new - just clear the memory of the "prev" YBI struct
+    std::memset(&ybi_prev, 0, sizeof(struct yield_block_info));
+    ybi_prev.network_health_percentage = 100;
+  }
+  
+  // Create the YIELD_BLOCK_INFO instance for this block
+  ybi.block_height = m_height;
+  ybi.slippage_total = slippage_total;
+  ybi.locked_coins = yield_total;
+  ybi.locked_coins_tally = ybi_prev.locked_coins_tally - ybi_matured.locked_coins_tally + yield_total;
+  ybi.network_health_percentage = 100;
+
+  // Put the YBI into the table
   MDB_val_set(key, m_height);
+  MDB_val_set(ybi_val, ybi);
+  result = mdb_cursor_put(m_cur_yield_blocks, &key, &ybi_val, MDB_APPEND);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to add YBI to db: ", result).c_str()));
 
   CURSOR(blocks)
   CURSOR(block_info)
-  CURSOR(circ_supply_tally)
 
   // this call to mdb_cursor_put will change height()
   cryptonote::blobdata block_blob(block_to_blob(blk));
@@ -1143,11 +1222,13 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   
   // Is there yield_tx data to add?
   if (tx.type == cryptonote::transaction_type::YIELD) {
+
     // Create the object we are going to write to the database
-    yield_tx_data yield_data;
+    yield_tx_info yield_data;
+    yield_data.block_height = m_height;
     yield_data.tx_hash = tx_hash;
     yield_data.return_address = tx.return_address;
-    yield_data.amount = tx.amount_burnt; // SRCG - this feels as though we are bastardising the variable for an invalid purpose
+    yield_data.locked_coins = tx.amount_burnt;
     MDB_val_set(val_height, m_height);
     MDB_val_set(val_yield_tx_data, yield_data);
     result = mdb_cursor_put(m_cur_yield_txs, &val_height, &val_yield_tx_data, MDB_APPEND);
@@ -1175,7 +1256,6 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
   CURSOR(txs_prunable_hash)
   CURSOR(txs_prunable_tip)
   CURSOR(tx_outputs)
-  CURSOR(circ_supply)
   CURSOR(circ_supply_tally)
   CURSOR(yield_txs)
 
@@ -1266,20 +1346,6 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
       LOG_PRINT_L1("tx ID " << tip->data.tx_id << "\n\tAsset Type = " << cryptonote::asset_type_from_id(asset.first) << "\n\tTally before undoing mint =" << source_tally.str() << "\n\tTally after undoing mint =" << final_source_tally.str());
     }
   }
-  /*
-  // Update the circ_supply table by deleting all entries for this TX
-  if ((result = mdb_cursor_get(m_cur_circ_supply, &val_tx_id, NULL, MDB_SET))) {
-    if (result == MDB_NOTFOUND) {
-      LOG_PRINT_L1("failed to obtain circulating supply data - no burns / conversions made yet?");
-    } else {
-      throw1(DB_ERROR(lmdb_error("Failed to locate circulating supply for removal: ", result).c_str()));
-    }
-  } else {
-    result = mdb_cursor_del(m_cur_circ_supply, 0);
-    if (result)
-      throw1(DB_ERROR(lmdb_error("Failed to add removal of circulating supply to db transaction: ", result).c_str()));
-  }
-  */
   remove_tx_outputs(tip->data.tx_id, tx);
 
   result = mdb_cursor_get(m_cur_tx_outputs, &val_tx_id, NULL, MDB_SET);
@@ -1297,16 +1363,21 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
   // Is there yield_tx data to remove?
   if (tx.type == cryptonote::transaction_type::YIELD) {
     // Remove any yield_tx data for this transaction
-    result = mdb_cursor_get(m_cur_yield_txs, &val_tx_id, NULL, MDB_SET);
-    if (result == MDB_NOTFOUND)
-      LOG_PRINT_L1("tx has no yield_tx data to remove: " << tx_hash);
-    else if (result)
-      throw1(DB_ERROR(lmdb_error("Failed to locate yield_tx data for removal: ", result).c_str()));
-    if (!result)
-    {
-      result = mdb_cursor_del(m_cur_yield_txs, 0);
-      if (result)
-        throw1(DB_ERROR(lmdb_error("Failed to add removal of yield_tx data to db transaction: ", result).c_str()));
+    MDB_val_set(val_height, m_height);
+    MDB_val v;
+    while (1) {
+      result = mdb_cursor_get(m_cur_yield_txs, &val_height, &v, MDB_SET);
+      if (result == MDB_NOTFOUND)
+        break;
+      else if (result)
+        throw1(DB_ERROR(lmdb_error("Failed to locate yield_tx data for removal: ", result).c_str()));
+      const yield_tx_info yti = *(const yield_tx_info*)v.mv_data;
+      if (yti.tx_hash == tx_hash) {
+        result = mdb_cursor_del(m_cur_yield_txs, 0);
+        if (result)
+          throw1(DB_ERROR(lmdb_error("Failed to add removal of yield_tx data to db transaction: ", result).c_str()));
+        break;
+      }
     }
   }
   
@@ -1790,6 +1861,7 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
   lmdb_db_open(txn, LMDB_CIRC_SUPPLY_TALLY, MDB_CREATE, m_circ_supply_tally, "Failed to open db handle for m_circ_supply_tally");
 
   lmdb_db_open(txn, LMDB_YIELD_TXS, MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_yield_txs, "Failed to open db handle for m_yield_txs");
+  lmdb_db_open(txn, LMDB_YIELD_BLOCKS, MDB_INTEGERKEY | MDB_CREATE, m_yield_blocks, "Failed to open db handle for m_yield_blocks");
 
   mdb_set_dupsort(txn, m_spent_keys, compare_hash32);
   mdb_set_dupsort(txn, m_block_heights, compare_hash32);
@@ -1993,6 +2065,8 @@ void BlockchainLMDB::reset()
     throw0(DB_ERROR(lmdb_error("Failed to drop m_properties: ", result).c_str()));
   if (auto result = mdb_drop(txn, m_yield_txs, 0))
     throw0(DB_ERROR(lmdb_error("Failed to drop m_yield_txs: ", result).c_str()));
+  if (auto result = mdb_drop(txn, m_yield_blocks, 0))
+    throw0(DB_ERROR(lmdb_error("Failed to drop m_yield_blocks: ", result).c_str()));
 
   // init with current version
   MDB_val_str(k, "version");
@@ -4532,7 +4606,7 @@ void BlockchainLMDB::block_rtxn_abort() const
 }
 
 uint64_t BlockchainLMDB::add_block(const std::pair<block, blobdata>& blk, size_t block_weight, uint64_t long_term_block_weight, const difficulty_type& cumulative_difficulty, const uint64_t& coins_generated,
-    const std::vector<std::pair<transaction, blobdata>>& txs)
+    const std::vector<std::pair<transaction, blobdata>>& txs, const cryptonote::network_type& nettype)
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -4550,7 +4624,7 @@ uint64_t BlockchainLMDB::add_block(const std::pair<block, blobdata>& blk, size_t
 
   try
   {
-    BlockchainDB::add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, txs);
+    BlockchainDB::add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, txs, nettype);
   }
   catch (const DB_ERROR_TXN_START& e)
   {

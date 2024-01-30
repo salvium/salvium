@@ -247,6 +247,13 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
     }
   }
   add_tx_amount_output_indices(tx_id, amount_output_indices);
+
+  // Check to see if this is a YIELD TX
+  if (tx.type == cryptonote::transaction_type::YIELD) {
+
+    // We now need to insert a record into the "yield_tx_data" table to record the TX
+    
+  }
 }
 
 uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
@@ -255,6 +262,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
                                 , const difficulty_type& cumulative_difficulty
                                 , const uint64_t& coins_generated
                                 , const std::vector<std::pair<transaction, blobdata>>& txs
+                                , const cryptonote::network_type& nettype
                                 )
 {
   const block &blk = blck.first;
@@ -295,6 +303,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
   }
 
   std::map<std::string, int64_t> slippage_counts;
+  uint64_t yield_total = 0;
   if (blk.protocol_tx.version == 2)
   {
     num_rct_outs += blk.protocol_tx.vout.size();
@@ -333,11 +342,17 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
         num_rct_outs_by_asset_type.add(asset_type, 1);
       }
 
-      // Update the amount tallies by ADDING the burnt amount
+      // Is this a CONVERT TX?
       if (tx.first.type == cryptonote::transaction_type::CONVERT) {
+        // Update the amount tallies by ADDING the burnt amount
         if (slippage_counts.count(asset_type) == 0)
           slippage_counts[asset_type] = 0;
         slippage_counts[asset_type] += tx.first.amount_burnt;
+      }
+
+      // Is this a YIELD TX?
+      if (tx.first.type == cryptonote::transaction_type::YIELD) {
+        yield_total += tx.first.amount_burnt;
       }
     }
     ++tx_i;
@@ -345,32 +360,42 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
 
   // SRCG: This is the code that calculates the total slippage for the block
   // Now convert all of the residual balances into FULM
-  /*
+  boost::multiprecision::int128_t slippage_total_128 = 0;
   uint64_t slippage_total = 0;
   for (const auto& tally: slippage_counts) {
-    if (tally.second < 0)
-      throw std::runtime_error("Found a negative tally when summing the burnt/minted amounts");
-    uint64_t slippage_amount = 0;
+    boost::multiprecision::int128_t slippage_amount_128 = 0;
     if (tally.first == "FULM") {
-      slippage_amount = tally.second;
+      slippage_amount_128 = tally.second;
     } else {
-      // Sanity check - do we have a price for this asset type in the PR?
-      if (blk.pricing_record.count(tally.first) == 0) {
+      // Sanity check - do we have a price for both source asset type and FULM in the PR?
+      boost::multiprecision::int128_t fulm_price = blk.pricing_record["FULM"];
+      boost::multiprecision::int128_t asset_price = blk.pricing_record[tally.first];
+      if (fulm_price == 0) {
         // No price available - bail out, because block is invalid
-        throw std::runtime_error("Asset type is not present in available pricing record:" + tally.first);
+        throw std::runtime_error("Asset type 'FULM' is not present in available pricing record");
       }
-      // Convert the amount
-      //boost::multiprecision::uint128_t tally_128 = tally.second;
+      if (asset_price == 0) {
+        // No price available - bail out, because block is invalid
+        throw std::runtime_error("Asset type '" + tally.first + "' is not present in available pricing record");
+      }
+      // Convert the amount into FULM
+      boost::multiprecision::int128_t tally_128 = tally.second;
+      tally_128 *= asset_price;
+      tally_128 /= fulm_price;
+      slippage_amount_128 = tally_128.convert_to<int64_t>();
     }
+    slippage_total_128 += slippage_amount_128;
   }
-  */
+  if (slippage_total_128 < 0)
+    throw std::runtime_error("Found a negative slippage total when summing the burnt/minted amounts");
+  slippage_total = slippage_total_128.convert_to<uint64_t>();
   
   TIME_MEASURE_FINISH(time1);
   time_add_transaction += time1;
 
   // call out to subclass implementation to add the block & metadata
   time1 = epee::misc_utils::get_tick_count();
-  add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, num_rct_outs, num_rct_outs_by_asset_type, blk_hash);
+  add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, num_rct_outs, num_rct_outs_by_asset_type, blk_hash, slippage_total, yield_total, nettype);
   TIME_MEASURE_FINISH(time1);
   time_add_block1 += time1;
 

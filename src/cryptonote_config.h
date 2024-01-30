@@ -52,12 +52,11 @@
 
 // MONEY_SUPPLY - total number coins to be generated
 #define MONEY_SUPPLY                                    ((uint64_t)(1800000000000000ull))
-#define EMISSION_SPEED_FACTOR_PER_MINUTE                (19)
+#define EMISSION_SPEED_FACTOR_PER_MINUTE                (20)
 #define FINAL_SUBSIDY_PER_MINUTE                        ((uint64_t)30000000) // 3 * pow(10, 7)
 
 #define BURN_LOCK_PERIOD                                0
 #define CONVERT_LOCK_PERIOD                             0
-#define YIELD_LOCK_PERIOD                               30*24*30
 
 #define CRYPTONOTE_REWARD_BLOCKS_WINDOW                 100
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2    60000 //size of block (bytes) after which reward for block calculated using block size
@@ -260,10 +259,12 @@ namespace config
       0x12 ,0x30, 0xF1, 0x71 , 0x61, 0x04 , 0x41, 0x61, 0x17, 0x31, 0x00, 0x82, 0x16, 0xA1, 0xA1, 0x10
     } }; // Bender's nightmare
 
-  std::string const GENESIS_TX = "020001ff000180c09e90acbb1402e8ee31433aa5ef7eb19af9740660381fe858b541d8c87e5ed38044d061c7072c0446554c4d3c0000000000000021019d1150e5f49422643dfeab470b89c6266f2b1b4469ab969f3bfba0bed74bcd1f0100000000000000000000000000000000000000000000000000000000000000000000000000";
-
+  std::string const GENESIS_TX = "020001ff000180c09e90acbb140228a98ddaae317689e1deb19444b8d60a5132a1f249d8d0ce72b6eba6b79c22240446554c4d3c000000000000002101d52228aa3413ee1bfe2b10fbc1a8cbe2ef9ab2cea0c6bd338103e5f7546384290100";
+  
   uint32_t const GENESIS_NONCE = 10000;
 
+  const uint64_t YIELD_LOCK_PERIOD = 30*24*30;
+  
   // Hash domain separators
   const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";
   const char HASH_KEY_BULLETPROOF_PLUS_EXPONENT[] = "bulletproof_plus";
@@ -333,6 +334,8 @@ namespace config
     std::string const GENESIS_TX = "013c01ff0001ffffffffffff03029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd08807121017767aafcde9be00dcfd098715ebcf7f410daebc582fda69d24a28e9d0bc890d1";
     uint32_t const GENESIS_NONCE = 10001;
 
+    const uint64_t YIELD_LOCK_PERIOD = 20;
+  
     std::array<std::string, 3> const ORACLE_URLS = {{"oracle.fulmo.network:8443", "oracle.fulmo.network:8443", "oracle.fulmo.network:8443"}};
 
     std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
@@ -355,6 +358,8 @@ namespace config
     std::string const GENESIS_TX = "013c01ff0001ffffffffffff0302df5d56da0c7d643ddd1ce61901c7bdc5fb1738bfe39fbe69c28a3a7032729c0f2101168d0c4ca86fb55a4cf6a36d31431be1c53a3bd7411bb24e8832410289fa6f3b";
     uint32_t const GENESIS_NONCE = 10002;
 
+    const uint64_t YIELD_LOCK_PERIOD = 20;
+  
     std::array<std::string, 3> const ORACLE_URLS = {{"oracle.fulmo.network:8443", "oracle.fulmo.network:8443", "oracle.fulmo.network:8443"}};
 
     std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
@@ -387,6 +392,7 @@ namespace cryptonote
     uint32_t const GENESIS_NONCE;
     std::array<std::string, 3> const ORACLE_URLS;
     std::string const ORACLE_PUBLIC_KEY;
+    uint64_t YIELD_LOCK_PERIOD;
   };
   inline const config_t& get_config(network_type nettype)
   {
@@ -401,7 +407,8 @@ namespace cryptonote
       ::config::GENESIS_TX,
       ::config::GENESIS_NONCE,
       ::config::ORACLE_URLS,
-      ::config::ORACLE_PUBLIC_KEY
+      ::config::ORACLE_PUBLIC_KEY,
+      ::config::YIELD_LOCK_PERIOD
     };
     static const config_t testnet = {
       ::config::testnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
@@ -414,7 +421,8 @@ namespace cryptonote
       ::config::testnet::GENESIS_TX,
       ::config::testnet::GENESIS_NONCE,
       ::config::testnet::ORACLE_URLS,
-      ::config::testnet::ORACLE_PUBLIC_KEY
+      ::config::testnet::ORACLE_PUBLIC_KEY,
+      ::config::testnet::YIELD_LOCK_PERIOD
     };
     static const config_t stagenet = {
       ::config::stagenet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
@@ -427,7 +435,8 @@ namespace cryptonote
       ::config::stagenet::GENESIS_TX,
       ::config::stagenet::GENESIS_NONCE,
       ::config::stagenet::ORACLE_URLS,
-      ::config::stagenet::ORACLE_PUBLIC_KEY
+      ::config::stagenet::ORACLE_PUBLIC_KEY,
+      ::config::stagenet::YIELD_LOCK_PERIOD
     };
     switch (nettype)
     {

@@ -925,7 +925,12 @@ namespace cryptonote
           tx_info[n].result = false;
           break;
         case rct::RCTTypeSimple:
-          if (!rct::verRctSemanticsSimple(rv, tx_info[n].tx->amount_burnt))
+          if (!rct::verRctSemanticsSimple(rv,
+                                          tx_info[n].tx->type == cryptonote::transaction_type::BURN ? tx_info[n].tx->amount_burnt :
+                                          tx_info[n].tx->type == cryptonote::transaction_type::CONVERT ? tx_info[n].tx->amount_burnt :
+                                          tx_info[n].tx->type == cryptonote::transaction_type::YIELD ? tx_info[n].tx->amount_burnt :
+                                          0
+                                          ))
           {
             MERROR_VER("rct signature semantics check failed");
             set_semantics_failed(tx_info[n].tx_hash);
@@ -978,7 +983,7 @@ namespace cryptonote
     }
     if (!rvv.empty())
     {
-      LOG_PRINT_L1("One transaction among this group has bad semantics, verifying one at a time");
+      LOG_PRINT_L1("Verifying one TX at a time");
       ret = false;
       for (size_t n = 0; n < tx_info.size(); ++n)
       {
@@ -986,7 +991,12 @@ namespace cryptonote
           continue;
         if (tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof2 && tx_info[n].tx->rct_signatures.type != rct::RCTTypeCLSAG && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproofPlus)
           continue;
-        if (!rct::verRctSemanticsSimple(tx_info[n].tx->rct_signatures, tx_info[n].tx->amount_burnt))
+        if (!rct::verRctSemanticsSimple(tx_info[n].tx->rct_signatures,
+                                        tx_info[n].tx->type == cryptonote::transaction_type::BURN ? tx_info[n].tx->amount_burnt :
+                                        tx_info[n].tx->type == cryptonote::transaction_type::CONVERT ? tx_info[n].tx->amount_burnt :
+                                        tx_info[n].tx->type == cryptonote::transaction_type::YIELD ? tx_info[n].tx->amount_burnt :
+                                        0
+                                        ))
         {
           set_semantics_failed(tx_info[n].tx_hash);
           tx_info[n].tvc.m_verifivation_failed = true;
