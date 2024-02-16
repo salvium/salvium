@@ -1871,9 +1871,10 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
     crypto::public_key pk_change = crypto::null_pkey;
     bool ok = m_account.get_device().derive_subaddress_public_key(output_public_key, tx_scan_info.received->derivation, i, pk_change);
     THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to derive subaddress public key for CONVERT/YIELD TX");
-    
+
     // Find the TX public key for P_change
-    auto search = m_protocol_txs.find(pk_change);
+    //auto search = m_protocol_txs.find(pk_change);
+    auto search = m_protocol_txs.find(output_public_key);
     THROW_WALLET_EXCEPTION_IF(search == m_protocol_txs.end(), error::wallet_internal_error, "failed to locate protocol_tx entry to permit source usage");
     size_t idx = search->second;
     THROW_WALLET_EXCEPTION_IF(idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate protocol_txs index in m_transfers");
@@ -2198,9 +2199,10 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
           crypto::public_key pk_change = crypto::null_pkey;
           bool ok = m_account.get_device().derive_subaddress_public_key(output_public_key, additional_derivations[i], i, pk_change);
           THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to derive subaddress public key for CONVERT/YIELD TX");
-    
+
           // Find the TX public key for P_change
-          auto search = m_protocol_txs.find(pk_change);
+          //auto search = m_protocol_txs.find(pk_change);
+          auto search = m_protocol_txs.find(output_public_key);
           THROW_WALLET_EXCEPTION_IF(search == m_protocol_txs.end(), error::wallet_internal_error, "failed to locate protocol_tx entry to permit source usage");
           size_t idx = search->second;
           THROW_WALLET_EXCEPTION_IF(idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate protocol_txs index in m_transfers");
@@ -2217,6 +2219,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
           THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td_origin.m_tx.type, k_image, td_origin.m_block_height, i, tx_scan_info[i].uniqueness),
                                     error::wallet_internal_error,
                                     "Failed to calculate uniqueness from origin TX");
+
         } else {
         
           // Get the uniqueness value
@@ -2363,7 +2366,8 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[0], P_change), error::wallet_internal_error, "Failed to get change output public key");
             //m_subaddresses[P_change] = {0x50524F54,0x4F434F4C};  /* {PROT,OCOL} - seemed like a good idea at the time, but harder to implement! */
             m_subaddresses[P_change] = {0,0};
-            m_protocol_txs.insert({P_change, m_transfers.size()-1});
+            //m_protocol_txs.insert({P_change, m_transfers.size()-1});
+            m_protocol_txs.insert({tx.return_address, m_transfers.size()-1});
 
             if (tx.type == cryptonote::transaction_type::YIELD) {
               // Additionally, with YIELD TXs, we need to update our "balance staked" subtotal, because otherwise our balance is out by the staked coins until they mature!
@@ -2466,7 +2470,8 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[0], P_change), error::wallet_internal_error, "Failed to get change output public key");
             //m_subaddresses[P_change] = {0x50524F54,0x4F434F4C};
             m_subaddresses[P_change] = {0,0};
-            m_protocol_txs.insert({P_change, m_transfers.size()-1});
+            //m_protocol_txs.insert({P_change, m_transfers.size()-1});
+            m_protocol_txs.insert({tx.return_address, m_transfers.size()-1});
           }
         }
       }
@@ -9123,8 +9128,8 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
                                     bool use_view_tags,
                                     const std::string& source_asset,
                                     const std::string& dest_asset,
-                                    const transaction_type& tx_type,
-                                    const oracle::pricing_record& pr)
+                                    const transaction_type& tx_type/*,
+                                                                     const oracle::pricing_record& pr*/)
 {
   using namespace cryptonote;
   // throw if attempting a transaction with no destinations
@@ -9242,7 +9247,7 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
 
     // check to see if the tx_source_entry was a payout from a protocol_tx
     if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
-      
+
       // 1. Get the correct TX pub key for this output (we know it is an ADDITIONAL TX PUB KEY)
       std::vector<crypto::public_key> additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(td.m_tx);
       THROW_WALLET_EXCEPTION_IF(additional_tx_pub_keys.size() < td.m_internal_output_index, error::wallet_internal_error, "failed to obtain additional tx pub keys for PROTOCOL TX");
@@ -9260,7 +9265,8 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
       THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to derive subaddress public key for PROTOCOL TX");
       
       // 4. Find the CONVERT/YIELD TX that created P_change
-      auto search = m_protocol_txs.find(P_change);
+      //auto search = m_protocol_txs.find(P_change);
+      auto search = m_protocol_txs.find(output_public_key);
       THROW_WALLET_EXCEPTION_IF(search == m_protocol_txs.end(), error::wallet_internal_error, "failed to locate m_protocol_txs entry to permit origin TX usage");
       size_t idx = search->second;
       THROW_WALLET_EXCEPTION_IF(idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate m_protocol_txs index in m_transfers");
@@ -9789,8 +9795,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(
   uint32_t hf_version = get_current_hard_fork();
   //const auto specific_transfers = m_transfers.at(source_asset);
 
-  oracle::pricing_record pricing_record;
-  std::vector<std::pair<std::string, std::string>> circ_amounts;
+  //oracle::pricing_record pricing_record;
+  //std::vector<std::pair<std::string, std::string>> circ_amounts;
   bool b = false;
 
   // Now perform all sanity checks specific to each tx type
@@ -9804,10 +9810,10 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(
   case transaction_type::CONVERT:
     THROW_WALLET_EXCEPTION_IF(source_asset == dest_asset, error::wallet_internal_error, "Conversion TX must specify different source and destination asset types");
     // Get the pricing record
-    b = get_pricing_record(pricing_record, current_height);
-    THROW_WALLET_EXCEPTION_IF(!b, error::wallet_internal_error, "Failed to get pricing record");
+    //b = get_pricing_record(pricing_record, current_height);
+    //THROW_WALLET_EXCEPTION_IF(!b, error::wallet_internal_error, "Failed to get pricing record");
     // Get the circulating supply data
-    THROW_WALLET_EXCEPTION_IF(!get_circulating_supply(circ_amounts), error::wallet_internal_error, "Failed to get circulating supply");
+    //THROW_WALLET_EXCEPTION_IF(!get_circulating_supply(circ_amounts), error::wallet_internal_error, "Failed to get circulating supply");
     break;
   case transaction_type::YIELD:
     THROW_WALLET_EXCEPTION_IF(dest_asset != "FULM", error::wallet_internal_error, "Yield TX must specify 'FULM' destination asset type");
@@ -10187,7 +10193,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(
       LOG_PRINT_L2("Trying to create a tx now, with " << tx.dsts.size() << " outputs and " <<
         tx.selected_transfers.size() << " inputs");
       transfer_selected_rct(tx.dsts, tx.selected_transfers, fake_outs_count, outs, valid_public_keys_cache, unlock_time, needed_fee, extra,
-                            test_tx, test_ptx, rct_config, use_view_tags, source_asset, dest_asset, tx_type, pricing_record);
+                            test_tx, test_ptx, rct_config, use_view_tags, source_asset, dest_asset, tx_type/*, pricing_record*/);
       auto txBlob = t_serializable_object_to_blob(test_ptx.tx);
       needed_fee = calculate_fee(use_per_byte_fee, test_ptx.tx, txBlob.size(), base_fee, fee_quantization_mask);
       available_for_fee = test_ptx.fee + test_ptx.change_dts.amount + (!test_ptx.dust_added_to_fee ? test_ptx.dust : 0);
@@ -10208,7 +10214,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(
         LOG_PRINT_L2("We made a tx, adjusting fee and saving it, we need " << print_money(needed_fee) << " and we have " << print_money(test_ptx.fee));
         while (needed_fee > test_ptx.fee) {
           transfer_selected_rct(tx.dsts, tx.selected_transfers, fake_outs_count, outs, valid_public_keys_cache, unlock_time, needed_fee, extra,
-                                test_tx, test_ptx, rct_config, use_view_tags, source_asset, dest_asset, tx_type, pricing_record);
+                                test_tx, test_ptx, rct_config, use_view_tags, source_asset, dest_asset, tx_type/*, pricing_record*/);
           txBlob = t_serializable_object_to_blob(test_ptx.tx);
           needed_fee = calculate_fee(use_per_byte_fee, test_ptx.tx, txBlob.size(), base_fee, fee_quantization_mask);
           LOG_PRINT_L2("Made an attempt at a  final " << get_weight_string(test_ptx.tx, txBlob.size()) << " tx, with " << print_money(test_ptx.fee) <<
@@ -10282,8 +10288,8 @@ skip_tx:
                           use_view_tags,              /* const bool use_view_tags */
                           source_asset,
                           dest_asset,
-                          tx_type,
-                          pricing_record);
+                          tx_type/*,
+                                   pricing_record*/);
     auto txBlob = t_serializable_object_to_blob(test_ptx.tx);
     tx.tx = test_tx;
     tx.ptx = test_ptx;
@@ -10362,7 +10368,9 @@ bool wallet2::sanity_check(const std::vector<wallet2::pending_tx> &ptx_vector, s
       }
       catch (const std::exception &e) { received = 0; }
 
-      if (ptx.tx.type == cryptonote::transaction_type::CONVERT)
+      if (ptx.tx.type == cryptonote::transaction_type::BURN)
+        received += ptx.tx.amount_burnt;
+      else if (ptx.tx.type == cryptonote::transaction_type::CONVERT)
         received += ptx.tx.amount_burnt;
       else if (ptx.tx.type == cryptonote::transaction_type::YIELD)
         received += ptx.tx.amount_burnt;
@@ -10593,7 +10601,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
         tx.selected_transfers.size() << " outputs");
       if (use_rct)
         transfer_selected_rct(tx.dsts, tx.selected_transfers, fake_outs_count, outs, valid_public_keys_cache, unlock_time, needed_fee, extra,
-                              test_tx, test_ptx, rct_config, use_view_tags, asset_type, asset_type, cryptonote::transaction_type::TRANSFER, oracle::pricing_record());
+                              test_tx, test_ptx, rct_config, use_view_tags, asset_type, asset_type, cryptonote::transaction_type::TRANSFER/*, oracle::pricing_record()*/);
       else
         transfer_selected(tx.dsts, tx.selected_transfers, fake_outs_count, outs, valid_public_keys_cache, unlock_time, needed_fee, extra,
           detail::digit_split_strategy, tx_dust_policy(::config::DEFAULT_DUST_THRESHOLD), test_tx, test_ptx, use_view_tags);
@@ -10630,7 +10638,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
         }
         if (use_rct)
           transfer_selected_rct(tx.dsts, tx.selected_transfers, fake_outs_count, outs, valid_public_keys_cache, unlock_time, needed_fee, extra, 
-                                test_tx, test_ptx, rct_config, use_view_tags, asset_type, asset_type, cryptonote::transaction_type::TRANSFER, oracle::pricing_record());
+                                test_tx, test_ptx, rct_config, use_view_tags, asset_type, asset_type, cryptonote::transaction_type::TRANSFER/*, oracle::pricing_record()*/);
         else
           transfer_selected(tx.dsts, tx.selected_transfers, fake_outs_count, outs, valid_public_keys_cache, unlock_time, needed_fee, extra,
             detail::digit_split_strategy, tx_dust_policy(::config::DEFAULT_DUST_THRESHOLD), test_tx, test_ptx, use_view_tags);
@@ -10669,7 +10677,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
     pending_tx test_ptx;
     if (use_rct) {
       transfer_selected_rct(tx.dsts, tx.selected_transfers, fake_outs_count, tx.outs, valid_public_keys_cache, unlock_time, tx.needed_fee, extra,
-                            test_tx, test_ptx, rct_config, use_view_tags, asset_type, asset_type, cryptonote::transaction_type::TRANSFER, oracle::pricing_record());
+                            test_tx, test_ptx, rct_config, use_view_tags, asset_type, asset_type, cryptonote::transaction_type::TRANSFER/*, oracle::pricing_record()*/);
     } else {
       transfer_selected(tx.dsts, tx.selected_transfers, fake_outs_count, tx.outs, valid_public_keys_cache, unlock_time, tx.needed_fee, extra,
         detail::digit_split_strategy, tx_dust_policy(::config::DEFAULT_DUST_THRESHOLD), test_tx, test_ptx, use_view_tags);

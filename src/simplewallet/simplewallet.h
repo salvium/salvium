@@ -180,6 +180,7 @@ namespace cryptonote
     bool sweep_below(const std::vector<std::string> &args);
     bool sweep_single(const std::vector<std::string> &args);
     bool sweep_unmixable(const std::vector<std::string> &args);
+    bool return_payment(const std::vector<std::string> &args);
     bool burn(const std::vector<std::string> &args);
     bool convert(const std::vector<std::string> &args);
     bool lock_for_yield(const std::vector<std::string> &args);

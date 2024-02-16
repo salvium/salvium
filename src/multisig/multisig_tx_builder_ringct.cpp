@@ -866,7 +866,6 @@ bool tx_builder_ringct_t::init(
 
   // misc. fields
   unsigned_tx.version = 2;  //rct = 2
-  unsigned_tx.unlock_time = unlock_time;
 
   // sort inputs
   sort_sources(sources);

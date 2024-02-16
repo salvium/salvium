@@ -391,7 +391,8 @@ namespace cryptonote
          */
         // 1. Obtain P_change from the output (it is the subaddress public key)
         crypto::public_key P_change = crypto::null_pkey;
-        hwdev.derive_subaddress_public_key(out_key, recv_derivation, real_output_index, P_change);
+        //hwdev.derive_subaddress_public_key(out_key, recv_derivation, real_output_index, P_change);
+        hwdev.derive_subaddress_public_key(out_key, recv_derivation, origin_tx_data.uniqueness, P_change);
 
         // 2. Obtain a separate key_derivation for the _original_ P_change output
         //    (using the TX public key from the CONVERT TX and the sender's private view key)
@@ -408,7 +409,8 @@ namespace cryptonote
         CHECK_AND_ASSERT_MES(P_change == change_pk, false, "derived P_change public key does not match P_change");
 
         // 5. Calculate the secret spend key "x_return"
-        CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, real_output_index, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
+        //CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, real_output_index, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
+        CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, origin_tx_data.uniqueness, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
         in_ephemeral.sec = scalar_step1;
         CHECK_AND_ASSERT_MES(hwdev.secret_key_to_public_key(in_ephemeral.sec, in_ephemeral.pub), false, "Failed to derive one-time output public key 'P_return'");
         CHECK_AND_ASSERT_MES(in_ephemeral.pub == out_key,
@@ -1428,7 +1430,7 @@ namespace cryptonote
       CHECK_AND_ASSERT_MES(output_index < additional_derivations.size(), boost::none, "wrong number of additional derivations");
       if (out_can_be_to_acc(view_tag_opt, additional_derivations[output_index], output_index, &hwdev))
       {
-        CHECK_AND_ASSERT_MES(hwdev.derive_subaddress_public_key(out_key, additional_derivations[output_index], output_index, subaddress_spendkey), boost::none, "Failed to derive subaddress public key");
+        CHECK_AND_ASSERT_MES(hwdev.derive_subaddress_public_key(out_key, additional_derivations[output_index], uniqueness, subaddress_spendkey), boost::none, "Failed to derive subaddress public key");
         auto found = subaddresses.find(subaddress_spendkey);
         if (found != subaddresses.end())
           return subaddress_receive_info{ found->second, additional_derivations[output_index] };

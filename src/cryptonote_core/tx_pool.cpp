@@ -379,7 +379,7 @@ namespace cryptonote
           if (!ok)
             return false;
           meta.one_time_public_key = change_output_public_key;
-          meta.input_k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
+          meta.return_pubkey = tx.return_pubkey;
         
           if (!insert_key_images(tx, id, tx_relay))
             return false;

@@ -232,17 +232,22 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
   {
     // miner v2 txes have their coinbase output in one single out to save space,
     // and we store them as rct outputs with an identity mask
+    uint64_t unlock_time = 0;
+    if (!cryptonote::get_output_unlock_time(tx.vout[i], unlock_time)) {
+      LOG_PRINT_L1("Failed to get output unlock time, aborting transaction addition");
+      throw std::runtime_error("Unexpected error getting output unlock_time, aborting");
+    }
     if (miner_tx && tx.version == 2)
     {
       cryptonote::tx_out vout = tx.vout[i];
       rct::key commitment = rct::zeroCommit(vout.amount);
       vout.amount = 0;
-      amount_output_indices[i] = add_output(tx_hash, vout, i, tx.unlock_time,
+      amount_output_indices[i] = add_output(tx_hash, vout, i, unlock_time,
         &commitment);
     }
     else
     {
-      amount_output_indices[i] = add_output(tx_hash, tx.vout[i], i, tx.unlock_time,
+      amount_output_indices[i] = add_output(tx_hash, tx.vout[i], i, unlock_time,
         tx.version > 1 ? &tx.rct_signatures.outPk[i].mask : NULL);
     }
   }
@@ -263,6 +268,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
                                 , const uint64_t& coins_generated
                                 , const std::vector<std::pair<transaction, blobdata>>& txs
                                 , const cryptonote::network_type& nettype
+                                , cryptonote::yield_block_info& ybi
                                 )
 {
   const block &blk = blck.first;
@@ -378,7 +384,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
         // No price available - bail out, because block is invalid
         throw std::runtime_error("Asset type '" + tally.first + "' is not present in available pricing record");
       }
-      // Convert the amount into FULM
+      // Convert the FUSD amount into FULM
       boost::multiprecision::int128_t tally_128 = tally.second;
       tally_128 *= asset_price;
       tally_128 /= fulm_price;
@@ -395,7 +401,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
 
   // call out to subclass implementation to add the block & metadata
   time1 = epee::misc_utils::get_tick_count();
-  add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, num_rct_outs, num_rct_outs_by_asset_type, blk_hash, slippage_total, yield_total, nettype);
+  add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, num_rct_outs, num_rct_outs_by_asset_type, blk_hash, slippage_total, yield_total, nettype, ybi);
   TIME_MEASURE_FINISH(time1);
   time_add_block1 += time1;
 

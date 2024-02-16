@@ -1082,8 +1082,8 @@ private:
                                const bool use_view_tags,
                                const std::string& source_asset,
                                const std::string& dest_asset,
-                               const cryptonote::transaction_type& tx_type,
-                               const oracle::pricing_record& pr);
+                               const cryptonote::transaction_type& tx_type/*,
+                                                                            const oracle::pricing_record& pr*/);
 
     void commit_tx(pending_tx& ptx_vector);
     void commit_tx(std::vector<pending_tx>& ptx_vector);

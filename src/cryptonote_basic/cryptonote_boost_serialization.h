@@ -104,12 +104,16 @@ namespace boost
   inline void serialize(Archive &a, cryptonote::txout_to_key &x, const boost::serialization::version_type ver)
   {
     a & x.key;
+    a & x.asset_type;
+    a & x.unlock_time;
   }
 
   template <class Archive>
   inline void serialize(Archive &a, cryptonote::txout_to_tagged_key &x, const boost::serialization::version_type ver)
   {
     a & x.key;
+    a & x.asset_type;
+    a & x.unlock_time;
     a & x.view_tag;
   }
 
@@ -162,13 +166,14 @@ namespace boost
   inline void serialize(Archive &a, cryptonote::transaction_prefix &x, const boost::serialization::version_type ver)
   {
     a & x.version;
-    a & x.unlock_time;
+    //a & x.unlock_time;
     a & x.vin;
     a & x.vout;
     a & x.extra;
     a & x.type;
     if (x.type != cryptonote::transaction_type::MINER && x.type != cryptonote::transaction_type::PROTOCOL) {
       a & x.return_address;
+      a & x.return_pubkey;
       a & x.source_asset_type;
       a & x.destination_asset_type;
       a & x.amount_burnt;
@@ -180,13 +185,14 @@ namespace boost
   inline void serialize(Archive &a, cryptonote::transaction &x, const boost::serialization::version_type ver)
   {
     a & x.version;
-    a & x.unlock_time;
+    //a & x.unlock_time;
     a & x.vin;
     a & x.vout;
     a & x.extra;
     a & x.type;
     if (x.type != cryptonote::transaction_type::MINER && x.type != cryptonote::transaction_type::PROTOCOL) {
       a & x.return_address;
+      a & x.return_pubkey;
       a & x.source_asset_type;
       a & x.destination_asset_type;
       a & x.amount_burnt;

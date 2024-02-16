@@ -62,7 +62,7 @@ namespace cryptonote
     std::string destination_asset;
     uint8_t type;
     crypto::public_key P_change;
-    crypto::key_image input_k_image;
+    crypto::public_key return_pubkey;
   };
 
   bool construct_protocol_tx(const size_t height, uint64_t& protocol_fee, transaction& tx, std::vector<protocol_data_entry>& protocol_data, std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version);

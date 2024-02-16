@@ -259,11 +259,11 @@ namespace config
       0x12 ,0x30, 0xF1, 0x71 , 0x61, 0x04 , 0x41, 0x61, 0x17, 0x31, 0x00, 0x82, 0x16, 0xA1, 0xA1, 0x10
     } }; // Bender's nightmare
 
-  std::string const GENESIS_TX = "020001ff000180c09e90acbb140228a98ddaae317689e1deb19444b8d60a5132a1f249d8d0ce72b6eba6b79c22240446554c4d3c000000000000002101d52228aa3413ee1bfe2b10fbc1a8cbe2ef9ab2cea0c6bd338103e5f7546384290100";
+  std::string const GENESIS_TX = "0201ff000180c09e90acbb14029f396e0265fb259de2dc3b8a956ad177f7432ad72034b1d0d28b1f54b59e64f90446554c4d3c000000000000002101901df6540da088783d037ac5b23f80d3adcbc10d171583480079097aadbe20dc0100";
   
   uint32_t const GENESIS_NONCE = 10000;
 
-  const uint64_t YIELD_LOCK_PERIOD = 30*24*30;
+  const uint64_t YIELD_LOCK_PERIOD = 5;//30*24*30;
   
   // Hash domain separators
   const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";

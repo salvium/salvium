@@ -207,8 +207,9 @@ namespace
   const char* USAGE_SWEEP_ACCOUNT("sweep_account <account> [index=<N1>[,<N2>,...] | index=all] [<priority>] [<ring_size>] [outputs=<N>] <address> [<payment_id (obsolete)>]");
   const char* USAGE_SWEEP_BELOW("sweep_below <amount_threshold> [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> [<payment_id (obsolete)>]");
   const char* USAGE_SWEEP_SINGLE("sweep_single [<priority>] [<ring_size>] [outputs=<N>] <key_image> <address> [<payment_id (obsolete)>]");
+  const char* USAGE_RETURN_PAYMENT("return_payment <tx_hash>");
   const char* USAGE_BURN("burn <amount> <asset_type>");
-  const char* USAGE_CONVERT("convert <source_amount> <source_asset> <dest_asset>");
+  const char* USAGE_CONVERT("convert <source_amount> <source_asset> <dest_asset> [<slippage_limit>]");
   const char* USAGE_LOCK_FOR_YIELD("lock_for_yield <amount>");
   const char* USAGE_PRICE_INFO("price_info");
   const char* USAGE_SUPPLY_INFO("supply_info");
@@ -3152,8 +3153,9 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
     message_writer() << tr("\"address all\" - Show all addresses.");
     message_writer() << tr("\"address new\" - Create new subaddress.");
     message_writer() << tr("\"transfer <address> <amount> [<asset_type>]\" - Send FULM or F$ to an address.");
+    message_writer() << tr("\"return_payment <tx_hash>\" - Return a previously-received amount to sender.");
     message_writer() << tr("\"burn <amount> <asset_type>\" - destroy coins forever.");
-    message_writer() << tr("\"convert <amount> <source_asset> <dest_asset>\" - convert between coin types.");
+    message_writer() << tr("\"convert <amount> <source_asset> <dest_asset> [<slippage_limit>]\" - convert between coin types.");
     message_writer() << tr("\"lock_for_yield <amount>\" - lock FULM in order to earn yield.");
     message_writer() << tr("\"price_info\" - Display current pricing information for supported assets.");
     message_writer() << tr("\"supply_info\" - Display circulating supply information.");
@@ -3331,6 +3333,10 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::sweep_single, _1),
                            tr(USAGE_SWEEP_SINGLE),
                            tr("Send a single output of the given key image to an address without change."));
+  m_cmd_binder.set_handler("return_payment",
+                           boost::bind(&simple_wallet::return_payment, this, _1),
+                           tr(USAGE_RETURN_PAYMENT),
+                           tr("Returns the payment(s) received in TX <tx_hash> to the original sender."));
   m_cmd_binder.set_handler("burn",
                            boost::bind(&simple_wallet::burn, this, _1),
                            tr(USAGE_BURN),
@@ -3338,7 +3344,7 @@ simple_wallet::simple_wallet()
   m_cmd_binder.set_handler("convert",
                            boost::bind(&simple_wallet::convert, this, _1),
                            tr(USAGE_CONVERT),
-                           tr("Converts <amount> <source_asset> into <dest_asset>"));
+                           tr("Converts <amount> <source_asset> into <dest_asset>, with optional <slippage_limit>"));
   m_cmd_binder.set_handler("lock_for_yield",
                            boost::bind(&simple_wallet::lock_for_yield, this, _1),
                            tr(USAGE_LOCK_FOR_YIELD),
@@ -7860,6 +7866,53 @@ bool simple_wallet::sweep_below(const std::vector<std::string> &args_)
     return true;
   }
   sweep_main(m_current_subaddress_account, below, false, std::vector<std::string>(++args_.begin(), args_.end()));
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::return_payment(const std::vector<std::string> &args_)
+{
+  // TODO: add locked versions
+  if (args_.size() != 1)
+  {
+    PRINT_USAGE(USAGE_RETURN_PAYMENT);
+    return true;
+  }
+
+  std::vector<std::string> local_args;
+  local_args.insert(local_args.end(), args_.begin(), args_.end());
+  
+  // Get the TX hash we are interested in 
+  crypto::hash txid;
+  if (!epee::string_tools::hex_to_pod(local_args[0], txid))
+  {
+    fail_msg_writer() << tr("failed to parse txid");
+    return true;
+  }
+
+  // Get the TX details
+  tools::wallet2::transfer_container transfers;
+  m_wallet->get_transfers(transfers);
+  for (const auto& td: transfers) {
+    // Skip entries we don't care about
+    if (td.m_txid != txid) continue;
+    
+    // Found the specified entry - make sure we can return it
+    if (td.m_tx.type != cryptonote::transaction_type::TRANSFER) {
+      fail_msg_writer() << tr("incorrect TX type for txid ") << local_args[0];
+      return true;
+    }
+
+    // Verify we have a valid return_address and tx_pubkey
+    if (td.m_tx.return_address == crypto::null_pkey || td.m_tx.return_pubkey == crypto::null_pkey) {
+      fail_msg_writer() << tr("missing return_address/return_pubkey for txid ") << local_args[0];
+      return true;
+    }
+
+    // Create the destination address...somehow
+    //construct_tx_with_tx_key(
+  }
+  
+  fail_msg_writer() << tr("failed to locate txid ") << local_args[0];
   return true;
 }
 //----------------------------------------------------------------------------------------------------

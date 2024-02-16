@@ -1153,6 +1153,17 @@ namespace cryptonote
      * @return TRUE if the payouts were calculated successfully, FALSE otherwise
      */
     bool calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& yield_payouts);
+
+    /**
+     * @brief get the YBI entry for a particular height from the cache
+     *
+     * Retrieve the YBI entry for the specified height from the local cache.
+     * If the cache is out of date, the cache will (attempt to) be rebuilt
+     * before the entry is obtained.
+     *
+     * @return TRUE if the entry was located and returned, FALSE otherwise
+     */
+    bool get_ybi_entry(const uint64_t height, cryptonote::yield_block_info& ybi);
     
     /**
      * (re)build the yield_block_info cache from the blockchain

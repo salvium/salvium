@@ -199,8 +199,10 @@ namespace cryptonote
     std::vector<uint8_t> extra;
     // TX type
     cryptonote::transaction_type type;
-    // Return address (encrypted)
+    // Return address
     crypto::public_key return_address;
+    // Return TX public key
+    crypto::public_key return_pubkey;
     // Source asset type
     std::string source_asset_type;
     // Destination asset type (this is only necessary for CONVERT transactions)
@@ -213,13 +215,13 @@ namespace cryptonote
     BEGIN_SERIALIZE()
       VARINT_FIELD(version)
       if(version == 0 || CURRENT_TRANSACTION_VERSION < version) return false;
-      VARINT_FIELD(unlock_time)
       FIELD(vin)
       FIELD(vout)
       FIELD(extra)
       VARINT_FIELD(type)
       if (type != cryptonote::transaction_type::MINER && type != cryptonote::transaction_type::PROTOCOL) {
         FIELD(return_address)
+        FIELD(return_pubkey)
         FIELD(source_asset_type)
         FIELD(destination_asset_type)
         VARINT_FIELD(amount_burnt)
@@ -238,6 +240,7 @@ namespace cryptonote
       extra.clear();
       type = cryptonote::transaction_type::UNSET;
       return_address = crypto::null_pkey;
+      return_pubkey = crypto::null_pkey;
       source_asset_type.clear();
       destination_asset_type.clear();
       amount_burnt = 0;

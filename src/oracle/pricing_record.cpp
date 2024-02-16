@@ -202,13 +202,7 @@ namespace oracle
   {
     for (const auto& asset: assets) {
       if (asset.asset_type != asset_type) continue;
-      if (asset_type == "FULM") return asset.spot_price;
-      if (asset_type == "FUSD") {
-        boost::multiprecision::uint128_t exchange_128 = COIN;
-        exchange_128 *= COIN;
-        exchange_128 /= asset.spot_price;
-        return exchange_128.convert_to<uint64_t>();
-      }
+      return asset.spot_price;
     }
     return 0;
   }

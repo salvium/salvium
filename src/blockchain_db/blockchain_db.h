@@ -157,7 +157,7 @@ struct txpool_tx_meta_t
 {
   crypto::hash max_used_block_id;
   crypto::hash last_failed_id;
-  crypto::key_image input_k_image;
+  crypto::public_key return_pubkey;
   crypto::public_key return_address;
   crypto::public_key one_time_public_key;
   uint64_t weight;
@@ -199,8 +199,8 @@ struct txpool_tx_meta_t
 
 typedef struct yield_block_info {
   uint64_t block_height;
-  uint64_t slippage_total;
-  uint64_t locked_coins;
+  uint64_t slippage_total_this_block;
+  uint64_t locked_coins_this_block;
   uint64_t locked_coins_tally;
   uint8_t network_health_percentage;
 } yield_block_info;
@@ -210,6 +210,8 @@ typedef struct yield_tx_info {
   crypto::hash tx_hash;
   uint64_t locked_coins;
   crypto::public_key return_address;
+  crypto::public_key P_change;
+  crypto::public_key return_pubkey;
 } yield_tx_info;
 
 #define DBF_SAFE       1
@@ -435,7 +437,8 @@ private:
                           const crypto::hash& blk_hash,
                           uint64_t slippage_total,
                           uint64_t yield_total,
-                          const cryptonote::network_type& nettype
+                          const cryptonote::network_type& nettype,
+                          cryptonote::yield_block_info& ybi
                           ) = 0;
 
   /**
@@ -889,7 +892,8 @@ public:
                             , const uint64_t& coins_generated
                             , const std::vector<std::pair<transaction, blobdata>>& txs
                             , const cryptonote::network_type& nettype
-                              );
+                            , cryptonote::yield_block_info& ybi
+                            );
 
   /**
    * @brief checks if a block exists
