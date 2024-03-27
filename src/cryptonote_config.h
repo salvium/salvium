@@ -264,6 +264,8 @@ namespace config
   uint32_t const GENESIS_NONCE = 10000;
 
   const uint64_t YIELD_LOCK_PERIOD = 5;//30*24*30;
+
+  std::string const TREASURY_ADDRESS = "fuLMowH85abK8nz9BBMEem7MAfUbQu4aSHHUV9j5Z86o6Go9Lv2U5ZQiJCWPY9R9HA8p5idburazjAhCqDngLo7fYPCD9ciM9ee1A";
   
   // Hash domain separators
   const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";
@@ -342,6 +344,8 @@ namespace config
       "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5YBxWx1AZCA9jTUk8Pr2uZ9jpfRt\n"
       "KWv3Vo1/Gny+1vfaxsXhBQiG1KlHkafNGarzoL0WHW4ocqaaqF5iv8i35A==\n"
       "-----END PUBLIC KEY-----\n";
+
+    std::string const TREASURY_ADDRESS = "fuLMowH85abK8nz9BBMEem7MAfUbQu4aSHHUV9j5Z86o6Go9Lv2U5ZQiJCWPY9R9HA8p5idburazjAhCqDngLo7fYPCD9ciM9ee1A";
   }
 
   namespace stagenet
@@ -366,6 +370,8 @@ namespace config
       "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5YBxWx1AZCA9jTUk8Pr2uZ9jpfRt\n"
       "KWv3Vo1/Gny+1vfaxsXhBQiG1KlHkafNGarzoL0WHW4ocqaaqF5iv8i35A==\n"
       "-----END PUBLIC KEY-----\n";
+
+    std::string const TREASURY_ADDRESS = "fuLMowH85abK8nz9BBMEem7MAfUbQu4aSHHUV9j5Z86o6Go9Lv2U5ZQiJCWPY9R9HA8p5idburazjAhCqDngLo7fYPCD9ciM9ee1A";
   }
 }
 
@@ -393,6 +399,7 @@ namespace cryptonote
     std::array<std::string, 3> const ORACLE_URLS;
     std::string const ORACLE_PUBLIC_KEY;
     uint64_t YIELD_LOCK_PERIOD;
+    std::string TREASURY_ADDRESS;
   };
   inline const config_t& get_config(network_type nettype)
   {
@@ -408,7 +415,8 @@ namespace cryptonote
       ::config::GENESIS_NONCE,
       ::config::ORACLE_URLS,
       ::config::ORACLE_PUBLIC_KEY,
-      ::config::YIELD_LOCK_PERIOD
+      ::config::YIELD_LOCK_PERIOD,
+      ::config::TREASURY_ADDRESS
     };
     static const config_t testnet = {
       ::config::testnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
@@ -422,7 +430,8 @@ namespace cryptonote
       ::config::testnet::GENESIS_NONCE,
       ::config::testnet::ORACLE_URLS,
       ::config::testnet::ORACLE_PUBLIC_KEY,
-      ::config::testnet::YIELD_LOCK_PERIOD
+      ::config::testnet::YIELD_LOCK_PERIOD,
+      ::config::testnet::TREASURY_ADDRESS
     };
     static const config_t stagenet = {
       ::config::stagenet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
@@ -436,7 +445,8 @@ namespace cryptonote
       ::config::stagenet::GENESIS_NONCE,
       ::config::stagenet::ORACLE_URLS,
       ::config::stagenet::ORACLE_PUBLIC_KEY,
-      ::config::stagenet::YIELD_LOCK_PERIOD
+      ::config::stagenet::YIELD_LOCK_PERIOD,
+      ::config::stagenet::TREASURY_ADDRESS
     };
     switch (nettype)
     {

@@ -1898,7 +1898,10 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   
   // Time to construct the protocol_tx
   uint64_t protocol_fee = 0;
-  ok = construct_protocol_tx(height, protocol_fee, b.protocol_tx, protocol_entries, circ_supply, pr, b.major_version);
+  address_parse_info treasury_address_info;
+  ok = cryptonote::get_account_address_from_str(treasury_address_info, m_nettype, get_config(m_nettype).TREASURY_ADDRESS);
+  CHECK_AND_ASSERT_MES(ok, false, "Failed to obtain treasury address info");
+  ok = construct_protocol_tx(height, protocol_fee, b.protocol_tx, protocol_entries, circ_supply, pr, miner_address, treasury_address_info.address, b.major_version);
   CHECK_AND_ASSERT_MES(ok, false, "Failed to construct protocol tx");
   
   pool_cookie = m_tx_pool.cookie();

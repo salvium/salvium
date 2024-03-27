@@ -6707,6 +6707,7 @@ bool simple_wallet::transfer_main(
 
   vector<cryptonote::address_parse_info> dsts_info;
   vector<cryptonote::tx_destination_entry> dsts;
+  double slippage_limit = 0.0;
   for (size_t i = 0; i < local_args.size(); )
   {
     dsts_info.emplace_back();
@@ -6737,15 +6738,27 @@ bool simple_wallet::transfer_main(
     }
     else if (i + 1 < local_args.size())
     {
-      r = cryptonote::get_account_address_from_str_or_url(info, m_wallet->nettype(), local_args[i], oa_prompter);
-      bool ok = cryptonote::parse_amount(de.amount, local_args[i + 1]);
-      if(!ok || 0 == de.amount)
-      {
-        fail_msg_writer() << tr("amount is wrong: ") << local_args[i] << ' ' << local_args[i + 1] <<
-          ", " << tr("expected number from 0 to ") << print_money(std::numeric_limits<uint64_t>::max());
-        return false;
+      if (transfer_type == Convert) {
+        bool ok = cryptonote::parse_amount(de.amount, local_args[i]);
+        if(!ok || 0 == de.amount)
+        {
+          fail_msg_writer() << tr("amount is wrong: ") << local_args[i] << ", " << tr("expected number from 0 to ") << print_money(std::numeric_limits<uint64_t>::max());
+          return false;
+        }
+        double slippage_limit = std::stod(local_args[i+1]); // Already validated in simple_wallet::convert()
+        de.slippage_limit = ((uint64_t)((double)de.amount * slippage_limit)) / 100;
+      } else {
+        r = cryptonote::get_account_address_from_str_or_url(info, m_wallet->nettype(), local_args[i], oa_prompter);
+        bool ok = cryptonote::parse_amount(de.amount, local_args[i + 1]);
+        if(!ok || 0 == de.amount)
+        {
+          fail_msg_writer() << tr("amount is wrong: ") << local_args[i] << ' ' << local_args[i + 1] <<
+            ", " << tr("expected number from 0 to ") << print_money(std::numeric_limits<uint64_t>::max());
+          return false;
+        }
+        de.original = local_args[i];
+        de.slippage_limit = 0;
       }
-      de.original = local_args[i];
       i += 2;
     }
     else
@@ -6759,6 +6772,7 @@ bool simple_wallet::transfer_main(
           return false;
         }
         de.asset_type = source_asset;
+        de.slippage_limit = 0;
         ++i;
       } else {
         if (boost::starts_with(local_args[i], "fulmo:"))
@@ -7871,6 +7885,9 @@ bool simple_wallet::sweep_below(const std::vector<std::string> &args_)
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::return_payment(const std::vector<std::string> &args_)
 {
+  if (!try_connect_to_daemon())
+    return true;
+
   // TODO: add locked versions
   if (args_.size() != 1)
   {
@@ -7891,11 +7908,13 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
 
   // Get the TX details
   tools::wallet2::transfer_container transfers;
+  crypto::key_image ki;
+  bool found_ki = false;
   m_wallet->get_transfers(transfers);
   for (const auto& td: transfers) {
     // Skip entries we don't care about
     if (td.m_txid != txid) continue;
-    
+
     // Found the specified entry - make sure we can return it
     if (td.m_tx.type != cryptonote::transaction_type::TRANSFER) {
       fail_msg_writer() << tr("incorrect TX type for txid ") << local_args[0];
@@ -7908,9 +7927,158 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
       return true;
     }
 
-    // Create the destination address...somehow
-    //construct_tx_with_tx_key(
+    // Check that we have the key image information, and that it is usable
+    if (!td.m_key_image_known || td.m_key_image_partial || td.m_spent || td.m_frozen) {
+      fail_msg_writer() << tr("key image is unavailable (partial / unknown / spent / frozen) for txid ") << local_args[0];
+      return true;
+    }
+    
+    ki = td.m_key_image;
+    found_ki = true;
   }
+
+  // Check we have a valid key_image
+  if (!found_ki) {
+    fail_msg_writer() << tr("key image is unavailable (partial / unknown / spent / frozen) for txid ") << local_args[0];
+    return true;
+  }
+  
+  // This is nonsense, really - priority isn't really a problem for Fulmo
+  uint32_t priority = 0;
+  priority = m_wallet->adjust_priority(priority);
+
+  // This should be fixed by the protocol - any changes would stand out like a sore thumb
+  size_t fake_outs_count = m_wallet->get_min_ring_size() - 1;
+  uint64_t adjusted_fake_outs_count = m_wallet->adjust_mixin(fake_outs_count);
+  if (adjusted_fake_outs_count > fake_outs_count)
+  {
+    fail_msg_writer() << (boost::format(tr("ring size %u is too small, minimum is %u")) % (fake_outs_count+1) % (adjusted_fake_outs_count+1)).str();
+    return true;
+  }
+  if (adjusted_fake_outs_count < fake_outs_count)
+  {
+    fail_msg_writer() << (boost::format(tr("ring size %u is too large, maximum is %u")) % (fake_outs_count+1) % (adjusted_fake_outs_count+1)).str();
+    return true;
+  }
+
+  // We will only use one output - the one we are returning - to pay for the transaction fully
+  size_t outputs = 1;
+
+  std::vector<uint8_t> extra;
+
+  SCOPED_WALLET_UNLOCK();
+  /*
+  try
+  {
+    // figure out what tx will be necessary
+    auto ptx_vector = m_wallet->create_transactions_single(ki, info.address, info.is_subaddress, outputs, fake_outs_count, 0, priority, extra);
+
+    if (ptx_vector.empty())
+    {
+      fail_msg_writer() << tr("No outputs found");
+      return true;
+    }
+    if (ptx_vector.size() > 1)
+    {
+      fail_msg_writer() << tr("Multiple transactions are created, which is not supposed to happen");
+      return true;
+    }
+    if (ptx_vector[0].selected_transfers.size() != 1)
+    {
+      fail_msg_writer() << tr("The transaction uses multiple or no inputs, which is not supposed to happen");
+      return true;
+    }
+
+    // give user total and fee, and prompt to confirm
+    uint64_t total_fee = ptx_vector[0].fee;
+    uint64_t total_sent = m_wallet->get_transfer_details(ptx_vector[0].selected_transfers.front()).amount();
+    std::ostringstream prompt;
+    if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
+      return true;
+    prompt << boost::format(tr("Sweeping %s for a total fee of %s.  Is this okay?")) %
+      print_money(total_sent) %
+      print_money(total_fee);
+    std::string accepted = input_line(prompt.str(), true);
+    if (std::cin.eof())
+      return true;
+    if (!command_line::is_yes(accepted))
+    {
+      fail_msg_writer() << tr("transaction cancelled.");
+      return true;
+    }
+
+    // actually commit the transactions
+    if (m_wallet->multisig())
+    {
+      CHECK_MULTISIG_ENABLED();
+      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_monero_tx");
+      if (!r)
+      {
+        fail_msg_writer() << tr("Failed to write transaction(s) to file");
+      }
+      else
+      {
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_monero_tx";
+      }
+    }
+    else if (m_wallet->get_account().get_device().has_tx_cold_sign())
+    {
+      try
+      {
+        tools::wallet2::signed_tx_set signed_tx;
+        std::vector<cryptonote::address_parse_info> dsts_info;
+        dsts_info.push_back(info);
+
+        if (!cold_sign_tx(ptx_vector, signed_tx, dsts_info, [&](const tools::wallet2::signed_tx_set &tx){ return accept_loaded_tx(tx); })){
+          fail_msg_writer() << tr("Failed to cold sign transaction with HW wallet");
+          return true;
+        }
+
+        commit_or_save(signed_tx.ptx, m_do_not_relay);
+        success_msg_writer(true) << tr("Money successfully sent, transaction: ") << get_transaction_hash(ptx_vector[0].tx);
+      }
+      catch (const std::exception& e)
+      {
+        handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
+      }
+      catch (...)
+      {
+        LOG_ERROR("Unknown error");
+        fail_msg_writer() << tr("unknown error");
+      }
+    }
+    else if (m_wallet->watch_only())
+    {
+      bool r = m_wallet->save_tx(ptx_vector, "unsigned_monero_tx");
+      if (!r)
+      {
+        fail_msg_writer() << tr("Failed to write transaction(s) to file");
+      }
+      else
+      {
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_monero_tx";
+      }
+    }
+    else
+    {
+      m_wallet->commit_tx(ptx_vector[0]);
+      success_msg_writer(true) << tr("Money successfully sent, transaction: ") << get_transaction_hash(ptx_vector[0].tx);
+    }
+
+  }
+  catch (const std::exception& e)
+  {
+    handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
+  }
+  catch (...)
+  {
+    LOG_ERROR("unknown error");
+    fail_msg_writer() << tr("unknown error");
+  }
+  */
+
+  fail_msg_writer() << tr("return_payment() is not implemented");
+  return true;
   
   fail_msg_writer() << tr("failed to locate txid ") << local_args[0];
   return true;
@@ -7947,18 +8115,49 @@ bool simple_wallet::burn(const std::vector<std::string> &args_)
 bool simple_wallet::convert(const std::vector<std::string> &args_)
 {
   // TODO: add locked versions
-  if (args_.size() != 3)
+  if (args_.size() not_eq 3 and args_.size() not_eq 4)
   {
     fail_msg_writer() << tr("missing / extraneous argument(s)");
     PRINT_USAGE(USAGE_CONVERT);
     return true;
   }
-
+  
   std::vector<std::string> local_args = args_;
+  std::string strLastArg = local_args.back();
+
+  // Check to see if the last arg is "slippage_limit" (a decimal number)
+  double slippage_limit = 0.0;
+  if (args_.size() == 4) {
+    // Expect to be able to parse the last arg as a double
+    try
+    {
+      slippage_limit = std::stod(strLastArg);
+      if (slippage_limit < 0.0 or slippage_limit > 90.0) {
+        fail_msg_writer() << tr("invalid slippage_limit value : expected 0.0-90.0, got ") << slippage_limit;
+        PRINT_USAGE(USAGE_CONVERT);
+        return true;
+      }
+      
+      // Update the last arg value
+      local_args.pop_back();
+      strLastArg = local_args.back();
+    }
+    catch (std::invalid_argument const& ex)
+    {
+      fail_msg_writer() << tr("invalid argument(s): ") << ex.what();
+      PRINT_USAGE(USAGE_CONVERT);
+      return true;
+    }
+    catch (std::out_of_range const& ex)
+    {
+      fail_msg_writer() << tr("out of range for slippage limit: ") << ex.what();
+      PRINT_USAGE(USAGE_CONVERT);
+      return true;
+    }
+  }
   
   // Get the destination asset type
   std::string source_asset, dest_asset;
-  std::string strLastArg = local_args.back();
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
   if (strLastArg not_eq "FULM" and strLastArg not_eq "FUSD") {
     fail_msg_writer() << tr("invalid destination asset_type");
@@ -7983,6 +8182,11 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
     fail_msg_writer() << tr("invalid conversion - asset_type is unchanged");
     PRINT_USAGE(USAGE_CONVERT);
     return true;
+  }
+
+  // Check for slippage_limit again
+  if (slippage_limit != 0.0) {
+    local_args.push_back(std::to_string(slippage_limit));
   }
   
   transfer_main(Convert, source_asset, dest_asset, local_args, false);

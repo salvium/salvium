@@ -197,18 +197,12 @@ namespace cryptonote
     // Apply slippage to the burnt amount
     amount_slippage = amount_burnt >> 5; // (1/32)
 
-    if (hf_version >= HF_VERSION_SLIPPAGE_YIELD) {
-
-      // Apply slippage to the burnt amount
-      amount_slippage = amount_burnt >> 5; // (1/32)
-
-      // Check that the slippage is acceptable
-      if (amount_slippage > amount_slippage_limit) {
-        // Bail out with no conversion
-        LOG_PRINT_L1("Unable to convert - slippage limit was too low");
-        amount_minted = 0;
-        return true;
-      }
+    // Check that the slippage is acceptable
+    if (amount_slippage > amount_slippage_limit) {
+      // Bail out with no conversion
+      LOG_PRINT_L1("Unable to convert - slippage limit was too low");
+      amount_minted = 0;
+      return true;
     }
 
     // Work out the converted amount
@@ -224,11 +218,13 @@ namespace cryptonote
                              std::vector<protocol_data_entry>& protocol_data,
                              std::map<std::string, uint64_t> circ_supply,
                              const oracle::pricing_record& pr,
+                             const account_public_address &miner_address, 
+                             const account_public_address &treasury_address, 
                              const uint8_t hf_version) {
 
     // A vector to contain all of the additional _tx_secret_keys_
     //std::vector<crypto::secret_key>& additional_tx_keys;
-    
+
     // Clear the TX contents
     tx.set_null();
     tx.type = cryptonote::transaction_type::PROTOCOL;
@@ -255,6 +251,7 @@ namespace cryptonote
 
     // Calculate the slippage for the output amounts
     LOG_PRINT_L2("Creating protocol_tx...");
+    uint64_t slippage_total = 0;
     std::vector<crypto::public_key> additional_tx_public_keys;
     for (auto const& entry: protocol_data) {
       if (entry.destination_asset == "BURN") {
@@ -337,6 +334,19 @@ namespace cryptonote
           // CONVERTED
           LOG_PRINT_L2("Conversion TX submitted - converted " << print_money(entry.amount_burnt) << " " << entry.source_asset << " to " << print_money(amount_minted) << " " << entry.destination_asset << "(slippage " << print_money(amount_slippage) << ")");
           txin_gen_totals[entry.destination_asset] += amount_minted;
+
+          // Add the slippage to our total for the block
+          if (entry.source_asset == "FULM") {
+            slippage_total += amount_slippage;
+          } else {
+            // Convert the slippage into a FULM amount so we can pay a proportion to the miner
+            uint64_t conversion_rate = 0, amount_slippage_converted = 0;
+            ok = get_conversion_rate(pr, entry.source_asset, entry.destination_asset, conversion_rate);
+            CHECK_AND_ASSERT_MES(ok, false, "Failed to get conversion rate for miner payout");
+            ok = get_converted_amount(conversion_rate, amount_slippage, amount_slippage_converted);
+            CHECK_AND_ASSERT_MES(ok, false, "Failed to get converted slippage amount for miner payout");
+            slippage_total += amount_slippage_converted;
+          }
           
           // Create the TX output for this conversion
           tx_out out;
@@ -359,9 +369,46 @@ namespace cryptonote
         tx.vout.push_back(out);
       }
     }
-
+    
     // Add in all of the additional TX pubkeys we need to process the payments
     add_additional_tx_pub_keys_to_extra(tx.extra, additional_tx_public_keys);
+
+    if (slippage_total > 0) {
+
+      // Add a payout for the miner
+      uint64_t slippage_miner = slippage_total / 5;
+
+      crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+      crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
+      bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
+      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << txkey.sec << ")");
+
+      // Calculate the uniqueness
+      crypto::key_image k_image;
+      ec_scalar uniqueness;
+      CHECK_AND_ASSERT_MES(calculate_uniqueness(tx.type, k_image, height, ((size_t)-1), uniqueness), false, "while constructing miner_tx: failed to calculate uniqueness");
+
+      r = crypto::derive_public_key(derivation, uniqueness, miner_address.m_spend_public_key, out_eph_public_key);
+      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
+    
+      tx_out out_miner;
+      cryptonote::set_tx_out(slippage_miner, "FULM", 0, out_eph_public_key, false, crypto::view_tag{}, out_miner);
+      tx.vout.push_back(out_miner);
+
+      // Add a payout for the treasury
+      crypto::key_derivation derivation_treasury = AUTO_VAL_INIT(derivation_treasury);
+      crypto::public_key out_eph_public_key_treasury = AUTO_VAL_INIT(out_eph_public_key_treasury);
+      r = crypto::generate_key_derivation(treasury_address.m_view_public_key, txkey.sec, derivation_treasury);
+      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << treasury_address.m_view_public_key << ", " << txkey.sec << ")");
+
+      r = crypto::derive_public_key(derivation_treasury, uniqueness, treasury_address.m_spend_public_key, out_eph_public_key_treasury);
+      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
+
+      uint64_t slippage_treasury = slippage_miner >> 1;
+      tx_out out_treasury;
+      cryptonote::set_tx_out(slippage_treasury, "FULM", 0, out_eph_public_key_treasury, false, crypto::view_tag{}, out_treasury);
+      tx.vout.push_back(out_treasury);
+    }
     
     // Create the txin_gen now
     txin_gen in;
@@ -930,6 +977,7 @@ namespace cryptonote
         // Do not create outputs that are for the destination asset type - discard them as unused
         if (dst_entr.asset_type == dest_asset) {
           tx.amount_burnt += dst_entr.amount;
+          tx.amount_slippage_limit = dst_entr.slippage_limit;
           continue;
         }
       } else if (tx_type == cryptonote::transaction_type::YIELD) {
