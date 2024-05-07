@@ -424,8 +424,8 @@ private:
    * @param cumulative_difficulty the accumulated difficulty after this block
    * @param coins_generated the number of coins generated total after this block
    * @param blk_hash the hash of the block
-   * @param slippage_total the total value (expressed in FULM coins) of all slippage for this block
-   * @param yield_total the total of FULM coins that have been locked for yield in this block
+   * @param slippage_total the total value (expressed in SAL coins) of all slippage for this block
+   * @param yield_total the total of SAL coins that have been locked for yield in this block
    */
   virtual void add_block( const block& blk,
                           size_t block_weight,

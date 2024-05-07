@@ -100,7 +100,7 @@ namespace multisig
     cryptonote::keypair in_ephemeral;
     //crypto::hash uniqueness = crypto::cn_fast_hash(reinterpret_cast<void*>(&real_output_index), sizeof(size_t));
 
-    // Populate this struct if you want to make use of multisig for Fulmo!!!
+    // Populate this struct if you want to make use of multisig for Salvium!!!
     assert(false);
     cryptonote::origin_data origin_tx_data;
     

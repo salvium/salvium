@@ -1290,6 +1290,9 @@ namespace cryptonote
     // cache for verifying transaction RCT non semantics
     mutable rct_ver_cache_t m_rct_ver_cache;
 
+    /**
+     * @brief hashmap linking blockchain height to YBI struct for that height
+     */
     std::map<uint64_t, yield_block_info> m_yield_block_info_cache;
     
     /**

@@ -41,10 +41,10 @@
 template <template <bool> class Archive>
 bool do_serialize(Archive<false> &ar, oracle::supply_data &sd, uint8_t version)
 {
-  ar.serialize_varint(sd.fulm);
+  ar.serialize_varint(sd.sal);
   if (!ar.good())
     return false;
-  ar.serialize_varint(sd.fusd);
+  ar.serialize_varint(sd.vsd);
   if (!ar.good())
     return false;
   return true;
@@ -56,8 +56,8 @@ bool do_serialize(Archive<true> &ar, oracle::supply_data &sd, uint8_t version)
 {
   if (!ar.good())
     return false;
-  ar.serialize_varint(sd.fulm);
-  ar.serialize_varint(sd.fusd);
+  ar.serialize_varint(sd.sal);
+  ar.serialize_varint(sd.vsd);
   if (!ar.good())
     return false;
   return true;

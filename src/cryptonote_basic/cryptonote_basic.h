@@ -535,7 +535,7 @@ namespace cryptonote
 
     transaction miner_tx;
     /**
-     * Ok, the "protocol_tx" is a large part of what makes Fulmo unique, and requires a bit of explaining...
+     * Ok, the "protocol_tx" is a large part of what makes Salvium unique, and requires a bit of explaining...
      *
      * In Haven, and therefore Zephyr also, conversions take place "in-transaction". That is to say,
      * amounts of coin A are burnt, and amounts of coin B are minted, and the conversion rate is known,
@@ -564,14 +564,14 @@ namespace cryptonote
      * Therefore, it follows that slippage can only accurately be assessed when we know ALL of the changes
      * to the above parameters that will occur at a given point in time (specifically, when the block is
      * mined). There is a fundamental interdependence between each conversion TX in a given block. This
-     * means that, in Fulmo, you can't tell in advance precisely how much you will get minted by a given
+     * means that, in Salvium, you can't tell in advance precisely how much you will get minted by a given
      * conversion TX until the block is mined. Instead, when creating a conversion TX, the user is asked
      * to specify a minimum amount they will accept - if the transaction can satisfy that criterion when
      * it is mined, the conversion will be processed and the minted amount will be sent to the user. If
      * the transaction cannot satisfy the minimum minted requirement, the user will be refunded their
      * money, minus a nominal transaction fee.
      *
-     * Welcome to Fulmo, and the protocol_tx.
+     * Welcome to Salvium, and the protocol_tx.
      * --------------------------------------
      * The protocol_tx is a per-block TX (much like the miner_tx, where the block reward gets paid out).
      * It is created at the time of populating the block template to be sent to the miner. Specifically,

@@ -1136,8 +1136,8 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::suppl
 {
   dest.StartObject();
 
-  INSERT_INTO_JSON_OBJECT(dest, fulm, supply_data.fulm);
-  INSERT_INTO_JSON_OBJECT(dest, fusd, supply_data.fusd);
+  INSERT_INTO_JSON_OBJECT(dest, sal, supply_data.sal);
+  INSERT_INTO_JSON_OBJECT(dest, vsd, supply_data.vsd);
 
   dest.EndObject();
 }
@@ -1149,8 +1149,8 @@ void fromJsonValue(const rapidjson::Value& val, oracle::supply_data& supply_data
     throw WRONG_TYPE("json object");
   }
 
-  GET_FROM_JSON_OBJECT(val, supply_data.fulm, fulm);
-  GET_FROM_JSON_OBJECT(val, supply_data.fusd, fusd);
+  GET_FROM_JSON_OBJECT(val, supply_data.sal, sal);
+  GET_FROM_JSON_OBJECT(val, supply_data.vsd, vsd);
 }
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::asset_data& asset_data)

@@ -67,8 +67,8 @@ namespace oracle
   #pragma pack(pop)
 
   struct supply_data {
-    uint64_t fulm;
-    uint64_t fusd;
+    uint64_t sal;
+    uint64_t vsd;
 
     //! Load from epee p2p format
     bool _load(epee::serialization::portable_storage& src, epee::serialization::section* hparent);
@@ -76,15 +76,15 @@ namespace oracle
     bool store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const;
 
     BEGIN_SERIALIZE_OBJECT()
-      VARINT_FIELD(fulm)
-      VARINT_FIELD(fusd)
+      VARINT_FIELD(sal)
+      VARINT_FIELD(vsd)
     END_SERIALIZE()
   };
 
   inline bool operator==(const supply_data& a, const supply_data& b) noexcept
   {
-    return (a.fulm == b.fulm &&
-            a.fusd == b.fusd);
+    return (a.sal == b.sal &&
+            a.vsd == b.vsd);
   }
   
   struct asset_data {

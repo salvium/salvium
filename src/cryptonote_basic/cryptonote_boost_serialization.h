@@ -213,8 +213,8 @@ namespace boost
   template <class Archive>
   inline void serialize(Archive &a, oracle::supply_data &sd, const boost::serialization::version_type ver)
   {
-    a & sd.fulm;
-    a & sd.fusd;
+    a & sd.sal;
+    a & sd.vsd;
   }
 
   template <class Archive>

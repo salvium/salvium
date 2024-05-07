@@ -366,6 +366,8 @@ namespace crypto {
   const extern crypto::public_key null_pkey;
   const extern crypto::secret_key null_skey;
 
+  const extern crypto::key_image null_ki;
+  
   inline bool operator<(const public_key &p1, const public_key &p2) { return memcmp(&p1, &p2, sizeof(public_key)) < 0; }
   inline bool operator>(const public_key &p1, const public_key &p2) { return p2 < p1; }
 }

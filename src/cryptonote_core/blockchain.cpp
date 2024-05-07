@@ -1457,6 +1457,18 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
     money_in_use += o.amount;
   partial_block_reward = false;
 
+  switch (version) {
+  case HF_VERSION_BULLETPROOF_PLUS:
+    if (b.miner_tx.amount_burnt > 0) {
+      CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
+      money_in_use += b.miner_tx.amount_burnt;
+    }
+    break;
+  default:
+    assert(false);
+    break;
+  }
+
   uint64_t median_weight = m_current_block_cumul_weight_median;
   if (!get_block_reward(median_weight, cumulative_block_weight, already_generated_coins, base_reward, version))
   {
@@ -1577,8 +1589,9 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
 
   // Get the data for the block that matured this time
   cryptonote::yield_block_info ybi_matured;
-  uint64_t start_height = height - get_config(m_nettype).YIELD_LOCK_PERIOD;
-  bool ok = get_ybi_entry(start_height - 1, ybi_matured);
+  uint64_t lock_period = get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t start_height = (height > lock_period) ? height - lock_period : 0;
+  bool ok = get_ybi_entry(start_height, ybi_matured);
   if (ok && ybi_matured.locked_coins_this_block > 0) {
   
     // Iterate over the cached data for block yield, calculating the yield payouts due
@@ -1868,9 +1881,10 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
 
   // Check to see if there are any matured YIELD TXs
   uint64_t yield_lock_period = get_config(m_nettype).YIELD_LOCK_PERIOD;
-  uint64_t start_height = height - yield_lock_period;
+  uint64_t start_height = (height > yield_lock_period) ? height - yield_lock_period : 0;
+
   cryptonote::yield_block_info ybi_matured;
-  bool ok = get_ybi_entry(start_height - 1, ybi_matured);
+  bool ok = get_ybi_entry(start_height, ybi_matured);
   if (ok && ybi_matured.locked_coins_this_block > 0) {
   
     // Iterate over the cached data for block yield, calculating the yield payouts due
@@ -1886,8 +1900,8 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
       entry.amount_burnt = yield_entry.second;
       entry.amount_minted = 0;
       entry.amount_slippage_limit = 0;
-      entry.source_asset = "FULM";
-      entry.destination_asset = "FULM";
+      entry.source_asset = "SAL";
+      entry.destination_asset = "SAL";
       entry.return_address = yield_entry.first.return_address;
       entry.type = cryptonote::transaction_type::YIELD;
       entry.P_change = yield_entry.first.P_change;
@@ -2734,8 +2748,8 @@ bool Blockchain::get_pricing_record(oracle::pricing_record &pr, std::map<std::st
   std::shuffle(oracle_urls.begin(), oracle_urls.end(), std::default_random_engine(crypto::rand<unsigned>()));
   std::string url = "/price?height=" + std::to_string(height);
   //url += "&timestamp=" + boost::lexical_cast<std::string>(timestamp) + "&version=" + std::to_string(hf_version);
-  url += "&fulm=" + (circ_supply.count("FULM") ? std::to_string(circ_supply["FULM"]) : "0");
-  url += "&fusd=" + (circ_supply.count("FUSD") ? std::to_string(circ_supply["FUSD"]) : "0");
+  url += "&sal=" + (circ_supply.count("SAL") ? std::to_string(circ_supply["SAL"]) : "0");
+  url += "&vsd=" + (circ_supply.count("VSD") ? std::to_string(circ_supply["VSD"]) : "0");
   for (size_t n = 0; n < oracle_urls.size(); n++) {
     http_client.set_server(oracle_urls[n], boost::none, epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
     r = epee::net_utils::invoke_http_json(url, req, res, http_client, std::chrono::seconds(10), "GET");
@@ -4869,10 +4883,12 @@ leave:
       // Update the YBI cache data
       uint64_t yield_lock_period = cryptonote::get_config(m_nettype).YIELD_LOCK_PERIOD;
       uint64_t ybi_cache_expected_size = std::min(new_height, yield_lock_period);
-      if (m_yield_block_info_cache.count(new_height - yield_lock_period) != 0) {
-        m_yield_block_info_cache.erase(new_height - yield_lock_period);
+      if (new_height > yield_lock_period) {
+        if (m_yield_block_info_cache.count(new_height - yield_lock_period - 1) != 0) {
+          m_yield_block_info_cache.erase(new_height - yield_lock_period - 1);
+        }
       }
-      m_yield_block_info_cache[new_height] = new_ybi;
+      m_yield_block_info_cache[new_ybi.block_height] = new_ybi;
     }
     catch (const KEY_IMAGE_EXISTS& e)
     {

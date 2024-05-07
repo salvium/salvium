@@ -118,7 +118,7 @@ namespace cryptonote
     bool is_integrated;
     bool is_change;
 
-    tx_destination_entry() : amount(0), slippage_limit(0), addr(AUTO_VAL_INIT(addr)), asset_type("FULM"), is_subaddress(false), is_integrated(false), is_change(false) { }
+    tx_destination_entry() : amount(0), slippage_limit(0), addr(AUTO_VAL_INIT(addr)), asset_type("SAL"), is_subaddress(false), is_integrated(false), is_change(false) { }
     tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress) : amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false) { }
     tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress) : original(o), amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false) { }
 

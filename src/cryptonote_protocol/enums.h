@@ -51,6 +51,7 @@ namespace cryptonote
     TRANSFER = 3,
     CONVERT = 4,
     BURN = 5,
-    YIELD = 6
+    YIELD = 6,
+    RETURN = 7
   };
 }

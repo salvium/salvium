@@ -54,12 +54,12 @@ namespace oracle
 
     struct supply_data_serialized
     {
-      uint64_t FULM;
-      uint64_t FUSD;
+      uint64_t SAL;
+      uint64_t VSD;
       
       BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(FULM)
-        KV_SERIALIZE(FUSD)
+        KV_SERIALIZE(SAL)
+        KV_SERIALIZE(VSD)
       END_KV_SERIALIZE_MAP()
     };
 
@@ -103,8 +103,8 @@ namespace oracle
     if (in._load(src, hparent))
     {
       // Copy everything into the local instance
-      fulm = in.FULM;
-      fusd = in.FUSD;
+      sal = in.SAL;
+      vsd = in.VSD;
       return true;
     }
     // Report error here?
@@ -113,7 +113,7 @@ namespace oracle
 
   bool supply_data::store(epee::serialization::portable_storage& dest, epee::serialization::section* hparent) const
   {
-    const supply_data_serialized out{fulm, fusd};
+    const supply_data_serialized out{sal, vsd};
     return out.store(dest, hparent);
   }
   
@@ -241,7 +241,7 @@ namespace oracle
     std::ostringstream oss;
     oss << "{\"pr_version\":" << pr_version;
     oss << ",\"height\":" << height;
-    oss << ",\"supply\":{\"FULM\":" << supply.fulm <<",\"FUSD\":" << supply.fusd << "}";
+    oss << ",\"supply\":{\"SAL\":" << supply.sal <<",\"VSD\":" << supply.vsd << "}";
     oss << ",\"assets\":[";
     bool first = true;
     for (const auto& asset: assets) {

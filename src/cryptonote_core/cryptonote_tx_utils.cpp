@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2022, The Monero Project
-// Portions Copyright (c) 2023, Fulmo (author: SRCG)
+// Portions Copyright (c) 2023, Salvium (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -151,8 +151,8 @@ namespace cryptonote
       rate = COIN;
       return true;
     }
-    if ((from_asset == "FULM" && to_asset != "FUSD") ||
-        (from_asset == "FUSD" && to_asset != "FULM")) {
+    if ((from_asset == "SAL" && to_asset != "VSD") ||
+        (from_asset == "VSD" && to_asset != "SAL")) {
       // Invalid conversion - abort
       LOG_ERROR("Invalid conversion (" << from_asset << "," << to_asset << ") - aborting");
       return false;
@@ -336,10 +336,10 @@ namespace cryptonote
           txin_gen_totals[entry.destination_asset] += amount_minted;
 
           // Add the slippage to our total for the block
-          if (entry.source_asset == "FULM") {
+          if (entry.source_asset == "SAL") {
             slippage_total += amount_slippage;
           } else {
-            // Convert the slippage into a FULM amount so we can pay a proportion to the miner
+            // Convert the slippage into a SAL amount so we can pay a proportion to the miner
             uint64_t conversion_rate = 0, amount_slippage_converted = 0;
             ok = get_conversion_rate(pr, entry.source_asset, entry.destination_asset, conversion_rate);
             CHECK_AND_ASSERT_MES(ok, false, "Failed to get conversion rate for miner payout");
@@ -386,13 +386,13 @@ namespace cryptonote
       // Calculate the uniqueness
       crypto::key_image k_image;
       ec_scalar uniqueness;
-      CHECK_AND_ASSERT_MES(calculate_uniqueness(tx.type, k_image, height, ((size_t)-1), uniqueness), false, "while constructing miner_tx: failed to calculate uniqueness");
+      CHECK_AND_ASSERT_MES(calculate_uniqueness(tx.type, k_image, height, ((size_t)-1), uniqueness), false, "while constructing protocol_tx: failed to calculate uniqueness");
 
       r = crypto::derive_public_key(derivation, uniqueness, miner_address.m_spend_public_key, out_eph_public_key);
       CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
     
       tx_out out_miner;
-      cryptonote::set_tx_out(slippage_miner, "FULM", 0, out_eph_public_key, false, crypto::view_tag{}, out_miner);
+      cryptonote::set_tx_out(slippage_miner, "SAL", 0, out_eph_public_key, false, crypto::view_tag{}, out_miner);
       tx.vout.push_back(out_miner);
 
       // Add a payout for the treasury
@@ -406,7 +406,7 @@ namespace cryptonote
 
       uint64_t slippage_treasury = slippage_miner >> 1;
       tx_out out_treasury;
-      cryptonote::set_tx_out(slippage_treasury, "FULM", 0, out_eph_public_key_treasury, false, crypto::view_tag{}, out_treasury);
+      cryptonote::set_tx_out(slippage_treasury, "SAL", 0, out_eph_public_key_treasury, false, crypto::view_tag{}, out_treasury);
       tx.vout.push_back(out_treasury);
     }
     
@@ -479,12 +479,45 @@ namespace cryptonote
     crypto::view_tag view_tag;
     if (use_view_tags)
       crypto::derive_view_tag(derivation, 0, view_tag);
-    
-    tx_out out;
-    cryptonote::set_tx_out(amount, "FULM", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);
-    
-    tx.vout.push_back(out);
 
+    // Should we award some of the block reward to the stakers?
+    if (height != 0) {
+
+      // Different forks take a different proportion of the block_reward for stakers
+      switch (hard_fork_version) {
+      case HF_VERSION_BULLETPROOF_PLUS:
+        // MVP - subtract 20% that will be rewarded to staking users
+        CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
+        tx.amount_burnt = amount / 5;
+        amount -= tx.amount_burnt;
+        break;
+      default:
+        assert(false);
+      }
+
+      tx_out out;
+      cryptonote::set_tx_out(amount, "SAL", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);    
+      tx.vout.push_back(out);
+
+    } else {
+
+      // Genesis TX - create the necessary distribution for Salvium seed funds
+      tx_out out;
+      cryptonote::set_tx_out(PREMINE_AMOUNT, "SAL", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);    
+      tx.vout.push_back(out);
+      /*
+      tx_out out;
+      cryptonote::set_tx_out(PREMINE_AMOUNT_UPFRONT, "SAL", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);    
+      tx.vout.push_back(out);
+      
+      for (size_t i=1; i<=24; ++i) {
+        tx_out out_monthly;
+        cryptonote::set_tx_out(PREMINE_AMOUNT_MONTHLY, "SAL", i*21600, out_eph_public_key, use_view_tags, view_tag, out_monthly);
+        tx.vout.push_back(out_monthly);
+      }
+      */
+    }
+      
     CHECK_AND_ASSERT_MES(summary_amounts == block_reward, false, "Failed to construct miner tx, summary_amounts = " << summary_amounts << " not equal block_reward = " << block_reward);
 
     tx.version = 2;

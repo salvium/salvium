@@ -51,7 +51,7 @@
 #define BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW               60
 
 // MONEY_SUPPLY - total number coins to be generated
-#define MONEY_SUPPLY                                    ((uint64_t)(1800000000000000ull))
+#define MONEY_SUPPLY                                    ((uint64_t)(18440000000000000ull)) // 184.4M coins * pow(10, 8)
 #define EMISSION_SPEED_FACTOR_PER_MINUTE                (20)
 #define FINAL_SUBSIDY_PER_MINUTE                        ((uint64_t)30000000) // 3 * pow(10, 7)
 
@@ -69,7 +69,7 @@
 // COIN - number of smallest units in one coin
 #define COIN                                            ((uint64_t)100000000) // pow(10, 8)
 
-#define FEE_PER_KB_OLD                                  ((uint64_t)1000000) // pow(10, 6)
+//#define FEE_PER_KB_OLD                                  ((uint64_t)1000000) // pow(10, 6)
 #define FEE_PER_KB                                      ((uint64_t)200000) // 2 * pow(10, 5)
 #define FEE_PER_BYTE                                    ((uint64_t)30)
 #define DYNAMIC_FEE_PER_KB_BASE_FEE                     ((uint64_t)200000) // 2 * pow(10,5)
@@ -79,7 +79,9 @@
 
 #define ORPHANED_BLOCKS_MAX_COUNT                       100
 
-#define PREMINE_AMOUNT                                  ((uint64_t)90000000000000ull) // 5% of supply (9 * pow(10,13))
+#define PREMINE_AMOUNT                                  ((uint64_t)2210000000000000ull) // 12% of MONEY_SUPPLY
+#define PREMINE_AMOUNT_UPFRONT                          ((uint64_t)650000000000000ull)  // 3.4% of MONEY_SUPPLY
+#define PREMINE_AMOUNT_MONTHLY                          ((uint64_t)65000000000000ull)   // 8.6%/24 of MONEY_SUPPLY 
 
 #define DIFFICULTY_TARGET_V2                            120  // seconds
 #define DIFFICULTY_TARGET_V1                            60  // seconds - before first fork
@@ -162,7 +164,7 @@
 
 #define RPC_IP_FAILS_BEFORE_BLOCK                       3
 
-#define CRYPTONOTE_NAME                         "fulmo"
+#define CRYPTONOTE_NAME                         "salvium"
 #define CRYPTONOTE_BLOCKCHAINDATA_FILENAME      "data.mdb"
 #define CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME "lock.mdb"
 #define P2P_NET_DATA_FILENAME                   "p2pstate.bin"
@@ -209,8 +211,9 @@
 #define HF_VERSION_LONG_TERM_BLOCK_WEIGHT       2
 #define HF_VERSION_VIEW_TAGS                    2
 #define HF_VERSION_2021_SCALING                 2
-
-#define HF_VERSION_SLIPPAGE_YIELD               3
+#define HF_VERSION_ENABLE_CONVERT               2
+#define HF_VERSION_ENABLE_ORACLE                2
+#define HF_VERSION_SLIPPAGE_YIELD               2
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
 #define CRYPTONOTE_SCALING_2021_FEE_ROUNDING_PLACES 2
@@ -246,12 +249,9 @@ namespace config
   uint64_t const DEFAULT_DUST_THRESHOLD = ((uint64_t)2000000000); // 2 * pow(10, 9)
   uint64_t const BASE_REWARD_CLAMP_THRESHOLD = ((uint64_t)100000000); // pow(10, 8)
 
-  uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 0x1c1a4a68; // fuLMo
-  uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0x1bda4a68; // fuLMoi
-  uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0x5bbfa4a68; // fuLMos
-  //uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 18;
-  //uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 19;
-  //uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 42;
+  uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 0x3ef318; // SaLv
+  uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0x55ef318; // SaLvi
+  uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0xf5ef318; // SaLvs
   uint16_t const P2P_DEFAULT_PORT = 19080;
   uint16_t const RPC_DEFAULT_PORT = 19081;
   uint16_t const ZMQ_RPC_DEFAULT_PORT = 19082;
@@ -259,13 +259,13 @@ namespace config
       0x12 ,0x30, 0xF1, 0x71 , 0x61, 0x04 , 0x41, 0x61, 0x17, 0x31, 0x00, 0x82, 0x16, 0xA1, 0xA1, 0x10
     } }; // Bender's nightmare
 
-  std::string const GENESIS_TX = "0201ff000180c09e90acbb14029f396e0265fb259de2dc3b8a956ad177f7432ad72034b1d0d28b1f54b59e64f90446554c4d3c000000000000002101901df6540da088783d037ac5b23f80d3adcbc10d171583480079097aadbe20dc0100";
+  std::string const GENESIS_TX = "0201ff000180c0d0c7bbbff60302e03c14d309ba99f81fe1e523cf7bac8cbbb10dcbb9aba66d20c31ec0ff7d0a880353414c3c000000000000002101345d3471cba278cb9969e63704569b2a531f4bd99f75224f6494ed16b966deb40100";
   
   uint32_t const GENESIS_NONCE = 10000;
 
   const uint64_t YIELD_LOCK_PERIOD = 5;//30*24*30;
 
-  std::string const TREASURY_ADDRESS = "fuLMowH85abK8nz9BBMEem7MAfUbQu4aSHHUV9j5Z86o6Go9Lv2U5ZQiJCWPY9R9HA8p5idburazjAhCqDngLo7fYPCD9ciM9ee1A";
+  std::string const TREASURY_ADDRESS = "SaLvdVTaMJp5hrGv2rDWzaCrM6Wrq2T4tNBPX8kvuAJv7iUiYNy4vceFskGRAawnBDiqZ9jWYXZmWemRnEKtWmNMeuSXZg6jwtx";
   
   // Hash domain separators
   const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";
@@ -294,7 +294,7 @@ namespace config
   // Multisig
   const uint32_t MULTISIG_MAX_SIGNERS{16};
 
-  std::array<std::string, 3> const ORACLE_URLS = {{"oracle.fulmo.network:8443", "oracle.fulmo.network:8443", "oracle.fulmo.network:8443"}};
+  std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.network:8443", "oracle.salvium.network:8443", "oracle.salvium.network:8443"}};
   
   std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
     "MIIDRDCCAjYGByqGSM44BAEwggIpAoIBAQCZP7IJ5PcNvGbWiEqAioKF9wViVxEN\n"
@@ -324,9 +324,9 @@ namespace config
     */
   namespace testnet
   {
-    uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 0xa8bfa4a68; // fuLMot
-    uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0x9dbfa4a68; // fuLMoti
-    uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0x5a3bfa4a68; // fuLMots
+    uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 0x15beb318; // SaLvT
+    uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0xd055eb318; // SaLvTi
+    uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0xa59eb318; // SaLvTs
     uint16_t const P2P_DEFAULT_PORT = 29080;
     uint16_t const RPC_DEFAULT_PORT = 29081;
     uint16_t const ZMQ_RPC_DEFAULT_PORT = 29082;
@@ -338,7 +338,7 @@ namespace config
 
     const uint64_t YIELD_LOCK_PERIOD = 20;
   
-    std::array<std::string, 3> const ORACLE_URLS = {{"oracle.fulmo.network:8443", "oracle.fulmo.network:8443", "oracle.fulmo.network:8443"}};
+    std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.network:8443", "oracle.salvium.network:8443", "oracle.salvium.network:8443"}};
 
     std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
       "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5YBxWx1AZCA9jTUk8Pr2uZ9jpfRt\n"
@@ -350,9 +350,9 @@ namespace config
 
   namespace stagenet
   {
-    uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 0xafb7a4a68; // fuLMoS
-    uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0xa4b7a4a68; // fuLMoSi
-    uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0xabb7a4a68; // fuLMoSt
+    uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 0x149eb318; // SaLvS
+    uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0xf343eb318; // SaLvSi
+    uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0x2d47eb318; // SaLvSs
     uint16_t const P2P_DEFAULT_PORT = 39080;
     uint16_t const RPC_DEFAULT_PORT = 39081;
     uint16_t const ZMQ_RPC_DEFAULT_PORT = 39082;
@@ -364,7 +364,7 @@ namespace config
 
     const uint64_t YIELD_LOCK_PERIOD = 20;
   
-    std::array<std::string, 3> const ORACLE_URLS = {{"oracle.fulmo.network:8443", "oracle.fulmo.network:8443", "oracle.fulmo.network:8443"}};
+    std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.network:8443", "oracle.salvium.network:8443", "oracle.salvium.network:8443"}};
 
     std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
       "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5YBxWx1AZCA9jTUk8Pr2uZ9jpfRt\n"

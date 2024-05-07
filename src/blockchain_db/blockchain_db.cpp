@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2022, The Monero Project
-// Portions Copyright (c) 2023, Fulmo (author: SRCG)
+// Portions Copyright (c) 2023, Salvium (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -365,29 +365,29 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
   }
 
   // SRCG: This is the code that calculates the total slippage for the block
-  // Now convert all of the residual balances into FULM
+  // Now convert all of the residual balances into SAL
   boost::multiprecision::int128_t slippage_total_128 = 0;
   uint64_t slippage_total = 0;
   for (const auto& tally: slippage_counts) {
     boost::multiprecision::int128_t slippage_amount_128 = 0;
-    if (tally.first == "FULM") {
+    if (tally.first == "SAL") {
       slippage_amount_128 = tally.second;
     } else {
-      // Sanity check - do we have a price for both source asset type and FULM in the PR?
-      boost::multiprecision::int128_t fulm_price = blk.pricing_record["FULM"];
+      // Sanity check - do we have a price for both source asset type and SAL in the PR?
+      boost::multiprecision::int128_t sal_price = blk.pricing_record["SAL"];
       boost::multiprecision::int128_t asset_price = blk.pricing_record[tally.first];
-      if (fulm_price == 0) {
+      if (sal_price == 0) {
         // No price available - bail out, because block is invalid
-        throw std::runtime_error("Asset type 'FULM' is not present in available pricing record");
+        throw std::runtime_error("Asset type 'SAL' is not present in available pricing record");
       }
       if (asset_price == 0) {
         // No price available - bail out, because block is invalid
         throw std::runtime_error("Asset type '" + tally.first + "' is not present in available pricing record");
       }
-      // Convert the FUSD amount into FULM
+      // Convert the VSD amount into SAL
       boost::multiprecision::int128_t tally_128 = tally.second;
       tally_128 *= asset_price;
-      tally_128 /= fulm_price;
+      tally_128 /= sal_price;
       slippage_amount_128 = tally_128.convert_to<int64_t>();
     }
     slippage_total_128 += slippage_amount_128;

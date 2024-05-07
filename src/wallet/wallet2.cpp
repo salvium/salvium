@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2022, The Monero Project
-// Portions Copyright (c) 2023, Fulmo (author: SRCG)
+// Portions Copyright (c) 2023, Salvium (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -6172,7 +6172,7 @@ uint64_t wallet2::balance(uint32_t index_major, const std::string& asset_type, b
   uint64_t amount = 0;
   for (const auto& i : balance_per_subaddress(index_major, asset_type, strict))
     amount += i.second;
-  if (asset_type == "FULM") {
+  if (asset_type == "SAL") {
     // Iterate over the locked coins, adding them to the _locked_ balance
     for (const auto& i : m_locked_coins)
       amount += i.second.m_amount;
@@ -7000,8 +7000,8 @@ bool wallet2::sign_tx(unsigned_tx_set &exported_txs, std::vector<wallet2::pendin
     std::vector<std::pair<std::string, std::string>> circ_amounts;
     THROW_WALLET_EXCEPTION_IF(!get_circulating_supply(circ_amounts), error::wallet_internal_error, "Failed to get circulating supply");
     // To-do - work out the source_asset and dest_asset.
-    std::string source_asset = "FULM";
-    std::string dest_asset = "FULM";
+    std::string source_asset = "SAL";
+    std::string dest_asset = "SAL";
     bool r = cryptonote::construct_tx_and_get_tx_key(m_account.get_keys(), m_subaddresses, sd.sources, sd.splitted_dsts, hf_version, source_asset, dest_asset, sd.tx_type, sd.change_dts.addr, sd.extra, ptx.tx, sd.unlock_time, tx_key, additional_tx_keys, sd.use_rct, rct_config, sd.use_view_tags);
     THROW_WALLET_EXCEPTION_IF(!r, error::tx_not_constructed, sd.sources, sd.splitted_dsts, sd.unlock_time, m_nettype);
     // we don't test tx size, because we don't know the current limit, due to not having a blockchain,
@@ -9063,8 +9063,8 @@ void wallet2::transfer_selected(const std::vector<cryptonote::tx_destination_ent
   LOG_PRINT_L2("constructing tx");
   // To-do - work out if the "transfer_selected()" method will ever get called - if not, just remove it.
   // If it _does_ get called, it's necessary to work out the source_asset and dest_asset as well.
-  std::string source_asset = "FULM";
-  std::string dest_asset = "FULM";
+  std::string source_asset = "SAL";
+  std::string dest_asset = "SAL";
   cryptonote::transaction_type tx_type = TRANSFER;
   bool r = cryptonote::construct_tx_and_get_tx_key(m_account.get_keys(), m_subaddresses, sources, splitted_dsts, hf_version, source_asset, dest_asset, tx_type, change_dts.addr, extra, tx, unlock_time, tx_key, additional_tx_keys, false, {}, use_view_tags);
   LOG_PRINT_L2("constructed tx, r="<<r);
@@ -9713,7 +9713,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(
   uint32_t priority,
   const std::vector<uint8_t>& extra,
   uint32_t subaddr_account,
-  std::set<uint32_t> subaddr_indices
+  std::set<uint32_t> subaddr_indices,
+  const crypto::key_image& ki_return
 ){
   //ensure device is let in NONE mode in any case
   hw::device &hwdev = m_account.get_device();
@@ -9816,7 +9817,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(
     //THROW_WALLET_EXCEPTION_IF(!get_circulating_supply(circ_amounts), error::wallet_internal_error, "Failed to get circulating supply");
     break;
   case transaction_type::YIELD:
-    THROW_WALLET_EXCEPTION_IF(dest_asset != "FULM", error::wallet_internal_error, "Yield TX must specify 'FULM' destination asset type");
+    THROW_WALLET_EXCEPTION_IF(dest_asset != "SAL", error::wallet_internal_error, "Yield TX must specify 'SAL' destination asset type");
     break;
   default:
     THROW_WALLET_EXCEPTION(error::wallet_internal_error, "Invalid tx type specified: " + static_cast<uint64_t>(tx_type));
@@ -10469,7 +10470,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_single(const crypt
   std::vector<size_t> unused_transfers_indices;
   std::vector<size_t> unused_dust_indices;
   const bool use_rct = use_fork_rules(4, 0);
-  std::string asset_type = "FULM";
+  std::string asset_type = "SAL";
 
   // Verify that we have outputs in our wallet for the correct asset_type
   THROW_WALLET_EXCEPTION_IF(!m_transfers_indices.count(asset_type), error::wallet_internal_error, "Cannot find outputs with correct asset_type to pay for TX");
@@ -10988,7 +10989,7 @@ std::vector<wallet2::pending_tx> wallet2::create_unmixable_sweep_transactions()
       unmixable_transfer_outputs.push_back(n);
   }
 
-  return create_transactions_from(m_account_public_address, "FULM", false, 1, unmixable_transfer_outputs, unmixable_dust_outputs, 0 /*fake_outs_count */, 0 /* unlock_time */, 1 /*priority */, std::vector<uint8_t>());
+  return create_transactions_from(m_account_public_address, "SAL", false, 1, unmixable_transfer_outputs, unmixable_dust_outputs, 0 /*fake_outs_count */, 0 /* unlock_time */, 1 /*priority */, std::vector<uint8_t>());
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::discard_unmixable_outputs()
@@ -11907,13 +11908,13 @@ bool wallet2::check_tx_proof(const cryptonote::transaction &tx, const cryptonote
 std::string wallet2::get_reserve_proof(const boost::optional<std::pair<uint32_t, uint64_t>> &account_minreserve, const std::string &message)
 {
   THROW_WALLET_EXCEPTION_IF(m_watch_only || m_multisig, error::wallet_internal_error, "Reserve proof can only be generated by a full wallet");
-  THROW_WALLET_EXCEPTION_IF(balance_all(true, "FULM") == 0, error::wallet_internal_error, "Zero balance");
-  THROW_WALLET_EXCEPTION_IF(account_minreserve && balance(account_minreserve->first, "FULM", true) < account_minreserve->second, error::wallet_internal_error,
+  THROW_WALLET_EXCEPTION_IF(balance_all(true, "SAL") == 0, error::wallet_internal_error, "Zero balance");
+  THROW_WALLET_EXCEPTION_IF(account_minreserve && balance(account_minreserve->first, "SAL", true) < account_minreserve->second, error::wallet_internal_error,
     "Not enough balance in this account for the requested minimum reserve amount");
 
   // determine which outputs to include in the proof
   std::vector<size_t> selected_transfers;
-  for (const auto& i: m_transfers_indices["FULM"])
+  for (const auto& i: m_transfers_indices["SAL"])
   {
     const transfer_details &td = m_transfers[i];
     if (!is_spent(td, true) && !td.m_frozen && (!account_minreserve || account_minreserve->first == td.m_subaddr_index.major))
@@ -12002,7 +12003,7 @@ std::string wallet2::get_reserve_proof(const boost::optional<std::pair<uint32_t,
     crypto::ec_scalar uniqueness;
     THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td.m_tx.type, k_image, td.m_block_height, td.m_internal_output_index, uniqueness), error::wallet_internal_error, "Failed to calculate uniqueness");
 
-    // Populate this struct if you want to make use of get_reserve_proof() for Fulmo!!!
+    // Populate this struct if you want to make use of get_reserve_proof() for Salvium!!!
     assert(false);
     cryptonote::origin_data origin_tx_data;
 
@@ -12668,7 +12669,7 @@ std::pair<uint64_t, std::vector<std::pair<crypto::key_image, crypto::signature>>
       //uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
     }
     
-    // Populate this struct if you want to make use of check_reserve_proof() for Fulmo!!!
+    // Populate this struct if you want to make use of check_reserve_proof() for Salvium!!!
     assert(false);
     cryptonote::origin_data origin_tx_data;
 
@@ -13289,7 +13290,7 @@ process:
       //uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
     }
 
-    // Populate this struct if you want to make use of "import_outputs" for Fulmo!!!
+    // Populate this struct if you want to make use of "import_outputs" for Salvium!!!
     assert(false);
     origin_data origin_tx_data;
     
@@ -13431,7 +13432,7 @@ size_t wallet2::import_outputs(const std::tuple<uint64_t, uint64_t, std::vector<
       //uniqueness = cn_fast_hash(reinterpret_cast<void*>(&output_index_wrapper), sizeof(size_t));
     }
     
-    // Populate this struct if you want to make use of "import_outputs" for Fulmo!!!
+    // Populate this struct if you want to make use of "import_outputs" for Salvium!!!
     assert(false);
     origin_data origin_tx_data;
     

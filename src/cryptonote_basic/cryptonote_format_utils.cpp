@@ -1059,10 +1059,10 @@ namespace cryptonote
   std::string asset_type_from_id(const uint32_t asset_type_id)
   {
     switch (asset_type_id) {
-    case 0x46554c4d:
-      return "FULM";
-    case 0x46555344:
-      return "FUSD";
+    case 0x53414C00:
+      return "SAL";
+    case 0x56534400:
+      return "VSD";
     case 0x4255524E:
       return "BURN";
     case 0x00000000:
@@ -1076,10 +1076,10 @@ namespace cryptonote
   //---------------------------------------------------------------
   uint32_t asset_id_from_type(const std::string asset_type)
   {
-    if (asset_type == "FULM") {
-      return 0x46554c4d;
-    } else if (asset_type == "FUSD") {
-      return 0x46555344;
+    if (asset_type == "SAL") {
+      return 0x53414C00;
+    } else if (asset_type == "VSD") {
+      return 0x56534400;
     } else if (asset_type == "BURN") {
       return 0x4255524E;
     } else if (asset_type == "") {
@@ -1091,17 +1091,17 @@ namespace cryptonote
   }
   //---------------------------------------------------------------
   /**
-   * The various scenarios that are permitted for Fulmo are more extensive than
+   * The various scenarios that are permitted for Salvium are more extensive than
    * they are for Zepyhr / Havan. Specifically, we permit:
    *
-   * MINER_TX: (SRCG => all fees are to be paid in FULM?)
-   *   - input txin_gen (FULM)
-   *   - outputs txout_to_key (FULM) / txout_to_tagged_key (FULM)
+   * MINER_TX: (SRCG => all fees are to be paid in SAL?)
+   *   - input txin_gen (SAL)
+   *   - outputs txout_to_key (SAL) / txout_to_tagged_key (SAL)
    *
    * PROTOCOL_TX:
-   *   - input txin_gen (FULM) --- ONLY if there are outputs
+   *   - input txin_gen (SAL) --- ONLY if there are outputs
    *   - input void ("")       --- ONLY if there are NO outputs
-   *   - outputs txout_to_key (FULM, FUSD) / txout_to_tagged_key (FULM, FUSD)
+   *   - outputs txout_to_key (SAL, VSD) / txout_to_tagged_key (SAL, VSD)
    *
    * BURN:
    *
@@ -1123,7 +1123,7 @@ namespace cryptonote
           LOG_ERROR("txin_gen detected in non-miner TX. Rejecting..");
           return false;
         }
-        source_asset_types.insert("FULM");
+        source_asset_types.insert("SAL");
       } else if (tx.vin[i].type() == typeid(txin_to_key)) {
         source_asset_types.insert(boost::get<txin_to_key>(tx.vin[i]).asset_type);
       } else {
@@ -1183,7 +1183,7 @@ namespace cryptonote
     
     // Handle miner_txs differently - full validation is performed in validate_miner_transaction()
     if (is_miner_tx) {
-      destination = "FULM";
+      destination = "SAL";
     } else {
     
       // Sanity check that we only have 1 or 2 destination asset types
@@ -1202,7 +1202,7 @@ namespace cryptonote
         destination = dat[0];
       } else {
         if (sat.size() == 2) {
-          if (!((dat[0] == "FULM" && dat[1] == "FUSD") || (dat[0] == "FUSD" && dat[1] == "FULM"))) {
+          if (!((dat[0] == "SAL" && dat[1] == "VSD") || (dat[0] == "VSD" && dat[1] == "SAL"))) {
             LOG_ERROR("Impossible input asset types. Rejecting..");
             return false;
           }
@@ -1560,11 +1560,11 @@ namespace cryptonote
         return "piconero";
       */
     case 8:
-      return "fulmo";
+      return "sal";
     case 5:
-      return "millifulmo";
+      return "millisal";
     case 2:
-      return "microfulmo";
+      return "microsal";
     default:
       ASSERT_MES_AND_THROW("Invalid decimal point specification: " << decimal_point);
     }
