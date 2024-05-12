@@ -33,6 +33,7 @@
 #include "string_tools.h"
 
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
+#include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/difficulty.h"
 #include "crypto/hash.h"
@@ -1217,6 +1218,27 @@ namespace cryptonote
       
       BEGIN_KV_SERIALIZE_MAP()
       KV_SERIALIZE(pr)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  struct COMMAND_RPC_GET_YIELD_INFO
+  {
+    struct request_t
+    {
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+    
+
+    struct response_t
+    {
+      cryptonote::yield_block_info& latest_ybi;
+      
+      BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(latest_ybi)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<response_t> response;

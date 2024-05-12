@@ -6964,7 +6964,15 @@ bool simple_wallet::transfer_main(
           if (subaddr_indices.size() > 1)
             prompt << tr("WARNING: Outputs of multiple addresses are being used together, which might potentially compromise your privacy.\n");
         }
-        prompt << boost::format(tr("Sending %s.  ")) % print_money(total_sent);
+        if (transfer_type == Burn) {
+          prompt << boost::format(tr("Burning %s %s.  ")) % print_money(total_sent) % source_asset;
+        } else if (transfer_type == Convert) {
+          prompt << boost::format(tr("Converting %s %s to %s.  ")) % print_money(total_sent) % source_asset % dest_asset;
+        } else if (transfer_type == LockForYield) {
+          prompt << boost::format(tr("Staking %s %s for yield accrual.  ")) % print_money(total_sent) % source_asset;
+        } else {
+          prompt << boost::format(tr("Sending %s %s.  ")) % print_money(total_sent) % source_asset;
+        }
         if (ptx_vector.size() > 1)
         {
           prompt << boost::format(tr("Your transaction needs to be split into %llu transactions.  "

@@ -368,33 +368,42 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
   // Now convert all of the residual balances into SAL
   boost::multiprecision::int128_t slippage_total_128 = 0;
   uint64_t slippage_total = 0;
-  for (const auto& tally: slippage_counts) {
-    boost::multiprecision::int128_t slippage_amount_128 = 0;
-    if (tally.first == "SAL") {
-      slippage_amount_128 = tally.second;
-    } else {
-      // Sanity check - do we have a price for both source asset type and SAL in the PR?
-      boost::multiprecision::int128_t sal_price = blk.pricing_record["SAL"];
-      boost::multiprecision::int128_t asset_price = blk.pricing_record[tally.first];
-      if (sal_price == 0) {
-        // No price available - bail out, because block is invalid
-        throw std::runtime_error("Asset type 'SAL' is not present in available pricing record");
+  if (blk.major_version >= HF_VERSION_ENABLE_CONVERT) {
+    for (const auto& tally: slippage_counts) {
+      boost::multiprecision::int128_t slippage_amount_128 = 0;
+      if (tally.first == "SAL") {
+        slippage_amount_128 = tally.second;
+      } else {
+        // Sanity check - do we have a price for both source asset type and SAL in the PR?
+        boost::multiprecision::int128_t sal_price = blk.pricing_record["SAL"];
+        boost::multiprecision::int128_t asset_price = blk.pricing_record[tally.first];
+        if (sal_price == 0) {
+          // No price available - bail out, because block is invalid
+          throw std::runtime_error("Asset type 'SAL' is not present in available pricing record");
+        }
+        if (asset_price == 0) {
+          // No price available - bail out, because block is invalid
+          throw std::runtime_error("Asset type '" + tally.first + "' is not present in available pricing record");
+        }
+        // Convert the VSD amount into SAL
+        boost::multiprecision::int128_t tally_128 = tally.second;
+        tally_128 *= asset_price;
+        tally_128 /= sal_price;
+        slippage_amount_128 = tally_128.convert_to<int64_t>();
       }
-      if (asset_price == 0) {
-        // No price available - bail out, because block is invalid
-        throw std::runtime_error("Asset type '" + tally.first + "' is not present in available pricing record");
-      }
-      // Convert the VSD amount into SAL
-      boost::multiprecision::int128_t tally_128 = tally.second;
-      tally_128 *= asset_price;
-      tally_128 /= sal_price;
-      slippage_amount_128 = tally_128.convert_to<int64_t>();
+      slippage_total_128 += slippage_amount_128;
     }
-    slippage_total_128 += slippage_amount_128;
+    if (slippage_total_128 < 0)
+      throw std::runtime_error("Found a negative slippage total when summing the burnt/minted amounts");
+    slippage_total = slippage_total_128.convert_to<uint64_t>();
+
+  } else {
+
+    // Prior to activation of conversions, the staking reward is purely a percentage of the block reward
+    if (blk.miner_tx.amount_burnt == 0)
+      throw std::runtime_error("Staking reward is zero, but block reward is present");
+    slippage_total = blk.miner_tx.amount_burnt;
   }
-  if (slippage_total_128 < 0)
-    throw std::runtime_error("Found a negative slippage total when summing the burnt/minted amounts");
-  slippage_total = slippage_total_128.convert_to<uint64_t>();
   
   TIME_MEASURE_FINISH(time1);
   time_add_transaction += time1;
