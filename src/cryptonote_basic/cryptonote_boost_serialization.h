@@ -38,6 +38,7 @@
 #include <boost/serialization/is_bitwise_serializable.hpp>
 #include <boost/archive/portable_binary_iarchive.hpp>
 #include <boost/archive/portable_binary_oarchive.hpp>
+#include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic.h"
 #include "difficulty.h"
 #include "common/unordered_containers_boost_serialization.h"
@@ -234,6 +235,16 @@ namespace boost
     a & pr.assets;
     a & pr.timestamp;
     a & pr.signature;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::yield_block_info &ybi, const boost::serialization::version_type ver)
+  {
+    a & ybi.block_height;
+    a & ybi.slippage_total_this_block;
+    a & ybi.locked_coins_this_block;
+    a & ybi.locked_coins_tally;
+    a & ybi.network_health_percentage;
   }
 
   template <class Archive>

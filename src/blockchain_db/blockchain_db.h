@@ -197,14 +197,6 @@ struct txpool_tx_meta_t
   }
 };
 
-typedef struct yield_block_info {
-  uint64_t block_height;
-  uint64_t slippage_total_this_block;
-  uint64_t locked_coins_this_block;
-  uint64_t locked_coins_tally;
-  uint8_t network_health_percentage;
-} yield_block_info;
-
 typedef struct yield_tx_info {
   uint64_t block_height;
   crypto::hash tx_hash;

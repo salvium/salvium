@@ -1694,6 +1694,7 @@ private:
 
     bool get_pricing_record(oracle::pricing_record& pr, const uint64_t height);
     bool get_circulating_supply(std::vector<std::pair<std::string, std::string>> &amounts);
+    bool get_yield_info(std::vector<cryptonote::yield_block_info>& ybi_data);
     
   private:
     /*!

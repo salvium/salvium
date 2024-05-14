@@ -8167,25 +8167,41 @@ bool simple_wallet::supply_info(const std::vector<std::string> &args) {
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::yield_info(const std::vector<std::string> &args) {
-  // get circulating supply
+
+  // Get the total circulating supply of SALs
   std::vector<std::pair<std::string, std::string>> supply_amounts;
   if(!m_wallet->get_circulating_supply(supply_amounts)) {
     fail_msg_writer() << "failed to get circulating supply. Make sure you are connected to a daemon.";
     return false;
   }
-
-  // get pricing record
-  std::string err;
-  uint64_t bc_height = get_daemon_blockchain_height(err);
-  oracle::pricing_record pr;
-  if (!m_wallet->get_pricing_record(pr, bc_height-1)) {
-    fail_msg_writer() << "failed to get pricing record. Make sure you are connected to a daemon.";
-    return false;
+  boost::multiprecision::uint128_t total_supply_128 = 0;
+  for (auto supply_asset: supply_amounts) {
+    if (supply_asset.first == "SAL") {
+      boost::multiprecision::uint128_t supply_128(supply_asset.second);
+      total_supply_128 = supply_128;
+      break;
+    }
   }
-  
-  // calculate current block cap
-  //uint64_t block_cap = cryptonote::get_block_cap(supply_amounts, pr, m_wallet->get_current_hard_fork());
-  //message_writer() <<  boost::format(tr("Current Block Cap(height %d): %d XHV")) % bc_height % print_money(block_cap);
+
+  // Get the yield data from the blockchain
+  std::vector<cryptonote::yield_block_info> ybi_data;
+  bool r = m_wallet->get_yield_info(ybi_data);
+  if (!r)
+    return false;
+
+  // Scan the entries we have received to gather the state (total yield over period captured)
+  uint64_t total_yield = 0;
+  for (const auto& entry: ybi_data) {
+    total_yield += entry.slippage_total_this_block;
+  }
+
+  // Output the necessary information
+  message_writer(console_color_default, false) << boost::format(tr("YIELD INFO:\n\tTotal SAL supply: %d\n\tTotal coins locked: %d\n\tYield accrued over %s: %d"))
+    % print_money(total_supply_128.convert_to<uint64_t>())
+    % print_money(ybi_data.back().locked_coins_tally)
+    % get_human_readable_timespan(ybi_data.size() * DIFFICULTY_TARGET_V2)
+    % print_money(total_yield);
+
   return true;
 }
 //----------------------------------------------------------------------------------------------------

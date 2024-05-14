@@ -400,7 +400,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
   } else {
 
     // Prior to activation of conversions, the staking reward is purely a percentage of the block reward
-    if (blk.miner_tx.amount_burnt == 0)
+    if (blk.miner_tx.amount_burnt == 0 and prev_height != 0)
       throw std::runtime_error("Staking reward is zero, but block reward is present");
     slippage_total = blk.miner_tx.amount_burnt;
   }

@@ -498,6 +498,24 @@ namespace cryptonote
     return boost::apply_visitor(txin_signature_size_visitor(), tx_in);
   }
 
+  struct yield_block_info {
+    uint64_t block_height;
+    uint64_t slippage_total_this_block;
+    uint64_t locked_coins_this_block;
+    uint64_t locked_coins_tally;
+    uint8_t network_health_percentage;
+
+    BEGIN_SERIALIZE()
+      VARINT_FIELD(block_height)
+      VARINT_FIELD(slippage_total_this_block)
+      VARINT_FIELD(locked_coins_this_block)
+      VARINT_FIELD(locked_coins_tally)
+      VARINT_FIELD(network_health_percentage)
+    END_SERIALIZE()
+  };
+
+
+  
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/

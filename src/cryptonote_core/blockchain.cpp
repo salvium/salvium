@@ -4393,6 +4393,27 @@ bool Blockchain::validate_ybi_cache()
   return true;
 }
 //------------------------------------------------------------------
+bool Blockchain::get_ybi_cache(std::map<uint64_t, yield_block_info>& ybi_cache)
+{
+  LOG_PRINT_L3("Blockchain::" << __func__);
+  
+  // Clear the provided container
+  ybi_cache.clear();
+  
+  // Make sure the cache is fully populated and up to date
+  if (!validate_ybi_cache()) {
+    LOG_PRINT_L1("yield information cache is invalid - rebuilding cache");
+    if (!rebuild_ybi_cache()) {
+      LOG_ERROR("Failed to rebuild yield information cache - aborting");
+      return false;
+    }
+  }
+
+  // Copy the cache
+  ybi_cache = m_yield_block_info_cache;
+  return true;
+}
+//------------------------------------------------------------------
 bool Blockchain::get_ybi_entry(const uint64_t height, cryptonote::yield_block_info& ybi)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);

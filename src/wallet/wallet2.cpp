@@ -2035,6 +2035,36 @@ bool wallet2::get_circulating_supply(std::vector<std::pair<std::string, std::str
   }
 }
 //----------------------------------------------------------------------------------------------------
+bool wallet2::get_yield_info(std::vector<cryptonote::yield_block_info>& ybi_data)
+{
+  // Issue an RPC call to get the block header (and thus the pricing record) at the specified height
+  cryptonote::COMMAND_RPC_GET_YIELD_INFO::request req = AUTO_VAL_INIT(req);
+  cryptonote::COMMAND_RPC_GET_YIELD_INFO::response res = AUTO_VAL_INIT(res);
+  m_daemon_rpc_mutex.lock();
+  bool r = invoke_http_json_rpc("/json_rpc", "get_yield_info", req, res, rpc_timeout);
+  m_daemon_rpc_mutex.unlock();
+  if (r && res.status == CORE_RPC_STATUS_OK)
+  {
+    ybi_data.clear();
+    for (const auto& entry: res.yield_data) {
+      // Create a YBI
+      cryptonote::yield_block_info ybi;
+      ybi.block_height = entry.block_height;
+      ybi.slippage_total_this_block = entry.slippage_total_this_block;
+      ybi.locked_coins_this_block = entry.locked_coins_this_block;
+      ybi.locked_coins_tally = entry.locked_coins_tally;
+      ybi.network_health_percentage = entry.network_health_percentage;
+      ybi_data.push_back(ybi);
+    }
+    return true;
+  }
+  else
+  {
+    MERROR("Failed to retrieve yield info from daemon");
+    return false;
+  }
+}
+//----------------------------------------------------------------------------------------------------
 void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote::transaction& tx, const std::vector<uint64_t> &o_indices, const std::vector<uint64_t> &asset_type_output_indices, uint64_t height, uint8_t block_version, uint64_t ts, bool miner_tx, bool pool, bool double_spend_seen, const tx_cache_data &tx_cache_data, std::map<std::pair<uint64_t, uint64_t>, size_t> *output_tracker_cache)
 {
   PERF_TIMER(process_new_transaction);
