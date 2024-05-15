@@ -264,7 +264,9 @@ int main(int argc, char const * argv[])
     // OS
     if (command_line::get_arg(vm, daemon_args::arg_print_genesis_tx))
     {
-      print_genesis_tx_hex(cryptonote::MAINNET);
+      const bool testnet = command_line::get_arg(vm, cryptonote::arg_testnet_on);
+      const bool stagenet = command_line::get_arg(vm, cryptonote::arg_stagenet_on);
+      print_genesis_tx_hex(testnet ? cryptonote::TESTNET : stagenet ? cryptonote::STAGENET : cryptonote::MAINNET);
       return 0;
     }
 
