@@ -1819,15 +1819,25 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   }
 
   std::map<std::string, uint64_t> circ_supply = get_db().get_circulating_supply();
- 
-  oracle::pricing_record pr;
-  if (!get_pricing_record(pr, circ_supply, b.timestamp)) {
-    LOG_ERROR("Creating block template: error: failed to get pricing record");
-    return false;
-  }
 
-  // Copy the returned record
-  b.pricing_record = pr;
+  // Check if we are supposed to be obtaining PRs from the Oracle
+  if (b.major_version >= HF_VERSION_ENABLE_ORACLE) {
+
+    // Yep - go get the pricing records
+    oracle::pricing_record pr;
+    if (!get_pricing_record(pr, circ_supply, b.timestamp)) {
+      LOG_ERROR("Creating block template: error: failed to get pricing record");
+      return false;
+    }
+
+    // Copy the returned record
+    b.pricing_record = pr;
+
+  } else {
+
+    // Nope - set it to an empty record - it won't get serialised anyway
+    b.pricing_record = oracle::pricing_record();
+  }
   
   CHECK_AND_ASSERT_MES(diffic, false, "difficulty overhead.");
 
@@ -1850,7 +1860,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
    */
   std::vector<txpool_tx_meta_t> protocol_metadata;
   std::vector<cryptonote::protocol_data_entry> protocol_entries;
-  if (!m_tx_pool.fill_block_template(b, median_weight, already_generated_coins, txs_weight, fee, expected_reward, b.major_version, pr, circ_supply, protocol_metadata))
+  if (!m_tx_pool.fill_block_template(b, median_weight, already_generated_coins, txs_weight, fee, expected_reward, b.major_version, b.pricing_record, circ_supply, protocol_metadata))
   {
     return false;
   }
@@ -1906,7 +1916,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   address_parse_info treasury_address_info;
   ok = cryptonote::get_account_address_from_str(treasury_address_info, m_nettype, get_config(m_nettype).TREASURY_ADDRESS);
   CHECK_AND_ASSERT_MES(ok, false, "Failed to obtain treasury address info");
-  ok = construct_protocol_tx(height, protocol_fee, b.protocol_tx, protocol_entries, circ_supply, pr, miner_address, treasury_address_info.address, b.major_version);
+  ok = construct_protocol_tx(height, protocol_fee, b.protocol_tx, protocol_entries, circ_supply, b.pricing_record, miner_address, treasury_address_info.address, b.major_version);
   CHECK_AND_ASSERT_MES(ok, false, "Failed to construct protocol tx");
   
   pool_cookie = m_tx_pool.cookie();

@@ -804,7 +804,7 @@ size_t estimate_rct_tx_size(int n_inputs, int mixin, int n_outputs, size_t extra
   size += n_inputs * (1+6+(mixin+1)*2+32);
 
   // vout
-  size += n_outputs * (6+32);
+  size += n_outputs * (1+32+4+8);
 
   // extra
   size += extra_size;
@@ -839,6 +839,8 @@ size_t estimate_rct_tx_size(int n_inputs, int mixin, int n_outputs, size_t extra
 
   // pseudoOuts
   size += 32 * n_inputs;
+  // p_r
+  size += 32;
   // ecdhInfo
   size += 8 * n_outputs;
   // outPk - only commitment is saved
@@ -2249,6 +2251,9 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
           THROW_WALLET_EXCEPTION_IF(!cryptonote::calculate_uniqueness(td_origin.m_tx.type, k_image, td_origin.m_block_height, i, tx_scan_info[i].uniqueness),
                                     error::wallet_internal_error,
                                     "Failed to calculate uniqueness from origin TX");
+
+          // At this point, we need to clear the "locked coins" count, because otherwise we will be counting yield stakes twice in our balance
+          m_locked_coins.erase(pk_change);
 
         } else {
         

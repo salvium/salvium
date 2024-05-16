@@ -534,7 +534,8 @@ namespace cryptonote
       VARINT_FIELD(timestamp)
       FIELD(prev_id)
       FIELD(nonce)
-      FIELD(pricing_record)
+      if (major_version >= HF_VERSION_ENABLE_ORACLE)
+        FIELD(pricing_record)
     END_SERIALIZE()
   };
 

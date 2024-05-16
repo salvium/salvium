@@ -255,7 +255,8 @@ namespace boost
     a & b.timestamp;
     a & b.prev_id;
     a & b.nonce;
-    a & b.pricing_record;
+    if (b.major_version >= HF_VERSION_ENABLE_ORACLE)
+      a & b.pricing_record;
     //------------------
     a & b.miner_tx;
     a & b.protocol_tx;

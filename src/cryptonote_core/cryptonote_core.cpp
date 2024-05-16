@@ -1860,7 +1860,7 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   bool core::check_updates()
   {
-    static const char software[] = "monero";
+    static const char software[] = "salvium";
 #ifdef BUILD_TAG
     static const char buildtag[] = BOOST_PP_STRINGIZE(BUILD_TAG);
     static const char subdir[] = "cli"; // because it can never be simple
@@ -1880,7 +1880,7 @@ namespace cryptonote
     if (!tools::check_updates(software, buildtag, version, hash))
       return false;
 
-    if (tools::vercmp(version.c_str(), MONERO_VERSION) <= 0)
+    if (tools::vercmp(version.c_str(), SALVIUM_VERSION) <= 0)
     {
       m_update_available = false;
       return true;
