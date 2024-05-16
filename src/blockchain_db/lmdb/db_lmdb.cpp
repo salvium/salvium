@@ -924,7 +924,7 @@ void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t l
   ybi.block_height = m_height;
   ybi.slippage_total_this_block = slippage_total;
   ybi.locked_coins_this_block = yield_total;
-  ybi.locked_coins_tally = ybi_prev.locked_coins_tally - ybi_matured.locked_coins_tally + yield_total;
+  ybi.locked_coins_tally = ybi_prev.locked_coins_tally - ybi_matured.locked_coins_this_block + yield_total;
   ybi.network_health_percentage = 100;
 
   // Put the YBI into the table

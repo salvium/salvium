@@ -641,6 +641,7 @@ namespace cryptonote
   }
   //---------------------------------------------------------------
   bool get_return_address(const size_t tx_version,                             // needed in case we change implementation down the line
+                          const cryptonote::transaction_type& tx_type,         // needed because TRANSFER needs to use F point instead of return_address and TX pubkey
                           const crypto::ec_scalar& uniqueness,
                           const cryptonote::account_keys &sender_account_keys, // needed to calculate pretty much anything
                           const crypto::public_key &P_change,                  // one-time public key from CONVERT/YIELD change
@@ -999,6 +1000,7 @@ namespace cryptonote
     uint64_t summary_outs_money = 0;
     //fill outputs
     size_t output_index = 0;
+    size_t change_index = 0;
     for(const tx_destination_entry& dst_entr: destinations)
     {
       CHECK_AND_ASSERT_MES(dst_entr.amount > 0 || tx.version > 1, false, "Destination with wrong amount: " << dst_entr.amount);
@@ -1019,6 +1021,11 @@ namespace cryptonote
           tx.amount_burnt += dst_entr.amount;
           continue;
         }
+      }
+
+      // Check to see if this is the change output
+      if (dst_entr.is_change) {
+        change_index = output_index;
       }
       
       // Get the uniqueness for this TX
@@ -1061,7 +1068,7 @@ namespace cryptonote
       CHECK_AND_ASSERT_MES(P_change != crypto::null_pkey, false, "Internal error - not found TX change output for CONVERT tx");
 
       // Now generate the return address and TX pubkey
-      CHECK_AND_ASSERT_MES(get_return_address(tx.version, uniqueness, sender_account_keys, P_change, txkey_pub, tx.return_address, tx.return_pubkey, hwdev), false, "Failed to get protocol destination address");
+      CHECK_AND_ASSERT_MES(get_return_address(tx.version, tx.type, uniqueness, sender_account_keys, P_change, txkey_pub, tx.return_address, tx.return_pubkey, hwdev), false, "Failed to get protocol destination address");
 
     } else if (tx_type == cryptonote::transaction_type::YIELD) {
       
@@ -1079,7 +1086,24 @@ namespace cryptonote
       CHECK_AND_ASSERT_MES(P_change != crypto::null_pkey, false, "Internal error - not found TX change output for YIELD tx");
       
       // Now generate the return address and TX pubkey
-      CHECK_AND_ASSERT_MES(get_return_address(tx.version, uniqueness, sender_account_keys, P_change, txkey_pub, tx.return_address, tx.return_pubkey, hwdev), false, "Failed to get protocol destination address");
+      CHECK_AND_ASSERT_MES(get_return_address(tx.version, tx.type, uniqueness, sender_account_keys, P_change, txkey_pub, tx.return_address, tx.return_pubkey, hwdev), false, "Failed to get protocol destination address");
+    } else if (tx_type == cryptonote::transaction_type::TRANSFER) {
+
+      // Get the uniqueness for this TX
+      CHECK_AND_ASSERT_MES(!tx.vin.empty(), false, "tx.vin[] is empty");
+      CHECK_AND_ASSERT_MES(tx.vin[0].type() == typeid(cryptonote::txin_to_key), false, "incorrect tx.vin[0] type for TRANSFER TX");
+      crypto::key_image k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
+      ec_scalar uniqueness;
+      CHECK_AND_ASSERT_MES(calculate_uniqueness(tx.type, k_image, 0, 0, uniqueness), false, "Failed to calculate uniqueness for the transaction");
+
+      // Get the output public key for the change output
+      crypto::public_key P_change = crypto::null_pkey;
+      CHECK_AND_ASSERT_MES(tx.vout.size() == 2, false, "Internal error - incorrect number of outputs (!=2) for TRANSFER tx");
+      CHECK_AND_ASSERT_MES(cryptonote::get_output_public_key(tx.vout[change_index], P_change), false, "Internal error - failed to get TX change output public key");
+      CHECK_AND_ASSERT_MES(P_change != crypto::null_pkey, false, "Internal error - not found TX change output for TRANSFER tx");
+      
+      // Now generate the return address and TX pubkey
+      CHECK_AND_ASSERT_MES(get_return_address(tx.version, tx.type, uniqueness, sender_account_keys, P_change, txkey_pub, tx.return_address, tx.return_pubkey, hwdev), false, "Failed to get protocol destination address");
     }
 
     LOG_PRINT_L2("tx pubkey: " << txkey_pub);
