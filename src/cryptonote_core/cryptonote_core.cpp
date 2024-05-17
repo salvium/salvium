@@ -518,10 +518,16 @@ namespace cryptonote
       LOG_ERROR("Failed to initialize a database");
       return false;
     }
-
+    
+    if (m_nettype == STAGENET) {
+      folder /= std::to_string(STAGENET_VERSION);
+    } else if (m_nettype == TESTNET) {
+      folder /= std::to_string(TESTNET_VERSION);
+    }
+    
     folder /= db->get_db_name();
     MGINFO("Loading blockchain from folder " << folder.string() << " ...");
-
+    
     const std::string filename = folder.string();
     // default to fast:async:1 if overridden
     blockchain_db_sync_mode sync_mode = db_defaultsync;
