@@ -477,6 +477,7 @@ private:
       uint64_t m_amount;
 
       BEGIN_SERIALIZE_OBJECT()
+        VERSION_FIELD(0)
         VARINT_FIELD(m_index_major)
         VARINT_FIELD(m_amount)
       END_SERIALIZE()
@@ -1165,8 +1166,8 @@ private:
         a & m_blockchain;
       }
       a & m_transfers;
-      a & m_transfers_indices;
-      a & m_locked_coins;
+      a & m_transfers_indices.parent();
+      a & m_locked_coins.parent();
       a & m_account_public_address;
       a & m_key_images.parent();
       if(ver < 6)
@@ -1948,6 +1949,7 @@ BOOST_CLASS_VERSION(tools::wallet2::multisig_info::LR, 0)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_tx_set, 1)
 BOOST_CLASS_VERSION(tools::wallet2::payment_details, 5)
 BOOST_CLASS_VERSION(tools::wallet2::pool_payment_details, 1)
+BOOST_CLASS_VERSION(tools::wallet2::locked_yield_details, 1)
 BOOST_CLASS_VERSION(tools::wallet2::unconfirmed_transfer_details, 8)
 BOOST_CLASS_VERSION(tools::wallet2::confirmed_transfer_details, 6)
 BOOST_CLASS_VERSION(tools::wallet2::address_book_row, 18)
