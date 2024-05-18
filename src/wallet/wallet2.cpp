@@ -2101,6 +2101,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   std::vector<tx_scan_info_t> tx_scan_info(tx.vout.size());
   std::deque<bool> output_found(tx.vout.size(), false);
   uint64_t total_received_1 = 0;
+  uint64_t origin_td_idx = ((uint64_t)-1);
   while (!tx.vout.empty())
   {
     std::vector<size_t> outs;
@@ -2252,6 +2253,9 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
                                     error::wallet_internal_error,
                                     "Failed to calculate uniqueness from origin TX");
 
+	  // At this point, we know that we are receiving something - store the origin TD index
+	  origin_td_idx = idx;
+	  
           // At this point, we need to clear the "locked coins" count, because otherwise we will be counting yield stakes twice in our balance
 
 	  // Get the output key for the change entry
@@ -2331,6 +2335,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             td.m_txid = txid;
             td.m_asset_type_output_index = asset_type_output_indices[o];
             td.asset_type = asset_type;
+	    td.m_origin_td_idx = origin_td_idx;
             td.m_key_image = tx_scan_info[o].ki;
             td.m_key_image_known = !m_watch_only && !m_multisig;
             if (!td.m_key_image_known)
@@ -2389,7 +2394,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             }
             LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
             if (0 != m_callback)
-              m_callback->on_money_received(height, txid, tx, td.m_amount, 0, td.asset_type, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time);
+              m_callback->on_money_received(height, txid, tx, td.m_amount, td.asset_type, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time, td.m_origin_td_idx);
           }
           total_received_1 += amount;
           notify = true;
@@ -2459,6 +2464,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_asset_type(tx.vout[o], asset_type), error::wallet_internal_error, "failed to get output_asset_type");
             td.m_asset_type_output_index = asset_type_output_indices[o];
             td.asset_type = asset_type;
+	    td.m_origin_td_idx = origin_td_idx;
             td.m_amount = amount;
             td.m_pk_index = pk_index - 1;
             td.m_subaddr_index = tx_scan_info[o].received->index;
@@ -2493,7 +2499,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
 
             LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
             if (0 != m_callback)
-              m_callback->on_money_received(height, txid, tx, td.m_amount, burnt, td.asset_type, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time);
+              m_callback->on_money_received(height, txid, tx, td.m_amount, td.asset_type, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time, td.m_origin_td_idx);
           }
           total_received_1 += extra_amount;
           notify = true;
@@ -13411,6 +13417,7 @@ size_t wallet2::import_outputs(const std::tuple<uint64_t, uint64_t, std::vector<
     td.m_key_image_partial = false;
     td.m_subaddr_index.major = etd.m_subaddr_index_major;
     td.m_subaddr_index.minor = etd.m_subaddr_index_minor;
+    td.m_origin_td_idx = ((uint64_t)-1);
 
     // skip those we've already imported, or which have different data
     if (i + offset < original_size)

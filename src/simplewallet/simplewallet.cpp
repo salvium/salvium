@@ -5742,20 +5742,49 @@ void simple_wallet::on_new_block(uint64_t height, const cryptonote::block& block
     m_refresh_progress_reporter.update(height, false);
 }
 //----------------------------------------------------------------------------------------------------
-void simple_wallet::on_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, uint64_t burnt, const std::string& asset_type, const cryptonote::subaddress_index& subaddr_index, bool is_change, uint64_t unlock_time)
+void simple_wallet::on_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const std::string& asset_type, const cryptonote::subaddress_index& subaddr_index, bool is_change, uint64_t unlock_time, const uint64_t& origin_td_idx)
 {
   if (m_locked)
     return;
-  std::stringstream burn;
-  if (burnt != 0) {
-    burn << " (" << print_money(amount) << " yet " << print_money(burnt) << " was burnt)";
-  }
-  message_writer(asset_type == "SAL" ? console_color_green : console_color_yellow, false) << "\r" <<
-    tr("Height ") << height << ", " <<
-    tr("txid ") << txid << ", " <<
-    print_money(amount - burnt) << burn.str() << " " << asset_type <<  ", " <<
-    tr("idx ") << subaddr_index;
 
+  // Check for an origin TX
+  if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+
+    if (origin_td_idx != ((uint64_t)-1)) {
+      // Should not happen - report error
+    }
+    
+    // Retrieve the TD from the wallet
+    tools::wallet2::transfer_details td_origin = m_wallet->get_transfer_details(origin_td_idx);
+    
+    if (td_origin.m_tx.type == cryptonote::transaction_type::BURN) {
+      message_writer(console_color_red) << "\r" << "*** BURN ***";
+    } else if (td_origin.m_tx.type == cryptonote::transaction_type::CONVERT) {
+      message_writer(console_color_red) << "\r" << "*** CONVERT ***";
+    } else if (td_origin.m_tx.type == cryptonote::transaction_type::YIELD) {
+      message_writer(asset_type == "SAL" ? console_color_green : console_color_yellow, false) << "\r" <<
+	tr("Height ") << height << ", " <<
+	tr("txid ") << txid << ", " <<
+	tr("stake returned ") << print_money(td_origin.m_tx.amount_burnt) << " " << td_origin.asset_type << " from height " << td_origin.m_block_height << ", " <<
+	tr("idx ") << subaddr_index;
+
+      message_writer(asset_type == "SAL" ? console_color_green : console_color_yellow, false) << "\r" <<
+	tr("Height ") << height << ", " <<
+	tr("txid ") << txid << ", " <<
+	tr("yield earned ") << print_money(amount - td_origin.m_tx.amount_burnt) << " " << asset_type <<  ", " <<
+	tr("idx ") << subaddr_index;
+    } else {
+    }
+    
+  } else {
+    
+    message_writer(asset_type == "SAL" ? console_color_green : console_color_yellow, false) << "\r" <<
+      tr("Height ") << height << ", " <<
+      tr("txid ") << txid << ", " <<
+      print_money(amount) << " " << asset_type <<  ", " <<
+      tr("idx ") << subaddr_index;
+  }
+  
   const uint64_t warn_height = m_wallet->nettype() == TESTNET ? 1000000 : m_wallet->nettype() == STAGENET ? 50000 : 1650000;
   if (height >= warn_height && !is_change)
   {
@@ -5787,6 +5816,7 @@ void simple_wallet::on_money_received(uint64_t height, const crypto::hash &txid,
   }
   if (unlock_time && !cryptonote::is_coinbase(tx))
     message_writer() << tr("NOTE: This transaction is locked, see details with: show_transfer ") + epee::string_tools::pod_to_hex(txid);
+
   if (m_auto_refresh_refreshing)
     m_cmd_binder.print_prompt();
   else
@@ -5809,6 +5839,24 @@ void simple_wallet::on_money_spent(uint64_t height, const crypto::hash &txid, co
     tr("txid ") << txid << ", " <<
     tr("spent ") << print_money(amount) << " " << asset_type << ", " <<
     tr("idx ") << subaddr_index;
+  std::stringstream burn;
+  if (in_tx.type == cryptonote::transaction_type::BURN) {
+    message_writer(console_color_red, false) << "\r" <<
+      tr("Height ") << height << ", " <<
+      tr("txid ") << txid << ", " <<
+      tr("burnt ") << print_money(in_tx.amount_burnt) << " " << asset_type;
+  } else if (in_tx.type == cryptonote::transaction_type::CONVERT) {
+    message_writer(console_color_yellow, false) << "\r" <<
+      tr("Height ") << height << ", " <<
+      tr("txid ") << txid << ", " <<
+      tr("converting ") << print_money(in_tx.amount_burnt) << " " << asset_type;
+  } else if (in_tx.type == cryptonote::transaction_type::YIELD) {
+    message_writer(console_color_red, false) << "\r" <<
+      tr("Height ") << height << ", " <<
+      tr("txid ") << txid << ", " <<
+      tr("staked ") << print_money(in_tx.amount_burnt) << " " << asset_type;
+  } else {
+  }
   if (m_auto_refresh_refreshing)
     m_cmd_binder.print_prompt();
   else
