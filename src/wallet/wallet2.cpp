@@ -2236,6 +2236,10 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
           // Find the TX public key for P_change
           //auto search = m_protocol_txs.find(pk_change);
           auto search = m_protocol_txs.find(output_public_key);
+	  if (search == m_protocol_txs.end()) {
+	    LOG_PRINT_L3("failed to locate protocol_tx entry for this vout - skipping");
+	    continue;
+	  }
           THROW_WALLET_EXCEPTION_IF(search == m_protocol_txs.end(), error::wallet_internal_error, "failed to locate protocol_tx entry to permit source usage");
           size_t idx = search->second;
           THROW_WALLET_EXCEPTION_IF(idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate protocol_txs index in m_transfers");
@@ -2727,10 +2731,10 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
       payment.m_fee          = fee;
       // SRCG - figure out what this needs to be (pretty sure we should never get here with CONVERT!)
       payment.m_amount       = source_asset == dest_asset ? i.second[dest_asset] : tx.amount_burnt;
-      payment.m_asset_type   = dest_asset;
+      payment.m_asset_type   = (tx.type == cryptonote::transaction_type::PROTOCOL) ? "SAL" : dest_asset;
       payment.m_amounts      = tx_amounts_individual_outs[i.first];
       payment.m_block_height = height;
-      payment.m_unlock_time  = tx.unlock_time;
+      payment.m_unlock_time  = tx.unlock_time; // SRCG: this is incorrect - work out which vout entry it is and query that
       payment.m_timestamp    = ts;
       payment.m_coinbase     = miner_tx;
       payment.m_subaddr_index = i.first;
