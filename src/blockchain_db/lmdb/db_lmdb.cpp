@@ -1179,7 +1179,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       throw0(DB_ERROR(lmdb_error("Failed to add prunable tx prunable hash to db transaction: ", result).c_str()));
   }
 
-  if (tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::BURN) {
+  if (tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::YIELD) {
 
     // Get the current tally value for the source currency type
     MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
@@ -3395,6 +3395,12 @@ std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
 
   uint64_t m_coinbase = get_block_already_generated_coins(m_height-1);
   LOG_PRINT_L3("BlockchainLMDB::" << __func__ << " - mined supply for SAL = " << m_coinbase);
+
+  // SRCG: For V1, we can simply return this number, because there is no other source of coins
+  circulating_supply["SAL"] = m_coinbase;
+  return circulating_supply;
+  
+  /*
   check_open();
   
   TXN_PREFIX_RDONLY();
@@ -3436,6 +3442,7 @@ std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
     circulating_supply["SAL"] = m_coinbase;
   }
   return circulating_supply;
+  */
 }
 
 uint64_t BlockchainLMDB::num_outputs() const

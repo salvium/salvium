@@ -439,6 +439,7 @@ private:
       uint64_t m_timestamp;
       bool m_coinbase;
       cryptonote::subaddress_index m_subaddr_index;
+      cryptonote::transaction_type m_tx_type;
 
       BEGIN_SERIALIZE_OBJECT()
         VERSION_FIELD(0)
@@ -452,6 +453,7 @@ private:
         VARINT_FIELD(m_timestamp)
         FIELD(m_coinbase)
         FIELD(m_subaddr_index)
+        VARINT_FIELD(m_tx_type)
       END_SERIALIZE()
     };
 

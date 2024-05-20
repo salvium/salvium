@@ -2738,6 +2738,18 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
       payment.m_timestamp    = ts;
       payment.m_coinbase     = miner_tx;
       payment.m_subaddr_index = i.first;
+      if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+	if (origin_td_idx != ((uint64_t)-1)) {
+	  // Get the origin TD information
+	  payment.m_amount   = payment.m_amounts[0];
+	  payment.m_tx_type  = m_transfers[origin_td_idx].m_tx.type;
+	  payment.m_fee      = m_transfers[origin_td_idx].m_tx.amount_burnt;
+	} else {
+	  assert(false);
+	}
+      } else {
+	payment.m_tx_type      = tx.type;
+      }
       if (pool) {
         if (emplace_or_replace(m_unconfirmed_payments, payment_id, pool_payment_details{payment, double_spend_seen}))
           all_same = false;
@@ -2822,6 +2834,8 @@ void wallet2::process_outgoing(const crypto::hash &txid, const cryptonote::trans
   entry.first->second.m_timestamp = ts;
   entry.first->second.m_unlock_time = tx.unlock_time;
 
+  entry.first->second.m_tx = (cryptonote::transaction_prefix)tx;
+  
   add_rings(tx);
 }
 //----------------------------------------------------------------------------------------------------
