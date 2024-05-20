@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2022, The Monero Project
-// Portions Copyright (c) 2023, Fulmo (author: SRCG)
+// Portions Copyright (c) 2023, Salvium (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -232,17 +232,22 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
   {
     // miner v2 txes have their coinbase output in one single out to save space,
     // and we store them as rct outputs with an identity mask
+    uint64_t unlock_time = 0;
+    if (!cryptonote::get_output_unlock_time(tx.vout[i], unlock_time)) {
+      LOG_PRINT_L1("Failed to get output unlock time, aborting transaction addition");
+      throw std::runtime_error("Unexpected error getting output unlock_time, aborting");
+    }
     if (miner_tx && tx.version == 2)
     {
       cryptonote::tx_out vout = tx.vout[i];
       rct::key commitment = rct::zeroCommit(vout.amount);
       vout.amount = 0;
-      amount_output_indices[i] = add_output(tx_hash, vout, i, tx.unlock_time,
+      amount_output_indices[i] = add_output(tx_hash, vout, i, unlock_time,
         &commitment);
     }
     else
     {
-      amount_output_indices[i] = add_output(tx_hash, tx.vout[i], i, tx.unlock_time,
+      amount_output_indices[i] = add_output(tx_hash, tx.vout[i], i, unlock_time,
         tx.version > 1 ? &tx.rct_signatures.outPk[i].mask : NULL);
     }
   }
@@ -263,6 +268,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
                                 , const uint64_t& coins_generated
                                 , const std::vector<std::pair<transaction, blobdata>>& txs
                                 , const cryptonote::network_type& nettype
+                                , cryptonote::yield_block_info& ybi
                                 )
 {
   const block &blk = blck.first;
@@ -359,43 +365,52 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
   }
 
   // SRCG: This is the code that calculates the total slippage for the block
-  // Now convert all of the residual balances into FULM
+  // Now convert all of the residual balances into SAL
   boost::multiprecision::int128_t slippage_total_128 = 0;
   uint64_t slippage_total = 0;
-  for (const auto& tally: slippage_counts) {
-    boost::multiprecision::int128_t slippage_amount_128 = 0;
-    if (tally.first == "FULM") {
-      slippage_amount_128 = tally.second;
-    } else {
-      // Sanity check - do we have a price for both source asset type and FULM in the PR?
-      boost::multiprecision::int128_t fulm_price = blk.pricing_record["FULM"];
-      boost::multiprecision::int128_t asset_price = blk.pricing_record[tally.first];
-      if (fulm_price == 0) {
-        // No price available - bail out, because block is invalid
-        throw std::runtime_error("Asset type 'FULM' is not present in available pricing record");
+  if (blk.major_version >= HF_VERSION_ENABLE_CONVERT) {
+    for (const auto& tally: slippage_counts) {
+      boost::multiprecision::int128_t slippage_amount_128 = 0;
+      if (tally.first == "SAL") {
+        slippage_amount_128 = tally.second;
+      } else {
+        // Sanity check - do we have a price for both source asset type and SAL in the PR?
+        boost::multiprecision::int128_t sal_price = blk.pricing_record["SAL"];
+        boost::multiprecision::int128_t asset_price = blk.pricing_record[tally.first];
+        if (sal_price == 0) {
+          // No price available - bail out, because block is invalid
+          throw std::runtime_error("Asset type 'SAL' is not present in available pricing record");
+        }
+        if (asset_price == 0) {
+          // No price available - bail out, because block is invalid
+          throw std::runtime_error("Asset type '" + tally.first + "' is not present in available pricing record");
+        }
+        // Convert the VSD amount into SAL
+        boost::multiprecision::int128_t tally_128 = tally.second;
+        tally_128 *= asset_price;
+        tally_128 /= sal_price;
+        slippage_amount_128 = tally_128.convert_to<int64_t>();
       }
-      if (asset_price == 0) {
-        // No price available - bail out, because block is invalid
-        throw std::runtime_error("Asset type '" + tally.first + "' is not present in available pricing record");
-      }
-      // Convert the amount into FULM
-      boost::multiprecision::int128_t tally_128 = tally.second;
-      tally_128 *= asset_price;
-      tally_128 /= fulm_price;
-      slippage_amount_128 = tally_128.convert_to<int64_t>();
+      slippage_total_128 += slippage_amount_128;
     }
-    slippage_total_128 += slippage_amount_128;
+    if (slippage_total_128 < 0)
+      throw std::runtime_error("Found a negative slippage total when summing the burnt/minted amounts");
+    slippage_total = slippage_total_128.convert_to<uint64_t>();
+
+  } else {
+
+    // Prior to activation of conversions, the staking reward is purely a percentage of the block reward
+    if (blk.miner_tx.amount_burnt == 0 and prev_height != 0)
+      throw std::runtime_error("Staking reward is zero, but block reward is present");
+    slippage_total = blk.miner_tx.amount_burnt;
   }
-  if (slippage_total_128 < 0)
-    throw std::runtime_error("Found a negative slippage total when summing the burnt/minted amounts");
-  slippage_total = slippage_total_128.convert_to<uint64_t>();
   
   TIME_MEASURE_FINISH(time1);
   time_add_transaction += time1;
 
   // call out to subclass implementation to add the block & metadata
   time1 = epee::misc_utils::get_tick_count();
-  add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, num_rct_outs, num_rct_outs_by_asset_type, blk_hash, slippage_total, yield_total, nettype);
+  add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, num_rct_outs, num_rct_outs_by_asset_type, blk_hash, slippage_total, yield_total, nettype, ybi);
   TIME_MEASURE_FINISH(time1);
   time_add_block1 += time1;
 

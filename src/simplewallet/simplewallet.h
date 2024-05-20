@@ -52,8 +52,8 @@
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "wallet.simplewallet"
-// Hardcode Fulmo's donation address
-constexpr const char FULMO_DONATION_ADDR[] = "888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H";
+// Hardcode Salvium's donation address
+constexpr const char SALVIUM_DONATION_ADDR[] = "888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H";
 
 /*!
  * \namespace cryptonote
@@ -180,6 +180,7 @@ namespace cryptonote
     bool sweep_below(const std::vector<std::string> &args);
     bool sweep_single(const std::vector<std::string> &args);
     bool sweep_unmixable(const std::vector<std::string> &args);
+    bool return_payment(const std::vector<std::string> &args);
     bool burn(const std::vector<std::string> &args);
     bool convert(const std::vector<std::string> &args);
     bool lock_for_yield(const std::vector<std::string> &args);
@@ -352,7 +353,7 @@ namespace cryptonote
 
     //----------------- i_wallet2_callback ---------------------
     virtual void on_new_block(uint64_t height, const cryptonote::block& block);
-    virtual void on_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, uint64_t burnt, const std::string& asset_type, const cryptonote::subaddress_index& subaddr_index, bool is_change, uint64_t unlock_time);
+    virtual void on_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const std::string& asset_type, const cryptonote::subaddress_index& subaddr_index, bool is_change, uint64_t unlock_time, const uint64_t& origin_td_idx);
     virtual void on_unconfirmed_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const cryptonote::subaddress_index& subaddr_index);
     virtual void on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& in_tx, uint64_t amount, const std::string& asset_type, const cryptonote::transaction& spend_tx, const cryptonote::subaddress_index& subaddr_index);
     virtual void on_skip_transaction(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx);

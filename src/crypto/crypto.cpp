@@ -74,6 +74,13 @@ namespace crypto {
   const crypto::public_key null_pkey = crypto::public_key{};
   const crypto::secret_key null_skey = crypto::secret_key{};
 
+  static inline crypto::key_image get_null_ki() {
+    crypto::key_image ki;
+    std::memset(ki.data, 0, sizeof(ki.data));
+    return ki;
+  }     
+  const crypto::key_image  null_ki   = get_null_ki();
+
   static inline unsigned char *operator &(ec_point &point) {
     return &reinterpret_cast<unsigned char &>(point);
   }

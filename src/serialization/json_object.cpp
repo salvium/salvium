@@ -270,16 +270,18 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
   dest.StartObject();
 
   INSERT_INTO_JSON_OBJECT(dest, version, tx.version);
-  INSERT_INTO_JSON_OBJECT(dest, unlock_time, tx.unlock_time);
   INSERT_INTO_JSON_OBJECT(dest, inputs, tx.vin);
   INSERT_INTO_JSON_OBJECT(dest, outputs, tx.vout);
   INSERT_INTO_JSON_OBJECT(dest, extra, tx.extra);
   INSERT_INTO_JSON_OBJECT(dest, type, static_cast<uint8_t>(tx.type));
-  INSERT_INTO_JSON_OBJECT(dest, return_address, tx.return_address);
-  INSERT_INTO_JSON_OBJECT(dest, source_asset_type, tx.source_asset_type);
-  INSERT_INTO_JSON_OBJECT(dest, destination_asset_type, tx.destination_asset_type);
-  INSERT_INTO_JSON_OBJECT(dest, amount_burnt, tx.amount_burnt);
-  INSERT_INTO_JSON_OBJECT(dest, amount_slippage_limit, tx.amount_slippage_limit);
+  if (tx.type != cryptonote::transaction_type::MINER && tx.type != cryptonote::transaction_type::PROTOCOL) {
+    INSERT_INTO_JSON_OBJECT(dest, return_address, tx.return_address);
+    INSERT_INTO_JSON_OBJECT(dest, return_pubkey, tx.return_pubkey);
+    INSERT_INTO_JSON_OBJECT(dest, source_asset_type, tx.source_asset_type);
+    INSERT_INTO_JSON_OBJECT(dest, destination_asset_type, tx.destination_asset_type);
+    INSERT_INTO_JSON_OBJECT(dest, amount_burnt, tx.amount_burnt);
+    INSERT_INTO_JSON_OBJECT(dest, amount_slippage_limit, tx.amount_slippage_limit);
+  }
   if (!tx.pruned)
   {
     INSERT_INTO_JSON_OBJECT(dest, signatures, tx.signatures);
@@ -298,16 +300,18 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
   }
 
   GET_FROM_JSON_OBJECT(val, tx.version, version);
-  GET_FROM_JSON_OBJECT(val, tx.unlock_time, unlock_time);
   GET_FROM_JSON_OBJECT(val, tx.vin, inputs);
   GET_FROM_JSON_OBJECT(val, tx.vout, outputs);
   GET_FROM_JSON_OBJECT(val, tx.extra, extra);
   GET_FROM_JSON_OBJECT(val, tx.type, type);
-  GET_FROM_JSON_OBJECT(val, tx.return_address, return_address);
-  GET_FROM_JSON_OBJECT(val, tx.source_asset_type, source_asset_type);
-  GET_FROM_JSON_OBJECT(val, tx.destination_asset_type, destination_asset_type);
-  GET_FROM_JSON_OBJECT(val, tx.amount_burnt, amount_burnt);
-  GET_FROM_JSON_OBJECT(val, tx.amount_slippage_limit, amount_slippage_limit);
+  if (tx.type != cryptonote::transaction_type::MINER && tx.type != cryptonote::transaction_type::PROTOCOL) {
+    GET_FROM_JSON_OBJECT(val, tx.return_address, return_address);
+    GET_FROM_JSON_OBJECT(val, tx.return_pubkey, return_pubkey);
+    GET_FROM_JSON_OBJECT(val, tx.source_asset_type, source_asset_type);
+    GET_FROM_JSON_OBJECT(val, tx.destination_asset_type, destination_asset_type);
+    GET_FROM_JSON_OBJECT(val, tx.amount_burnt, amount_burnt);
+    GET_FROM_JSON_OBJECT(val, tx.amount_slippage_limit, amount_slippage_limit);
+  }
   GET_FROM_JSON_OBJECT(val, tx.rct_signatures, ringct);
 
   const auto& sigs = val.FindMember("signatures");
@@ -1132,8 +1136,8 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::suppl
 {
   dest.StartObject();
 
-  INSERT_INTO_JSON_OBJECT(dest, fulm, supply_data.fulm);
-  INSERT_INTO_JSON_OBJECT(dest, fusd, supply_data.fusd);
+  INSERT_INTO_JSON_OBJECT(dest, sal, supply_data.sal);
+  INSERT_INTO_JSON_OBJECT(dest, vsd, supply_data.vsd);
 
   dest.EndObject();
 }
@@ -1145,8 +1149,8 @@ void fromJsonValue(const rapidjson::Value& val, oracle::supply_data& supply_data
     throw WRONG_TYPE("json object");
   }
 
-  GET_FROM_JSON_OBJECT(val, supply_data.fulm, fulm);
-  GET_FROM_JSON_OBJECT(val, supply_data.fusd, fusd);
+  GET_FROM_JSON_OBJECT(val, supply_data.sal, sal);
+  GET_FROM_JSON_OBJECT(val, supply_data.vsd, vsd);
 }
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::asset_data& asset_data)

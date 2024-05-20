@@ -157,7 +157,7 @@ struct txpool_tx_meta_t
 {
   crypto::hash max_used_block_id;
   crypto::hash last_failed_id;
-  crypto::key_image input_k_image;
+  crypto::public_key return_pubkey;
   crypto::public_key return_address;
   crypto::public_key one_time_public_key;
   uint64_t weight;
@@ -197,19 +197,13 @@ struct txpool_tx_meta_t
   }
 };
 
-typedef struct yield_block_info {
-  uint64_t block_height;
-  uint64_t slippage_total;
-  uint64_t locked_coins;
-  uint64_t locked_coins_tally;
-  uint8_t network_health_percentage;
-} yield_block_info;
-
 typedef struct yield_tx_info {
   uint64_t block_height;
   crypto::hash tx_hash;
   uint64_t locked_coins;
   crypto::public_key return_address;
+  crypto::public_key P_change;
+  crypto::public_key return_pubkey;
 } yield_tx_info;
 
 #define DBF_SAFE       1
@@ -422,8 +416,8 @@ private:
    * @param cumulative_difficulty the accumulated difficulty after this block
    * @param coins_generated the number of coins generated total after this block
    * @param blk_hash the hash of the block
-   * @param slippage_total the total value (expressed in FULM coins) of all slippage for this block
-   * @param yield_total the total of FULM coins that have been locked for yield in this block
+   * @param slippage_total the total value (expressed in SAL coins) of all slippage for this block
+   * @param yield_total the total of SAL coins that have been locked for yield in this block
    */
   virtual void add_block( const block& blk,
                           size_t block_weight,
@@ -435,7 +429,8 @@ private:
                           const crypto::hash& blk_hash,
                           uint64_t slippage_total,
                           uint64_t yield_total,
-                          const cryptonote::network_type& nettype
+                          const cryptonote::network_type& nettype,
+                          cryptonote::yield_block_info& ybi
                           ) = 0;
 
   /**
@@ -889,7 +884,8 @@ public:
                             , const uint64_t& coins_generated
                             , const std::vector<std::pair<transaction, blobdata>>& txs
                             , const cryptonote::network_type& nettype
-                              );
+                            , cryptonote::yield_block_info& ybi
+                            );
 
   /**
    * @brief checks if a block exists

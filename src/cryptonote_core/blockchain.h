@@ -1153,6 +1153,28 @@ namespace cryptonote
      * @return TRUE if the payouts were calculated successfully, FALSE otherwise
      */
     bool calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& yield_payouts);
+
+    /**
+     * @brief get the complete YBI cache
+     *
+     * Retrieve the YBI local cache.
+     * If the cache is out of date, the cache will (attempt to) be rebuilt
+     * before being returned.
+     *
+     * @return TRUE if the call is successful, FALSE otherwise
+     */
+    bool get_ybi_cache(std::map<uint64_t, yield_block_info>& ybi_cache);
+
+    /**
+     * @brief get the YBI entry for a particular height from the cache
+     *
+     * Retrieve the YBI entry for the specified height from the local cache.
+     * If the cache is out of date, the cache will (attempt to) be rebuilt
+     * before the entry is obtained.
+     *
+     * @return TRUE if the entry was located and returned, FALSE otherwise
+     */
+    bool get_ybi_entry(const uint64_t height, cryptonote::yield_block_info& ybi);
     
     /**
      * (re)build the yield_block_info cache from the blockchain
@@ -1279,6 +1301,9 @@ namespace cryptonote
     // cache for verifying transaction RCT non semantics
     mutable rct_ver_cache_t m_rct_ver_cache;
 
+    /**
+     * @brief hashmap linking blockchain height to YBI struct for that height
+     */
     std::map<uint64_t, yield_block_info> m_yield_block_info_cache;
     
     /**

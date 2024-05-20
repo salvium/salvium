@@ -139,6 +139,13 @@ namespace cryptonote
   {
     const bool kept_by_block = (tx_relay == relay_method::block);
 
+    if(tx.type == cryptonote::transaction_type::CONVERT && version < HF_VERSION_ENABLE_CONVERT)
+    {
+      tvc.m_verifivation_failed = true;
+      tvc.m_invalid_version = true;
+      return false;
+    }
+
     // this should already be called with that lock, but let's make it explicit for clarity
     CRITICAL_REGION_LOCAL(m_transactions_lock);
 
@@ -379,7 +386,7 @@ namespace cryptonote
           if (!ok)
             return false;
           meta.one_time_public_key = change_output_public_key;
-          meta.input_k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
+          meta.return_pubkey = tx.return_pubkey;
         
           if (!insert_key_images(tx, id, tx_relay))
             return false;

@@ -38,6 +38,7 @@
 #include <boost/serialization/is_bitwise_serializable.hpp>
 #include <boost/archive/portable_binary_iarchive.hpp>
 #include <boost/archive/portable_binary_oarchive.hpp>
+#include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic.h"
 #include "difficulty.h"
 #include "common/unordered_containers_boost_serialization.h"
@@ -104,12 +105,16 @@ namespace boost
   inline void serialize(Archive &a, cryptonote::txout_to_key &x, const boost::serialization::version_type ver)
   {
     a & x.key;
+    a & x.asset_type;
+    a & x.unlock_time;
   }
 
   template <class Archive>
   inline void serialize(Archive &a, cryptonote::txout_to_tagged_key &x, const boost::serialization::version_type ver)
   {
     a & x.key;
+    a & x.asset_type;
+    a & x.unlock_time;
     a & x.view_tag;
   }
 
@@ -162,13 +167,14 @@ namespace boost
   inline void serialize(Archive &a, cryptonote::transaction_prefix &x, const boost::serialization::version_type ver)
   {
     a & x.version;
-    a & x.unlock_time;
+    //a & x.unlock_time;
     a & x.vin;
     a & x.vout;
     a & x.extra;
     a & x.type;
     if (x.type != cryptonote::transaction_type::MINER && x.type != cryptonote::transaction_type::PROTOCOL) {
       a & x.return_address;
+      a & x.return_pubkey;
       a & x.source_asset_type;
       a & x.destination_asset_type;
       a & x.amount_burnt;
@@ -180,13 +186,14 @@ namespace boost
   inline void serialize(Archive &a, cryptonote::transaction &x, const boost::serialization::version_type ver)
   {
     a & x.version;
-    a & x.unlock_time;
+    //a & x.unlock_time;
     a & x.vin;
     a & x.vout;
     a & x.extra;
     a & x.type;
     if (x.type != cryptonote::transaction_type::MINER && x.type != cryptonote::transaction_type::PROTOCOL) {
       a & x.return_address;
+      a & x.return_pubkey;
       a & x.source_asset_type;
       a & x.destination_asset_type;
       a & x.amount_burnt;
@@ -207,8 +214,8 @@ namespace boost
   template <class Archive>
   inline void serialize(Archive &a, oracle::supply_data &sd, const boost::serialization::version_type ver)
   {
-    a & sd.fulm;
-    a & sd.fusd;
+    a & sd.sal;
+    a & sd.vsd;
   }
 
   template <class Archive>
@@ -231,6 +238,16 @@ namespace boost
   }
 
   template <class Archive>
+  inline void serialize(Archive &a, cryptonote::yield_block_info &ybi, const boost::serialization::version_type ver)
+  {
+    a & ybi.block_height;
+    a & ybi.slippage_total_this_block;
+    a & ybi.locked_coins_this_block;
+    a & ybi.locked_coins_tally;
+    a & ybi.network_health_percentage;
+  }
+
+  template <class Archive>
   inline void serialize(Archive &a, cryptonote::block &b, const boost::serialization::version_type ver)
   {
     a & b.major_version;
@@ -238,7 +255,8 @@ namespace boost
     a & b.timestamp;
     a & b.prev_id;
     a & b.nonce;
-    a & b.pricing_record;
+    if (b.major_version >= HF_VERSION_ENABLE_ORACLE)
+      a & b.pricing_record;
     //------------------
     a & b.miner_tx;
     a & b.protocol_tx;

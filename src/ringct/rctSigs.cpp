@@ -1287,14 +1287,15 @@ namespace rct {
             rv.p.MGs.resize(inamounts.size());
         key sumpouts = zero(); //sum pseudoOut masks
         keyV a(inamounts.size());
-        for (i = 0 ; i < inamounts.size() - 1; i++) {
+        for (i = 0 ; i < inamounts.size(); i++) {
             skGen(a[i]);
             sc_add(sumpouts.bytes, a[i].bytes, sumpouts.bytes);
             genC(pseudoOuts[i], a[i], inamounts[i]);
         }
-        sc_sub(a[i].bytes, sumout.bytes, sumpouts.bytes);
-        genC(pseudoOuts[i], a[i], inamounts[i]);
-        DP(pseudoOuts[i]);
+        key difference;
+        sc_sub(difference.bytes, sumpouts.bytes, sumout.bytes);
+        genC(rv.p_r, difference, 0);
+        DP(rv.p_r);
 
         key full_message = get_pre_mlsag_hash(rv,hwdev);
 
@@ -1478,7 +1479,10 @@ namespace rct {
 
         const key txnAmountBurntKey = scalarmultH(d2h(amount_burnt));
         addKeys(sumOutpks, txnAmountBurntKey, sumOutpks);
-          
+
+        // Account for the "blinding factor remainder" term `p_r`
+        addKeys(sumOutpks, rv.p_r, sumOutpks);
+        
         key sumPseudoOuts = addKeys(pseudoOuts);
         DP(sumPseudoOuts);
 

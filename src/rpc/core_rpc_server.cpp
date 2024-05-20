@@ -1910,12 +1910,10 @@ namespace cryptonote
     crypto::hash seed_hash, next_seed_hash;
     if (!get_block_template(info.address, req.prev_block.empty() ? NULL : &prev_block, blob_reserve, reserved_offset, wdiff, res.height, res.expected_reward, b, res.seed_height, seed_hash, next_seed_hash, error_resp))
       return false;
-    if (b.major_version >= RX_BLOCK_VERSION)
-    {
-      res.seed_hash = string_tools::pod_to_hex(seed_hash);
-      if (seed_hash != next_seed_hash)
-        res.next_seed_hash = string_tools::pod_to_hex(next_seed_hash);
-    }
+
+    res.seed_hash = string_tools::pod_to_hex(seed_hash);
+    if (seed_hash != next_seed_hash)
+      res.next_seed_hash = string_tools::pod_to_hex(next_seed_hash);
 
     res.reserved_offset = reserved_offset;
     store_difficulty(wdiff, res.difficulty, res.wide_difficulty, res.difficulty_top64);
@@ -2228,7 +2226,7 @@ namespace cryptonote
       }
       b.nonce = req.starting_nonce;
       crypto::hash seed_hash = crypto::null_hash;
-      if (b.major_version >= RX_BLOCK_VERSION && !epee::string_tools::hex_to_pod(template_res.seed_hash, seed_hash))
+      if (!epee::string_tools::hex_to_pod(template_res.seed_hash, seed_hash))
       {
         error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
         error_resp.message = "Error converting seed hash";
@@ -2941,6 +2939,35 @@ namespace cryptonote
     return true;    
   }
   //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_get_yield_info(const COMMAND_RPC_GET_YIELD_INFO::request& req, COMMAND_RPC_GET_YIELD_INFO::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
+  {
+    PERF_TIMER(on_get_yield_info);
+    uint64_t height = m_core.get_current_blockchain_height();
+    std::map<uint64_t, yield_block_info> ybi_cache;
+    if (!m_core.get_blockchain_storage().get_ybi_cache(ybi_cache)) {
+      res.status = "failed to get YBI data from blockchain";
+      return true;
+    }
+    // Iterate over the cache, supplying the data in a more accessible format
+    res.yield_data.clear();
+    for (const auto& entry: ybi_cache) {
+      // Skip this entry if out-of=range
+      if (req.from_height > 0 and entry.first < req.from_height) continue;
+      if (req.to_height > 0 and entry.first > req.to_height) continue;
+
+      // Clone the data into the response
+      COMMAND_RPC_GET_YIELD_INFO::yield_data_t yd;
+      yd.block_height = entry.second.block_height;
+      yd.slippage_total_this_block = entry.second.slippage_total_this_block;
+      yd.locked_coins_this_block = entry.second.locked_coins_this_block;
+      yd.locked_coins_tally = entry.second.locked_coins_tally;
+      yd.network_health_percentage = entry.second.network_health_percentage;
+      res.yield_data.push_back(yd);
+    }
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::on_get_base_fee_estimate(const COMMAND_RPC_GET_BASE_FEE_ESTIMATE::request& req, COMMAND_RPC_GET_BASE_FEE_ESTIMATE::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
   {
     RPC_TRACKER(get_base_fee_estimate);
@@ -3458,12 +3485,10 @@ namespace cryptonote
     }
     res.hashing_blob = epee::string_tools::buff_to_hex_nodelimer(hashing_blob);
     res.top_hash = epee::string_tools::pod_to_hex(top_hash);
-    if (hashing_blob[0] >= RX_BLOCK_VERSION)
-    {
-      res.seed_hash = string_tools::pod_to_hex(seed_hash);
-      if (seed_hash != next_seed_hash)
-        res.next_seed_hash = string_tools::pod_to_hex(next_seed_hash);
-    }
+
+    res.seed_hash = string_tools::pod_to_hex(seed_hash);
+    if (seed_hash != next_seed_hash)
+      res.next_seed_hash = string_tools::pod_to_hex(next_seed_hash);
 
     res.status = CORE_RPC_STATUS_OK;
     return true;

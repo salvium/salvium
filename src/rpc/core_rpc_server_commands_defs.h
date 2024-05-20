@@ -33,6 +33,7 @@
 #include "string_tools.h"
 
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
+#include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/difficulty.h"
 #include "crypto/hash.h"
@@ -1217,6 +1218,50 @@ namespace cryptonote
       
       BEGIN_KV_SERIALIZE_MAP()
       KV_SERIALIZE(pr)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  struct COMMAND_RPC_GET_YIELD_INFO
+  {
+    struct yield_data_t
+    {
+      uint64_t block_height;
+      uint64_t slippage_total_this_block;
+      uint64_t locked_coins_this_block;
+      uint64_t locked_coins_tally;
+      uint8_t network_health_percentage;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(block_height)
+        KV_SERIALIZE(slippage_total_this_block)
+        KV_SERIALIZE(locked_coins_this_block)
+        KV_SERIALIZE(locked_coins_tally)
+        KV_SERIALIZE(network_health_percentage)
+      END_KV_SERIALIZE_MAP()
+    };
+    
+    struct request_t
+    {
+      uint64_t from_height;
+      uint64_t to_height;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_OPT(from_height, (uint64_t)0)
+        KV_SERIALIZE_OPT(to_height, (uint64_t)0)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+    
+
+    struct response_t
+    {
+      std::string status;
+      std::vector<COMMAND_RPC_GET_YIELD_INFO::yield_data_t> yield_data;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(status)
+        KV_SERIALIZE(yield_data)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<response_t> response;

@@ -199,8 +199,10 @@ namespace cryptonote
     std::vector<uint8_t> extra;
     // TX type
     cryptonote::transaction_type type;
-    // Return address (encrypted)
+    // Return address
     crypto::public_key return_address;
+    // Return TX public key
+    crypto::public_key return_pubkey;
     // Source asset type
     std::string source_asset_type;
     // Destination asset type (this is only necessary for CONVERT transactions)
@@ -213,17 +215,19 @@ namespace cryptonote
     BEGIN_SERIALIZE()
       VARINT_FIELD(version)
       if(version == 0 || CURRENT_TRANSACTION_VERSION < version) return false;
-      VARINT_FIELD(unlock_time)
       FIELD(vin)
       FIELD(vout)
       FIELD(extra)
       VARINT_FIELD(type)
-      if (type != cryptonote::transaction_type::MINER && type != cryptonote::transaction_type::PROTOCOL) {
-        FIELD(return_address)
-        FIELD(source_asset_type)
-        FIELD(destination_asset_type)
+      if (type != cryptonote::transaction_type::PROTOCOL) {
         VARINT_FIELD(amount_burnt)
-        VARINT_FIELD(amount_slippage_limit)
+        if (type != cryptonote::transaction_type::MINER) {
+          FIELD(return_address)
+          FIELD(return_pubkey)
+          FIELD(source_asset_type)
+          FIELD(destination_asset_type)
+          VARINT_FIELD(amount_slippage_limit)
+        }
       }
     END_SERIALIZE()
 
@@ -238,6 +242,7 @@ namespace cryptonote
       extra.clear();
       type = cryptonote::transaction_type::UNSET;
       return_address = crypto::null_pkey;
+      return_pubkey = crypto::null_pkey;
       source_asset_type.clear();
       destination_asset_type.clear();
       amount_burnt = 0;
@@ -493,6 +498,24 @@ namespace cryptonote
     return boost::apply_visitor(txin_signature_size_visitor(), tx_in);
   }
 
+  struct yield_block_info {
+    uint64_t block_height;
+    uint64_t slippage_total_this_block;
+    uint64_t locked_coins_this_block;
+    uint64_t locked_coins_tally;
+    uint8_t network_health_percentage;
+
+    BEGIN_SERIALIZE()
+      VARINT_FIELD(block_height)
+      VARINT_FIELD(slippage_total_this_block)
+      VARINT_FIELD(locked_coins_this_block)
+      VARINT_FIELD(locked_coins_tally)
+      VARINT_FIELD(network_health_percentage)
+    END_SERIALIZE()
+  };
+
+
+  
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
@@ -511,7 +534,8 @@ namespace cryptonote
       VARINT_FIELD(timestamp)
       FIELD(prev_id)
       FIELD(nonce)
-      FIELD(pricing_record)
+      if (major_version >= HF_VERSION_ENABLE_ORACLE)
+        FIELD(pricing_record)
     END_SERIALIZE()
   };
 
@@ -532,7 +556,7 @@ namespace cryptonote
 
     transaction miner_tx;
     /**
-     * Ok, the "protocol_tx" is a large part of what makes Fulmo unique, and requires a bit of explaining...
+     * Ok, the "protocol_tx" is a large part of what makes Salvium unique, and requires a bit of explaining...
      *
      * In Haven, and therefore Zephyr also, conversions take place "in-transaction". That is to say,
      * amounts of coin A are burnt, and amounts of coin B are minted, and the conversion rate is known,
@@ -561,14 +585,14 @@ namespace cryptonote
      * Therefore, it follows that slippage can only accurately be assessed when we know ALL of the changes
      * to the above parameters that will occur at a given point in time (specifically, when the block is
      * mined). There is a fundamental interdependence between each conversion TX in a given block. This
-     * means that, in Fulmo, you can't tell in advance precisely how much you will get minted by a given
+     * means that, in Salvium, you can't tell in advance precisely how much you will get minted by a given
      * conversion TX until the block is mined. Instead, when creating a conversion TX, the user is asked
      * to specify a minimum amount they will accept - if the transaction can satisfy that criterion when
      * it is mined, the conversion will be processed and the minted amount will be sent to the user. If
      * the transaction cannot satisfy the minimum minted requirement, the user will be refunded their
      * money, minus a nominal transaction fee.
      *
-     * Welcome to Fulmo, and the protocol_tx.
+     * Welcome to Salvium, and the protocol_tx.
      * --------------------------------------
      * The protocol_tx is a per-block TX (much like the miner_tx, where the block reward gets paid out).
      * It is created at the time of populating the block template to be sent to the miner. Specifically,

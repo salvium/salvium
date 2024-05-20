@@ -109,7 +109,7 @@ static bool compute_keys_for_sources(
     if (src.real_output >= src.outputs.size())
       return false;
 
-    // Populate this struct if you want to make use of multisig for Fulmo!!!
+    // Populate this struct if you want to make use of multisig for Salvium!!!
     assert(false);
     cryptonote::origin_data origin_tx_data;
     
@@ -514,7 +514,7 @@ static bool set_tx_outputs(const rct::keyV& output_public_keys, cryptonote::tran
   const std::size_t num_destinations = output_public_keys.size();
   unsigned_tx.vout.resize(num_destinations);
   for (std::size_t i = 0; i < num_destinations; ++i)
-    cryptonote::set_tx_out(0, "FULM", 0, rct::rct2pk(output_public_keys[i]), false, crypto::view_tag{}, unsigned_tx.vout[i]);
+    cryptonote::set_tx_out(0, "SAL", 0, rct::rct2pk(output_public_keys[i]), false, crypto::view_tag{}, unsigned_tx.vout[i]);
 
   return true;
 }
@@ -536,7 +536,7 @@ static bool set_tx_outputs_with_view_tags(
     "multisig signing protocol: internal error, view tag size mismatch.");
   unsigned_tx.vout.resize(num_destinations);
   for (std::size_t i = 0; i < num_destinations; ++i)
-    cryptonote::set_tx_out(0, "FULM", 0, rct::rct2pk(output_public_keys[i]), true, view_tags[i], unsigned_tx.vout[i]);
+    cryptonote::set_tx_out(0, "SAL", 0, rct::rct2pk(output_public_keys[i]), true, view_tags[i], unsigned_tx.vout[i]);
 
   return true;
 }
@@ -866,7 +866,6 @@ bool tx_builder_ringct_t::init(
 
   // misc. fields
   unsigned_tx.version = 2;  //rct = 2
-  unsigned_tx.unlock_time = unlock_time;
 
   // sort inputs
   sort_sources(sources);

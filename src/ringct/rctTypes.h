@@ -324,6 +324,7 @@ namespace rct {
         std::vector<ecdhTuple> ecdhInfo;
         ctkeyV outPk;
         xmr_amount txnFee; // contains b
+        key p_r;
 
         template<bool W, template <bool> class Archive>
         bool serialize_rctsig_base(Archive<W> &ar, size_t inputs, size_t outputs)
@@ -390,6 +391,7 @@ namespace rct {
               ar.delimit_array();
           }
           ar.end_array();
+          FIELD(p_r)
           return ar.good();
         }
 
@@ -401,6 +403,7 @@ namespace rct {
           FIELD(ecdhInfo)
           FIELD(outPk)
           VARINT_FIELD(txnFee)
+          FIELD(p_r)
         END_SERIALIZE()
     };
     struct rctSigPrunable {
