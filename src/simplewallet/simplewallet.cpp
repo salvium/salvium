@@ -162,7 +162,8 @@ enum TransferType {
   TransferLocked,
   Convert,
   Burn,
-  LockForYield
+  LockForYield,
+  Return
 };
 
 static std::string get_human_readable_timespan(std::chrono::seconds seconds);
@@ -5779,6 +5780,23 @@ void simple_wallet::on_money_received(uint64_t height, const crypto::hash &txid,
     
   } else {
     
+    if (tx.type == cryptonote::transaction_type::BURN) {
+      message_writer(console_color_yellow, false) << "\r" <<
+	tr("Height ") << height << ", " <<
+	tr("txid ") << txid << ", " <<
+	tr("burnt ") << print_money(tx.amount_burnt) << " " << asset_type;
+    } else if (tx.type == cryptonote::transaction_type::CONVERT) {
+      message_writer(console_color_blue, false) << "\r" <<
+	tr("Height ") << height << ", " <<
+	tr("txid ") << txid << ", " <<
+	tr("converting ") << print_money(tx.amount_burnt) << " " << asset_type;
+    } else if (tx.type == cryptonote::transaction_type::YIELD) {
+      message_writer(console_color_cyan, false) << "\r" <<
+	tr("Height ") << height << ", " <<
+	tr("txid ") << txid << ", " <<
+	tr("staked ") << print_money(tx.amount_burnt) << " " << asset_type;
+    }
+    
     message_writer(asset_type == "SAL" ? console_color_green : console_color_blue, false) << "\r" <<
       tr("Height ") << height << ", " <<
       tr("txid ") << txid << ", " <<
@@ -5840,24 +5858,6 @@ void simple_wallet::on_money_spent(uint64_t height, const crypto::hash &txid, co
     tr("txid ") << txid << ", " <<
     tr("spent ") << print_money(amount) << " " << asset_type << ", " <<
     tr("idx ") << subaddr_index;
-  std::stringstream burn;
-  if (in_tx.type == cryptonote::transaction_type::BURN) {
-    message_writer(console_color_yellow, false) << "\r" <<
-      tr("Height ") << height << ", " <<
-      tr("txid ") << txid << ", " <<
-      tr("burnt ") << print_money(in_tx.amount_burnt) << " " << asset_type;
-  } else if (in_tx.type == cryptonote::transaction_type::CONVERT) {
-    message_writer(console_color_blue, false) << "\r" <<
-      tr("Height ") << height << ", " <<
-      tr("txid ") << txid << ", " <<
-      tr("converting ") << print_money(in_tx.amount_burnt) << " " << asset_type;
-  } else if (in_tx.type == cryptonote::transaction_type::YIELD) {
-    message_writer(console_color_cyan, false) << "\r" <<
-      tr("Height ") << height << ", " <<
-      tr("txid ") << txid << ", " <<
-      tr("staked ") << print_money(in_tx.amount_burnt) << " " << asset_type;
-  } else {
-  }
   if (m_auto_refresh_refreshing)
     m_cmd_binder.print_prompt();
   else
@@ -7532,7 +7532,7 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
   try
   {
     // figure out what tx will be necessary
-    auto ptx_vector = m_wallet->create_transactions_all(below, asset_type, info.address, info.is_subaddress, outputs, fake_outs_count, unlock_block /* unlock_time */, priority, extra, account, subaddr_indices);
+    auto ptx_vector = m_wallet->create_transactions_all(below, cryptonote::transaction_type::TRANSFER, asset_type, info.address, info.is_subaddress, outputs, fake_outs_count, unlock_block /* unlock_time */, priority, extra, account, subaddr_indices);
 
     if (ptx_vector.empty())
     {
@@ -7789,7 +7789,7 @@ bool simple_wallet::sweep_single(const std::vector<std::string> &args_)
   try
   {
     // figure out what tx will be necessary
-    auto ptx_vector = m_wallet->create_transactions_single(ki, info.address, info.is_subaddress, outputs, fake_outs_count, 0 /* unlock_time */, priority, extra);
+    auto ptx_vector = m_wallet->create_transactions_single(ki, cryptonote::transaction_type::TRANSFER, info.address, info.is_subaddress, outputs, fake_outs_count, 0 /* unlock_time */, priority, extra);
 
     if (ptx_vector.empty())
     {
@@ -7963,11 +7963,13 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
 
   // Get the TX details
   tools::wallet2::transfer_container transfers;
-  crypto::key_image ki;
-  std::string asset_type;
-  bool found_ki = false;
   m_wallet->get_transfers(transfers);
-  for (const auto& td: transfers) {
+  std::vector<size_t> transfers_indices = {};
+  for (size_t idx=0; idx < transfers.size(); ++idx) {
+
+    // Get the TD by reference
+    tools::wallet2::transfer_details& td = transfers[idx];
+    
     // Skip entries we don't care about
     if (td.m_txid != txid) continue;
 
@@ -7990,23 +7992,129 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
     }
 
     // We found the one we were looking for - take a copy of the key_image, etc.
-    ki = td.m_key_image;
-    asset_type = td.asset_type;
-    found_ki = true;
+    transfers_indices.push_back(idx);
+    break;
   }
 
   // Check we have a valid key_image
-  if (!found_ki) {
+  if (transfers_indices.empty()) {
     fail_msg_writer() << tr("key image is unavailable (partial / unknown / spent / frozen) for txid ") << args_[0];
     return true;
   }
 
-  // Build the arguments list
-  std::vector<std::string> local_args;
-  local_args.insert(local_args.end(), args_.begin(), args_.end());
-  local_args.push_back(epee::string_tools::pod_to_hex(ki));
-  
-  transfer_main(Transfer, asset_type, asset_type, local_args, false);
+  SCOPED_WALLET_UNLOCK_ON_BAD_PASSWORD(return false;);
+
+  try
+  {
+    // Call the wallet create_transactions_return() method
+    auto ptx_vector = m_wallet->create_transactions_return(transfers_indices);
+    if (ptx_vector.empty())
+    {
+      fail_msg_writer() << tr("No outputs found");
+      return true;
+    }
+    if (ptx_vector.size() > 1)
+    {
+      fail_msg_writer() << tr("Multiple transactions are created, which is not supposed to happen");
+      return true;
+    }
+    if (ptx_vector[0].selected_transfers.size() != 1)
+    {
+      fail_msg_writer() << tr("The transaction uses multiple or no inputs, which is not supposed to happen");
+      return true;
+    }
+
+    // give user total and fee, and prompt to confirm
+    uint64_t total_fee = ptx_vector[0].fee;
+    uint64_t total_sent = m_wallet->get_transfer_details(ptx_vector[0].selected_transfers.front()).amount();
+    std::ostringstream prompt;
+    if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
+      return true;
+    prompt << boost::format(tr("Returning %s for a total fee of %s.  Is this okay?")) %
+      print_money(total_sent) %
+      print_money(total_fee);
+    std::string accepted = input_line(prompt.str(), true);
+    if (std::cin.eof())
+      return true;
+    if (!command_line::is_yes(accepted))
+    {
+      fail_msg_writer() << tr("transaction cancelled.");
+      return true;
+    }
+
+    // actually commit the transactions
+    if (m_wallet->multisig())
+    {
+      CHECK_MULTISIG_ENABLED();
+      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_monero_tx");
+      if (!r)
+      {
+        fail_msg_writer() << tr("Failed to write transaction(s) to file");
+      }
+      else
+      {
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_monero_tx";
+      }
+    }
+    else if (m_wallet->get_account().get_device().has_tx_cold_sign())
+    {
+      try
+      {
+	fail_msg_writer() << tr("cold-signing of return TXs not yet implemented");
+	return true;
+	/*
+        tools::wallet2::signed_tx_set signed_tx;
+        std::vector<cryptonote::address_parse_info> dsts_info;
+        dsts_info.push_back(info);
+
+        if (!cold_sign_tx(ptx_vector, signed_tx, dsts_info, [&](const tools::wallet2::signed_tx_set &tx){ return accept_loaded_tx(tx); })){
+          fail_msg_writer() << tr("Failed to cold sign transaction with HW wallet");
+          return true;
+        }
+
+        commit_or_save(signed_tx.ptx, m_do_not_relay);
+        success_msg_writer(true) << tr("Money successfully sent, transaction: ") << get_transaction_hash(ptx_vector[0].tx);
+	*/
+      }
+      catch (const std::exception& e)
+      {
+        handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
+      }
+      catch (...)
+      {
+        LOG_ERROR("Unknown error");
+        fail_msg_writer() << tr("unknown error");
+      }
+    }
+    else if (m_wallet->watch_only())
+    {
+      bool r = m_wallet->save_tx(ptx_vector, "unsigned_monero_tx");
+      if (!r)
+      {
+        fail_msg_writer() << tr("Failed to write transaction(s) to file");
+      }
+      else
+      {
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_monero_tx";
+      }
+    }
+    else
+    {
+      m_wallet->commit_tx(ptx_vector[0]);
+      success_msg_writer(true) << tr("Money successfully sent, transaction: ") << get_transaction_hash(ptx_vector[0].tx);
+    }
+
+  }
+  catch (const std::exception& e)
+  {
+    handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
+  }
+  catch (...)
+  {
+    LOG_ERROR("unknown error");
+    fail_msg_writer() << tr("unknown error");
+  }
+
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -9295,6 +9403,7 @@ bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vec
         type,
         true,
         pd.m_amount,
+	pd.m_asset_type,
         pd.m_tx_hash,
         payment_id,
         (pd.m_tx_type == cryptonote::transaction_type::YIELD) ? pd.m_fee : 0,
@@ -9334,6 +9443,7 @@ bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vec
         "out",
         true,
         pd.m_amount_in - change - fee,
+	pd.m_tx.source_asset_type,
         i->first,
         payment_id,
         fee,
@@ -9375,6 +9485,7 @@ bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vec
           "in",
           false,
           pd.m_amount,
+	  pd.m_asset_type,
           pd.m_tx_hash,
           payment_id,
           0,
@@ -9416,6 +9527,7 @@ bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vec
           "out",
           false,
           amount - pd.m_change - fee,
+	  pd.m_tx.source_asset_type,
           i->first,
           payment_id,
           fee,
@@ -9478,7 +9590,7 @@ bool simple_wallet::show_transfers(const std::vector<std::string> &args_)
       }
     }
 
-    auto formatter = boost::format("%8.8llu %6.6s %8.8s %25.25s %20.20s %s %s %14.14s %s %s - %s");
+    auto formatter = boost::format("%8.8llu %6.6s %8.8s %25.25s %20.20s %4.4s %s %s %14.14s %s %s - %s");
 
     message_writer(color, false) << formatter
       % transfer.block
@@ -9486,6 +9598,7 @@ bool simple_wallet::show_transfers(const std::vector<std::string> &args_)
       % transfer.unlocked
       % tools::get_human_readable_timestamp(transfer.timestamp)
       % print_money(transfer.amount)
+      % transfer.asset_type
       % string_tools::pod_to_hex(transfer.hash)
       % transfer.payment_id
       % print_money(transfer.fee)

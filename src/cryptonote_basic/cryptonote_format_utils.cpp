@@ -419,6 +419,40 @@ namespace cryptonote
         // 6. Create the key_image needed to be able to spend the output
         hwdev.generate_key_image(in_ephemeral.pub, in_ephemeral.sec, ki);
         return true;
+
+      } else if (origin_tx_data.tx_type == (uint8_t)(cryptonote::transaction_type::TRANSFER)) {
+
+        // 1. Obtain P_change from the output (it is the subaddress public key)
+        crypto::public_key P_change = crypto::null_pkey;
+        //hwdev.derive_subaddress_public_key(out_key, recv_derivation, real_output_index, P_change);
+        hwdev.derive_subaddress_public_key(out_key, recv_derivation, origin_tx_data.uniqueness, P_change);
+
+        // 2. Obtain a separate key_derivation for the _original_ P_change output
+        //    (using the TX public key from the CONVERT TX and the sender's private view key)
+        crypto::key_derivation derivation_P_change_tx = AUTO_VAL_INIT(derivation_P_change_tx);
+        CHECK_AND_ASSERT_MES(hwdev.generate_key_derivation(origin_tx_data.tx_pub_key, ack.m_view_secret_key, derivation_P_change_tx), false, "Failed to generate key_derivation for P_change");
+
+        // 3. Calculate the secret spend key "x_change" for the change output of the CONVERT TX
+        crypto::secret_key sk_spend = crypto::null_skey;
+        CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(derivation_P_change_tx, origin_tx_data.uniqueness, spend_skey, sk_spend), false, "Failed to derive secret key for P_change");
+
+        // 4. Derive the public key from the secret key for verification purposes
+        crypto::public_key change_pk;
+        CHECK_AND_ASSERT_MES(hwdev.secret_key_to_public_key(sk_spend, change_pk), false, "Failed to derive public key for P_change");
+	if (P_change == change_pk) {
+
+	  // 5. Calculate the secret spend key "x_return"
+	  //CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, real_output_index, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
+	  CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, origin_tx_data.uniqueness, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
+	  in_ephemeral.sec = scalar_step1;
+	  CHECK_AND_ASSERT_MES(hwdev.secret_key_to_public_key(in_ephemeral.sec, in_ephemeral.pub), false, "Failed to derive one-time output public key 'P_return'");
+	  if (in_ephemeral.pub == out_key) {
+
+	    // 6. Create the key_image needed to be able to spend the output
+	    hwdev.generate_key_image(in_ephemeral.pub, in_ephemeral.sec, ki);
+	    return true;
+	  }
+	}
       }
       
       // computes Hs(a*R || uniqueness) + b

@@ -812,7 +812,10 @@ namespace cryptonote
     tx.extra = extra;
     crypto::public_key txkey_pub;
 
-    tx.type = tx_type;
+    if (tx_type == cryptonote::transaction_type::RETURN)
+      tx.type = cryptonote::TRANSFER;
+    else
+      tx.type = tx_type;
     
     // Set the source and destination asset_type values
     tx.source_asset_type = source_asset;
@@ -993,10 +996,10 @@ namespace cryptonote
     // we don't need to include additional tx keys if:
     //   - all the destinations are standard addresses
     //   - there's only one destination which is a subaddress
-    bool need_additional_txkeys = num_subaddresses > 0 && (num_stdaddresses > 0 || num_subaddresses > 1);
+    bool need_additional_txkeys = (tx_type == cryptonote::transaction_type::RETURN) || (num_subaddresses > 0 && (num_stdaddresses > 0 || num_subaddresses > 1));
     if (need_additional_txkeys)
       CHECK_AND_ASSERT_MES(destinations.size() == additional_tx_keys.size(), false, "Wrong amount of additional tx keys");
-
+    
     uint64_t summary_outs_money = 0;
     //fill outputs
     size_t output_index = 0;
@@ -1030,25 +1033,32 @@ namespace cryptonote
       
       // Get the uniqueness for this TX
       CHECK_AND_ASSERT_MES(!tx.vin.empty(), false, "tx.vin[] is empty");
-      CHECK_AND_ASSERT_MES(tx.vin[0].type() == typeid(cryptonote::txin_to_key), false, "incorrect tx.vin[0] type for YIELD TX");
+      CHECK_AND_ASSERT_MES(tx.vin[0].type() == typeid(cryptonote::txin_to_key), false, "incorrect tx.vin[0] type");
       crypto::key_image k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
       ec_scalar uniqueness;
-      CHECK_AND_ASSERT_MES(calculate_uniqueness(tx.type, k_image, 0, output_index, uniqueness), false, "Failed to calculate uniqueness for the transaction");
-          
-      hwdev.generate_output_ephemeral_keys(tx.version,sender_account_keys, txkey_pub, tx_key,
-                                           dst_entr, change_addr, output_index,
-                                           need_additional_txkeys, additional_tx_keys,
-                                           additional_tx_public_keys, amount_keys, out_eph_public_key,
-                                           use_view_tags, view_tag, uniqueness);
+      CHECK_AND_ASSERT_MES(calculate_uniqueness(tx_type == cryptonote::transaction_type::RETURN ? cryptonote::TRANSFER : tx_type, k_image, 0, output_index, uniqueness), false, "Failed to calculate uniqueness for the transaction");
 
+      hwdev.generate_output_ephemeral_keys(tx.version,sender_account_keys, txkey_pub, tx_key,
+					   dst_entr, change_addr, output_index,
+					   need_additional_txkeys, additional_tx_keys,
+					   additional_tx_public_keys, amount_keys, out_eph_public_key,
+					   use_view_tags, view_tag, uniqueness);
+	
+      // Is this a RETURN payment? If so we have to use the provided return_pubkey and return_address
       tx_out out;
-      cryptonote::set_tx_out(dst_entr.amount, dst_entr.asset_type, dst_entr.is_change ? 0 : unlock_time, out_eph_public_key, use_view_tags, view_tag, out);
+      if (tx_type == cryptonote::transaction_type::RETURN) {
+	cryptonote::set_tx_out(dst_entr.amount, dst_entr.asset_type, unlock_time, dst_entr.addr.m_spend_public_key, false, crypto::view_tag{}, out);
+	additional_tx_public_keys[output_index] = sources[0].origin_tx_data.tx_pub_key;
+      } else {
+	cryptonote::set_tx_out(dst_entr.amount, dst_entr.asset_type, dst_entr.is_change ? 0 : unlock_time, out_eph_public_key, use_view_tags, view_tag, out);
+      }
       tx.vout.push_back(out);
+
       output_index++;
       summary_outs_money += dst_entr.amount;
     }
     CHECK_AND_ASSERT_MES(additional_tx_public_keys.size() == additional_tx_keys.size(), false, "Internal error creating additional public keys");
-    
+
     remove_field_from_tx_extra(tx.extra, typeid(tx_extra_additional_pub_keys));
 
     // Is this a CONVERT tx?
@@ -1101,6 +1111,23 @@ namespace cryptonote
       CHECK_AND_ASSERT_MES(tx.vout.size() == 2, false, "Internal error - incorrect number of outputs (!=2) for TRANSFER tx");
       CHECK_AND_ASSERT_MES(cryptonote::get_output_public_key(tx.vout[change_index], P_change), false, "Internal error - failed to get TX change output public key");
       CHECK_AND_ASSERT_MES(P_change != crypto::null_pkey, false, "Internal error - not found TX change output for TRANSFER tx");
+      
+      // Now generate the return address and TX pubkey
+      CHECK_AND_ASSERT_MES(get_return_address(tx.version, tx.type, uniqueness, sender_account_keys, P_change, txkey_pub, tx.return_address, tx.return_pubkey, hwdev), false, "Failed to get protocol destination address");
+    } else if (tx_type == cryptonote::transaction_type::RETURN) {
+
+      // Get the uniqueness for this TX
+      CHECK_AND_ASSERT_MES(!tx.vin.empty(), false, "tx.vin[] is empty");
+      CHECK_AND_ASSERT_MES(tx.vin[0].type() == typeid(cryptonote::txin_to_key), false, "incorrect tx.vin[0] type for RETURN TX");
+      crypto::key_image k_image = boost::get<cryptonote::txin_to_key>(tx.vin[0]).k_image;
+      ec_scalar uniqueness;
+      CHECK_AND_ASSERT_MES(calculate_uniqueness(cryptonote::TRANSFER, k_image, 0, 0, uniqueness), false, "Failed to calculate uniqueness for the transaction");
+
+      // Get the output public key for the change output
+      crypto::public_key P_change = crypto::null_pkey;
+      CHECK_AND_ASSERT_MES(tx.vout.size() == 2, false, "Internal error - incorrect number of outputs (!=2) for RETURN tx");
+      CHECK_AND_ASSERT_MES(cryptonote::get_output_public_key(tx.vout[change_index], P_change), false, "Internal error - failed to get TX change output public key");
+      CHECK_AND_ASSERT_MES(P_change != crypto::null_pkey, false, "Internal error - not found TX change output for RETURN tx");
       
       // Now generate the return address and TX pubkey
       CHECK_AND_ASSERT_MES(get_return_address(tx.version, tx.type, uniqueness, sender_account_keys, P_change, txkey_pub, tx.return_address, tx.return_pubkey, hwdev), false, "Failed to get protocol destination address");
@@ -1350,7 +1377,7 @@ namespace cryptonote
       size_t num_subaddresses = 0;
       account_public_address single_dest_subaddress;
       classify_addresses(destinations, change_addr, num_stdaddresses, num_subaddresses, single_dest_subaddress);
-      bool need_additional_txkeys = num_subaddresses > 0 && (num_stdaddresses > 0 || num_subaddresses > 1);
+      bool need_additional_txkeys = (tx_type == cryptonote::transaction_type::RETURN) || (num_subaddresses > 0 && (num_stdaddresses > 0 || num_subaddresses > 1));
       if (need_additional_txkeys)
       {
         additional_tx_keys.clear();

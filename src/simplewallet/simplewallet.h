@@ -303,6 +303,7 @@ namespace cryptonote
       std::string direction;
       bool confirmed;
       uint64_t amount;
+      std::string asset_type;
       crypto::hash hash;
       std::string payment_id;
       uint64_t fee;
