@@ -270,16 +270,18 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
   dest.StartObject();
 
   INSERT_INTO_JSON_OBJECT(dest, version, tx.version);
-  INSERT_INTO_JSON_OBJECT(dest, unlock_time, tx.unlock_time);
   INSERT_INTO_JSON_OBJECT(dest, inputs, tx.vin);
   INSERT_INTO_JSON_OBJECT(dest, outputs, tx.vout);
   INSERT_INTO_JSON_OBJECT(dest, extra, tx.extra);
   INSERT_INTO_JSON_OBJECT(dest, type, static_cast<uint8_t>(tx.type));
-  INSERT_INTO_JSON_OBJECT(dest, destination_address, tx.destination_address);
-  INSERT_INTO_JSON_OBJECT(dest, source_asset_type, tx.source_asset_type);
-  INSERT_INTO_JSON_OBJECT(dest, destination_asset_type, tx.destination_asset_type);
-  INSERT_INTO_JSON_OBJECT(dest, amount_burnt, tx.amount_burnt);
-  INSERT_INTO_JSON_OBJECT(dest, amount_slippage_limit, tx.amount_slippage_limit);
+  if (tx.type != cryptonote::transaction_type::MINER && tx.type != cryptonote::transaction_type::PROTOCOL) {
+    INSERT_INTO_JSON_OBJECT(dest, return_address, tx.return_address);
+    INSERT_INTO_JSON_OBJECT(dest, return_pubkey, tx.return_pubkey);
+    INSERT_INTO_JSON_OBJECT(dest, source_asset_type, tx.source_asset_type);
+    INSERT_INTO_JSON_OBJECT(dest, destination_asset_type, tx.destination_asset_type);
+    INSERT_INTO_JSON_OBJECT(dest, amount_burnt, tx.amount_burnt);
+    INSERT_INTO_JSON_OBJECT(dest, amount_slippage_limit, tx.amount_slippage_limit);
+  }
   if (!tx.pruned)
   {
     INSERT_INTO_JSON_OBJECT(dest, signatures, tx.signatures);
@@ -298,16 +300,18 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
   }
 
   GET_FROM_JSON_OBJECT(val, tx.version, version);
-  GET_FROM_JSON_OBJECT(val, tx.unlock_time, unlock_time);
   GET_FROM_JSON_OBJECT(val, tx.vin, inputs);
   GET_FROM_JSON_OBJECT(val, tx.vout, outputs);
   GET_FROM_JSON_OBJECT(val, tx.extra, extra);
   GET_FROM_JSON_OBJECT(val, tx.type, type);
-  GET_FROM_JSON_OBJECT(val, tx.destination_address, destination_address);
-  GET_FROM_JSON_OBJECT(val, tx.source_asset_type, source_asset_type);
-  GET_FROM_JSON_OBJECT(val, tx.destination_asset_type, destination_asset_type);
-  GET_FROM_JSON_OBJECT(val, tx.amount_burnt, amount_burnt);
-  GET_FROM_JSON_OBJECT(val, tx.amount_slippage_limit, amount_slippage_limit);
+  if (tx.type != cryptonote::transaction_type::MINER && tx.type != cryptonote::transaction_type::PROTOCOL) {
+    GET_FROM_JSON_OBJECT(val, tx.return_address, return_address);
+    GET_FROM_JSON_OBJECT(val, tx.return_pubkey, return_pubkey);
+    GET_FROM_JSON_OBJECT(val, tx.source_asset_type, source_asset_type);
+    GET_FROM_JSON_OBJECT(val, tx.destination_asset_type, destination_asset_type);
+    GET_FROM_JSON_OBJECT(val, tx.amount_burnt, amount_burnt);
+    GET_FROM_JSON_OBJECT(val, tx.amount_slippage_limit, amount_slippage_limit);
+  }
   GET_FROM_JSON_OBJECT(val, tx.rct_signatures, ringct);
 
   const auto& sigs = val.FindMember("signatures");
@@ -1104,7 +1108,7 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::rpc::error& error)
   GET_FROM_JSON_OBJECT(val, error.error_str, error_str);
   GET_FROM_JSON_OBJECT(val, error.message, message);
 }
-
+/*
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const std::pair<std::string, std::pair<uint64_t, uint64_t>>& pr_entry)
 {
   dest.StartObject();
@@ -1127,14 +1131,59 @@ void fromJsonValue(const rapidjson::Value& val, std::pair<std::string, std::pair
   GET_FROM_JSON_OBJECT(val, pr_entry.second.first, spot);
   GET_FROM_JSON_OBJECT(val, pr_entry.second.second, ma);
 }
+*/
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::supply_data& supply_data)
+{
+  dest.StartObject();
+
+  INSERT_INTO_JSON_OBJECT(dest, sal, supply_data.sal);
+  INSERT_INTO_JSON_OBJECT(dest, vsd, supply_data.vsd);
+
+  dest.EndObject();
+}
+
+void fromJsonValue(const rapidjson::Value& val, oracle::supply_data& supply_data)
+{  
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, supply_data.sal, sal);
+  GET_FROM_JSON_OBJECT(val, supply_data.vsd, vsd);
+}
+
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::asset_data& asset_data)
+{
+  dest.StartObject();
+
+  INSERT_INTO_JSON_OBJECT(dest, asset_type, asset_data.asset_type);
+  INSERT_INTO_JSON_OBJECT(dest, spot, asset_data.spot_price);
+  INSERT_INTO_JSON_OBJECT(dest, ma, asset_data.ma_price);
+
+  dest.EndObject();
+}
+
+void fromJsonValue(const rapidjson::Value& val, oracle::asset_data& asset_data)
+{  
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, asset_data.asset_type, asset_type);
+  GET_FROM_JSON_OBJECT(val, asset_data.spot_price, spot);
+  GET_FROM_JSON_OBJECT(val, asset_data.ma_price, ma);
+}
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::pricing_record& pricing_record)
 {
   dest.StartObject();
 
   INSERT_INTO_JSON_OBJECT(dest, pr_version, pricing_record.pr_version);
-  INSERT_INTO_JSON_OBJECT(dest, spot, pricing_record.spot);
-  INSERT_INTO_JSON_OBJECT(dest, moving_average, pricing_record.moving_average);
+  INSERT_INTO_JSON_OBJECT(dest, height, pricing_record.height);
+  INSERT_INTO_JSON_OBJECT(dest, supply, pricing_record.supply);
+  INSERT_INTO_JSON_OBJECT(dest, assets, pricing_record.assets);
   INSERT_INTO_JSON_OBJECT(dest, timestamp, pricing_record.timestamp);
   INSERT_INTO_JSON_OBJECT(dest, signature, pricing_record.signature);
 
@@ -1143,16 +1192,23 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::prici
 
 void fromJsonValue(const rapidjson::Value& val, oracle::pricing_record& pricing_record)
 {  
+  LOG_ERROR("Oracle::" << __func__ << ":" << __LINE__);
   if (!val.IsObject())
   {
     throw WRONG_TYPE("json object");
   }
 
   GET_FROM_JSON_OBJECT(val, pricing_record.pr_version, pr_version);
-  GET_FROM_JSON_OBJECT(val, pricing_record.spot, spot);
-  GET_FROM_JSON_OBJECT(val, pricing_record.moving_average, moving_average);
+  GET_FROM_JSON_OBJECT(val, pricing_record.height, height);
+  GET_FROM_JSON_OBJECT(val, pricing_record.supply, supply);
+  GET_FROM_JSON_OBJECT(val, pricing_record.assets, assets);
   GET_FROM_JSON_OBJECT(val, pricing_record.timestamp, timestamp);
-  GET_FROM_JSON_OBJECT(val, boost::lexical_cast<std::string>(pricing_record.signature), signature);
+  std::string sig_hex;
+  std::ostringstream oss;
+  for (size_t i=0; i<pricing_record.signature.size(); ++i) {
+    oss << std::hex << std::setfill('0') << std::setw(2) << std::uppercase << (int)(pricing_record.signature[i]);
+  }
+  GET_FROM_JSON_OBJECT(val, oss.str(), signature);
 }
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::rpc::BlockHeaderResponse& response)

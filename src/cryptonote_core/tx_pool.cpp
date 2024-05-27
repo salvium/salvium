@@ -139,6 +139,13 @@ namespace cryptonote
   {
     const bool kept_by_block = (tx_relay == relay_method::block);
 
+    if(tx.type == cryptonote::transaction_type::CONVERT && version < HF_VERSION_ENABLE_CONVERT)
+    {
+      tvc.m_verifivation_failed = true;
+      tvc.m_invalid_version = true;
+      return false;
+    }
+
     // this should already be called with that lock, but let's make it explicit for clarity
     CRITICAL_REGION_LOCAL(m_transactions_lock);
 
@@ -284,7 +291,8 @@ namespace cryptonote
         memset(meta.padding, 0, sizeof(meta.padding));
 
         //SRCG - need to work out how to populate this
-        meta.destination_address = tx.destination_address;
+        meta.tx_type = (uint8_t)(tx.type);
+        meta.return_address = tx.return_address;
         meta.amount_burnt = tx.amount_burnt;
         meta.amount_slippage_limit = tx.amount_slippage_limit;
         meta.source_asset_id = cryptonote::asset_id_from_type(tx.source_asset_type);
@@ -367,11 +375,18 @@ namespace cryptonote
           memset(meta.padding, 0, sizeof(meta.padding));
 
           //SRCG - need to work out how to populate this
-          meta.destination_address = tx.destination_address;
+          meta.return_address = tx.return_address;
           meta.amount_burnt = tx.amount_burnt;
           meta.amount_slippage_limit = tx.amount_slippage_limit;
           meta.source_asset_id = cryptonote::asset_id_from_type(tx.source_asset_type);
           meta.destination_asset_id = cryptonote::asset_id_from_type(tx.destination_asset_type);
+          meta.tx_type = tx.type;
+          crypto::public_key change_output_public_key;
+          bool ok = cryptonote::get_output_public_key(tx.vout[0], change_output_public_key);
+          if (!ok)
+            return false;
+          meta.one_time_public_key = change_output_public_key;
+          meta.return_pubkey = tx.return_pubkey;
         
           if (!insert_key_images(tx, id, tx_relay))
             return false;

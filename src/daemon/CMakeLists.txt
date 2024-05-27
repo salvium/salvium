@@ -71,5 +71,5 @@ target_link_libraries(daemon
     ${Blocks})
 set_property(TARGET daemon
   PROPERTY
-    OUTPUT_NAME "fulmod")
+    OUTPUT_NAME "salviumd")
 install(TARGETS daemon DESTINATION bin)

@@ -39,37 +39,102 @@
 
 // read
 template <template <bool> class Archive>
+bool do_serialize(Archive<false> &ar, oracle::supply_data &sd, uint8_t version)
+{
+  ar.serialize_varint(sd.sal);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(sd.vsd);
+  if (!ar.good())
+    return false;
+  return true;
+}
+
+// write
+template <template <bool> class Archive>
+bool do_serialize(Archive<true> &ar, oracle::supply_data &sd, uint8_t version)
+{
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(sd.sal);
+  ar.serialize_varint(sd.vsd);
+  if (!ar.good())
+    return false;
+  return true;
+}
+
+// read
+template <template <bool> class Archive>
+bool do_serialize(Archive<false> &ar, oracle::asset_data &ad, uint8_t version)
+{
+  ar.serialize_string(ad.asset_type);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(ad.spot_price);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(ad.ma_price);
+  if (!ar.good())
+    return false;
+  return true;
+}
+
+// write
+template <template <bool> class Archive>
+bool do_serialize(Archive<true> &ar, oracle::asset_data &ad, uint8_t version)
+{
+  if (!ar.good())
+    return false;
+  ar.serialize_string(ad.asset_type);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(ad.spot_price);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(ad.ma_price);
+  if (!ar.good())
+    return false;
+  return true;
+}
+
+// read
+template <template <bool> class Archive>
 bool do_serialize(Archive<false> &ar, oracle::pricing_record &pr, uint8_t version)
 {
+  // very basic sanity checks
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(pr.pr_version);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(pr.height);
+  if (!ar.good())
+    return false;
+  if (!do_serialize(ar, pr.supply, version))
+    return false;
   /*
-  if (version < HF_VERSION_SLIPPAGE_YIELD)
-  {
-    // very basic sanity check
-    if (ar.remaining_bytes() < sizeof(oracle::pricing_record_v1)) {
+  // The next line should never do anything, but better safe than sorry
+  pr.asset_data.empty();
+  size_t asset_count;
+  ar.begin_array(asset_count);
+  if (!ar.good())
+    return false;
+  for (size_t idx=0; idx<asset_count; idx++) {
+    if (idx > 0) ar.delimit_array();
+    asset_data ad;
+    if (!do_serialize(ar, ad, version))
       return false;
-    }
-
-    oracle::pricing_record_v1 pr_v1;
-    ar.serialize_blob(&pr_v1, sizeof(oracle::pricing_record_v1), "");
-    if (!ar.good())
-      return false;
-
-    if (!pr_v1.write_to_pr(pr))
-      return false;
+    pr.asset_data.emplace_back(ad);
   }
-  else
+  ar.end_array();
   */
-  {
-    // very basic sanity check
-    if (ar.remaining_bytes() < sizeof(oracle::pricing_record)) {
-      return false;
-    }
-
-    ar.serialize_blob(&pr, sizeof(oracle::pricing_record), "");
-    if (!ar.good())
-      return false;
-  }
-
+  if (!do_serialize_container(ar, pr.assets))
+    return false;
+  ar.serialize_varint(pr.timestamp);
+  if (!ar.good())
+    return false;
+  if (!do_serialize_container(ar, pr.signature))
+    return false;
   return true;
 }
 
@@ -77,54 +142,28 @@ bool do_serialize(Archive<false> &ar, oracle::pricing_record &pr, uint8_t versio
 template <template <bool> class Archive>
 bool do_serialize(Archive<true> &ar, oracle::pricing_record &pr, uint8_t version)
 {
-  ar.begin_string();
-  /*
-  if (version < HF_VERSION_SLIPPAGE_YIELD)
-  {
-    oracle::pricing_record_v1 pr_v1;
-    if (!pr_v1.read_from_pr(pr))
-      return false;
-    ar.serialize_blob(&pr_v1, sizeof(oracle::pricing_record_v1), "");
-  }
-  else
-  */
-  {
-    ar.serialize_blob(&pr, sizeof(oracle::pricing_record), "");
-  }
-
+  // very basic sanity checks
   if (!ar.good())
     return false;
-  ar.end_string();
+  ar.serialize_varint(pr.pr_version);
+  if (!ar.good())
+    return false;
+  ar.serialize_varint(pr.height);
+  if (!ar.good())
+    return false;
+  if (!do_serialize(ar, pr.supply, version))
+    return false;
+  if (!do_serialize_container(ar, pr.assets))
+    return false;
+  ar.serialize_varint(pr.timestamp);
+  if (!ar.good())
+    return false;
+  pr.signature.empty();
+  if (!do_serialize_container(ar, pr.signature))
+    return false;
   return true;
 }
 
-// read
-template <template <bool> class Archive>
-bool do_serialize(Archive<false> &ar, oracle::pricing_record_v1 &pr, uint8_t version)
-{
-  // very basic sanity check
-  if (ar.remaining_bytes() < sizeof(oracle::pricing_record_v1)) {
-    return false;
-  }
-
-  ar.serialize_blob(&pr, sizeof(oracle::pricing_record_v1), "");
-  if (!ar.good())
-    return false;
-
-  return true;
-}
-
-// write
-template <template <bool> class Archive>
-bool do_serialize(Archive<true> &ar, oracle::pricing_record_v1 &pr, uint8_t version)
-{
-  ar.begin_string();
-  ar.serialize_blob(&pr, sizeof(oracle::pricing_record_v1), "");
-  if (!ar.good())
-    return false;
-  ar.end_string();
-  return true;
-}
-
-BLOB_SERIALIZER(oracle::pricing_record);
-BLOB_SERIALIZER(oracle::pricing_record_v1);
+//BLOB_SERIALIZER(oracle::supply_data);
+//BLOB_SERIALIZER(oracle::asset_data);
+//BLOB_SERIALIZER(oracle::pricing_record);

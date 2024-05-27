@@ -74,6 +74,13 @@ namespace crypto {
   const crypto::public_key null_pkey = crypto::public_key{};
   const crypto::secret_key null_skey = crypto::secret_key{};
 
+  static inline crypto::key_image get_null_ki() {
+    crypto::key_image ki;
+    std::memset(ki.data, 0, sizeof(ki.data));
+    return ki;
+  }     
+  const crypto::key_image  null_ki   = get_null_ki();
+
   static inline unsigned char *operator &(ec_point &point) {
     return &reinterpret_cast<unsigned char &>(point);
   }
@@ -263,11 +270,11 @@ namespace crypto {
 
   /**
    * The following functions are designed to perform the correct encoding / decoding for protocol_tx outputs,
-   * which use a hash of a crypto::key_image for uniqueness
+   * which use an ec_scalar to provide uniqueness
    */
-  void crypto_ops::derivation_to_scalar(const key_derivation &derivation, const hash& uniqueness, ec_scalar &res) {
+  void crypto_ops::derivation_to_scalar(const key_derivation &derivation, const ec_scalar& uniqueness, ec_scalar &res) {
     struct {
-      hash uniqueness;
+      ec_scalar uniqueness;
       key_derivation derivation;
     } buf;
     buf.uniqueness = uniqueness;
@@ -275,7 +282,7 @@ namespace crypto {
     hash_to_scalar(&buf, sizeof(buf), res);
   }
 
-  bool crypto_ops::derive_public_key(const key_derivation &derivation, const hash& uniqueness,
+  bool crypto_ops::derive_public_key(const key_derivation &derivation, const ec_scalar& uniqueness,
     const public_key &base, public_key &derived_key) {
     ec_scalar scalar;
     ge_p3 point1;
@@ -295,7 +302,7 @@ namespace crypto {
     return true;
   }
 
-  void crypto_ops::derive_secret_key(const key_derivation &derivation, const hash& uniqueness,
+  void crypto_ops::derive_secret_key(const key_derivation &derivation, const ec_scalar& uniqueness,
     const secret_key &base, secret_key &derived_key) {
     ec_scalar scalar;
     assert(sc_check(&base) == 0);
@@ -303,7 +310,7 @@ namespace crypto {
     sc_add(&unwrap(derived_key), &unwrap(base), &scalar);
   }
 
-  bool crypto_ops::derive_subaddress_public_key(const public_key &out_key, const key_derivation &derivation, const hash& uniqueness, public_key &derived_key) {
+  bool crypto_ops::derive_subaddress_public_key(const public_key &out_key, const key_derivation &derivation, const ec_scalar& uniqueness, public_key &derived_key) {
     ec_scalar scalar;
     ge_p3 point1;
     ge_p3 point2;

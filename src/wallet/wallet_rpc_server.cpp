@@ -451,7 +451,7 @@ namespace tools
     if (!m_wallet) return not_open(er);
 
     std::vector<std::string> assets_in_wallet = m_wallet->list_asset_types();
-    std::string asset_type = req.asset_type.empty() ? "FULM" : boost::algorithm::to_upper_copy(req.asset_type);
+    std::string asset_type = req.asset_type.empty() ? "SAL" : boost::algorithm::to_upper_copy(req.asset_type);
     // verify that the asset is in the list of in-wallet assets
     if (std::find(assets_in_wallet.begin(), assets_in_wallet.end(), asset_type) == assets_in_wallet.end()) {
       er.message = std::string("Invalid source asset specified: ") + asset_type; 
@@ -667,8 +667,8 @@ namespace tools
         info.base_address = m_wallet->get_subaddress_as_str(subaddr_index);
 
         //for (const auto& asset: asset_types) {
-          info.balance = m_wallet->balance(subaddr_index.major, "FULM", req.strict_balances);
-          info.unlocked_balance = m_wallet->unlocked_balance(subaddr_index.major, "FULM", req.strict_balances);
+          info.balance = m_wallet->balance(subaddr_index.major, "SAL", req.strict_balances);
+          info.unlocked_balance = m_wallet->unlocked_balance(subaddr_index.major, "SAL", req.strict_balances);
           //}
         info.label = m_wallet->get_subaddress_label(subaddr_index);
         info.tag = account_tags.second[subaddr_index.major];
@@ -1102,7 +1102,8 @@ namespace tools
     {
       uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
       uint32_t priority = m_wallet->adjust_priority(req.priority);
-      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, req.source_asset, req.dest_asset, static_cast<cryptonote::transaction_type>(req.tx_type), mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices);
+      const crypto::key_image ki_return = crypto::null_ki;
+      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, req.source_asset, req.dest_asset, static_cast<cryptonote::transaction_type>(req.tx_type), mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices, ki_return);
 
       if (ptx_vector.empty())
       {
@@ -1156,8 +1157,9 @@ namespace tools
     {
       uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
       uint32_t priority = m_wallet->adjust_priority(req.priority);
+      const crypto::key_image ki_return = crypto::null_ki;
       LOG_PRINT_L2("on_transfer_split calling create_transactions_2");
-      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, req.source_asset, req.dest_asset, static_cast<cryptonote::transaction_type>(req.tx_type), mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices);
+      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, req.source_asset, req.dest_asset, static_cast<cryptonote::transaction_type>(req.tx_type), mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices, ki_return);
       LOG_PRINT_L2("on_transfer_split called create_transactions_2");
 
       if (ptx_vector.empty())
@@ -1587,7 +1589,7 @@ namespace tools
     destination.push_back(wallet_rpc::transfer_destination());
     destination.back().amount = 0;
     destination.back().address = req.address;
-    std::string asset_type = req.asset_type.empty() ? "FULM" : req.asset_type;
+    std::string asset_type = req.asset_type.empty() ? "SAL" : req.asset_type;
     if (!validate_transfer(destination, req.payment_id, dsts, extra, true, er))
     {
       return false;
@@ -1615,7 +1617,7 @@ namespace tools
     {
       uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
       uint32_t priority = m_wallet->adjust_priority(req.priority);
-      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_all(req.below_amount, asset_type, dsts[0].addr, dsts[0].is_subaddress, req.outputs, mixin, req.unlock_time, priority, extra, req.account_index, subaddr_indices);
+      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_all(req.below_amount, cryptonote::transaction_type::TRANSFER, asset_type, dsts[0].addr, dsts[0].is_subaddress, req.outputs, mixin, req.unlock_time, priority, extra, req.account_index, subaddr_indices);
 
       return fill_response(ptx_vector, req.get_tx_keys, res.tx_key_list, res.amount_list, res.fee_list, res.weight_list, res.multisig_txset, res.unsigned_txset, req.do_not_relay,
           res.tx_hash_list, req.get_tx_hex, res.tx_blob_list, req.get_tx_metadata, res.tx_metadata_list, res.spent_key_images_list, er);
@@ -1672,7 +1674,7 @@ namespace tools
     {
       uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
       uint32_t priority = m_wallet->adjust_priority(req.priority);
-      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_single(ki, dsts[0].addr, dsts[0].is_subaddress, req.outputs, mixin, req.unlock_time, priority, extra);
+      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_single(ki, cryptonote::transaction_type::TRANSFER, dsts[0].addr, dsts[0].is_subaddress, req.outputs, mixin, req.unlock_time, priority, extra);
 
       if (ptx_vector.empty())
       {

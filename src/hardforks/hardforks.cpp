@@ -36,26 +36,26 @@ const hardfork_t mainnet_hard_forks[] = {
   { 1, 1, 0, 1341378000 },
 
   // version 2 starts from block 1000, which is on or around the 20th of March, 2016. Fork time finalised on 2015-09-20. No fork voting occurs for the v2 fork.
-  { 2, 1000, 0, 1442763710 },
+  //{ 2, 1000, 0, 1442763710 },
 };
 const size_t num_mainnet_hard_forks = sizeof(mainnet_hard_forks) / sizeof(mainnet_hard_forks[0]);
-const uint64_t mainnet_hard_fork_version_1_till = 1000;
+const uint64_t mainnet_hard_fork_version_1_till = ((uint64_t)-1);
 
 const hardfork_t testnet_hard_forks[] = {
   // version 1 from the start of the blockchain
   { 1, 1, 0, 1341378000 },
 
   // version 2 starts from block 1000, which is on or around the 23rd of November, 2015. Fork time finalised on 2015-11-20. No fork voting occurs for the v2 fork.
-  { 1, 1000, 0, 1445355000 },
+  //{ 2, 1000, 0, 1445355000 },
 };
 const size_t num_testnet_hard_forks = sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]);
-const uint64_t testnet_hard_fork_version_1_till = 1000;
+const uint64_t testnet_hard_fork_version_1_till = ((uint64_t)-1);
 
 const hardfork_t stagenet_hard_forks[] = {
   // version 1 from the start of the blockchain
   { 1, 1, 0, 1341378000 },
 
   // versions 2-7 in rapid succession from March 13th, 2018
-  { 2, 1000, 0, 1521000000 },
+  //{ 2, 1000, 0, 1521000000 },
 };
 const size_t num_stagenet_hard_forks = sizeof(stagenet_hard_forks) / sizeof(stagenet_hard_forks[0]);

@@ -120,12 +120,19 @@ namespace
 }
 
 namespace rct {
-    Bulletproof proveRangeBulletproof(keyV &C, keyV &masks, const std::vector<uint64_t> &amounts, epee::span<const key> sk, hw::device &hwdev)
+
+    Bulletproof proveRangeBulletproof(keyV &C, keyV &masks, const std::vector<bool> &zero_masks, const std::vector<uint64_t> &amounts, epee::span<const key> sk, hw::device &hwdev)
     {
         CHECK_AND_ASSERT_THROW_MES(amounts.size() == sk.size(), "Invalid amounts/sk sizes");
+        CHECK_AND_ASSERT_THROW_MES(amounts.size() == zero_masks.size(), "Invalid amounts/zero_masks sizes");
         masks.resize(amounts.size());
-        for (size_t i = 0; i < masks.size(); ++i)
-            masks[i] = hwdev.genCommitmentMask(sk[i]);
+        for (size_t i = 0; i < masks.size(); ++i) {
+            if (zero_masks[i] == true) {
+                masks[i] = rct::identity();
+            } else {
+                masks[i] = hwdev.genCommitmentMask(sk[i]);
+            }
+        }
         Bulletproof proof = bulletproof_PROVE(amounts, masks);
         CHECK_AND_ASSERT_THROW_MES(proof.V.size() == amounts.size(), "V does not have the expected size");
         C = proof.V;
@@ -146,12 +153,18 @@ namespace rct {
       catch (...) { return false; }
     }
 
-    BulletproofPlus proveRangeBulletproofPlus(keyV &C, keyV &masks, const std::vector<uint64_t> &amounts, epee::span<const key> sk, hw::device &hwdev)
+    BulletproofPlus proveRangeBulletproofPlus(keyV &C, keyV &masks, const std::vector<bool> &zero_masks, const std::vector<uint64_t> &amounts, epee::span<const key> sk, hw::device &hwdev)
     {
         CHECK_AND_ASSERT_THROW_MES(amounts.size() == sk.size(), "Invalid amounts/sk sizes");
+        CHECK_AND_ASSERT_THROW_MES(amounts.size() == zero_masks.size(), "Invalid amounts/zero_masks sizes");
         masks.resize(amounts.size());
-        for (size_t i = 0; i < masks.size(); ++i)
-            masks[i] = hwdev.genCommitmentMask(sk[i]);
+        for (size_t i = 0; i < masks.size(); ++i) {
+            if (zero_masks[i] == true) {
+                masks[i] = rct::identity();
+            } else {
+                masks[i] = hwdev.genCommitmentMask(sk[i]);
+            }
+        }
         BulletproofPlus proof = bulletproof_plus_PROVE(amounts, masks);
         CHECK_AND_ASSERT_THROW_MES(proof.V.size() == amounts.size(), "V does not have the expected size");
         C = proof.V;
@@ -1109,8 +1122,9 @@ namespace rct {
       const cryptonote::transaction_type tx_type,
       const std::string& in_asset_type,
       const std::vector<std::string> & destination_asset_types,
-      const vector<xmr_amount> &inamounts,
-      const vector<xmr_amount> &outamounts,
+      const std::vector<bool> &zero_masks,
+      const std::vector<xmr_amount> &inamounts,
+      const std::vector<xmr_amount> &outamounts,
       xmr_amount txnFee,
       const ctkeyM & mixRing,
       const keyV &amount_keys,
@@ -1125,6 +1139,7 @@ namespace rct {
         CHECK_AND_ASSERT_THROW_MES(inamounts.size() == inSk.size(), "Different number of inamounts/inSk");
         CHECK_AND_ASSERT_THROW_MES(outamounts.size() == destinations.size(), "Different number of amounts/destinations");
         CHECK_AND_ASSERT_THROW_MES(amount_keys.size() == destinations.size(), "Different number of amount_keys/destinations");
+        CHECK_AND_ASSERT_THROW_MES(zero_masks.size() == destinations.size(), "Different number of zero_masks/destinations");
         CHECK_AND_ASSERT_THROW_MES(index.size() == inSk.size(), "Different number of index/inSk");
         CHECK_AND_ASSERT_THROW_MES(mixRing.size() == inSk.size(), "Different number of mixRing/inSk");
         for (size_t n = 0; n < mixRing.size(); ++n) {
@@ -1191,9 +1206,9 @@ namespace rct {
                 {
                     const epee::span<const key> keys{&amount_keys[0], amount_keys.size()};
                     if (plus)
-                      rv.p.bulletproofs_plus.push_back(proveRangeBulletproofPlus(C, masks, outamounts, keys, hwdev));
+                      rv.p.bulletproofs_plus.push_back(proveRangeBulletproofPlus(C, masks, zero_masks, outamounts, keys, hwdev));
                     else
-                      rv.p.bulletproofs.push_back(proveRangeBulletproof(C, masks, outamounts, keys, hwdev));
+                      rv.p.bulletproofs.push_back(proveRangeBulletproof(C, masks, zero_masks, outamounts, keys, hwdev));
                     #ifdef DBG
                     if (plus)
                       CHECK_AND_ASSERT_THROW_MES(verBulletproofPlus(rv.p.bulletproofs_plus.back()), "verBulletproofPlus failed on newly created proof");
@@ -1229,9 +1244,9 @@ namespace rct {
                 {
                     const epee::span<const key> keys{&amount_keys[amounts_proved], batch_size};
                     if (plus)
-                      rv.p.bulletproofs_plus.push_back(proveRangeBulletproofPlus(C, masks, batch_amounts, keys, hwdev));
+                      rv.p.bulletproofs_plus.push_back(proveRangeBulletproofPlus(C, masks, zero_masks, batch_amounts, keys, hwdev));
                     else
-                      rv.p.bulletproofs.push_back(proveRangeBulletproof(C, masks, batch_amounts, keys, hwdev));
+                      rv.p.bulletproofs.push_back(proveRangeBulletproof(C, masks, zero_masks, batch_amounts, keys, hwdev));
                 #ifdef DBG
                     if (plus)
                       CHECK_AND_ASSERT_THROW_MES(verBulletproofPlus(rv.p.bulletproofs_plus.back()), "verBulletproofPlus failed on newly created proof");
@@ -1272,14 +1287,15 @@ namespace rct {
             rv.p.MGs.resize(inamounts.size());
         key sumpouts = zero(); //sum pseudoOut masks
         keyV a(inamounts.size());
-        for (i = 0 ; i < inamounts.size() - 1; i++) {
+        for (i = 0 ; i < inamounts.size(); i++) {
             skGen(a[i]);
             sc_add(sumpouts.bytes, a[i].bytes, sumpouts.bytes);
             genC(pseudoOuts[i], a[i], inamounts[i]);
         }
-        sc_sub(a[i].bytes, sumout.bytes, sumpouts.bytes);
-        genC(pseudoOuts[i], a[i], inamounts[i]);
-        DP(pseudoOuts[i]);
+        key difference;
+        sc_sub(difference.bytes, sumpouts.bytes, sumout.bytes);
+        genC(rv.p_r, difference, 0);
+        DP(rv.p_r);
 
         key full_message = get_pre_mlsag_hash(rv,hwdev);
 
@@ -1307,9 +1323,10 @@ namespace rct {
       const keyV & destinations,
       const cryptonote::transaction_type tx_type,
       const std::string& in_asset_type,
-        const std::vector<std::string> & destination_asset_types,
-      const vector<xmr_amount> &inamounts,
-      const vector<xmr_amount> &outamounts,
+      const std::vector<std::string> & destination_asset_types,
+      const std::vector<bool> &zero_masks,
+      const std::vector<xmr_amount> &inamounts,
+      const std::vector<xmr_amount> &outamounts,
       const keyV &amount_keys,
       xmr_amount txnFee,
       unsigned int mixin,
@@ -1325,7 +1342,7 @@ namespace rct {
           mixRing[i].resize(mixin+1);
           index[i] = populateFromBlockchainSimple(mixRing[i], inPk[i], mixin);
         }
-        return genRctSimple(message, inSk, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, txnFee, mixRing, amount_keys, index, outSk, rct_config, hwdev);
+        return genRctSimple(message, inSk, destinations, tx_type, in_asset_type, destination_asset_types, zero_masks, inamounts, outamounts, txnFee, mixRing, amount_keys, index, outSk, rct_config, hwdev);
     }
 
     //RingCT protocol
@@ -1462,7 +1479,10 @@ namespace rct {
 
         const key txnAmountBurntKey = scalarmultH(d2h(amount_burnt));
         addKeys(sumOutpks, txnAmountBurntKey, sumOutpks);
-          
+
+        // Account for the "blinding factor remainder" term `p_r`
+        addKeys(sumOutpks, rv.p_r, sumOutpks);
+        
         key sumPseudoOuts = addKeys(pseudoOuts);
         DP(sumPseudoOuts);
 

@@ -127,7 +127,7 @@ struct output_data_t
   crypto::public_key pubkey;       //!< the output's public key (for spend verification)
   uint64_t           unlock_time;  //!< the output's unlock time (or height)
   uint64_t           height;       //!< the height of the block which created the output
-  char               asset_type[8];   //!< the asset type of the output
+  uint32_t           asset_type;   //!< the asset type of the output
   rct::key           commitment;   //!< the output's amount commitment (for spend verification)
 };
 #pragma pack(pop)
@@ -157,7 +157,9 @@ struct txpool_tx_meta_t
 {
   crypto::hash max_used_block_id;
   crypto::hash last_failed_id;
-  crypto::public_key destination_address;
+  crypto::public_key return_pubkey;
+  crypto::public_key return_address;
+  crypto::public_key one_time_public_key;
   uint64_t weight;
   uint64_t fee;
   uint64_t amount_burnt;
@@ -168,7 +170,8 @@ struct txpool_tx_meta_t
   uint64_t last_relayed_time; //!< If received over i2p/tor, randomized forward time. If Dandelion++stem, randomized embargo time. Otherwise, last relayed timestamp
   uint32_t source_asset_id;
   uint32_t destination_asset_id;
-  // 168 bytes
+  // 232 bytes
+  uint8_t tx_type;
   uint8_t kept_by_block;
   uint8_t relayed;
   uint8_t do_not_relay;
@@ -179,7 +182,7 @@ struct txpool_tx_meta_t
   uint8_t is_forwarding: 1;
   uint8_t bf_padding: 3;
 
-  uint8_t padding[20]; // till 192 bytes
+  uint8_t padding[19]; // till 256 bytes
 
   void set_relay_method(relay_method method) noexcept;
   relay_method get_relay_method() const noexcept;
@@ -194,6 +197,14 @@ struct txpool_tx_meta_t
   }
 };
 
+typedef struct yield_tx_info {
+  uint64_t block_height;
+  crypto::hash tx_hash;
+  uint64_t locked_coins;
+  crypto::public_key return_address;
+  crypto::public_key P_change;
+  crypto::public_key return_pubkey;
+} yield_tx_info;
 
 #define DBF_SAFE       1
 #define DBF_FAST       2
@@ -405,16 +416,22 @@ private:
    * @param cumulative_difficulty the accumulated difficulty after this block
    * @param coins_generated the number of coins generated total after this block
    * @param blk_hash the hash of the block
+   * @param slippage_total the total value (expressed in SAL coins) of all slippage for this block
+   * @param yield_total the total of SAL coins that have been locked for yield in this block
    */
-  virtual void add_block( const block& blk
-                , size_t block_weight
-                , uint64_t long_term_block_weight
-                , const difficulty_type& cumulative_difficulty
-                , const uint64_t& coins_generated
-                , uint64_t num_rct_outs
-                , oracle::asset_type_counts& cum_rct_by_asset_type
-                , const crypto::hash& blk_hash
-                ) = 0;
+  virtual void add_block( const block& blk,
+                          size_t block_weight,
+                          uint64_t long_term_block_weight,
+                          const difficulty_type& cumulative_difficulty,
+                          const uint64_t& coins_generated,
+                          uint64_t num_rct_outs,
+                          oracle::asset_type_counts& cum_rct_by_asset_type,
+                          const crypto::hash& blk_hash,
+                          uint64_t slippage_total,
+                          uint64_t yield_total,
+                          const cryptonote::network_type& nettype,
+                          cryptonote::yield_block_info& ybi
+                          ) = 0;
 
   /**
    * @brief remove data about the top block
@@ -866,6 +883,8 @@ public:
                             , const difficulty_type& cumulative_difficulty
                             , const uint64_t& coins_generated
                             , const std::vector<std::pair<transaction, blobdata>>& txs
+                            , const cryptonote::network_type& nettype
+                            , cryptonote::yield_block_info& ybi
                             );
 
   /**
@@ -1895,13 +1914,10 @@ public:
    */
   virtual uint64_t get_database_size() const = 0;
 
-  // TODO: this should perhaps be (or call) a series of functions which
-  // progressively update through version updates
-  /**
-   * @brief fix up anything that may be wrong due to past bugs
-   */
-  virtual void fixup();
+  virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi) = 0;
+  virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) = 0;
 
+  
   /**
    * @brief set whether or not to automatically remove logs
    *

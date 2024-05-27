@@ -77,6 +77,7 @@ typedef struct mdb_txn_cursors
   MDB_cursor *m_txc_circ_supply;
   MDB_cursor *m_txc_circ_supply_tally;
   MDB_cursor *m_txc_yield_txs;
+  MDB_cursor *m_txc_yield_blocks;
 
 } mdb_txn_cursors;
 
@@ -102,6 +103,7 @@ typedef struct mdb_txn_cursors
 #define m_cur_circ_supply       m_cursors->m_txc_circ_supply
 #define m_cur_circ_supply_tally m_cursors->m_txc_circ_supply_tally
 #define m_cur_yield_txs		m_cursors->m_txc_yield_txs
+#define m_cur_yield_blocks	m_cursors->m_txc_yield_blocks
 
 typedef struct mdb_rflags
 {
@@ -128,6 +130,7 @@ typedef struct mdb_rflags
   bool m_rf_circ_supply;
   bool m_rf_circ_supply_tally;
   bool m_rf_yield_txs;
+  bool m_rf_yield_blocks;
 } mdb_rflags;
 
 typedef struct mdb_threadinfo
@@ -338,6 +341,8 @@ public:
                             , const difficulty_type& cumulative_difficulty
                             , const uint64_t& coins_generated
                             , const std::vector<std::pair<transaction, blobdata>>& txs
+                            , const cryptonote::network_type& nettype
+                            , cryptonote::yield_block_info& ybi
                             );
 
   virtual void set_batch_transactions(bool batch_transactions);
@@ -385,15 +390,19 @@ private:
   void check_and_resize_for_batch(uint64_t batch_num_blocks, uint64_t batch_bytes);
   uint64_t get_estimated_batch_size(uint64_t batch_num_blocks, uint64_t batch_bytes) const;
 
-  virtual void add_block( const block& blk
-                , size_t block_weight
-                , uint64_t long_term_block_weight
-                , const difficulty_type& cumulative_difficulty
-                , const uint64_t& coins_generated
-                , uint64_t num_rct_outs
-                , oracle::asset_type_counts& cum_rct_by_asset_type
-                , const crypto::hash& block_hash
-                );
+  virtual void add_block( const block& blk,
+                          size_t block_weight,
+                          uint64_t long_term_block_weight,
+                          const difficulty_type& cumulative_difficulty,
+                          const uint64_t& coins_generated,
+                          uint64_t num_rct_outs,
+                          oracle::asset_type_counts& cum_rct_by_asset_type,
+                          const crypto::hash& blk_hash,
+                          uint64_t slippage_total,
+                          uint64_t yield_total,
+                          const cryptonote::network_type& nettype,
+                          cryptonote::yield_block_info& ybi
+                          );
 
   virtual void remove_block();
 
@@ -443,15 +452,15 @@ private:
   uint64_t get_max_block_size();
   void add_max_block_size(uint64_t sz);
 
-  // fix up anything that may be wrong due to past bugs
-  virtual void fixup();
-
   // migrate from older DB version to current
   void migrate(const uint32_t oldversion);
 
   // migrate from DB version 0 to 1
   //void migrate_0_1();
   void cleanup_batch();
+
+  virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi);
+  virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container);
 
 private:
   MDB_env* m_env;
@@ -486,7 +495,9 @@ private:
 
   MDB_dbi m_circ_supply;
   MDB_dbi m_circ_supply_tally;
+
   MDB_dbi m_yield_txs;
+  MDB_dbi m_yield_blocks;
 
   mutable uint64_t m_cum_size;	// used in batch size estimation
   mutable unsigned int m_cum_count;

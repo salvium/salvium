@@ -54,18 +54,22 @@ namespace cryptonote
    */
   struct protocol_data_entry
   {
-    crypto::public_key destination_address;
+    crypto::public_key return_address;
     uint64_t amount_burnt;
     uint64_t amount_minted;
     uint64_t amount_slippage_limit;
     std::string source_asset;
     std::string destination_asset;
+    uint8_t type;
+    crypto::public_key P_change;
+    crypto::public_key return_pubkey;
   };
-  bool construct_protocol_tx(const size_t height, uint64_t& protocol_fee, transaction& tx, std::vector<protocol_data_entry>& protocol_data, std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version);
+
+  bool construct_protocol_tx(const size_t height, uint64_t& protocol_fee, transaction& tx, std::vector<protocol_data_entry>& protocol_data, std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const account_public_address &miner_address, const account_public_address &treasury_address, const uint8_t hf_version);
   //---------------------------------------------------------------
   bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, const blobdata& extra_nonce = blobdata(), size_t max_outs = 999, uint8_t hard_fork_version = 1);
   bool construct_protocol_tx(size_t height, transaction& tx, size_t max_outs = 999, uint8_t hard_fork_version = 1);
-
+  bool calculate_uniqueness(const cryptonote::transaction_type& type, const crypto::key_image& k_image, const size_t height, const size_t idx, crypto::ec_scalar& uniqueness);
   struct tx_source_entry
   {
     typedef std::pair<uint64_t, rct::ctkey> output_entry;
@@ -81,6 +85,7 @@ namespace cryptonote
     rct::multisig_kLRki multisig_kLRki; //multisig info
     oracle::pricing_record pr;
     std::string asset_type;
+    origin_data origin_tx_data;
 
     void push_output(uint64_t idx, const crypto::public_key &k, uint64_t amount) { outputs.push_back(std::make_pair(idx, rct::ctkey({rct::pk2rct(k), rct::zeroCommit(amount)}))); }
 
@@ -95,6 +100,7 @@ namespace cryptonote
       FIELD(mask)
       FIELD(multisig_kLRki)
       FIELD(asset_type)
+      FIELD(origin_tx_data)
 
       if (real_output >= outputs.size())
         return false;
@@ -105,15 +111,16 @@ namespace cryptonote
   {
     std::string original;
     uint64_t amount;                    //money
+    uint64_t slippage_limit;            //percentage of slippage permitted
     account_public_address addr;        //destination address
     std::string asset_type;
     bool is_subaddress;
     bool is_integrated;
     bool is_change;
 
-    tx_destination_entry() : amount(0), addr(AUTO_VAL_INIT(addr)), asset_type("FULM"), is_subaddress(false), is_integrated(false), is_change(false) { }
-    tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress) : amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false) { }
-    tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress) : original(o), amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false) { }
+    tx_destination_entry() : amount(0), slippage_limit(0), addr(AUTO_VAL_INIT(addr)), asset_type("SAL"), is_subaddress(false), is_integrated(false), is_change(false) { }
+    tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress) : amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false) { }
+    tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress) : original(o), amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false) { }
 
     std::string address(network_type nettype, const crypto::hash &payment_id) const
     {
@@ -133,6 +140,7 @@ namespace cryptonote
     BEGIN_SERIALIZE_OBJECT()
       FIELD(original)
       VARINT_FIELD(amount)
+      VARINT_FIELD(slippage_limit)
       FIELD(addr)
       FIELD(asset_type)
       FIELD(is_subaddress)

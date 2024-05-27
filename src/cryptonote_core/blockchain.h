@@ -268,7 +268,7 @@ namespace cryptonote
      *
      * @return false if method failed to obtain pricing record from oracle, otherwise true
      */
-    bool get_pricing_record(oracle::pricing_record& pr, uint64_t timestamp);
+    bool get_pricing_record(oracle::pricing_record &pr, std::map<std::string, uint64_t> &circ_supply, uint64_t timestamp);
 
     /**
      * @brief gets the latest pricing record that was in the last 10 block.
@@ -746,6 +746,8 @@ namespace cryptonote
      */
     uint64_t get_current_cumulative_block_weight_median() const;
 
+    int get_yield_info(const uint64_t start_height, const uint64_t end_height, std::vector<std::pair<yield_tx_info, uint64_t>>& yield_container);
+    
     /**
      * @brief gets the difficulty of the block with a given height
      *
@@ -1145,6 +1147,55 @@ namespace cryptonote
      */
     uint64_t get_adjusted_time(uint64_t height) const;
 
+    /**
+     * calculate the yield payouts
+     *
+     * @return TRUE if the payouts were calculated successfully, FALSE otherwise
+     */
+    bool calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& yield_payouts);
+
+    /**
+     * @brief get the complete YBI cache
+     *
+     * Retrieve the YBI local cache.
+     * If the cache is out of date, the cache will (attempt to) be rebuilt
+     * before being returned.
+     *
+     * @return TRUE if the call is successful, FALSE otherwise
+     */
+    bool get_ybi_cache(std::map<uint64_t, yield_block_info>& ybi_cache);
+
+    /**
+     * @brief get the YBI entry for a particular height from the cache
+     *
+     * Retrieve the YBI entry for the specified height from the local cache.
+     * If the cache is out of date, the cache will (attempt to) be rebuilt
+     * before the entry is obtained.
+     *
+     * @return TRUE if the entry was located and returned, FALSE otherwise
+     */
+    bool get_ybi_entry(const uint64_t height, cryptonote::yield_block_info& ybi);
+    
+    /**
+     * (re)build the yield_block_info cache from the blockchain
+     *
+     * @return TRUE if the cache rebuilt correctly, FALSE otherwise
+     */
+    bool rebuild_ybi_cache();
+    
+    /**
+     * @brief validate the yield_block_info cache
+     *
+     * Checks that the m_yield_block_info_cache is fully populated by
+     * checking the size of the map, and making sure it has the most recent entry
+     * and the oldest expected entry as well
+     *
+     * Returns TRUE if the cache is intact, full, and up-to-date, FALSE otherwise
+     *
+     * @return TRUE if cache is OK, FALSE otherwise
+     */
+    bool validate_ybi_cache();
+
 #ifndef IN_UNIT_TESTS
   private:
 #endif
@@ -1250,6 +1301,11 @@ namespace cryptonote
     // cache for verifying transaction RCT non semantics
     mutable rct_ver_cache_t m_rct_ver_cache;
 
+    /**
+     * @brief hashmap linking blockchain height to YBI struct for that height
+     */
+    std::map<uint64_t, yield_block_info> m_yield_block_info_cache;
+    
     /**
      * @brief collects the keys for all outputs being "spent" as an input
      *

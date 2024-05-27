@@ -110,7 +110,8 @@ namespace tools
     catch(...)
     {
       // if failed, try reading in unportable mode
-      boost::filesystem::copy_file(file_path, file_path + ".unportable", boost::filesystem::copy_option::overwrite_if_exists);
+      //boost::filesystem::copy_file(file_path, file_path + ".unportable", boost::filesystem::copy_option::overwrite_if_exists);
+      tools::copy_file(file_path, file_path + ".unportable");
       data_file.close();
       data_file.open( file_path, std::ios_base::binary | std::ios_base::in);
       if(data_file.fail())
