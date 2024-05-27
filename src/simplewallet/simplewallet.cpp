@@ -7860,6 +7860,186 @@ bool simple_wallet::sweep_below(const std::vector<std::string> &args_)
   return true;
 }
 //----------------------------------------------------------------------------------------------------
+bool simple_wallet::return_payment(const std::vector<std::string> &args_)
+{
+  // Disable until appropriate hard fork
+  CHECK_AND_ASSERT_MES(m_wallet->get_current_hard_fork() >= HF_VERSION_ENABLE_RETURN, false, tr("return_payments are disabled"));
+
+  if (!try_connect_to_daemon())
+    return true;
+
+  // TODO: add locked versions
+  if (args_.size() != 1)
+  {
+    PRINT_USAGE(USAGE_RETURN_PAYMENT);
+    return true;
+  }
+
+  // Get the TX hash we are interested in 
+  crypto::hash txid;
+  if (!epee::string_tools::hex_to_pod(args_[0], txid))
+  {
+    fail_msg_writer() << tr("failed to parse txid");
+    return true;
+  }
+
+  // Get the TX details
+  tools::wallet2::transfer_container transfers;
+  m_wallet->get_transfers(transfers);
+  std::vector<size_t> transfers_indices = {};
+  for (size_t idx=0; idx < transfers.size(); ++idx) {
+
+    // Get the TD by reference
+    tools::wallet2::transfer_details& td = transfers[idx];
+    
+    // Skip entries we don't care about
+    if (td.m_txid != txid) continue;
+
+    // Found the specified entry - make sure we can return it
+    if (td.m_tx.type != cryptonote::transaction_type::TRANSFER) {
+      fail_msg_writer() << tr("incorrect TX type for txid ") << args_[0];
+      return true;
+    }
+
+    // Verify we have a valid return_address and tx_pubkey
+    if (td.m_tx.return_address == crypto::null_pkey || td.m_tx.return_pubkey == crypto::null_pkey) {
+      fail_msg_writer() << tr("missing return_address/return_pubkey for txid ") << args_[0];
+      return true;
+    }
+
+    // Check that we have the key image information, and that it is usable
+    if (!td.m_key_image_known || td.m_key_image_partial || td.m_spent || td.m_frozen) {
+      fail_msg_writer() << tr("key image is unavailable (partial / unknown / spent / frozen) for txid ") << args_[0];
+      return true;
+    }
+
+    // We found the one we were looking for - take a copy of the key_image, etc.
+    transfers_indices.push_back(idx);
+    break;
+  }
+
+  // Check we have a valid key_image
+  if (transfers_indices.empty()) {
+    fail_msg_writer() << tr("key image is unavailable (partial / unknown / spent / frozen) for txid ") << args_[0];
+    return true;
+  }
+
+  SCOPED_WALLET_UNLOCK_ON_BAD_PASSWORD(return false;);
+
+  try
+  {
+    // Call the wallet create_transactions_return() method
+    auto ptx_vector = m_wallet->create_transactions_return(transfers_indices);
+    if (ptx_vector.empty())
+    {
+      fail_msg_writer() << tr("No outputs found");
+      return true;
+    }
+    if (ptx_vector.size() > 1)
+    {
+      fail_msg_writer() << tr("Multiple transactions are created, which is not supposed to happen");
+      return true;
+    }
+    if (ptx_vector[0].selected_transfers.size() != 1)
+    {
+      fail_msg_writer() << tr("The transaction uses multiple or no inputs, which is not supposed to happen");
+      return true;
+    }
+
+    // give user total and fee, and prompt to confirm
+    uint64_t total_fee = ptx_vector[0].fee;
+    uint64_t total_sent = m_wallet->get_transfer_details(ptx_vector[0].selected_transfers.front()).amount();
+    std::ostringstream prompt;
+    if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
+      return true;
+    prompt << boost::format(tr("Returning %s for a total fee of %s.  Is this okay?")) %
+      print_money(total_sent) %
+      print_money(total_fee);
+    std::string accepted = input_line(prompt.str(), true);
+    if (std::cin.eof())
+      return true;
+    if (!command_line::is_yes(accepted))
+    {
+      fail_msg_writer() << tr("transaction cancelled.");
+      return true;
+    }
+
+    // actually commit the transactions
+    if (m_wallet->multisig())
+    {
+      CHECK_MULTISIG_ENABLED();
+      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_monero_tx");
+      if (!r)
+      {
+        fail_msg_writer() << tr("Failed to write transaction(s) to file");
+      }
+      else
+      {
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_monero_tx";
+      }
+    }
+    else if (m_wallet->get_account().get_device().has_tx_cold_sign())
+    {
+      try
+      {
+	fail_msg_writer() << tr("cold-signing of return TXs not yet implemented");
+	return true;
+	/*
+        tools::wallet2::signed_tx_set signed_tx;
+        std::vector<cryptonote::address_parse_info> dsts_info;
+        dsts_info.push_back(info);
+
+        if (!cold_sign_tx(ptx_vector, signed_tx, dsts_info, [&](const tools::wallet2::signed_tx_set &tx){ return accept_loaded_tx(tx); })){
+          fail_msg_writer() << tr("Failed to cold sign transaction with HW wallet");
+          return true;
+        }
+
+        commit_or_save(signed_tx.ptx, m_do_not_relay);
+        success_msg_writer(true) << tr("Money successfully sent, transaction: ") << get_transaction_hash(ptx_vector[0].tx);
+	*/
+      }
+      catch (const std::exception& e)
+      {
+        handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
+      }
+      catch (...)
+      {
+        LOG_ERROR("Unknown error");
+        fail_msg_writer() << tr("unknown error");
+      }
+    }
+    else if (m_wallet->watch_only())
+    {
+      bool r = m_wallet->save_tx(ptx_vector, "unsigned_monero_tx");
+      if (!r)
+      {
+        fail_msg_writer() << tr("Failed to write transaction(s) to file");
+      }
+      else
+      {
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_monero_tx";
+      }
+    }
+    else
+    {
+      m_wallet->commit_tx(ptx_vector[0]);
+      success_msg_writer(true) << tr("Money successfully sent, transaction: ") << get_transaction_hash(ptx_vector[0].tx);
+    }
+
+  }
+  catch (const std::exception& e)
+  {
+    handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
+  }
+  catch (...)
+  {
+    LOG_ERROR("unknown error");
+    fail_msg_writer() << tr("unknown error");
+  }
+
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
 bool simple_wallet::burn(const std::vector<std::string> &args_)
 {
   // TODO: add locked versions

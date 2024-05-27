@@ -210,6 +210,10 @@
 #define HF_VERSION_LONG_TERM_BLOCK_WEIGHT       2
 #define HF_VERSION_VIEW_TAGS                    2
 #define HF_VERSION_2021_SCALING                 2
+#define HF_VERSION_ENABLE_CONVERT               2
+#define HF_VERSION_ENABLE_ORACLE                2
+#define HF_VERSION_ENABLE_RETURN                2
+#define HF_VERSION_SLIPPAGE_YIELD               2
 
 #define HF_VERSION_SLIPPAGE_YIELD               3
 
