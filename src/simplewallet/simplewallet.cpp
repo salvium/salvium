@@ -7944,7 +7944,10 @@ bool simple_wallet::sweep_below(const std::vector<std::string> &args_)
 bool simple_wallet::return_payment(const std::vector<std::string> &args_)
 {
   // Disable until appropriate hard fork
-  CHECK_AND_ASSERT_MES(m_wallet->get_current_hard_fork() >= HF_VERSION_ENABLE_RETURN, false, tr("return_payments are disabled"));
+  if (m_wallet->get_current_hard_fork() < HF_VERSION_ENABLE_RETURN) {
+    fail_msg_writer() << tr("return_payments are disabled");
+    return true;
+  }
 
   if (!try_connect_to_daemon())
     return true;
