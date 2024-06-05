@@ -504,7 +504,7 @@ namespace cryptonote
       {
         MWARNING("Found old-style blockchain.bin in " << old_files.string());
         MWARNING("Monero now uses a new format. You can either remove blockchain.bin to start syncing");
-        MWARNING("the blockchain anew, or use monero-blockchain-export and monero-blockchain-import to");
+        MWARNING("the blockchain anew, or use salvium-blockchain-export and salvium-blockchain-import to");
         MWARNING("convert your existing blockchain.bin to the new format. See README.md for instructions.");
         return false;
       }
@@ -518,16 +518,10 @@ namespace cryptonote
       LOG_ERROR("Failed to initialize a database");
       return false;
     }
-    
-    if (m_nettype == STAGENET) {
-      folder /= std::to_string(STAGENET_VERSION);
-    } else if (m_nettype == TESTNET) {
-      folder /= std::to_string(TESTNET_VERSION);
-    }
-    
+
     folder /= db->get_db_name();
     MGINFO("Loading blockchain from folder " << folder.string() << " ...");
-    
+
     const std::string filename = folder.string();
     // default to fast:async:1 if overridden
     blockchain_db_sync_mode sync_mode = db_defaultsync;
@@ -934,7 +928,7 @@ namespace cryptonote
           if (!rct::verRctSemanticsSimple(rv,
                                           tx_info[n].tx->type == cryptonote::transaction_type::BURN ? tx_info[n].tx->amount_burnt :
                                           tx_info[n].tx->type == cryptonote::transaction_type::CONVERT ? tx_info[n].tx->amount_burnt :
-                                          tx_info[n].tx->type == cryptonote::transaction_type::YIELD ? tx_info[n].tx->amount_burnt :
+                                          tx_info[n].tx->type == cryptonote::transaction_type::STAKE ? tx_info[n].tx->amount_burnt :
                                           0
                                           ))
           {
@@ -989,7 +983,7 @@ namespace cryptonote
     }
     if (!rvv.empty())
     {
-      LOG_PRINT_L1("Verifying one TX at a time");
+      LOG_PRINT_L1("One transaction among this group has bad semantics, verifying one at a time");
       ret = false;
       for (size_t n = 0; n < tx_info.size(); ++n)
       {
@@ -1000,7 +994,7 @@ namespace cryptonote
         if (!rct::verRctSemanticsSimple(tx_info[n].tx->rct_signatures,
                                         tx_info[n].tx->type == cryptonote::transaction_type::BURN ? tx_info[n].tx->amount_burnt :
                                         tx_info[n].tx->type == cryptonote::transaction_type::CONVERT ? tx_info[n].tx->amount_burnt :
-                                        tx_info[n].tx->type == cryptonote::transaction_type::YIELD ? tx_info[n].tx->amount_burnt :
+                                        tx_info[n].tx->type == cryptonote::transaction_type::STAKE ? tx_info[n].tx->amount_burnt :
                                         0
                                         ))
         {
@@ -1743,6 +1737,11 @@ namespace cryptonote
     return true;
   }
   //-----------------------------------------------------------------------------------------------
+  bool core::get_pool_transactions_info(const std::vector<crypto::hash>& txids, std::vector<std::pair<crypto::hash, tx_memory_pool::tx_details>>& txs, bool include_sensitive_txes) const
+  {
+    return m_mempool.get_transactions_info(txids, txs, include_sensitive_txes);
+  }
+  //-----------------------------------------------------------------------------------------------
   bool core::get_pool_transactions(std::vector<transaction>& txs, bool include_sensitive_data) const
   {
     m_mempool.get_transactions(txs, include_sensitive_data);
@@ -1753,6 +1752,11 @@ namespace cryptonote
   {
     m_mempool.get_transaction_hashes(txs, include_sensitive_data);
     return true;
+  }
+  //-----------------------------------------------------------------------------------------------
+  bool core::get_pool_info(time_t start_time, bool include_sensitive_txes, size_t max_tx_count, std::vector<std::pair<crypto::hash, tx_memory_pool::tx_details>>& added_txs, std::vector<crypto::hash>& remaining_added_txids, std::vector<crypto::hash>& removed_txs, bool& incremental) const
+  {
+    return m_mempool.get_pool_info(start_time, include_sensitive_txes, max_tx_count, added_txs, remaining_added_txids, removed_txs, incremental);
   }
   //-----------------------------------------------------------------------------------------------
   bool core::get_pool_transaction_stats(struct txpool_stats& stats, bool include_sensitive_data) const
@@ -1866,7 +1870,7 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   bool core::check_updates()
   {
-    static const char software[] = "salvium";
+    static const char software[] = "monero";
 #ifdef BUILD_TAG
     static const char buildtag[] = BOOST_PP_STRINGIZE(BUILD_TAG);
     static const char subdir[] = "cli"; // because it can never be simple
@@ -1886,7 +1890,7 @@ namespace cryptonote
     if (!tools::check_updates(software, buildtag, version, hash))
       return false;
 
-    if (tools::vercmp(version.c_str(), SALVIUM_VERSION) <= 0)
+    if (tools::vercmp(version.c_str(), MONERO_VERSION) <= 0)
     {
       m_update_available = false;
       return true;

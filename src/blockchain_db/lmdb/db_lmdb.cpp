@@ -894,7 +894,7 @@ void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t l
 
   CURSOR(yield_blocks)
   yield_block_info ybi_matured, ybi_prev;
-  uint64_t yield_lock_period = cryptonote::get_config(nettype).YIELD_LOCK_PERIOD;
+  uint64_t yield_lock_period = cryptonote::get_config(nettype).STAKE_LOCK_PERIOD;
   if (m_height > yield_lock_period) {
     uint64_t height_matured = m_height - yield_lock_period - 1;
     result = get_yield_block_info(height_matured, ybi_matured);
@@ -1179,7 +1179,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       throw0(DB_ERROR(lmdb_error("Failed to add prunable tx prunable hash to db transaction: ", result).c_str()));
   }
 
-  if (tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::YIELD) {
+  if (tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::STAKE) {
 
     // Get the current tally value for the source currency type
     MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
@@ -1232,7 +1232,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   }
   
   // Is there yield_tx data to add?
-  if (tx.type == cryptonote::transaction_type::YIELD) {
+  if (tx.type == cryptonote::transaction_type::STAKE) {
 
     // Create the object we are going to write to the database
     yield_tx_info yield_data;
@@ -1381,7 +1381,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
   }
 
   // Is there yield_tx data to remove?
-  if (tx.type == cryptonote::transaction_type::YIELD) {
+  if (tx.type == cryptonote::transaction_type::STAKE) {
     // Remove any yield_tx data for this transaction
     MDB_val_set(val_height, m_height);
     MDB_val v;

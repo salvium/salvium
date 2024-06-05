@@ -35,7 +35,7 @@
 
 namespace daemon_args
 {
-  std::string const WINDOWS_SERVICE_NAME = "Salvium Daemon";
+  std::string const WINDOWS_SERVICE_NAME = "Monero Daemon";
 
   const command_line::arg_descriptor<std::string, false, true, 2> arg_config_file = {
     "config-file"
@@ -135,6 +135,7 @@ namespace daemon_args
     "zmq-pub"
   , "Address for ZMQ pub - tcp://ip:port or ipc://path"
   };
+
   const command_line::arg_descriptor<bool> arg_print_genesis_tx = {
     "print-genesis-tx"
   , "Print the genesis transaction"

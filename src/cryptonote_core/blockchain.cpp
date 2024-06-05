@@ -1580,7 +1580,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
 
   // Get the data for the block that matured this time
   cryptonote::yield_block_info ybi_matured;
-  uint64_t lock_period = get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   uint64_t start_height = (height > lock_period) ? height - lock_period - 1 : 0;
   bool ok = get_ybi_entry(start_height, ybi_matured);
   if (ok && ybi_matured.locked_coins_this_block > 0) {
@@ -1881,7 +1881,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   }
 
   // Check to see if there are any matured YIELD TXs
-  uint64_t yield_lock_period = get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t yield_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   uint64_t start_height = (height > yield_lock_period) ? height - yield_lock_period - 1 : 0;
 
   cryptonote::yield_block_info ybi_matured;
@@ -1904,7 +1904,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
       entry.source_asset = "SAL";
       entry.destination_asset = "SAL";
       entry.return_address = yield_entry.first.return_address;
-      entry.type = cryptonote::transaction_type::YIELD;
+      entry.type = cryptonote::transaction_type::STAKE;
       entry.P_change = yield_entry.first.P_change;
       entry.return_pubkey = yield_entry.first.return_pubkey;
       protocol_entries.push_back(entry);
@@ -2291,7 +2291,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
       cryptonote::blobdata blob;
       if (m_tx_pool.have_tx(txid, relay_category::legacy))
       {
-        if (m_tx_pool.get_transaction_info(txid, td))
+        if (m_tx_pool.get_transaction_info(txid, td, true/*include_sensitive_data*/))
         {
           bei.block_cumulative_weight += td.weight;
         }
@@ -4311,7 +4311,7 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
   }
   
   // Iterate over the cached yield_block_info data
-  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
   for (uint64_t idx = start_height+1; idx <= start_height + yield_lock_period; ++idx) {
     // Get the next block
     if (m_yield_block_info_cache.count(idx) == 0) {
@@ -4350,7 +4350,7 @@ bool Blockchain::rebuild_ybi_cache()
   
   // Get the size that the cache should be when fully populated (could be less than the lock period if the chain is young)
   uint64_t height = m_db->height();
-  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
   uint64_t ybi_cache_expected_size = std::min(height, yield_lock_period+1);
 
   // Now get this number of entries from the blockchain
@@ -4379,7 +4379,7 @@ bool Blockchain::validate_ybi_cache()
   
   // Get the size that the cache should be if fully populated
   uint64_t height = m_db->height();
-  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
   uint64_t ybi_cache_expected_size = std::min(height, yield_lock_period + 1);
   if (m_yield_block_info_cache.size() != ybi_cache_expected_size) {
     // It's not the right size - report error and bail out
@@ -4902,7 +4902,7 @@ leave:
       new_height = m_db->add_block(std::make_pair(std::move(bl), std::move(bd)), block_weight, long_term_block_weight, cumulative_difficulty, already_generated_coins, txs, m_nettype, new_ybi);
 
       // Update the YBI cache data
-      uint64_t yield_lock_period = cryptonote::get_config(m_nettype).YIELD_LOCK_PERIOD;
+      uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
       uint64_t ybi_cache_expected_size = std::min(new_height, yield_lock_period);
       if (new_height > yield_lock_period) {
         if (m_yield_block_info_cache.count(new_height - yield_lock_period - 2) != 0) {

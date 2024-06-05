@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023, Monero Research Labs
+// Copyright (c) 2016, Monero Research Labs
 //
 // Author: Shen Noether <shen.noether@gmx.com>
 // 
@@ -120,19 +120,12 @@ namespace
 }
 
 namespace rct {
-
-    Bulletproof proveRangeBulletproof(keyV &C, keyV &masks, const std::vector<bool> &zero_masks, const std::vector<uint64_t> &amounts, epee::span<const key> sk, hw::device &hwdev)
+    Bulletproof proveRangeBulletproof(keyV &C, keyV &masks, const std::vector<uint64_t> &amounts, epee::span<const key> sk, hw::device &hwdev)
     {
         CHECK_AND_ASSERT_THROW_MES(amounts.size() == sk.size(), "Invalid amounts/sk sizes");
-        CHECK_AND_ASSERT_THROW_MES(amounts.size() == zero_masks.size(), "Invalid amounts/zero_masks sizes");
         masks.resize(amounts.size());
-        for (size_t i = 0; i < masks.size(); ++i) {
-            if (zero_masks[i] == true) {
-                masks[i] = rct::identity();
-            } else {
-                masks[i] = hwdev.genCommitmentMask(sk[i]);
-            }
-        }
+        for (size_t i = 0; i < masks.size(); ++i)
+            masks[i] = hwdev.genCommitmentMask(sk[i]);
         Bulletproof proof = bulletproof_PROVE(amounts, masks);
         CHECK_AND_ASSERT_THROW_MES(proof.V.size() == amounts.size(), "V does not have the expected size");
         C = proof.V;
@@ -153,18 +146,12 @@ namespace rct {
       catch (...) { return false; }
     }
 
-    BulletproofPlus proveRangeBulletproofPlus(keyV &C, keyV &masks, const std::vector<bool> &zero_masks, const std::vector<uint64_t> &amounts, epee::span<const key> sk, hw::device &hwdev)
+    BulletproofPlus proveRangeBulletproofPlus(keyV &C, keyV &masks, const std::vector<uint64_t> &amounts, epee::span<const key> sk, hw::device &hwdev)
     {
         CHECK_AND_ASSERT_THROW_MES(amounts.size() == sk.size(), "Invalid amounts/sk sizes");
-        CHECK_AND_ASSERT_THROW_MES(amounts.size() == zero_masks.size(), "Invalid amounts/zero_masks sizes");
         masks.resize(amounts.size());
-        for (size_t i = 0; i < masks.size(); ++i) {
-            if (zero_masks[i] == true) {
-                masks[i] = rct::identity();
-            } else {
-                masks[i] = hwdev.genCommitmentMask(sk[i]);
-            }
-        }
+        for (size_t i = 0; i < masks.size(); ++i)
+            masks[i] = hwdev.genCommitmentMask(sk[i]);
         BulletproofPlus proof = bulletproof_plus_PROVE(amounts, masks);
         CHECK_AND_ASSERT_THROW_MES(proof.V.size() == amounts.size(), "V does not have the expected size");
         C = proof.V;
@@ -1131,8 +1118,8 @@ namespace rct {
       const std::vector<unsigned int> & index,
       ctkeyV &outSk,
       const RCTConfig &rct_config,
-      hw::device &hwdev
-    ) {
+      hw::device &hwdev)
+    {
         const bool bulletproof_or_plus = rct_config.range_proof_type > RangeProofBorromean;
         CHECK_AND_ASSERT_THROW_MES(destination_asset_types.size() == destinations.size(), "Different number of amount_keys/destinations");
         CHECK_AND_ASSERT_THROW_MES(inamounts.size() > 0, "Empty inamounts");
@@ -1206,9 +1193,9 @@ namespace rct {
                 {
                     const epee::span<const key> keys{&amount_keys[0], amount_keys.size()};
                     if (plus)
-                      rv.p.bulletproofs_plus.push_back(proveRangeBulletproofPlus(C, masks, zero_masks, outamounts, keys, hwdev));
+                      rv.p.bulletproofs_plus.push_back(proveRangeBulletproofPlus(C, masks, outamounts, keys, hwdev));
                     else
-                      rv.p.bulletproofs.push_back(proveRangeBulletproof(C, masks, zero_masks, outamounts, keys, hwdev));
+                      rv.p.bulletproofs.push_back(proveRangeBulletproof(C, masks, outamounts, keys, hwdev));
                     #ifdef DBG
                     if (plus)
                       CHECK_AND_ASSERT_THROW_MES(verBulletproofPlus(rv.p.bulletproofs_plus.back()), "verBulletproofPlus failed on newly created proof");
@@ -1244,9 +1231,9 @@ namespace rct {
                 {
                     const epee::span<const key> keys{&amount_keys[amounts_proved], batch_size};
                     if (plus)
-                      rv.p.bulletproofs_plus.push_back(proveRangeBulletproofPlus(C, masks, zero_masks, batch_amounts, keys, hwdev));
+                      rv.p.bulletproofs_plus.push_back(proveRangeBulletproofPlus(C, masks, batch_amounts, keys, hwdev));
                     else
-                      rv.p.bulletproofs.push_back(proveRangeBulletproof(C, masks, zero_masks, batch_amounts, keys, hwdev));
+                      rv.p.bulletproofs.push_back(proveRangeBulletproof(C, masks, batch_amounts, keys, hwdev));
                 #ifdef DBG
                     if (plus)
                       CHECK_AND_ASSERT_THROW_MES(verBulletproofPlus(rv.p.bulletproofs_plus.back()), "verBulletproofPlus failed on newly created proof");
@@ -1465,9 +1452,9 @@ namespace rct {
           max_non_bp_proofs += rv.p.rangeSigs.size();
 
         results.resize(max_non_bp_proofs);
-
+        
         const keyV &pseudoOuts = bulletproof || bulletproof_plus ? rv.p.pseudoOuts : rv.pseudoOuts;
-
+        
         rct::keyV masks(rv.outPk.size());
         for (size_t i = 0; i < rv.outPk.size(); i++) {
           masks[i] = rv.outPk[i].mask;
@@ -1476,22 +1463,22 @@ namespace rct {
         DP(sumOutpks);
         const key txnFeeKey = scalarmultH(d2h(rv.txnFee));
         addKeys(sumOutpks, txnFeeKey, sumOutpks);
-
+        
         const key txnAmountBurntKey = scalarmultH(d2h(amount_burnt));
         addKeys(sumOutpks, txnAmountBurntKey, sumOutpks);
-
+        
         // Account for the "blinding factor remainder" term `p_r`
         addKeys(sumOutpks, rv.p_r, sumOutpks);
         
         key sumPseudoOuts = addKeys(pseudoOuts);
         DP(sumPseudoOuts);
-
+        
         //check pseudoOuts vs Outs..
         if (!equalKeys(sumPseudoOuts, sumOutpks)) {
           LOG_PRINT_L1("Sum check failed");
           return false;
         }
-
+        
         if (bulletproof_plus)
         {
           for (size_t i = 0; i < rv.p.bulletproofs_plus.size(); i++)
@@ -1508,6 +1495,7 @@ namespace rct {
             tpool.submit(&waiter, [&, i, offset] { results[i+offset] = verRange(rv.outPk[i].mask, rv.p.rangeSigs[i]); });
           offset += rv.p.rangeSigs.size();
         }
+
         if (!bpp_proofs.empty() && !verBulletproofPlus(bpp_proofs))
         {
           LOG_PRINT_L1("Aggregate range proof verified failed");
@@ -1531,7 +1519,7 @@ namespace rct {
             return false;
           }
         }
-
+        
         return true;
       }
       // we can get deep throws from ge_frombytes_vartime if input isn't valid

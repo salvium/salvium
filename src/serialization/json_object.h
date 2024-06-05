@@ -197,13 +197,6 @@ void fromJsonValue(const rapidjson::Value& val, long& i);
 
 // end integers
 
-void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::supply_data& supply_data);
-void fromJsonValue(const rapidjson::Value& val, oracle::supply_data& supply_data);
-void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::asset_data& asset_data);
-void fromJsonValue(const rapidjson::Value& val, oracle::asset_data& asset_data);
-void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const oracle::pricing_record& pricing_record);
-void fromJsonValue(const rapidjson::Value& val, oracle::pricing_record& pricing_record);
-
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::transaction& tx);
 void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx);
 
@@ -310,6 +303,9 @@ void fromJsonValue(const rapidjson::Value& val, rct::boroSig& sig);
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::mgSig& sig);
 void fromJsonValue(const rapidjson::Value& val, rct::mgSig& sig);
+
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::clsag& sig);
+void fromJsonValue(const rapidjson::Value& val, rct::clsag& sig);
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::rpc::DaemonInfo& info);
 void fromJsonValue(const rapidjson::Value& val, cryptonote::rpc::DaemonInfo& info);

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2023, The Monero Project
+// Copyright (c) 2019-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -51,7 +51,7 @@ namespace cryptonote
     TRANSFER = 3,
     CONVERT = 4,
     BURN = 5,
-    YIELD = 6,
+    STAKE = 6,
     RETURN = 7
   };
 }

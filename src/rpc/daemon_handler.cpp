@@ -137,7 +137,6 @@ namespace rpc
 
     res.blocks.resize(blocks.size());
     res.output_indices.resize(blocks.size());
-    res.asset_type_output_indices.resize(blocks.size());
 
     auto it = blocks.begin();
 
@@ -150,7 +149,6 @@ namespace rpc
       {
         res.blocks.clear();
         res.output_indices.clear();
-        res.asset_type_output_indices.clear();
         res.status = Message::STATUS_FAILED;
         res.error_details = "failed retrieving a requested block";
         return;
@@ -160,7 +158,6 @@ namespace rpc
       {
           res.blocks.clear();
           res.output_indices.clear();
-          res.asset_type_output_indices.clear();
           res.status = Message::STATUS_FAILED;
           res.error_details = "incorrect number of transactions retrieved for block";
           return;
