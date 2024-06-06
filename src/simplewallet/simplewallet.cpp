@@ -3178,6 +3178,25 @@ bool simple_wallet::set_enable_multisig(const std::vector<std::string> &args/* =
   return true;
 }
 
+bool simple_wallet::set_freeze_incoming_payments(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
+{
+  if (args.size() < 2)
+  {
+    fail_msg_writer() << tr("Value not specified");
+    return true;
+  }
+
+  const auto pwd_container = get_and_verify_password();
+  if (pwd_container)
+  {
+    parse_bool_and_use(args[1], [&](bool r) {
+      m_wallet->freeze_incoming_payments(r);
+      m_wallet->rewrite(m_wallet_file, pwd_container->password());
+    });
+  }
+  return true;
+}
+
 bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
 {
   if(args.empty())
@@ -3533,7 +3552,9 @@ simple_wallet::simple_wallet()
                                   "enable-multisig-experimental <1|0>\n "
                                   "  Set this to allow multisig commands. Multisig may currently be exploitable if parties do not trust each other.\n "
                                   "inactivity-lock-timeout <unsigned int>\n "
-                                  "  How many seconds to wait before locking the wallet (0 to disable)."));
+                                  "  How many seconds to wait before locking the wallet (0 to disable).\n"
+                                  "freeze-incoming-payments <1|0>\n "
+                                  "  Whether to have incoming payments automatically frozen, so they cannot be spent erroneously."));
   m_cmd_binder.set_handler("encrypted_seed",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::encrypted_seed, _1),
                            tr("Display the encrypted Electrum-style mnemonic seed."));
@@ -3948,6 +3969,7 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     success_msg_writer() << "credits-target = " << m_wallet->credits_target();
     success_msg_writer() << "load-deprecated-formats = " << m_wallet->load_deprecated_formats();
     success_msg_writer() << "enable-multisig-experimental = " << m_wallet->is_multisig_enabled();
+    success_msg_writer() << "freeze-incoming-payments = " << m_wallet->is_freeze_incoming_payments_enabled();
     return true;
   }
   else
@@ -4015,6 +4037,7 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     CHECK_SIMPLE_VARIABLE("auto-mine-for-rpc-payment-threshold", set_auto_mine_for_rpc_payment_threshold, tr("floating point >= 0"));
     CHECK_SIMPLE_VARIABLE("credits-target", set_credits_target, tr("unsigned integer"));
     CHECK_SIMPLE_VARIABLE("enable-multisig-experimental", set_enable_multisig, tr("0 or 1"));
+    CHECK_SIMPLE_VARIABLE("freeze-incoming-payments", set_freeze_incoming_payments, tr("0 or 1"));
   }
   fail_msg_writer() << tr("set: unrecognized argument(s)");
   return true;
