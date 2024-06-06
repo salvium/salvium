@@ -36,6 +36,7 @@
 #include "warnings.h"
 #include "misc_log_ex.h"
 
+#include <boost/numeric/conversion/bounds.hpp>
 #include <boost/lexical_cast.hpp>
 #include <typeinfo>
 #include <iomanip>
