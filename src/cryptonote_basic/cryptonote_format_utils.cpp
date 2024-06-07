@@ -399,8 +399,12 @@ namespace cryptonote
           // SRCG: This is a confusing one - for some reason I was using the line below, and it _seemed_ to work...
           // ... but I think it was luck! the "od.output_index" would only work for the TD_ORIGIN data, of course...
           //hwdev.derive_subaddress_public_key(out_key, recv_derivation, od.output_index, P_change);
-          hwdev.derive_subaddress_public_key(out_key, recv_derivation, real_output_index, P_change);
-
+          if (od.tx_type == cryptonote::transaction_type::CONVERT || od.tx_type == cryptonote::transaction_type::STAKE) {
+            hwdev.derive_subaddress_public_key(out_key, recv_derivation, 0, P_change);
+          } else {
+            hwdev.derive_subaddress_public_key(out_key, recv_derivation, real_output_index, P_change);
+          }
+          
           // 2. Obtain a separate key_derivation for the _original_ P_change output
           //    (using the TX public key from the CONVERT TX and the sender's private view key)
           crypto::key_derivation derivation_P_change_tx = AUTO_VAL_INIT(derivation_P_change_tx);
@@ -416,9 +420,11 @@ namespace cryptonote
           CHECK_AND_ASSERT_MES(P_change == change_pk, false, "derived P_change public key does not match P_change");
 
           // 5. Calculate the secret spend key "x_return"
-          // SRCG: And another confusing one - luck again?!?!?
-          // CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, od.output_index, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");                              
-          CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, real_output_index, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");                              
+          if (od.tx_type == cryptonote::transaction_type::CONVERT || od.tx_type == cryptonote::transaction_type::STAKE) {
+            CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, 0, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
+          } else {
+            CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, real_output_index, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
+          }
           in_ephemeral.sec = scalar_step1;
           CHECK_AND_ASSERT_MES(hwdev.secret_key_to_public_key(in_ephemeral.sec, in_ephemeral.pub), false, "Failed to derive one-time output public key 'P_return'");
           CHECK_AND_ASSERT_MES(in_ephemeral.pub == out_key,

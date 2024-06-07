@@ -2179,9 +2179,15 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
 
   // Calculate the subaddress public_key (P_change)
   crypto::public_key pk_change = crypto::null_pkey;
-  bool ok = m_account.get_device().derive_subaddress_public_key(output_public_key, tx_scan_info.received->derivation, i, pk_change);
-  THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to derive subaddress public key for CONVERT/YIELD/RETURN TX");
-
+  if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+    // Force the output index to be 0 in all cases, despite where it appears in this TX
+    bool ok = m_account.get_device().derive_subaddress_public_key(output_public_key, tx_scan_info.received->derivation, 0, pk_change);
+    THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to derive subaddress public key for CONVERT/YIELD TX");
+  } else {
+    bool ok = m_account.get_device().derive_subaddress_public_key(output_public_key, tx_scan_info.received->derivation, i, pk_change);
+    THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to derive subaddress public key for RETURN TX");
+  }
+  
   // Flag to indicate this is a TX that uses a return_address
   bool use_od = false;
   cryptonote::origin_data od = AUTO_VAL_INIT(od);
@@ -2194,6 +2200,7 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
     use_od = true;
     od.tx_pub_key = get_tx_pub_key_from_extra(td_origin.m_tx);
     od.output_index = td_origin.m_internal_output_index;
+    od.tx_type = td_origin.m_tx.type;
   }
   
   if (m_multisig)
@@ -2215,12 +2222,14 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
   {
     tx_scan_info.money_transfered = tools::decodeRct(tx.rct_signatures, tx_scan_info.received->derivation, i, tx_scan_info.mask, m_account.get_device());
   }
+  /*
   if (tx_scan_info.money_transfered == 0)
   {
     MERROR("Invalid output amount, skipping");
     tx_scan_info.error = true;
     return;
   }
+  */
   outs.push_back(i);
   THROW_WALLET_EXCEPTION_IF(tx_money_got_in_outs[tx_scan_info.received->index][tx_scan_info.asset_type] >= std::numeric_limits<uint64_t>::max() - tx_scan_info.money_transfered,
       error::wallet_internal_error, "Overflow in received amounts");
@@ -2993,7 +3002,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
       if (tx.type == cryptonote::transaction_type::PROTOCOL) {
         if (td_origin_idx != ((uint64_t)-1)) {
           // Get the origin TD information
-          payment.m_amount   = payment.m_amounts[0];
+          payment.m_amount   = payment.m_amounts.empty() ? 0 : payment.m_amounts[0];
           payment.m_tx_type  = m_transfers[td_origin_idx].m_tx.type;
           payment.m_fee      = m_transfers[td_origin_idx].m_tx.amount_burnt;
         } else {
