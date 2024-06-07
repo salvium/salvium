@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023, The Monero Project
+// Copyright (c) 2014-2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -65,11 +65,11 @@ namespace cryptonote
     crypto::public_key return_pubkey;
   };
 
+  //---------------------------------------------------------------
   bool construct_protocol_tx(const size_t height, uint64_t& protocol_fee, transaction& tx, std::vector<protocol_data_entry>& protocol_data, std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const account_public_address &miner_address, const account_public_address &treasury_address, const uint8_t hf_version);
   //---------------------------------------------------------------
   bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, const blobdata& extra_nonce = blobdata(), size_t max_outs = 999, uint8_t hard_fork_version = 1);
-  bool construct_protocol_tx(size_t height, transaction& tx, size_t max_outs = 999, uint8_t hard_fork_version = 1);
-  bool calculate_uniqueness(const cryptonote::transaction_type& type, const crypto::key_image& k_image, const size_t height, const size_t idx, crypto::ec_scalar& uniqueness);
+
   struct tx_source_entry
   {
     typedef std::pair<uint64_t, rct::ctkey> output_entry;
@@ -83,7 +83,6 @@ namespace cryptonote
     bool rct;                           //true if the output is rct
     rct::key mask;                      //ringct amount mask
     rct::multisig_kLRki multisig_kLRki; //multisig info
-    oracle::pricing_record pr;
     std::string asset_type;
     origin_data origin_tx_data;
 
@@ -101,7 +100,7 @@ namespace cryptonote
       FIELD(multisig_kLRki)
       FIELD(asset_type)
       FIELD(origin_tx_data)
-
+    
       if (real_output >= outputs.size())
         return false;
     END_SERIALIZE()
@@ -117,11 +116,20 @@ namespace cryptonote
     bool is_subaddress;
     bool is_integrated;
     bool is_change;
+    bool is_return;
 
-    tx_destination_entry() : amount(0), slippage_limit(0), addr(AUTO_VAL_INIT(addr)), asset_type("SAL"), is_subaddress(false), is_integrated(false), is_change(false) { }
-    tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress) : amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false) { }
-    tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress) : original(o), amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false) { }
-
+    tx_destination_entry() : amount(0), slippage_limit(0), addr(AUTO_VAL_INIT(addr)), is_subaddress(false), is_integrated(false), is_change(false), is_return(false) { }
+    tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress) : amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(false) { }
+    tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress, bool is_return) : amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(is_return) { }
+    tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress) : original(o), amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(false) { }
+    tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress, bool is_return) : original(o), amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(is_return) { }
+    /*
+    tx_destination_entry() : amount(0), addr(AUTO_VAL_INIT(addr)), is_subaddress(false), is_integrated(false), is_change(false), is_return(false) { }
+    tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress) : amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(false) { }
+    tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress, bool is_return) : amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(is_return) { }
+    tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress) : original(o), amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(false) { }
+    tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress, bool is_return) : original(o), amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(is_return) { }
+    */
     std::string address(network_type nettype, const crypto::hash &payment_id) const
     {
       if (!original.empty())
@@ -140,12 +148,11 @@ namespace cryptonote
     BEGIN_SERIALIZE_OBJECT()
       FIELD(original)
       VARINT_FIELD(amount)
-      VARINT_FIELD(slippage_limit)
       FIELD(addr)
-      FIELD(asset_type)
       FIELD(is_subaddress)
       FIELD(is_integrated)
       FIELD(is_change)
+      FIELD(is_return)
     END_SERIALIZE()
   };
 
@@ -160,8 +167,10 @@ namespace cryptonote
 
   //---------------------------------------------------------------
   crypto::public_key get_destination_view_key_pub(const std::vector<tx_destination_entry> &destinations, const boost::optional<cryptonote::account_public_address>& change_addr);
-  bool construct_tx(const account_keys& sender_account_keys, std::vector<tx_source_entry> &sources, const std::vector<tx_destination_entry>& destinations, const uint8_t hf_version, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type& tx_type, const boost::optional<cryptonote::account_public_address>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time);
+  bool construct_tx(const account_keys& sender_account_keys, std::vector<tx_source_entry> &sources, const std::vector<tx_destination_entry>& destinations, const uint8_t hf_version, const std::string& asset_type, const cryptonote::transaction_type& tx_type, const boost::optional<cryptonote::account_public_address>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time);
+
   bool construct_tx_with_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const uint8_t hf_version, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type& tx_type, const boost::optional<cryptonote::account_public_address>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, bool rct = false, const rct::RCTConfig &rct_config = { rct::RangeProofBorromean, 0 }, bool shuffle_outs = true, bool use_view_tags = false);
+
   bool construct_tx_and_get_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const uint8_t hf_version, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type& tx_type, const boost::optional<cryptonote::account_public_address>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, crypto::secret_key &tx_key, std::vector<crypto::secret_key> &additional_tx_keys, bool rct = false, const rct::RCTConfig &rct_config = { rct::RangeProofBorromean, 0 }, bool use_view_tags = false);
   bool generate_output_ephemeral_keys(const size_t tx_version, const cryptonote::account_keys &sender_account_keys, const crypto::public_key &txkey_pub,  const crypto::secret_key &tx_key,
                                       const cryptonote::tx_destination_entry &dst_entr, const boost::optional<cryptonote::account_public_address> &change_addr, const size_t output_index,
@@ -191,7 +200,6 @@ namespace cryptonote
   crypto::hash get_block_longhash(const Blockchain *pb, const block& b, const uint64_t height, const crypto::hash *seed_hash = nullptr, const int miners = 0);
   void get_altblock_longhash(const block& b, crypto::hash& res, const crypto::hash& seed_hash);
 
-  bool get_tx_type(const std::string& source, const std::string& destination, transaction_type& type);
 }
 
 BOOST_CLASS_VERSION(cryptonote::tx_source_entry, 1)

@@ -64,6 +64,7 @@ using rct_ver_cache_t = ::tools::data_cache<::crypto::hash, RCT_VER_CACHE_SIZE>;
  * @param mix_ring mixring referenced by this tx. THIS DATA MUST BE PREVIOUSLY VALIDATED
  * @param cache saves tx+mixring hashes used to cache calls
  * @param rct_type_to_cache Only RCT sigs with version (e.g. RCTTypeBulletproofPlus) will be cached
+ * @param hf_version the hard fork version currently in use on the chain
  * @return true when verRctNonSemanticsSimple() w/ expanded tx.rct_signatures would return true
  * @return false when verRctNonSemanticsSimple() w/ expanded tx.rct_signatures would return false
  */

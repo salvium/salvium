@@ -135,20 +135,6 @@ namespace crypto {
     friend void derive_secret_key(const key_derivation &, std::size_t, const secret_key &, secret_key &);
     static bool derive_subaddress_public_key(const public_key &, const key_derivation &, std::size_t, public_key &);
     friend bool derive_subaddress_public_key(const public_key &, const key_derivation &, std::size_t, public_key &);
-
-    /**
-     * The following functions are designed to perform the correct encoding / decoding for protocol_tx outputs,
-     * which use a hash of a crypto::key_image for uniqueness
-     */
-    static void derivation_to_scalar(const key_derivation &derivation, const ec_scalar& uniqueness, ec_scalar &res);
-    friend void derivation_to_scalar(const key_derivation &derivation, const ec_scalar& uniqueness, ec_scalar &res);
-    static bool derive_public_key(const key_derivation &, const ec_scalar&, const public_key &, public_key &);
-    friend bool derive_public_key(const key_derivation &, const ec_scalar&, const public_key &, public_key &);
-    static void derive_secret_key(const key_derivation &, const ec_scalar&, const secret_key &, secret_key &);
-    friend void derive_secret_key(const key_derivation &, const ec_scalar&, const secret_key &, secret_key &);
-    static bool derive_subaddress_public_key(const public_key &, const key_derivation &, const ec_scalar&, public_key &);
-    friend bool derive_subaddress_public_key(const public_key &, const key_derivation &, const ec_scalar&, public_key &);
-
     static void generate_signature(const hash &, const public_key &, const secret_key &, signature &);
     friend void generate_signature(const hash &, const public_key &, const secret_key &, signature &);
     static bool check_signature(const hash &, const public_key &, const signature &);
@@ -259,25 +245,6 @@ namespace crypto {
     return crypto_ops::derive_subaddress_public_key(out_key, derivation, output_index, result);
   }
 
-  /**
-   * The following functions are designed to perform the correct encoding / decoding for protocol_tx outputs,
-   * which use an ec_scalar to provide uniqueness
-   */
-  inline bool derive_public_key(const key_derivation &derivation, const ec_scalar& uniqueness,
-    const public_key &base, public_key &derived_key) {
-    return crypto_ops::derive_public_key(derivation, uniqueness, base, derived_key);
-  }
-  inline void derivation_to_scalar(const key_derivation &derivation, const ec_scalar& uniqueness, ec_scalar &res) {
-    return crypto_ops::derivation_to_scalar(derivation, uniqueness, res);
-  }
-  inline void derive_secret_key(const key_derivation &derivation, const ec_scalar& uniqueness,
-    const secret_key &base, secret_key &derived_key) {
-    crypto_ops::derive_secret_key(derivation, uniqueness, base, derived_key);
-  }
-  inline bool derive_subaddress_public_key(const public_key &out_key, const key_derivation &derivation, const ec_scalar& uniqueness, public_key &result) {
-    return crypto_ops::derive_subaddress_public_key(out_key, derivation, uniqueness, result);
-  }
-
   /* Generation and checking of a standard signature.
    */
   inline void generate_signature(const hash &prefix_hash, const public_key &pub, const secret_key &sec, signature &sig) {
@@ -366,8 +333,6 @@ namespace crypto {
   const extern crypto::public_key null_pkey;
   const extern crypto::secret_key null_skey;
 
-  const extern crypto::key_image null_ki;
-  
   inline bool operator<(const public_key &p1, const public_key &p2) { return memcmp(&p1, &p2, sizeof(public_key)) < 0; }
   inline bool operator>(const public_key &p1, const public_key &p2) { return p2 < p1; }
 }

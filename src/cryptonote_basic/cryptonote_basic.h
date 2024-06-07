@@ -42,8 +42,8 @@
 #include "serialization/json_archive.h"
 #include "serialization/debug_archive.h"
 #include "serialization/crypto.h"
-#include "serialization/keyvalue_serialization.h" // epee named serialization
-#include "serialization/pricing_record.h"
+#include "serialization/keyvalue_serialization.h" // eepe named serialization
+#include "serialization/string.h"
 #include "cryptonote_config.h"
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
@@ -107,7 +107,7 @@ namespace cryptonote
     BEGIN_SERIALIZE_OBJECT()
       FIELD(key)
       FIELD(asset_type)
-      FIELD(unlock_time)
+      VARINT_FIELD(unlock_time)
       FIELD(view_tag)
     END_SERIALIZE()
   };
@@ -215,6 +215,7 @@ namespace cryptonote
     BEGIN_SERIALIZE()
       VARINT_FIELD(version)
       if(version == 0 || CURRENT_TRANSACTION_VERSION < version) return false;
+      VARINT_FIELD(unlock_time)
       FIELD(vin)
       FIELD(vout)
       FIELD(extra)
@@ -515,7 +516,6 @@ namespace cryptonote
   };
 
 
-  
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
@@ -674,16 +674,19 @@ namespace cryptonote
   {
     uint8_t tx_type;
     crypto::public_key tx_pub_key;
-    crypto::key_image input_k_image;
-    crypto::ec_scalar uniqueness;
+    uint64_t output_index;
+    //crypto::key_image input_k_image;
+    //crypto::ec_scalar uniqueness;
 
     BEGIN_SERIALIZE_OBJECT()
       VARINT_FIELD(tx_type)
       FIELD(tx_pub_key)
-      FIELD(input_k_image)
+      VARINT_FIELD(output_index)
+    //FIELD(input_k_image)
     //FIELD(uniqueness)
     END_SERIALIZE()
   };  
+
 }
 
 namespace std {

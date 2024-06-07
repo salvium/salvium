@@ -154,20 +154,21 @@ struct Wallet2CallbackImpl : public tools::i_wallet2_callback
         }
     }
 
-    virtual void on_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const cryptonote::subaddress_index& subaddr_index, bool is_change, uint64_t unlock_time, const uint64_t& tx_origin_idx)
+  virtual void on_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const std::string& asset_type, uint64_t burnt, const cryptonote::subaddress_index& subaddr_index, bool is_change, uint64_t unlock_time, const uint64_t& td_origin_idx)
     {
 
         std::string tx_hash =  epee::string_tools::pod_to_hex(txid);
 
         LOG_PRINT_L3(__FUNCTION__ << ": money received. height:  " << height
                      << ", tx: " << tx_hash
-                     << ", amount: " << print_money(amount)
-                     << ", burnt: " << print_money(tx.amount_burnt)
-                     << ", raw_output_value: " << print_money(amount - tx.amount_burnt)
+                     << ", amount: " << print_money(amount - burnt)
+                     << " " << asset_type
+                     << ", burnt: " << print_money(burnt)
+                     << ", raw_output_value: " << print_money(amount)
                      << ", idx: " << subaddr_index);
         // do not signal on received tx if wallet is not syncronized completely
         if (m_listener && m_wallet->synchronized()) {
-            m_listener->moneyReceived(tx_hash, amount - tx.amount_burnt);
+            m_listener->moneyReceived(tx_hash, amount - burnt);
             m_listener->updated();
         }
     }
@@ -189,13 +190,14 @@ struct Wallet2CallbackImpl : public tools::i_wallet2_callback
     }
 
     virtual void on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& in_tx,
-                                uint64_t amount, const cryptonote::transaction& spend_tx, const cryptonote::subaddress_index& subaddr_index)
+                                uint64_t amount, const std::string& asset_type, const cryptonote::transaction& spend_tx, const cryptonote::subaddress_index& subaddr_index)
     {
         // TODO;
         std::string tx_hash = epee::string_tools::pod_to_hex(txid);
         LOG_PRINT_L3(__FUNCTION__ << ": money spent. height:  " << height
                      << ", tx: " << tx_hash
                      << ", amount: " << print_money(amount)
+                     << " " << asset_type
                      << ", idx: " << subaddr_index);
         // do not signal on sent tx if wallet is not syncronized completely
         if (m_listener && m_wallet->synchronized()) {
@@ -587,8 +589,8 @@ bool WalletImpl::recoverFromKeysWithPassword(const std::string &path,
     cryptonote::address_parse_info info;
     if(!get_account_address_from_str(info, m_wallet->nettype(), address_string))
     {
-      setStatusError(tr("failed to parse address (WalletImpl::recoverFromKeysWithPassword)"));
-      return false;
+        setStatusError(tr("failed to parse address"));
+        return false;
     }
 
     // parse optional spend key
@@ -1302,11 +1304,15 @@ bool WalletImpl::scanTransactions(const std::vector<std::string> &txids)
         }
         txids_u.insert(txid);
     }
-    std::vector<crypto::hash> txids_v(txids_u.begin(), txids_u.end());
 
     try
     {
-        m_wallet->scan_tx(txids_v);
+        m_wallet->scan_tx(txids_u);
+    }
+    catch (const tools::error::wont_reprocess_recent_txs_via_untrusted_daemon &e)
+    {
+        setStatusError(e.what());
+        return false;
     }
     catch (const std::exception &e)
     {

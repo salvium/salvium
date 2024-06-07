@@ -31,7 +31,6 @@
 #include "int-util.h"
 #include "memwipe.h"
 
-#include "crypto/hash.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
@@ -112,7 +111,7 @@ static bool compute_keys_for_sources(
     // Populate this struct if you want to make use of multisig for Salvium!!!
     assert(false);
     cryptonote::origin_data origin_tx_data;
-    
+
     if (not cryptonote::generate_key_image_helper(
       account_keys,
       subaddresses,
@@ -123,6 +122,7 @@ static bool compute_keys_for_sources(
       tmp_keys,
       tmp_key_image,
       hwdev,
+      true,
       origin_tx_data
     )) {
       return false;
@@ -429,10 +429,6 @@ static bool compute_keys_for_destinations(
   crypto::public_key temp_output_public_key;
 
   for (std::size_t i = 0; i < num_destinations; ++i) {
-
-    crypto::ec_scalar uniqueness;
-    assert(false);
-
     if (not hwdev.generate_output_ephemeral_keys(
       unsigned_tx.version,
       account_keys,
@@ -447,8 +443,7 @@ static bool compute_keys_for_destinations(
       output_amount_secret_keys,
       temp_output_public_key,
       use_view_tags,
-      view_tags[i], //unused variable if use_view_tags is not set
-      uniqueness
+      view_tags[i]  //unused variable if use_view_tags is not set
     )) {
       return false;
     }
@@ -866,6 +861,7 @@ bool tx_builder_ringct_t::init(
 
   // misc. fields
   unsigned_tx.version = 2;  //rct = 2
+  unsigned_tx.unlock_time = unlock_time;
 
   // sort inputs
   sort_sources(sources);

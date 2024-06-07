@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2023, The Monero Project
+// Copyright (c) 2017-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -145,6 +145,16 @@ namespace epee
   {
     static_assert(!has_padding<T>(), "source type may have padding");
     return {reinterpret_cast<const std::uint8_t*>(src.data()), src.size_bytes()}; 
+  }
+
+  //! \return `span<std::uint8_t>` from a STL compatible `src`.
+  template<typename T>
+  constexpr span<std::uint8_t> to_mut_byte_span(T& src)
+  {
+    using value_type = typename T::value_type;
+    static_assert(!std::is_empty<value_type>(), "empty value types will not work -> sizeof == 1");
+    static_assert(!has_padding<value_type>(), "source value type may have padding");
+    return {reinterpret_cast<std::uint8_t*>(src.data()), src.size() * sizeof(value_type)};
   }
 
   //! \return `span<const std::uint8_t>` which represents the bytes at `&src`.

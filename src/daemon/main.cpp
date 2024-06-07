@@ -247,7 +247,7 @@ int main(int argc, char const * argv[])
       return 0;
     }
 
-    // Monero Version
+    // Salvium Version
     if (command_line::get_arg(vm, command_line::arg_version))
     {
       std::cout << "Salvium '" << MONERO_RELEASE_NAME << "' (v" << MONERO_VERSION_FULL << ")" << ENDL;
@@ -278,6 +278,19 @@ int main(int argc, char const * argv[])
       try
       {
         po::store(po::parse_config_file<char>(config_path.string<std::string>().c_str(), core_settings), vm);
+      }
+      catch (const po::unknown_option &e)
+      {
+        std::string unrecognized_option = e.get_option_name();
+        if (all_options.find_nothrow(unrecognized_option, false))
+        {
+          std::cerr << "Option '" << unrecognized_option << "' is not allowed in the config file, please use it as a command line flag." << std::endl;
+        }
+        else
+        {
+          std::cerr << "Unrecognized option '" << unrecognized_option << "' in config file." << std::endl;
+        }
+        return 1;
       }
       catch (const std::exception &e)
       {
