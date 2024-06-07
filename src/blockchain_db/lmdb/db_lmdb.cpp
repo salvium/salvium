@@ -847,7 +847,7 @@ int BlockchainLMDB::get_yield_tx_info(const uint64_t height, std::vector<yield_t
   while (1)
   {
     int ret = mdb_cursor_get(m_cur_yield_txs, &k, &v, op);
-    op = MDB_NEXT;
+    op = MDB_NEXT_DUP;
     if (ret == MDB_NOTFOUND)
       break;
     if (ret)
@@ -894,7 +894,7 @@ void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t l
 
   CURSOR(yield_blocks)
   yield_block_info ybi_matured, ybi_prev;
-  uint64_t yield_lock_period = cryptonote::get_config(nettype).YIELD_LOCK_PERIOD;
+  uint64_t yield_lock_period = cryptonote::get_config(nettype).STAKE_LOCK_PERIOD;
   if (m_height > yield_lock_period) {
     uint64_t height_matured = m_height - yield_lock_period - 1;
     result = get_yield_block_info(height_matured, ybi_matured);
@@ -1179,7 +1179,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       throw0(DB_ERROR(lmdb_error("Failed to add prunable tx prunable hash to db transaction: ", result).c_str()));
   }
 
-  if (tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::YIELD) {
+  if (tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::STAKE) {
 
     // Get the current tally value for the source currency type
     MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
@@ -1232,7 +1232,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   }
   
   // Is there yield_tx data to add?
-  if (tx.type == cryptonote::transaction_type::YIELD) {
+  if (tx.type == cryptonote::transaction_type::STAKE) {
 
     // Create the object we are going to write to the database
     yield_tx_info yield_data;
@@ -1249,9 +1249,28 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       throw0(DB_ERROR("tx.vout is wrong size (needed to create yield data for the PROTOCOL_TX)"));
     if (!cryptonote::get_output_public_key(tx.vout[0], yield_data.P_change))
       throw0(DB_ERROR("failed to get P_change from tx.vout[0] (needed to create yield data for the PROTOCOL_TX)"));
+
+    // Because LMDB is shockingly bad at handling duplicates, we have resorted to using a counter of elements
+    // in the first element of the struct.
+    MDB_val data;
     MDB_val_set(val_height, m_height);
+    result = mdb_cursor_get(m_cur_yield_txs, &val_height, &data, MDB_SET);
+    if (!result)
+    {
+      mdb_size_t num_elems = 0;
+      result = mdb_cursor_count(m_cur_yield_txs, &num_elems);
+      if (result)
+        throw0(DB_ERROR(std::string("Failed to get number of yield TXs for height: ").append(mdb_strerror(result)).c_str()));
+      yield_data.block_height = num_elems;
+    }
+    else if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to get output amount in db transaction: ", result).c_str()));
+    else
+     yield_data.block_height = 0;
+
+    // Now we know how many there are, write out the data to the DB
     MDB_val_set(val_yield_tx_data, yield_data);
-    result = mdb_cursor_put(m_cur_yield_txs, &val_height, &val_yield_tx_data, MDB_APPEND);
+    result = mdb_cursor_put(m_cur_yield_txs, &val_height, &val_yield_tx_data, MDB_APPENDDUP);
     if (result)
       throw0(DB_ERROR(  lmdb_error("Failed to add tx yield data to db transaction: ", result).c_str()  ));
   }
@@ -1381,7 +1400,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
   }
 
   // Is there yield_tx data to remove?
-  if (tx.type == cryptonote::transaction_type::YIELD) {
+  if (tx.type == cryptonote::transaction_type::STAKE) {
     // Remove any yield_tx data for this transaction
     MDB_val_set(val_height, m_height);
     MDB_val v;

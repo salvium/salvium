@@ -120,12 +120,8 @@ namespace hw {
         /*                               SUB ADDRESS                               */
         /* ======================================================================= */
 
-      bool device_default::derive_subaddress_public_key(const crypto::public_key &out_key, const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, crypto::public_key &derived_key) {
-            return crypto::wallet::derive_subaddress_public_key(out_key, derivation, uniqueness, derived_key);
-        }
-
-      bool device_default::derive_subaddress_public_key(const crypto::public_key &out_key, const crypto::key_derivation &derivation, std::size_t output_index, crypto::public_key &derived_key) {
-            return crypto::wallet::derive_subaddress_public_key(out_key, derivation, output_index, derived_key);
+        bool device_default::derive_subaddress_public_key(const crypto::public_key &out_key, const crypto::key_derivation &derivation, const std::size_t output_index, crypto::public_key &derived_key) {
+            return crypto::wallet::derive_subaddress_public_key(out_key, derivation, output_index,derived_key);
         }
 
         crypto::public_key device_default::get_subaddress_spend_public_key(const cryptonote::account_keys& keys, const cryptonote::subaddress_index &index) {
@@ -257,20 +253,6 @@ namespace hw {
         bool device_default::derive_public_key(const crypto::key_derivation &derivation, const std::size_t output_index, const crypto::public_key &base, crypto::public_key &derived_key){
             return crypto::derive_public_key(derivation, output_index, base, derived_key);
         }
-      
-      bool device_default::derivation_to_scalar(const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, crypto::ec_scalar &res){
-            crypto::derivation_to_scalar(derivation, uniqueness, res);
-            return true;
-        }
-
-      bool device_default::derive_secret_key(const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, const crypto::secret_key &base, crypto::secret_key &derived_key){
-            crypto::derive_secret_key(derivation, uniqueness, base, derived_key);
-            return true;
-        }
-
-      bool device_default::derive_public_key(const crypto::key_derivation &derivation, const crypto::ec_scalar& uniqueness, const crypto::public_key &base, crypto::public_key &derived_key){
-            return crypto::derive_public_key(derivation, uniqueness, base, derived_key);
-        }
 
         bool device_default::secret_key_to_public_key(const crypto::secret_key &sec, crypto::public_key &pub) {
             return crypto::secret_key_to_public_key(sec,pub);
@@ -315,8 +297,7 @@ namespace hw {
                                                             const bool &need_additional_txkeys, const std::vector<crypto::secret_key> &additional_tx_keys,
                                                             std::vector<crypto::public_key> &additional_tx_public_keys,
                                                             std::vector<rct::key> &amount_keys,  crypto::public_key &out_eph_public_key,
-                                                            const bool use_view_tags, crypto::view_tag &view_tag,
-                                                            const crypto::ec_scalar& uniqueness) {
+                                                            const bool use_view_tags, crypto::view_tag &view_tag) {
 
             crypto::key_derivation derivation;
 
@@ -340,9 +321,9 @@ namespace hw {
             }
             else
             {
-            // sending to the recipient; derivation = r*A (or s*C in the subaddress scheme)
-                r = generate_key_derivation(dst_entr.addr.m_view_public_key, dst_entr.is_subaddress && need_additional_txkeys ? additional_txkey.sec : tx_key, derivation);
-                CHECK_AND_ASSERT_MES(r, false, "at creation outs: failed to generate_key_derivation(" << dst_entr.addr.m_view_public_key << ", " << (dst_entr.is_subaddress && need_additional_txkeys ? additional_txkey.sec : tx_key) << ")");
+              // sending to the recipient; derivation = r*A (or s*C in the subaddress scheme)
+              r = generate_key_derivation(dst_entr.addr.m_view_public_key, dst_entr.is_subaddress && need_additional_txkeys ? additional_txkey.sec : tx_key, derivation);
+              CHECK_AND_ASSERT_MES(r, false, "at creation outs: failed to generate_key_derivation(" << dst_entr.addr.m_view_public_key << ", " << (dst_entr.is_subaddress && need_additional_txkeys ? additional_txkey.sec : tx_key) << ")");
             }
 
             if (need_additional_txkeys)
@@ -353,7 +334,7 @@ namespace hw {
             if (tx_version > 1)
             {
                 crypto::secret_key scalar1;
-                derivation_to_scalar(derivation, uniqueness, scalar1);
+                derivation_to_scalar(derivation, output_index, scalar1);
                 amount_keys.push_back(rct::sk2rct(scalar1));
             }
 
@@ -362,8 +343,8 @@ namespace hw {
                 derive_view_tag(derivation, output_index, view_tag);
             }
 
-            r = derive_public_key(derivation, uniqueness, dst_entr.addr.m_spend_public_key, out_eph_public_key);
-            CHECK_AND_ASSERT_MES(r, false, "at creation outs: failed to derive_public_key(" << derivation << ", " << uniqueness.data << ", "<< dst_entr.addr.m_spend_public_key << ")");
+            r = derive_public_key(derivation, output_index, dst_entr.addr.m_spend_public_key, out_eph_public_key);
+            CHECK_AND_ASSERT_MES(r, false, "at creation outs: failed to derive_public_key(" << derivation << ", " << output_index << ", "<< dst_entr.addr.m_spend_public_key << ")");
 
             return r;
         }

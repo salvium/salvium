@@ -144,8 +144,11 @@ elseif(ARCHITECTURE STREQUAL "aarch64")
 endif()
 
 if(ARCHITECTURE STREQUAL "riscv64")
-    set(NO_AES ON)
-    set(ARCH "rv64imafdc")
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(BUILD_TAG "linux-riscv64")
+  endif()
+  set(ARCH_ID "riscv64")
+  set(ARCH "rv64gc")
 endif()
 
 if(ARCHITECTURE STREQUAL "i686")

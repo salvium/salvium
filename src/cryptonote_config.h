@@ -207,6 +207,7 @@
 #define HF_VERSION_MIN_V2_COINBASE_TX           1
 #define HF_VERSION_REJECT_SIGS_IN_COINBASE      1
 #define HF_VERSION_BULLETPROOF_PLUS             1
+#define HF_VERSION_ENABLE_RETURN                1
 
 #define HF_VERSION_LONG_TERM_BLOCK_WEIGHT       2
 #define HF_VERSION_VIEW_TAGS                    2
@@ -267,7 +268,7 @@ namespace config
   
   uint32_t const GENESIS_NONCE = 10000;
 
-  const uint64_t YIELD_LOCK_PERIOD = 30*24*30;
+  const uint64_t STAKE_LOCK_PERIOD = 30*24*30;
 
   std::string const TREASURY_ADDRESS = "SaLvdVTaMJp5hrGv2rDWzaCrM6Wrq2T4tNBPX8kvuAJv7iUiYNy4vceFskGRAawnBDiqZ9jWYXZmWemRnEKtWmNMeuSXZg6jwtx";
   
@@ -337,10 +338,10 @@ namespace config
     boost::uuids::uuid const NETWORK_ID = { {
         0x12 ,0x30, 0xF1, 0x71 , 0x61, 0x04 , 0x41, 0x61, 0x17, 0x31, 0x82, 0x53, 0x41, 0x4C, 0x00, TESTNET_VERSION
       } };
-    std::string const GENESIS_TX = "0201ff000180c0d0c7bbbff6030204f30dcd0ffa78009527d89113e104e49486b14abd230a03becca67c15b2bbba0353414c3c000000000000002101b26ac50aaf94cf9df780e2c57bd61983123d96325fffa8e6603665a255d3810c010000";
+    std::string const GENESIS_TX = "020001ff000180c0d0c7bbbff6030279e90d3da9f9568396c5795833e6aed334d10b6bc08219de189e3ac6fade73c50353414c3c00000000000000210118c0fd33040975cb28c52cca0005a909661afeec61944e42b8646e069fd04209010000";
     uint32_t const GENESIS_NONCE = 10001;
 
-    const uint64_t YIELD_LOCK_PERIOD = 20;
+    const uint64_t STAKE_LOCK_PERIOD = 20;
   
     std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.network:8443", "oracle.salvium.network:8443", "oracle.salvium.network:8443"}};
 
@@ -366,7 +367,7 @@ namespace config
     std::string const GENESIS_TX = "013c01ff0001ffffffffffff0302df5d56da0c7d643ddd1ce61901c7bdc5fb1738bfe39fbe69c28a3a7032729c0f2101168d0c4ca86fb55a4cf6a36d31431be1c53a3bd7411bb24e8832410289fa6f3b";
     uint32_t const GENESIS_NONCE = 10002;
 
-    const uint64_t YIELD_LOCK_PERIOD = 20;
+    const uint64_t STAKE_LOCK_PERIOD = 20;
   
     std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.network:8443", "oracle.salvium.network:8443", "oracle.salvium.network:8443"}};
 
@@ -402,7 +403,7 @@ namespace cryptonote
     uint32_t const GENESIS_NONCE;
     std::array<std::string, 3> const ORACLE_URLS;
     std::string const ORACLE_PUBLIC_KEY;
-    uint64_t YIELD_LOCK_PERIOD;
+    uint64_t STAKE_LOCK_PERIOD;
     std::string TREASURY_ADDRESS;
   };
   inline const config_t& get_config(network_type nettype)
@@ -419,7 +420,7 @@ namespace cryptonote
       ::config::GENESIS_NONCE,
       ::config::ORACLE_URLS,
       ::config::ORACLE_PUBLIC_KEY,
-      ::config::YIELD_LOCK_PERIOD,
+      ::config::STAKE_LOCK_PERIOD,
       ::config::TREASURY_ADDRESS
     };
     static const config_t testnet = {
@@ -434,7 +435,7 @@ namespace cryptonote
       ::config::testnet::GENESIS_NONCE,
       ::config::testnet::ORACLE_URLS,
       ::config::testnet::ORACLE_PUBLIC_KEY,
-      ::config::testnet::YIELD_LOCK_PERIOD,
+      ::config::testnet::STAKE_LOCK_PERIOD,
       ::config::testnet::TREASURY_ADDRESS
     };
     static const config_t stagenet = {
@@ -449,7 +450,7 @@ namespace cryptonote
       ::config::stagenet::GENESIS_NONCE,
       ::config::stagenet::ORACLE_URLS,
       ::config::stagenet::ORACLE_PUBLIC_KEY,
-      ::config::stagenet::YIELD_LOCK_PERIOD,
+      ::config::stagenet::STAKE_LOCK_PERIOD,
       ::config::stagenet::TREASURY_ADDRESS
     };
     switch (nettype)

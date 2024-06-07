@@ -254,7 +254,7 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
   add_tx_amount_output_indices(tx_id, amount_output_indices);
 
   // Check to see if this is a YIELD TX
-  if (tx.type == cryptonote::transaction_type::YIELD) {
+  if (tx.type == cryptonote::transaction_type::STAKE) {
 
     // We now need to insert a record into the "yield_tx_data" table to record the TX
     
@@ -357,7 +357,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
       }
 
       // Is this a YIELD TX?
-      if (tx.first.type == cryptonote::transaction_type::YIELD) {
+      if (tx.first.type == cryptonote::transaction_type::STAKE) {
         yield_total += tx.first.amount_burnt;
       }
     }
@@ -462,7 +462,7 @@ void BlockchainDB::remove_transaction(const crypto::hash& tx_hash)
   }
 
   // Check for yield_tx entries
-  if (tx.type == cryptonote::transaction_type::YIELD) {
+  if (tx.type == cryptonote::transaction_type::STAKE) {
   }
   
   const bool miner_tx = tx.vin.size() == 1 && tx.vin[0].type() == typeid(txin_gen);

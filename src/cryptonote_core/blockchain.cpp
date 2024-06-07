@@ -1491,15 +1491,6 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
     return true;
   }
   
-  key_images_container keys;
-
-  uint64_t fee_summary = 0;
-  uint64_t t_checktx = 0;
-  uint64_t t_exists = 0;
-  uint64_t t_pool = 0;
-  uint64_t t_dblspnd = 0;
-  uint64_t n_pruned = 0;
-
   // Build a map of outputs from the protocol_tx
   std::map<crypto::public_key, std::tuple<std::string, uint64_t, uint64_t>> outputs;
   for (auto& o : b.protocol_tx.vout) {
@@ -1514,6 +1505,9 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
       return false;
     }
   }
+
+  // Maintain a count of outputs that we have verified
+  std::vector<crypto::public_key> outputs_verified;
   
   size_t tx_index = 0;
   // Iterate over the block's transaction hashes, grabbing each
@@ -1530,69 +1524,119 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
       return false;
     }
 
-    // Check to see if the TX is a conversion or not
-    if (tx->type != cryptonote::transaction_type::CONVERT) {
-      // Only conversion (and failed conversion, aka refund) TXs need to be verified - skip this TX
-      continue;
-    }
-    /*
-    // Verify that the TX has an output in the protocol_tx to verify
-    if (outputs.count(tx->return_address) != 1) {
-      LOG_ERROR("Failed to locate output for conversion TX id " << tx->hash << " - rejecting block");
-      return false;
-    }
+    if (hf_version >= HF_VERSION_ENABLE_CONVERT) {
+      
+      // Check to see if the TX is a conversion or not
+      if (tx->type != cryptonote::transaction_type::CONVERT) {
+        // Only conversion (and failed conversion, aka refund) TXs need to be verified - skip this TX
+        continue;
+      }
 
-    // Get the output information
-    std::string output_asset_type;
-    uint64_t output_amount;
-    uint64_t output_unlock_time;
-    std::tie(output_asset_type, output_amount, output_unlock_time) = outputs[tx->return_address];
-
-    // Verify the asset_type
-    if (tx->source_asset_type == output_asset_type) {
-      // Check the amount for REFUND
-      if (tx->amount_burnt != output_amount) {
-        LOG_ERROR("Output amount does not match amount_burnt for refunded TX id " << tx->hash << " - rejecting block");
+      // Verify that the TX has an output in the protocol_tx to verify
+      if (outputs.count(tx->return_address) != 1) {
+        LOG_ERROR("Block at height: " << height << " - Failed to locate output for conversion TX id " << tx->hash << " - rejecting block");
         return false;
       }
-    } else if (tx->destination_asset_type == output_asset_type) {
-      // Check the amount for CONVERT
 
-      // Verify the amount of the conversion
-      uint64_t amount_minted_check = 0, amount_slippage_check = 0;
-      bool ok = cryptonote::calculate_conversion(tx->source_asset_type, tx->destination_asset_type, tx->amount_burnt, tx->amount_slippage_limit, amount_minted_check, amount_slippage_check, circ_supply, b.pricing_record, hf_version);
-      if (!ok) {
-        LOG_ERROR("Failed to calculate conversion for TX id " << tx->hash << " - rejecting block");
+      // Get the output information
+      std::string output_asset_type;
+      uint64_t output_amount;
+      uint64_t output_unlock_time;
+      std::tie(output_asset_type, output_amount, output_unlock_time) = outputs[tx->return_address];
+
+      // Verify the asset_type
+      if (tx->source_asset_type == output_asset_type) {
+        // Check the amount for REFUND
+        if (tx->amount_burnt != output_amount) {
+          LOG_ERROR("Block at height: " << height << " - Output amount does not match amount_burnt for refunded TX id " << tx->hash << " - rejecting block");
+          return false;
+        }
+
+        // Verified the refund successfully
+        outputs_verified.push_back(tx->return_address);
+        
+      } else if (tx->destination_asset_type == output_asset_type) {
+        // Check the amount for CONVERT
+
+        // Verify the amount of the conversion
+        uint64_t amount_minted_check = 0, amount_slippage_check = 0;
+        bool ok = cryptonote::calculate_conversion(tx->source_asset_type, tx->destination_asset_type, tx->amount_burnt, tx->amount_slippage_limit, amount_minted_check, amount_slippage_check, circ_supply, b.pricing_record, hf_version);
+        if (!ok) {
+          LOG_ERROR("Block at height: " << height << " - Failed to calculate conversion for TX id " << tx->hash << " - rejecting block");
+          return false;
+        }
+        if (amount_minted_check != output_amount) {
+          LOG_ERROR("Block at height: " << height << " - Output amount does not match amount_burnt for refunded TX id " << tx->hash << " - rejecting block");
+          return false;
+        }
+
+        // Verified the conversion successfully
+        outputs_verified.push_back(tx->return_address);
+        
+      } else {
+        LOG_ERROR("Block at height: " << height << " - Output asset type incorrect: source " << tx->source_asset_type << ", dest " << tx->destination_asset_type << ", got " << output_asset_type << " - rejecting block");
         return false;
       }
-      if (amount_minted_check != output_amount) {
-        LOG_ERROR("Output amount does not match amount_burnt for refunded TX id " << tx->hash << " - rejecting block");
-        return false;
-      }
-    } else {
-      LOG_ERROR("Output asset type incorrect: source " << tx->source_asset_type << ", dest " << tx->destination_asset_type << ", got " << output_asset_type << " - rejecting block");
-      return false;
     }
-    */
   }
 
-  // Now consider the payouts from matured YIELD transactions
+  // Can we have matured STAKE transactions yet?
+  uint64_t lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
+  if (height > lock_period) {
 
-  // Get the data for the block that matured this time
-  cryptonote::yield_block_info ybi_matured;
-  uint64_t lock_period = get_config(m_nettype).YIELD_LOCK_PERIOD;
-  uint64_t start_height = (height > lock_period) ? height - lock_period - 1 : 0;
-  bool ok = get_ybi_entry(start_height, ybi_matured);
-  if (ok && ybi_matured.locked_coins_this_block > 0) {
-  
-    // Iterate over the cached data for block yield, calculating the yield payouts due
-    std::vector<std::pair<yield_tx_info, uint64_t>> yield_payouts;
-    if (!calculate_yield_payouts(start_height, yield_payouts)) {
-      LOG_ERROR("Failed to obtain yield payout information - aborting");
-      return false;
+    // Yes - Get the staking data for the block that matured this time
+    cryptonote::yield_block_info ybi_matured;
+    uint64_t matured_height = height - lock_period - 1;
+    bool ok = get_ybi_entry(matured_height, ybi_matured);
+    if (ok && ybi_matured.locked_coins_this_block > 0) {
+      
+      // Iterate over the cached data for block yield, calculating the yield payouts due
+      std::vector<std::pair<yield_tx_info, uint64_t>> yield_payouts;
+      if (!calculate_yield_payouts(matured_height, yield_payouts)) {
+        LOG_ERROR("Block at height: " << height << " - Failed to obtain yield payout information - aborting");
+        return false;
+      }
+
+      // Iterate the yield payouts, verifying as we go
+      for (const auto& payout: yield_payouts) {
+
+        // Do we have a singular matching output in tx.vout?
+        if (outputs.count(payout.first.return_address) != 1) {
+          LOG_ERROR("Block at height: " << height << " - Failed to locate output for matured TX id " << payout.first.tx_hash << " - rejecting block");
+          return false;
+        }
+        
+        // Get the output information
+        std::string output_asset_type;
+        uint64_t output_amount;
+        uint64_t output_unlock_time;
+        std::tie(output_asset_type, output_amount, output_unlock_time) = outputs[payout.first.return_address];
+
+        // Verify the asset type - must be SAL
+        if (output_asset_type != "SAL") {
+          LOG_ERROR("Block at height: " << height << " - Incorrect output asset type for matured TX id " << payout.first.tx_hash << " - rejecting block");
+          return false;
+        }
+
+        // Verify the amount
+        if (output_amount != payout.second) {
+          LOG_ERROR("Block at height: " << height << " - Incorrect output amount for matured TX id " << payout.first.tx_hash << " - rejecting block");
+          return false;
+        }
+
+        // Amount and return_address match our expectation
+        outputs_verified.push_back(payout.first.return_address);        
+      }
     }
   }
-  
+
+  // All candidates have been evaluated - make sure there are no other outputs that have not been catered for
+  if (outputs.size() != outputs_verified.size()) {
+    LOG_ERROR("Block at height: " << height << " - Incorrect number of outputs - expected " << outputs_verified.size() << " but received " << outputs.size() << " - rejecting block");
+    return false;
+  }
+
+  // Everything checks out
   return true;
 }
 //------------------------------------------------------------------
@@ -1881,7 +1925,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   }
 
   // Check to see if there are any matured YIELD TXs
-  uint64_t yield_lock_period = get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t yield_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   uint64_t start_height = (height > yield_lock_period) ? height - yield_lock_period - 1 : 0;
 
   cryptonote::yield_block_info ybi_matured;
@@ -1904,7 +1948,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
       entry.source_asset = "SAL";
       entry.destination_asset = "SAL";
       entry.return_address = yield_entry.first.return_address;
-      entry.type = cryptonote::transaction_type::YIELD;
+      entry.type = cryptonote::transaction_type::STAKE;
       entry.P_change = yield_entry.first.P_change;
       entry.return_pubkey = yield_entry.first.return_pubkey;
       protocol_entries.push_back(entry);
@@ -2291,7 +2335,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
       cryptonote::blobdata blob;
       if (m_tx_pool.have_tx(txid, relay_category::legacy))
       {
-        if (m_tx_pool.get_transaction_info(txid, td))
+        if (m_tx_pool.get_transaction_info(txid, td, true/*include_sensitive_data*/))
         {
           bei.block_cumulative_weight += td.weight;
         }
@@ -4311,7 +4355,7 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
   }
   
   // Iterate over the cached yield_block_info data
-  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
   for (uint64_t idx = start_height+1; idx <= start_height + yield_lock_period; ++idx) {
     // Get the next block
     if (m_yield_block_info_cache.count(idx) == 0) {
@@ -4350,7 +4394,7 @@ bool Blockchain::rebuild_ybi_cache()
   
   // Get the size that the cache should be when fully populated (could be less than the lock period if the chain is young)
   uint64_t height = m_db->height();
-  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
   uint64_t ybi_cache_expected_size = std::min(height, yield_lock_period+1);
 
   // Now get this number of entries from the blockchain
@@ -4379,7 +4423,7 @@ bool Blockchain::validate_ybi_cache()
   
   // Get the size that the cache should be if fully populated
   uint64_t height = m_db->height();
-  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).YIELD_LOCK_PERIOD;
+  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
   uint64_t ybi_cache_expected_size = std::min(height, yield_lock_period + 1);
   if (m_yield_block_info_cache.size() != ybi_cache_expected_size) {
     // It's not the right size - report error and bail out
@@ -4902,7 +4946,7 @@ leave:
       new_height = m_db->add_block(std::make_pair(std::move(bl), std::move(bd)), block_weight, long_term_block_weight, cumulative_difficulty, already_generated_coins, txs, m_nettype, new_ybi);
 
       // Update the YBI cache data
-      uint64_t yield_lock_period = cryptonote::get_config(m_nettype).YIELD_LOCK_PERIOD;
+      uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
       uint64_t ybi_cache_expected_size = std::min(new_height, yield_lock_period);
       if (new_height > yield_lock_period) {
         if (m_yield_block_info_cache.count(new_height - yield_lock_period - 2) != 0) {
@@ -4944,7 +4988,7 @@ leave:
     return false;
   }
 
-  MINFO("+++++ BLOCK SUCCESSFULLY ADDED" << std::endl << "id:\t" << id << std::endl << "PoW:\t" << proof_of_work << std::endl << "HEIGHT " << new_height-1 << ", difficulty:\t" << current_diffic << std::endl << "block reward: " << print_money(fee_summary + base_reward) << "(" << print_money(base_reward) << " + " << print_money(fee_summary) << "), coinbase_weight: " << coinbase_weight << ", cumulative weight: " << cumulative_block_weight << ", " << block_processing_time << "(" << target_calculating_time << "/" << longhash_calculating_time << ")ms");
+  MINFO("+++++ BLOCK SUCCESSFULLY ADDED" << std::endl << "id:\t" << id << std::endl << "PoW:\t" << proof_of_work << std::endl << "HEIGHT " << new_height-1 << ", difficulty:\t" << current_diffic << std::endl << "block reward: " << print_money(fee_summary + base_reward - bl.miner_tx.amount_burnt) << "(" << print_money(base_reward - bl.miner_tx.amount_burnt) << " reward + " << print_money(fee_summary) << " fees), coinbase_weight: " << coinbase_weight << ", cumulative weight: " << cumulative_block_weight << ", " << block_processing_time << "(" << target_calculating_time << "/" << longhash_calculating_time << ")ms");
   if(m_show_time_stats)
   {
     MINFO("Height: " << new_height << " coinbase weight: " << coinbase_weight << " cumm: "

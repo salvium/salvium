@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2023, The Monero Project
+// Copyright (c) 2017-2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -66,9 +66,6 @@ namespace epee
       buffer_unchecked(out.data(), as_byte_span(src));
       return out;
     }
-
-    //! Write `src` as hex to `out`. `out` must be exactly 2x in size.
-    static bool buffer(span<char> out, const span<const std::uint8_t> src) noexcept;
 
     //! Append `src` as hex to `out`.
     static void buffer(std::ostream& out, const span<const std::uint8_t> src);
