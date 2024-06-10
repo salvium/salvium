@@ -1,4 +1,5 @@
 // Copyright (c) 2016, Monero Research Labs
+// Portions Copyright (c) 2023-2024, Salvium (author: SRCG)
 //
 // Author: Shen Noether <shen.noether@gmx.com>
 //
