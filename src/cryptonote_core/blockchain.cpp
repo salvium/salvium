@@ -1,4 +1,5 @@
 // Copyright (c) 2014-2022, The Monero Project
+// Portions Copyright (c) 2023-2024, Salvium (author: SRCG)
 //
 // All rights reserved.
 //
@@ -1422,10 +1423,7 @@ bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t heigh
     return false;
   }
   MDEBUG("Protocol tx hash: " << get_transaction_hash(b.protocol_tx));
-  //CHECK_AND_ASSERT_MES(b.protocol_tx.unlock_time == height, false, "coinbase protocol transaction transaction has the wrong unlock time=" << b.protocol_tx.unlock_time << ", expected " << height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
 
-  // SRCG - we still need to make output checks
-  /*
   //check outs overflow
   if(!check_outs_overflow(b.protocol_tx))
   {
@@ -1433,8 +1431,8 @@ bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t heigh
     return false;
   }
 
-  CHECK_AND_ASSERT_MES(check_output_types(b.miner_tx, hf_version), false, "miner transaction has invalid output type(s) in block " << get_block_hash(b));
-  */
+  CHECK_AND_ASSERT_MES(check_output_types(b.protocol_tx, hf_version), false, "protocol transaction has invalid output type(s) in block " << get_block_hash(b));
+
   return true;
 }
 //------------------------------------------------------------------
@@ -1496,9 +1494,11 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   for (auto& o : b.protocol_tx.vout) {
     if (o.target.type() == typeid(txout_to_key)) {
       txout_to_key out = boost::get<txout_to_key>(o.target);
+      CHECK_AND_ASSERT_MES(out.unlock_time == CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "Invalid unlock time on protocol_tx output");
       outputs[out.key] = {out.asset_type, o.amount, out.unlock_time};
     } else if (o.target.type() == typeid(txout_to_tagged_key)) {
       txout_to_tagged_key out = boost::get<txout_to_tagged_key>(o.target);
+      CHECK_AND_ASSERT_MES(out.unlock_time == CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "Invalid unlock time on protocol_tx output");
       outputs[out.key] = {out.asset_type, o.amount, out.unlock_time};
     } else {
       MERROR("Block at height: " << height << " attempting to add protocol transaction with invalid type " << o.target.type().name());
@@ -1566,7 +1566,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
           return false;
         }
         if (amount_minted_check != output_amount) {
-          LOG_ERROR("Block at height: " << height << " - Output amount does not match amount_burnt for refunded TX id " << tx->hash << " - rejecting block");
+          LOG_ERROR("Block at height: " << height << " - Output amount does not match amount minted for converted TX id " << tx->hash << " - rejecting block");
           return false;
         }
 
@@ -1581,12 +1581,12 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   }
 
   // Can we have matured STAKE transactions yet?
-  uint64_t lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
-  if (height > lock_period) {
+  uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
+  if (height > stake_lock_period) {
 
     // Yes - Get the staking data for the block that matured this time
     cryptonote::yield_block_info ybi_matured;
-    uint64_t matured_height = height - lock_period - 1;
+    uint64_t matured_height = height - stake_lock_period - 1;
     bool ok = get_ybi_entry(matured_height, ybi_matured);
     if (ok && ybi_matured.locked_coins_this_block > 0) {
       
