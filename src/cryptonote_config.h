@@ -214,7 +214,6 @@
 #define HF_VERSION_2021_SCALING                 2
 #define HF_VERSION_ENABLE_CONVERT               2
 #define HF_VERSION_ENABLE_ORACLE                2
-#define HF_VERSION_ENABLE_RETURN                2
 #define HF_VERSION_SLIPPAGE_YIELD               2
 
 #define TESTNET_VERSION                         5

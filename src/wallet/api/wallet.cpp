@@ -1010,12 +1010,12 @@ void WalletImpl::setSubaddressLookahead(uint32_t major, uint32_t minor)
 
 uint64_t WalletImpl::balance(uint32_t accountIndex) const
 {
-    return m_wallet->balance(accountIndex, false);
+    return m_wallet->balance(accountIndex, "SAL", false);
 }
 
 uint64_t WalletImpl::unlockedBalance(uint32_t accountIndex) const
 {
-    return m_wallet->unlocked_balance(accountIndex, false);
+    return m_wallet->unlocked_balance(accountIndex, "SAL", false);
 }
 
 uint64_t WalletImpl::blockChainHeight() const
@@ -1590,13 +1590,13 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const std::vector<stri
             fake_outs_count = m_wallet->adjust_mixin(mixin_count);
 
             if (amount) {
-                transaction->m_pending_tx = m_wallet->create_transactions_2(dsts, fake_outs_count, 0 /* unlock_time */,
+              transaction->m_pending_tx = m_wallet->create_transactions_2(dsts, "SAL", "SAL", cryptonote::transaction_type::TRANSFER, fake_outs_count, 0 /* unlock_time */,
+                                                                          adjusted_priority,
+                                                                          extra, subaddr_account, subaddr_indices);
+            } else {
+              transaction->m_pending_tx = m_wallet->create_transactions_all(0, cryptonote::transaction_type::TRANSFER, "SAL", info.address, info.is_subaddress, 1, fake_outs_count, 0 /* unlock_time */,
                                                                             adjusted_priority,
                                                                             extra, subaddr_account, subaddr_indices);
-            } else {
-                transaction->m_pending_tx = m_wallet->create_transactions_all(0, info.address, info.is_subaddress, 1, fake_outs_count, 0 /* unlock_time */,
-                                                                              adjusted_priority,
-                                                                              extra, subaddr_account, subaddr_indices);
             }
             pendingTxPostProcess(transaction);
 
