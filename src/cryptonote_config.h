@@ -216,7 +216,7 @@
 #define HF_VERSION_ENABLE_ORACLE                2
 #define HF_VERSION_SLIPPAGE_YIELD               2
 
-#define TESTNET_VERSION                         6
+#define TESTNET_VERSION                         7
 #define STAGENET_VERSION                        1
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
