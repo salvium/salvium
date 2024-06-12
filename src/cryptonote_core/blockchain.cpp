@@ -1483,6 +1483,13 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   LOG_PRINT_L3("Blockchain::" << __func__);
   CHECK_AND_ASSERT_MES(b.tx_hashes.size() == txs.size(), false, "Invalid number of TXs / hashes supplied");
 
+  // HERE BE DRAGONS!!!
+  // SRCG: There are security tests below that must be activated - this is a reminder to do so
+  if (m_nettype == TESTNET && TESTNET_VERSION >= 6) {
+    LOG_ERROR("Please activate the unlock_time security checks below and then remove this code : Blockchain::" << __func__);
+    assert(false);
+  }
+  
   if (!b.protocol_tx.vin.size()) {
     // Nothing is created by this TX - check no money is included
     CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "void protocol transaction in the block has outputs");
@@ -1494,11 +1501,19 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   for (auto& o : b.protocol_tx.vout) {
     if (o.target.type() == typeid(txout_to_key)) {
       txout_to_key out = boost::get<txout_to_key>(o.target);
-      CHECK_AND_ASSERT_MES(out.unlock_time == CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "Invalid unlock time on protocol_tx output");
+      // HERE BE DRAGONS!!!
+      // SRCG: This test is a bad decision, and should be removed on the next iteration of TESTNET
+      if (m_nettype == MAINNET)
+        CHECK_AND_ASSERT_MES(out.unlock_time == CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "Invalid unlock time on protocol_tx output");
+      // LAND AHOY!!!
       outputs[out.key] = {out.asset_type, o.amount, out.unlock_time};
     } else if (o.target.type() == typeid(txout_to_tagged_key)) {
       txout_to_tagged_key out = boost::get<txout_to_tagged_key>(o.target);
-      CHECK_AND_ASSERT_MES(out.unlock_time == CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "Invalid unlock time on protocol_tx output");
+      // HERE BE DRAGONS!!!
+      // SRCG: This test is a bad decision, and should be removed on the next iteration of TESTNET
+      if (m_nettype == MAINNET)
+        CHECK_AND_ASSERT_MES(out.unlock_time == CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "Invalid unlock time on protocol_tx output");
+      // LAND AHOY!!!
       outputs[out.key] = {out.asset_type, o.amount, out.unlock_time};
     } else {
       MERROR("Block at height: " << height << " attempting to add protocol transaction with invalid type " << o.target.type().name());
