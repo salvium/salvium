@@ -9209,7 +9209,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
             {
               MINFO("Using it");
               //req.outputs.push_back({amount, out, true}); // Rings are stored referencing global output IDs
-              add_output_to_lists({amount, out});
+              add_output_to_lists({amount, out, true});
               ++num_found;
               seen_indices.emplace(out);
               if (out == td.m_global_output_index)
@@ -9497,7 +9497,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
                     break;
                   }
                 }
-                THROW_WALLET_EXCEPTION_IF(!found, error::wallet_internal_error, "Falied to find existing ring output in daemon out data");
+                THROW_WALLET_EXCEPTION_IF(!found, error::wallet_internal_error, "Failed to find existing ring output in daemon out data");
               }
             }
           }
