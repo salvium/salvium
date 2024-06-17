@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2022, The Monero Project
+// Copyright (c) 2014-2023, The Monero Project
 //
 // All rights reserved.
 //
@@ -42,6 +42,7 @@
 #include "string_coding.h"
 #include "string_tools.h"
 #include "storages/portable_storage_template_helper.h"
+#include "time_helper.h"
 #include "boost/logic/tribool.hpp"
 #include <boost/filesystem.hpp>
 
