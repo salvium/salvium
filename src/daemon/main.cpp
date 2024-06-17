@@ -255,13 +255,6 @@ int main(int argc, char const * argv[])
     }
 
     // OS
-    if (command_line::get_arg(vm, daemon_args::arg_os_version))
-    {
-      std::cout << "OS: " << tools::get_os_version_string() << ENDL;
-      return 0;
-    }
-
-    // OS
     if (command_line::get_arg(vm, daemon_args::arg_print_genesis_tx))
     {
       const bool testnet = command_line::get_arg(vm, cryptonote::arg_testnet_on);

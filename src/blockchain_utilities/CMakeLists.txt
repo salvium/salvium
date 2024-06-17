@@ -141,6 +141,7 @@ target_link_libraries(blockchain_import
   PRIVATE
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -168,6 +169,7 @@ target_link_libraries(blockchain_export
   PRIVATE
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -190,6 +192,7 @@ target_link_libraries(blockchain_blackball
     wallet
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -212,6 +215,7 @@ target_link_libraries(blockchain_usage
   PRIVATE
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -233,6 +237,7 @@ target_link_libraries(blockchain_ancestry
   PRIVATE
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -254,6 +259,7 @@ target_link_libraries(blockchain_depth
   PRIVATE
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -275,6 +281,7 @@ target_link_libraries(blockchain_stats
   PRIVATE
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -296,6 +303,7 @@ target_link_libraries(blockchain_prune_known_spent_data
   PRIVATE
     cryptonote_core
     blockchain_db
+    oracle
     p2p
     version
     epee
@@ -323,6 +331,7 @@ target_link_libraries(blockchain_prune
   PRIVATE
     cryptonote_core
     blockchain_db
+    oracle
     p2p
     version
     epee
