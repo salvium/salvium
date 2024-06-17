@@ -1495,11 +1495,11 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
     if (o.target.type() == typeid(txout_to_key)) {
       txout_to_key out = boost::get<txout_to_key>(o.target);
       CHECK_AND_ASSERT_MES(out.unlock_time == CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "Invalid unlock time on protocol_tx output");
-      outputs[out.key] = {out.asset_type, o.amount, out.unlock_time};
+      outputs[out.key] = std::make_tuple(out.asset_type, o.amount, out.unlock_time);
     } else if (o.target.type() == typeid(txout_to_tagged_key)) {
       txout_to_tagged_key out = boost::get<txout_to_tagged_key>(o.target);
       CHECK_AND_ASSERT_MES(out.unlock_time == CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "Invalid unlock time on protocol_tx output");
-      outputs[out.key] = {out.asset_type, o.amount, out.unlock_time};
+      outputs[out.key] = std::make_tuple(out.asset_type, o.amount, out.unlock_time);
     } else {
       MERROR("Block at height: " << height << " attempting to add protocol transaction with invalid type " << o.target.type().name());
       return false;
