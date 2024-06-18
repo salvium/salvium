@@ -2982,13 +2982,13 @@ namespace cryptonote
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  bool core_rpc_server::on_get_circulating_supply(const COMMAND_RPC_GET_CIRCULATING_SUPPLY::request& req, COMMAND_RPC_GET_CIRCULATING_SUPPLY::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
+  bool core_rpc_server::on_get_supply_info(const COMMAND_RPC_GET_SUPPLY_INFO::request& req, COMMAND_RPC_GET_SUPPLY_INFO::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
   {
-    PERF_TIMER(on_get_circulating_supply);
+    PERF_TIMER(on_get_supply_info);
     std::map<std::string, uint64_t> amounts = m_core.get_blockchain_storage().get_db().get_circulating_supply();
     for (const auto &i: amounts)
     {
-      COMMAND_RPC_GET_CIRCULATING_SUPPLY::supply_entry se(i.first, std::to_string(i.second));
+      COMMAND_RPC_GET_SUPPLY_INFO::supply_entry se(i.first, std::to_string(i.second));
       res.supply_tally.push_back(se);
     }
     res.height = m_core.get_current_blockchain_height();

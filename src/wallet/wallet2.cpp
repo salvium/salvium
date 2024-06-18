@@ -2323,10 +2323,10 @@ bool wallet2::get_pricing_record(oracle::pricing_record& pr, const uint64_t heig
 bool wallet2::get_circulating_supply(std::vector<std::pair<std::string, std::string>> &amounts)
 {
   // Issue an RPC call to get the block header (and thus the pricing record) at the specified height
-  cryptonote::COMMAND_RPC_GET_CIRCULATING_SUPPLY::request req = AUTO_VAL_INIT(req);
-  cryptonote::COMMAND_RPC_GET_CIRCULATING_SUPPLY::response res = AUTO_VAL_INIT(res);
+  cryptonote::COMMAND_RPC_GET_SUPPLY_INFO::request req = AUTO_VAL_INIT(req);
+  cryptonote::COMMAND_RPC_GET_SUPPLY_INFO::response res = AUTO_VAL_INIT(res);
   m_daemon_rpc_mutex.lock();
-  bool r = invoke_http_json_rpc("/json_rpc", "get_circulating_supply", req, res, rpc_timeout);
+  bool r = invoke_http_json_rpc("/json_rpc", "get_supply_info", req, res, rpc_timeout);
   m_daemon_rpc_mutex.unlock();
   if (r && res.status == CORE_RPC_STATUS_OK)
   {
@@ -2338,7 +2338,7 @@ bool wallet2::get_circulating_supply(std::vector<std::pair<std::string, std::str
   }
   else
   {
-    MERROR("Failed to retrieve circulating supply from daemon");
+    MERROR("Failed to retrieve supply info from daemon");
     return false;
   }
 }

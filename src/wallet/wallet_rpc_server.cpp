@@ -473,7 +473,7 @@ namespace tools
         balance_info.balance = req.all_accounts ? m_wallet->balance_all(req.strict, asset) : m_wallet->balance(req.account_index, asset, req.strict);
         if (!balance_info.balance)
           continue;
-        balance_info.unlocked_balance = req.all_accounts ? m_wallet->unlocked_balance_all(req.strict, asset, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock) : m_wallet->unlocked_balance(req.account_index, "XHV", req.strict, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock);
+        balance_info.unlocked_balance = req.all_accounts ? m_wallet->unlocked_balance_all(req.strict, asset, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock) : m_wallet->unlocked_balance(req.account_index, asset, req.strict, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock);
         balance_info.multisig_import_needed = m_wallet->multisig() && m_wallet->has_multisig_partial_key_images();
         std::map<uint32_t, std::map<uint32_t, uint64_t>> balance_per_subaddress_per_account;
         std::map<uint32_t, std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>>> unlocked_balance_per_subaddress_per_account;

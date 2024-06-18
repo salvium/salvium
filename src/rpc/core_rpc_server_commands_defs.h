@@ -1440,7 +1440,7 @@ namespace cryptonote
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  struct COMMAND_RPC_GET_CIRCULATING_SUPPLY
+  struct COMMAND_RPC_GET_SUPPLY_INFO
   {
     struct request_t
     {

@@ -133,59 +133,59 @@ monero_private_headers(blockchain_stats
 	  ${blockchain_stats_private_headers})
 
 
-#monero_add_executable(blockchain_import
-#  ${blockchain_import_sources}
-#  ${blockchain_import_private_headers})
+monero_add_executable(blockchain_import
+  ${blockchain_import_sources}
+  ${blockchain_import_private_headers})
 
-#target_link_libraries(blockchain_import
-#  PRIVATE
-#    crypto
-#    cncrypto
-#    cryptonote_core
-#    blockchain_db
-#    oracle
-#    version
-#    epee
-#    ${Boost_FILESYSTEM_LIBRARY}
-#    ${Boost_SYSTEM_LIBRARY}
-#    ${Boost_THREAD_LIBRARY}
-#    ${CMAKE_THREAD_LIBS_INIT}
-#    ${EXTRA_LIBRARIES}
-#    ${Blocks})
+target_link_libraries(blockchain_import
+  PRIVATE
+    crypto
+    cncrypto
+    cryptonote_core
+    blockchain_db
+    oracle
+    version
+    epee
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES}
+    ${Blocks})
 
-#if(ARCH_WIDTH)
-#  target_compile_definitions(blockchain_import
-#    PUBLIC -DARCH_WIDTH=${ARCH_WIDTH})
-#endif()
+if(ARCH_WIDTH)
+  target_compile_definitions(blockchain_import
+    PUBLIC -DARCH_WIDTH=${ARCH_WIDTH})
+endif()
 
-#set_property(TARGET blockchain_import
-#	PROPERTY
-#	OUTPUT_NAME "salvium-blockchain-import")
-#install(TARGETS blockchain_import DESTINATION bin)
+set_property(TARGET blockchain_import
+	PROPERTY
+	OUTPUT_NAME "salvium-blockchain-import")
+install(TARGETS blockchain_import DESTINATION bin)
 
-#monero_add_executable(blockchain_export
-#  ${blockchain_export_sources}
-#  ${blockchain_export_private_headers})
+monero_add_executable(blockchain_export
+  ${blockchain_export_sources}
+  ${blockchain_export_private_headers})
 
-#target_link_libraries(blockchain_export
-#  PRIVATE
-#    crypto
-#    cncrypto
-#    cryptonote_core
-#    blockchain_db
-#    oracle
-#    version
-#    epee
-#    ${Boost_FILESYSTEM_LIBRARY}
-#    ${Boost_SYSTEM_LIBRARY}
-#    ${Boost_THREAD_LIBRARY}
-#    ${CMAKE_THREAD_LIBS_INIT}
-#    ${EXTRA_LIBRARIES})
+target_link_libraries(blockchain_export
+  PRIVATE
+    crypto
+    cncrypto
+    cryptonote_core
+    blockchain_db
+    oracle
+    version
+    epee
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES})
 
-#set_property(TARGET blockchain_export
-#	PROPERTY
-#	OUTPUT_NAME "salvium-blockchain-export")
-#install(TARGETS blockchain_export DESTINATION bin)
+set_property(TARGET blockchain_export
+	PROPERTY
+	OUTPUT_NAME "salvium-blockchain-export")
+install(TARGETS blockchain_export DESTINATION bin)
 
 monero_add_executable(blockchain_blackball
   ${blockchain_blackball_sources}
@@ -213,95 +213,95 @@ set_property(TARGET blockchain_blackball
 install(TARGETS blockchain_blackball DESTINATION bin)
 
 
-#monero_add_executable(blockchain_usage
-#  ${blockchain_usage_sources}
-#  ${blockchain_usage_private_headers})
+monero_add_executable(blockchain_usage
+  ${blockchain_usage_sources}
+  ${blockchain_usage_private_headers})
 
-#target_link_libraries(blockchain_usage
-#  PRIVATE
-#    crypto
-#    cncrypto
-#    cryptonote_core
-#    blockchain_db
-#    oracle
-#    version
-#    epee
-#    ${Boost_FILESYSTEM_LIBRARY}
-#    ${Boost_SYSTEM_LIBRARY}
-#    ${Boost_THREAD_LIBRARY}
-#    ${CMAKE_THREAD_LIBS_INIT}
-#    ${EXTRA_LIBRARIES})
+target_link_libraries(blockchain_usage
+  PRIVATE
+    crypto
+    cncrypto
+    cryptonote_core
+    blockchain_db
+    oracle
+    version
+    epee
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES})
 
-#set_property(TARGET blockchain_usage
-#	PROPERTY
-#	OUTPUT_NAME "salvium-blockchain-usage")
-#nstall(TARGETS blockchain_usage DESTINATION bin)
+set_property(TARGET blockchain_usage
+	PROPERTY
+	OUTPUT_NAME "salvium-blockchain-usage")
+install(TARGETS blockchain_usage DESTINATION bin)
 
-#monero_add_executable(blockchain_ancestry
-#  ${blockchain_ancestry_sources}
-#  ${blockchain_ancestry_private_headers})
+monero_add_executable(blockchain_ancestry
+  ${blockchain_ancestry_sources}
+  ${blockchain_ancestry_private_headers})
 
-#target_link_libraries(blockchain_ancestry
-#  PRIVATE
-#    cryptonote_core
-#    blockchain_db
-#    oracle
-#    version
-#    epee
-#    ${Boost_FILESYSTEM_LIBRARY}
-#    ${Boost_SYSTEM_LIBRARY}
-#    ${Boost_THREAD_LIBRARY}
-#    ${CMAKE_THREAD_LIBS_INIT}
-#    ${EXTRA_LIBRARIES})
+target_link_libraries(blockchain_ancestry
+  PRIVATE
+    cryptonote_core
+    blockchain_db
+    oracle
+    version
+    epee
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES})
 
-#set_property(TARGET blockchain_ancestry
-#	PROPERTY
-#	OUTPUT_NAME "salvium-blockchain-ancestry")
-#install(TARGETS blockchain_ancestry DESTINATION bin)
+set_property(TARGET blockchain_ancestry
+	PROPERTY
+	OUTPUT_NAME "salvium-blockchain-ancestry")
+install(TARGETS blockchain_ancestry DESTINATION bin)
 
-# monero_add_executable(blockchain_depth
-#  ${blockchain_depth_sources}
-#  ${blockchain_depth_private_headers})
+monero_add_executable(blockchain_depth
+  ${blockchain_depth_sources}
+  ${blockchain_depth_private_headers})
 
-#target_link_libraries(blockchain_depth
-#  PRIVATE
-#    cryptonote_core
-#    blockchain_db
-#    oracle
-#    version
-#    epee
-#    ${Boost_FILESYSTEM_LIBRARY}
-#    ${Boost_SYSTEM_LIBRARY}
-#    ${Boost_THREAD_LIBRARY}
-#    ${CMAKE_THREAD_LIBS_INIT}
-#    ${EXTRA_LIBRARIES})
+target_link_libraries(blockchain_depth
+  PRIVATE
+    cryptonote_core
+    blockchain_db
+    oracle
+    version
+    epee
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES})
 
-#set_property(TARGET blockchain_depth
-#	PROPERTY
-#	OUTPUT_NAME "salvium-blockchain-depth")
-#install(TARGETS blockchain_depth DESTINATION bin)
+set_property(TARGET blockchain_depth
+	PROPERTY
+	OUTPUT_NAME "salvium-blockchain-depth")
+install(TARGETS blockchain_depth DESTINATION bin)
 
-#monero_add_executable(blockchain_stats
-#  ${blockchain_stats_sources}
-#  ${blockchain_stats_private_headers})
+monero_add_executable(blockchain_stats
+  ${blockchain_stats_sources}
+  ${blockchain_stats_private_headers})
 
-#target_link_libraries(blockchain_stats
-#  PRIVATE
-#    cryptonote_core
-#    blockchain_db
-#    oracle
-#    version
-#    epee
-#    ${Boost_FILESYSTEM_LIBRARY}
-#    ${Boost_SYSTEM_LIBRARY}
-#    ${Boost_THREAD_LIBRARY}
-#    ${CMAKE_THREAD_LIBS_INIT}
-#    ${EXTRA_LIBRARIES})
+target_link_libraries(blockchain_stats
+  PRIVATE
+    cryptonote_core
+    blockchain_db
+    oracle
+    version
+    epee
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES})
 
-#set_property(TARGET blockchain_stats
-#	PROPERTY
-#	OUTPUT_NAME "salvium-blockchain-stats")
-#install(TARGETS blockchain_stats DESTINATION bin)
+set_property(TARGET blockchain_stats
+	PROPERTY
+	OUTPUT_NAME "salvium-blockchain-stats")
+install(TARGETS blockchain_stats DESTINATION bin)
 
 monero_add_executable(blockchain_prune_known_spent_data
   ${blockchain_prune_known_spent_data_sources}
