@@ -4336,7 +4336,7 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
   LOG_PRINT_L3("Blockchain::" << __func__);
 
   // Clear the yield payout amounts
-  yield_container.empty();
+  yield_container.clear();
 
   // Get the YIELD TX information for matured staked coins
   std::vector<cryptonote::yield_tx_info> yield_entries;
