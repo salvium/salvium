@@ -3006,20 +3006,44 @@ namespace cryptonote
       return true;
     }
     // Iterate over the cache, supplying the data in a more accessible format
+    res.total_burnt = res.total_staked = res.total_yield = res.yield_per_stake = 0;
     res.yield_data.clear();
     for (const auto& entry: ybi_cache) {
-      // Skip this entry if out-of=range
+
+      // Check for last entry
+      if (entry.first == height - 1) {
+        res.total_staked = entry.second.locked_coins_tally;
+        if (entry.second.locked_coins_tally > 0) {
+          boost::multiprecision::uint128_t yield_per_stake = entry.second.slippage_total_this_block;
+          yield_per_stake *= COIN;
+          yield_per_stake /= entry.second.locked_coins_tally;
+          res.yield_per_stake = yield_per_stake.convert_to<uint64_t>();
+        }
+      }
+      
+      // Skip this entry if out-of-range
       if (req.from_height > 0 and entry.first < req.from_height) continue;
       if (req.to_height > 0 and entry.first > req.to_height) continue;
 
-      // Clone the data into the response
-      COMMAND_RPC_GET_YIELD_INFO::yield_data_t yd;
-      yd.block_height = entry.second.block_height;
-      yd.slippage_total_this_block = entry.second.slippage_total_this_block;
-      yd.locked_coins_this_block = entry.second.locked_coins_this_block;
-      yd.locked_coins_tally = entry.second.locked_coins_tally;
-      yd.network_health_percentage = entry.second.network_health_percentage;
-      res.yield_data.push_back(yd);
+      // Do we need to include raw data?
+      if (req.include_raw_data) {
+        
+        // Clone the data into the response
+        COMMAND_RPC_GET_YIELD_INFO::yield_data_t yd;
+        yd.block_height = entry.second.block_height;
+        yd.slippage_total_this_block = entry.second.slippage_total_this_block;
+        yd.locked_coins_this_block = entry.second.locked_coins_this_block;
+        yd.locked_coins_tally = entry.second.locked_coins_tally;
+        yd.network_health_percentage = entry.second.network_health_percentage;
+        res.yield_data.push_back(yd);
+      }
+      
+      // Perform the aggregation
+      if (entry.second.locked_coins_tally == 0) {
+        res.total_burnt += entry.second.slippage_total_this_block;
+      } else {
+        res.total_yield += entry.second.slippage_total_this_block;
+      }
     }
     res.status = CORE_RPC_STATUS_OK;
     return true;

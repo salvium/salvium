@@ -8411,17 +8411,33 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
     return false;
 
   // Scan the entries we have received to gather the state (total yield over period captured)
+  uint64_t total_burnt = 0;
   uint64_t total_yield = 0;
+  uint64_t yield_per_stake = 0;
   for (size_t idx=1; idx<ybi_data.size(); ++idx) {
-    total_yield += ybi_data[idx].slippage_total_this_block;
+    if (ybi_data[idx].locked_coins_tally == 0) {
+      total_burnt += ybi_data[idx].slippage_total_this_block;
+    } else {
+      total_yield += ybi_data[idx].slippage_total_this_block;
+    }
   }
 
+  // Calculate the yield_per_staked_SAL value
+  if (ybi_data.back().locked_coins_tally > 0) {
+    boost::multiprecision::uint128_t yield_per_stake_128 = ybi_data.back().slippage_total_this_block;
+    yield_per_stake_128 *= COIN;
+    yield_per_stake_128 /= ybi_data.back().locked_coins_tally;
+    yield_per_stake = yield_per_stake_128.convert_to<uint64_t>();
+  }
+  
   // Output the necessary information about yield stats
-  message_writer(console_color_default, false) << boost::format(tr("YIELD INFO:\n\tTotal SAL supply: %d\n\tTotal coins locked: %d\n\tYield accrued over last %s: %d"))
+  message_writer(console_color_default, false) << boost::format(tr("YIELD INFO:\n\tTotal SAL supply: %d\n\tTotal coins burnt: %d\n\tTotal coins locked: %d\n\tYield accrued over last %s: %d\n\tYield per SAL staked: %d"))
     % print_money(total_supply_128.convert_to<uint64_t>())
+    % print_money(total_burnt)
     % print_money(ybi_data.back().locked_coins_tally)
     % get_human_readable_timespan((ybi_data.size()-1) * DIFFICULTY_TARGET_V2)
-    % print_money(total_yield);
+    % print_money(total_yield)
+    % print_money(yield_per_stake);
 
   // Now summarise our own YIELD TXs that are yet to amture
   tools::wallet2::transfer_container transfers;

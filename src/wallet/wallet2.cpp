@@ -2349,6 +2349,7 @@ bool wallet2::get_yield_info(std::vector<cryptonote::yield_block_info>& ybi_data
   cryptonote::COMMAND_RPC_GET_YIELD_INFO::request req = AUTO_VAL_INIT(req);
   cryptonote::COMMAND_RPC_GET_YIELD_INFO::response res = AUTO_VAL_INIT(res);
   m_daemon_rpc_mutex.lock();
+  req.include_raw_data = true;
   bool r = invoke_http_json_rpc("/json_rpc", "get_yield_info", req, res, rpc_timeout);
   m_daemon_rpc_mutex.unlock();
   if (r && res.status == CORE_RPC_STATUS_OK)
