@@ -216,7 +216,7 @@
 #define HF_VERSION_ENABLE_ORACLE                2
 #define HF_VERSION_SLIPPAGE_YIELD               2
 
-#define TESTNET_VERSION                         7
+#define TESTNET_VERSION                         8
 #define STAGENET_VERSION                        1
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
@@ -337,7 +337,7 @@ namespace config
     boost::uuids::uuid const NETWORK_ID = { {
         0x12 ,0x30, 0xF1, 0x71 , 0x61, 0x04 , 0x41, 0x61, 0x17, 0x31, 0x82, 0x53, 0x41, 0x4C, 0x00, TESTNET_VERSION
       } };
-    std::string const GENESIS_TX = "020001ff000180c0d0c7bbbff6030279e90d3da9f9568396c5795833e6aed334d10b6bc08219de189e3ac6fade73c50353414c3c00000000000000210118c0fd33040975cb28c52cca0005a909661afeec61944e42b8646e069fd04209010000";
+    std::string const GENESIS_TX = "020001ff000180c0d0c7bbbff60302800b6eb882218e901c1c36bce474224456d82226260226d252459dfbadf186f70353414c3c00000000000000210171af115cca70fdcfdac362854ed9de472e242c8be5a3684e8a809d54f5dbdb18010000";
     uint32_t const GENESIS_NONCE = 10001;
 
     const uint64_t STAKE_LOCK_PERIOD = 20;
