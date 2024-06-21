@@ -298,7 +298,7 @@ namespace config
   // Multisig
   const uint32_t MULTISIG_MAX_SIGNERS{16};
 
-  std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.network:8443", "oracle.salvium.network:8443", "oracle.salvium.network:8443"}};
+  std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.io:8443", "oracle.salvium.io:8443", "oracle.salvium.io:8443"}};
   
   std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
     "MIIDRDCCAjYGByqGSM44BAEwggIpAoIBAQCZP7IJ5PcNvGbWiEqAioKF9wViVxEN\n"
@@ -342,7 +342,7 @@ namespace config
 
     const uint64_t STAKE_LOCK_PERIOD = 20;
   
-    std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.network:8443", "oracle.salvium.network:8443", "oracle.salvium.network:8443"}};
+    std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.io:8443", "oracle.salvium.io:8443", "oracle.salvium.io:8443"}};
 
     std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
       "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5YBxWx1AZCA9jTUk8Pr2uZ9jpfRt\n"
@@ -368,7 +368,7 @@ namespace config
 
     const uint64_t STAKE_LOCK_PERIOD = 20;
   
-    std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.network:8443", "oracle.salvium.network:8443", "oracle.salvium.network:8443"}};
+    std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.io:8443", "oracle.salvium.io:8443", "oracle.salvium.io:8443"}};
 
     std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
       "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5YBxWx1AZCA9jTUk8Pr2uZ9jpfRt\n"
