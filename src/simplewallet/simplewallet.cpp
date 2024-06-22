@@ -8370,7 +8370,7 @@ bool simple_wallet::supply_info(const std::vector<std::string> &args) {
     //supply_128 /= COIN;
     uint64_t supply = supply_128.convert_to<uint64_t>();
 
-    message_writer(console_color_default, false) << boost::format(tr("\t%s\t:\t%d")) % supply_asset.first % print_money(supply);
+    message_writer(console_color_default, false) << boost::format(tr("\t%6s : %21.8d")) % supply_asset.first % print_money(supply);
 
     /*
     // get price
@@ -8431,8 +8431,8 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
   }
   
   // Output the necessary information about yield stats
-  message_writer(console_color_default, false) << boost::format(tr("YIELD INFO:\n\tTotal SAL supply: %d\n\tTotal coins burnt: %d\n\tTotal coins locked: %d\n\tYield accrued over last %s: %d\n\tYield per SAL staked: %d"))
-    % print_money(total_supply_128.convert_to<uint64_t>())
+  message_writer(console_color_default, false) << boost::format(tr("YIELD INFO:\n\tSupply coins burnt over last %s: %d\n\tTotal coins locked: %d\n\tYield accrued over last %s: %d\n\tYield per SAL staked: %d"))
+    % get_human_readable_timespan((ybi_data.size()-1) * DIFFICULTY_TARGET_V2)
     % print_money(total_burnt)
     % print_money(ybi_data.back().locked_coins_tally)
     % get_human_readable_timespan((ybi_data.size()-1) * DIFFICULTY_TARGET_V2)

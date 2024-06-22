@@ -2543,12 +2543,6 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         bool ok = m_account.get_device().derive_subaddress_public_key(output_public_key, derivation, i, pk_change);
         THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to derive subaddress public key for TRANSFER TX");
 
-        // Find the TX public key for P_change
-        //auto search = m_salvium_txs.find(pk_change);
-        //if (search != m_salvium_txs.end()) {
-          // Store the origin index for the TX - this is needed when we want to SPEND the returned funds
-          
-	
         check_acc_out_precomp_once(tx.vout[i], derivation, additional_derivations, i, is_out_data_ptr, tx_scan_info[i], output_found[i]);
         THROW_WALLET_EXCEPTION_IF(tx_scan_info[i].error, error::acc_outs_lookup_error, tx, tx_pub_key, m_account.get_keys());
         if (tx_scan_info[i].received)
@@ -2564,6 +2558,19 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
 
             // Copy the origin TD
             td_origin_idx = tx_scan_info[i].origin_idx;
+
+            if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+              
+              THROW_WALLET_EXCEPTION_IF(td_origin_idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate protocol TX origin in m_transfers");
+              const transfer_details& td_origin = get_transfer_details(td_origin_idx);
+              THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.type != cryptonote::transaction_type::STAKE, error::wallet_internal_error, "incorrect TX type for protocol_tx origin in m_transfers");
+              
+              // Get the output key for the change entry
+              crypto::public_key pk_locked_coins = crypto::null_pkey;
+              THROW_WALLET_EXCEPTION_IF(!get_output_public_key(td_origin.m_tx.vout[td_origin.m_internal_output_index], pk_locked_coins), error::wallet_internal_error, "Failed to get output public key for locked coins");
+              // At this point, we need to clear the "locked coins" count, because otherwise we will be counting yield stakes twice in our balance
+              THROW_WALLET_EXCEPTION_IF(!m_locked_coins.erase(pk_locked_coins), error::wallet_internal_error, "Failed to remove protocol_tx entry from m_locked_coins");
+            }
           }
         }
       }
@@ -2691,7 +2698,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             if (tx.type == cryptonote::transaction_type::STAKE) {
               // Additionally, with YIELD TXs, we need to update our "balance staked" subtotal, because otherwise our balance is out by the staked coins until they mature!
               // SRCG: must remember to deduct the number of staked coins when they mature!!
-              LOG_ERROR("***** STAKED COINS : " << tx.amount_burnt << " *****");
+              LOG_PRINT_L1("***** STAKED COINS : " << tx.amount_burnt << " *****");
               m_locked_coins.insert({P_change, {0, tx.amount_burnt}});
             }
             

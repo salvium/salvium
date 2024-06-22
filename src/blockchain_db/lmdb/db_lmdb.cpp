@@ -1381,7 +1381,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
     LOG_PRINT_L1("tx ID " << tip->data.tx_id << "\n\tTally before burn = " << source_tally.str() << "\n\tTally after burn = " << final_source_tally.str());
   }
   
-  if (tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::STAKE) {
+  if (tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::STAKE) {
 
     // Get the current tally value for the source currency type
     MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
@@ -3502,6 +3502,7 @@ std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
   if (circulating_supply.empty()) {
     circulating_supply["SAL"] = m_coinbase;
   }
+  circulating_supply["BURN"] = m_coinbase - circulating_supply["SAL"];
   return circulating_supply;
 }
 
