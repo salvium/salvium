@@ -8442,7 +8442,9 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
   // Now summarise our own YIELD TXs that are yet to amture
   tools::wallet2::transfer_container transfers;
   m_wallet->get_transfers(transfers);
-
+  if (transfers.empty())
+    return true;
+  
   std::map<size_t, size_t> payouts;
   message_writer(console_color_default, false) << boost::format(tr("\nSTAKED FUNDS:"));
   for (size_t idx = transfers.size()-1; idx>0; --idx) {
