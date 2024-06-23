@@ -1442,17 +1442,28 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
       throw1(DB_ERROR(lmdb_error("Failed to add removal of tx outputs to db transaction: ", result).c_str()));
   }
 
+  // SRCG: The following code is designed to clean up the STAKE transactions, but it is very poorly written
+  // Since transactions are ALWAYS supposed to be created in order, it stands that they should ALWAYS be
+  // removed in REVERSE ORDER. Yet the following loop starts from the beginning - this is the worst possible
+  // implementation in performance terms, since it will ALWAYS take the longest possible time to remove the
+  // correct TX.
+
+  // RECODE TO START FROM THE END OF THE DATABASE TABLE, AND THROW AN EXCEPTION IF YOU DO NOT MATCH FIRST TIME!
+  
   // Is there yield_tx data to remove?
   if (tx.type == cryptonote::transaction_type::STAKE) {
     // Remove any yield_tx data for this transaction
     MDB_val_set(val_height, m_height);
     MDB_val v;
+    MDB_cursor_op op = MDB_SET;
     while (1) {
-      result = mdb_cursor_get(m_cur_yield_txs, &val_height, &v, MDB_SET);
-      if (result == MDB_NOTFOUND)
-        break;
-      else if (result)
+      result = mdb_cursor_get(m_cur_yield_txs, &val_height, &v, op);
+      if (result == MDB_NOTFOUND) {
+        throw1(DB_ERROR("Failed to locate yield tx for removal from db transaction"));
+      } else if (result) {
         throw1(DB_ERROR(lmdb_error("Failed to locate yield_tx data for removal: ", result).c_str()));
+      }
+      op = MDB_NEXT_DUP;
       const yield_tx_info yti = *(const yield_tx_info*)v.mv_data;
       if (yti.tx_hash == tx_hash) {
         result = mdb_cursor_del(m_cur_yield_txs, 0);
