@@ -3555,7 +3555,7 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
     }
   }
 
-  // from v15, require view tags on outputs
+  // from v15, require view tags and asset types on outputs
   if (!check_output_types(tx, hf_version))
   {
     tvc.m_invalid_output = true;

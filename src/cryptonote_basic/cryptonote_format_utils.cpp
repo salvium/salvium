@@ -1256,6 +1256,11 @@ namespace cryptonote
           << o.target.type().name() << " and " << tx.vout[0].target.type().name() << ", "
           << "expected matching variant types in transaction id=" << get_transaction_hash(tx));
       }
+
+      // Verify the asset type
+      std::string asset_type;
+      CHECK_AND_ASSERT_MES(cryptonote::get_output_asset_type(o, asset_type), false, "failed to get asset type");
+      CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
     }
     return true;
   }
