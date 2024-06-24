@@ -1,6 +1,6 @@
 ### Usage
 
-To build dependencies for the current arch+OS:
+To build dependencies for the current arch+OS, from this working directory:
 
 ```bash
 make
@@ -20,17 +20,19 @@ make HOST=x86_64-w64-mingw32 -j4
 
 A toolchain will be generated that's suitable for plugging into Monero's
 cmake. In the above example, a dir named x86_64-w64-mingw32 will be
-created. To use it for Monero:
+created. To use it for Monero, from the top of the Monero source tree:
 
 ```bash
-cmake -DCMAKE_TOOLCHAIN=`pwd`/contrib/depends/x86_64-w64-mingw32
+mkdir build
+cd build
+cmake -DCMAKE_TOOLCHAIN_FILE=$PWD/../contrib/depends/x86_64-w64-mingw32/share/toolchain.cmake ..
 ```
 
 Common `host-platform-triplets` for cross compilation are:
 
 - `i686-w64-mingw32` for Win32
 - `x86_64-w64-mingw32` for Win64
-- `x86_64-apple-darwin11` for MacOSX x86_64
+- `x86_64-apple-darwin` for MacOSX x86_64
 - `arm-linux-gnueabihf` for Linux ARM 32 bit
 - `aarch64-linux-gnu` for Linux ARM 64 bit
 - `riscv64-linux-gnu` for Linux RISCV 64 bit

@@ -1,4 +1,5 @@
 // Copyright (c) 2014-2022, The Monero Project
+// Portions Copyright (c) 2023-2024, Salvium (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -2348,7 +2349,7 @@ bool simple_wallet::welcome(const std::vector<std::string> &args)
   message_writer() << tr("Flaws in Salvium may be discovered in the future, and attacks may be developed to peek under some");
   message_writer() << tr("of the layers of privacy Salvium provides. Be safe and practice defense in depth.");
   message_writer() << "";
-  message_writer() << tr("Welcome to Salvium and compliant financial privacy. For more information see https://salvium.network");
+  message_writer() << tr("Welcome to Salvium and compliant financial privacy. For more information see https://salvium.io");
   return true;
 }
 
@@ -2490,7 +2491,7 @@ bool simple_wallet::show_qr_code(const std::vector<std::string> &args)
   WTEXTON();
   try
   {
-    const std::string address = "monero:" + m_wallet->get_subaddress_as_str({m_current_subaddress_account, subaddress_index});
+    const std::string address = "salvium:" + m_wallet->get_subaddress_as_str({m_current_subaddress_account, subaddress_index});
     const qrcodegen::QrCode qr = qrcodegen::QrCode::encodeText(address.c_str(), qrcodegen::QrCode::Ecc::LOW);
     for (int y = -2; y < qr.getSize() + 2; y+=2)
     {
@@ -3426,7 +3427,7 @@ simple_wallet::simple_wallet()
   m_cmd_binder.set_handler("donate",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::donate, _1),
                            tr(USAGE_DONATE),
-                           tr("Donate <amount> to the development team (donate.salvium.network)."));
+                           tr("Donate <amount> to the development team (donate.salvium.io)."));
   m_cmd_binder.set_handler("sign_transfer",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::sign_transfer, _1),
                            tr(USAGE_SIGN_TRANSFER),
@@ -6873,7 +6874,7 @@ bool simple_wallet::transfer_main(
     }
     else
     {
-      if (boost::starts_with(local_args[i], "monero:"))
+      if (boost::starts_with(local_args[i], "salvium:"))
         fail_msg_writer() << tr("Invalid last argument: ") << local_args.back() << ": " << error;
       else
         fail_msg_writer() << tr("Invalid last argument: ") << local_args.back();
@@ -7995,6 +7996,12 @@ bool simple_wallet::sweep_below(const std::vector<std::string> &args_)
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::return_payment(const std::vector<std::string> &args_)
 {
+  // Disable until appropriate hard fork
+  if (m_wallet->get_current_hard_fork() < HF_VERSION_ENABLE_RETURN) {
+    fail_msg_writer() << tr("return_payments are disabled");
+    return true;
+  }
+
   if (!try_connect_to_daemon())
     return true;
 
@@ -8363,7 +8370,7 @@ bool simple_wallet::supply_info(const std::vector<std::string> &args) {
     //supply_128 /= COIN;
     uint64_t supply = supply_128.convert_to<uint64_t>();
 
-    message_writer(console_color_default, false) << boost::format(tr("\t%s\t:\t%d")) % supply_asset.first % print_money(supply);
+    message_writer(console_color_default, false) << boost::format(tr("\t%6s : %21.8d")) % supply_asset.first % print_money(supply);
 
     /*
     // get price
@@ -8404,22 +8411,40 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
     return false;
 
   // Scan the entries we have received to gather the state (total yield over period captured)
+  uint64_t total_burnt = 0;
   uint64_t total_yield = 0;
+  uint64_t yield_per_stake = 0;
   for (size_t idx=1; idx<ybi_data.size(); ++idx) {
-    total_yield += ybi_data[idx].slippage_total_this_block;
+    if (ybi_data[idx].locked_coins_tally == 0) {
+      total_burnt += ybi_data[idx].slippage_total_this_block;
+    } else {
+      total_yield += ybi_data[idx].slippage_total_this_block;
+    }
   }
 
+  // Calculate the yield_per_staked_SAL value
+  if (ybi_data.back().locked_coins_tally > 0) {
+    boost::multiprecision::uint128_t yield_per_stake_128 = ybi_data.back().slippage_total_this_block;
+    yield_per_stake_128 *= COIN;
+    yield_per_stake_128 /= ybi_data.back().locked_coins_tally;
+    yield_per_stake = yield_per_stake_128.convert_to<uint64_t>();
+  }
+  
   // Output the necessary information about yield stats
-  message_writer(console_color_default, false) << boost::format(tr("YIELD INFO:\n\tTotal SAL supply: %d\n\tTotal coins locked: %d\n\tYield accrued over last %s: %d"))
-    % print_money(total_supply_128.convert_to<uint64_t>())
+  message_writer(console_color_default, false) << boost::format(tr("YIELD INFO:\n\tSupply coins burnt over last %s: %d\n\tTotal coins locked: %d\n\tYield accrued over last %s: %d\n\tYield per SAL staked: %d"))
+    % get_human_readable_timespan((ybi_data.size()-1) * DIFFICULTY_TARGET_V2)
+    % print_money(total_burnt)
     % print_money(ybi_data.back().locked_coins_tally)
     % get_human_readable_timespan((ybi_data.size()-1) * DIFFICULTY_TARGET_V2)
-    % print_money(total_yield);
+    % print_money(total_yield)
+    % print_money(yield_per_stake);
 
   // Now summarise our own YIELD TXs that are yet to amture
   tools::wallet2::transfer_container transfers;
   m_wallet->get_transfers(transfers);
-
+  if (transfers.empty())
+    return true;
+  
   std::map<size_t, size_t> payouts;
   message_writer(console_color_default, false) << boost::format(tr("\nSTAKED FUNDS:"));
   for (size_t idx = transfers.size()-1; idx>0; --idx) {
@@ -8501,7 +8526,7 @@ bool simple_wallet::donate(const std::vector<std::string> &args_)
   if (!payment_id_str.empty())
     local_args.push_back(payment_id_str);
   if (m_wallet->nettype() == cryptonote::MAINNET)
-    message_writer() << (boost::format(tr("Donating %s %s to The Salvium Team (donate.salvium.network or %s).")) % amount_str % cryptonote::get_unit(cryptonote::get_default_decimal_point()) % SALVIUM_DONATION_ADDR).str();
+    message_writer() << (boost::format(tr("Donating %s %s to The Salvium Team (donate.salvium.io or %s).")) % amount_str % cryptonote::get_unit(cryptonote::get_default_decimal_point()) % SALVIUM_DONATION_ADDR).str();
   else
     message_writer() << (boost::format(tr("Donating %s %s to %s.")) % amount_str % cryptonote::get_unit(cryptonote::get_default_decimal_point()) % address_str).str();
   transfer(local_args);

@@ -1294,10 +1294,12 @@ namespace cryptonote
     
     struct request_t
     {
+      bool include_raw_data;
       uint64_t from_height;
       uint64_t to_height;
 
       BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_OPT(include_raw_data, false)
         KV_SERIALIZE_OPT(from_height, (uint64_t)0)
         KV_SERIALIZE_OPT(to_height, (uint64_t)0)
       END_KV_SERIALIZE_MAP()
@@ -1308,9 +1310,17 @@ namespace cryptonote
     struct response_t
     {
       std::string status;
+      uint64_t total_burnt;
+      uint64_t total_staked;
+      uint64_t total_yield;
+      uint64_t yield_per_stake;
       std::vector<COMMAND_RPC_GET_YIELD_INFO::yield_data_t> yield_data;
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(status)
+        KV_SERIALIZE(total_burnt)
+        KV_SERIALIZE(total_staked)
+        KV_SERIALIZE(total_yield)
+        KV_SERIALIZE(yield_per_stake)
         KV_SERIALIZE(yield_data)
       END_KV_SERIALIZE_MAP()
     };
@@ -1440,7 +1450,7 @@ namespace cryptonote
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  struct COMMAND_RPC_GET_CIRCULATING_SUPPLY
+  struct COMMAND_RPC_GET_SUPPLY_INFO
   {
     struct request_t
     {

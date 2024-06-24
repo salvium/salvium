@@ -1,4 +1,5 @@
 // Copyright (c) 2014-2022, The Monero Project
+// Portions Copyright (c) 2023-2024, Salvium (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -2168,8 +2169,8 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
     if (!m_encrypt_keys_after_refresh)
     {
       boost::optional<epee::wipeable_string> pwd = m_callback->on_get_password(pool ? "output found in pool" : "output received");
-      THROW_WALLET_EXCEPTION_IF(!pwd, error::password_needed, tr("Password is needed to compute key image for incoming monero"));
-      THROW_WALLET_EXCEPTION_IF(!verify_password(*pwd), error::password_needed, tr("Invalid password: password is needed to compute key image for incoming monero"));
+      THROW_WALLET_EXCEPTION_IF(!pwd, error::password_needed, tr("Password is needed to compute key image for incoming SALs"));
+      THROW_WALLET_EXCEPTION_IF(!verify_password(*pwd), error::password_needed, tr("Invalid password: password is needed to compute key image for incoming SALs"));
       m_encrypt_keys_after_refresh.reset(new wallet_keys_unlocker(*this, m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only, *pwd));
     }
   }
@@ -2322,10 +2323,10 @@ bool wallet2::get_pricing_record(oracle::pricing_record& pr, const uint64_t heig
 bool wallet2::get_circulating_supply(std::vector<std::pair<std::string, std::string>> &amounts)
 {
   // Issue an RPC call to get the block header (and thus the pricing record) at the specified height
-  cryptonote::COMMAND_RPC_GET_CIRCULATING_SUPPLY::request req = AUTO_VAL_INIT(req);
-  cryptonote::COMMAND_RPC_GET_CIRCULATING_SUPPLY::response res = AUTO_VAL_INIT(res);
+  cryptonote::COMMAND_RPC_GET_SUPPLY_INFO::request req = AUTO_VAL_INIT(req);
+  cryptonote::COMMAND_RPC_GET_SUPPLY_INFO::response res = AUTO_VAL_INIT(res);
   m_daemon_rpc_mutex.lock();
-  bool r = invoke_http_json_rpc("/json_rpc", "get_circulating_supply", req, res, rpc_timeout);
+  bool r = invoke_http_json_rpc("/json_rpc", "get_supply_info", req, res, rpc_timeout);
   m_daemon_rpc_mutex.unlock();
   if (r && res.status == CORE_RPC_STATUS_OK)
   {
@@ -2337,7 +2338,7 @@ bool wallet2::get_circulating_supply(std::vector<std::pair<std::string, std::str
   }
   else
   {
-    MERROR("Failed to retrieve circulating supply from daemon");
+    MERROR("Failed to retrieve supply info from daemon");
     return false;
   }
 }
@@ -2348,6 +2349,7 @@ bool wallet2::get_yield_info(std::vector<cryptonote::yield_block_info>& ybi_data
   cryptonote::COMMAND_RPC_GET_YIELD_INFO::request req = AUTO_VAL_INIT(req);
   cryptonote::COMMAND_RPC_GET_YIELD_INFO::response res = AUTO_VAL_INIT(res);
   m_daemon_rpc_mutex.lock();
+  req.include_raw_data = true;
   bool r = invoke_http_json_rpc("/json_rpc", "get_yield_info", req, res, rpc_timeout);
   m_daemon_rpc_mutex.unlock();
   if (r && res.status == CORE_RPC_STATUS_OK)
@@ -2541,12 +2543,6 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         bool ok = m_account.get_device().derive_subaddress_public_key(output_public_key, derivation, i, pk_change);
         THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to derive subaddress public key for TRANSFER TX");
 
-        // Find the TX public key for P_change
-        //auto search = m_salvium_txs.find(pk_change);
-        //if (search != m_salvium_txs.end()) {
-          // Store the origin index for the TX - this is needed when we want to SPEND the returned funds
-          
-	
         check_acc_out_precomp_once(tx.vout[i], derivation, additional_derivations, i, is_out_data_ptr, tx_scan_info[i], output_found[i]);
         THROW_WALLET_EXCEPTION_IF(tx_scan_info[i].error, error::acc_outs_lookup_error, tx, tx_pub_key, m_account.get_keys());
         if (tx_scan_info[i].received)
@@ -2562,6 +2558,19 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
 
             // Copy the origin TD
             td_origin_idx = tx_scan_info[i].origin_idx;
+
+            if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+              
+              THROW_WALLET_EXCEPTION_IF(td_origin_idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate protocol TX origin in m_transfers");
+              const transfer_details& td_origin = get_transfer_details(td_origin_idx);
+              THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.type != cryptonote::transaction_type::STAKE, error::wallet_internal_error, "incorrect TX type for protocol_tx origin in m_transfers");
+              
+              // Get the output key for the change entry
+              crypto::public_key pk_locked_coins = crypto::null_pkey;
+              THROW_WALLET_EXCEPTION_IF(!get_output_public_key(td_origin.m_tx.vout[td_origin.m_internal_output_index], pk_locked_coins), error::wallet_internal_error, "Failed to get output public key for locked coins");
+              // At this point, we need to clear the "locked coins" count, because otherwise we will be counting yield stakes twice in our balance
+              THROW_WALLET_EXCEPTION_IF(!m_locked_coins.erase(pk_locked_coins), error::wallet_internal_error, "Failed to remove protocol_tx entry from m_locked_coins");
+            }
           }
         }
       }
@@ -2689,7 +2698,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             if (tx.type == cryptonote::transaction_type::STAKE) {
               // Additionally, with YIELD TXs, we need to update our "balance staked" subtotal, because otherwise our balance is out by the staked coins until they mature!
               // SRCG: must remember to deduct the number of staked coins when they mature!!
-              LOG_ERROR("***** STAKED COINS : " << tx.amount_burnt << " *****");
+              LOG_PRINT_L1("***** STAKED COINS : " << tx.amount_burnt << " *****");
               m_locked_coins.insert({P_change, {0, tx.amount_burnt}});
             }
             
@@ -9208,7 +9217,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
             {
               MINFO("Using it");
               //req.outputs.push_back({amount, out, true}); // Rings are stored referencing global output IDs
-              add_output_to_lists({amount, out});
+              add_output_to_lists({amount, out, true});
               ++num_found;
               seen_indices.emplace(out);
               if (out == td.m_global_output_index)
@@ -9496,7 +9505,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
                     break;
                   }
                 }
-                THROW_WALLET_EXCEPTION_IF(!found, error::wallet_internal_error, "Falied to find existing ring output in daemon out data");
+                THROW_WALLET_EXCEPTION_IF(!found, error::wallet_internal_error, "Failed to find existing ring output in daemon out data");
               }
             }
           }
@@ -14581,7 +14590,7 @@ std::string wallet2::make_uri(const std::string &address, const std::string &pay
     return std::string();
   }
 
-  std::string uri = "monero:" + address;
+  std::string uri = "salvium:" + address;
   unsigned int n_fields = 0;
 
   if (!payment_id.empty())
@@ -14610,9 +14619,9 @@ std::string wallet2::make_uri(const std::string &address, const std::string &pay
 //----------------------------------------------------------------------------------------------------
 bool wallet2::parse_uri(const std::string &uri, std::string &address, std::string &payment_id, uint64_t &amount, std::string &tx_description, std::string &recipient_name, std::vector<std::string> &unknown_parameters, std::string &error)
 {
-  if (uri.substr(0, 7) != "monero:")
+  if (uri.substr(0, 7) != "salvium:")
   {
-    error = std::string("URI has wrong scheme (expected \"monero:\"): ") + uri;
+    error = std::string("URI has wrong scheme (expected \"salvium:\"): ") + uri;
     return false;
   }
 
@@ -14899,7 +14908,7 @@ mms::multisig_wallet_state wallet2::get_multisig_wallet_state() const
   state.num_transfer_details = m_transfers.size();
   if (state.multisig)
   {
-    THROW_WALLET_EXCEPTION_IF(!m_original_keys_available, error::wallet_internal_error, "MMS use not possible because own original Monero address not available");
+    THROW_WALLET_EXCEPTION_IF(!m_original_keys_available, error::wallet_internal_error, "MMS use not possible because own original Salvium address not available");
     state.address = m_original_address;
     state.view_secret_key = m_original_view_secret_key;
   }

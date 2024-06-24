@@ -320,7 +320,7 @@ namespace tools
     {
       MINFO("The daemon is not set up to background mine.");
       MINFO("With background mining enabled, the daemon will mine when idle and not on battery.");
-      MINFO("Enabling this supports the network you are using, and makes you eligible for receiving new monero");
+      MINFO("Enabling this supports the network you are using, and makes you eligible for receiving new SALs");
       MINFO("Set setup-background-mining to 1 in salvium-wallet-cli to change.");
       return;
     }
@@ -473,7 +473,7 @@ namespace tools
         balance_info.balance = req.all_accounts ? m_wallet->balance_all(req.strict, asset) : m_wallet->balance(req.account_index, asset, req.strict);
         if (!balance_info.balance)
           continue;
-        balance_info.unlocked_balance = req.all_accounts ? m_wallet->unlocked_balance_all(req.strict, asset, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock) : m_wallet->unlocked_balance(req.account_index, "XHV", req.strict, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock);
+        balance_info.unlocked_balance = req.all_accounts ? m_wallet->unlocked_balance_all(req.strict, asset, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock) : m_wallet->unlocked_balance(req.account_index, asset, req.strict, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock);
         balance_info.multisig_import_needed = m_wallet->multisig() && m_wallet->has_multisig_partial_key_images();
         std::map<uint32_t, std::map<uint32_t, uint64_t>> balance_per_subaddress_per_account;
         std::map<uint32_t, std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>>> unlocked_balance_per_subaddress_per_account;
@@ -914,7 +914,7 @@ namespace tools
           }
           if (addresses.empty())
           {
-            er.message = std::string("No Monero address found at ") + url;
+            er.message = std::string("No Salvium address found at ") + url;
             return {};
           }
           return addresses[0];
@@ -2223,7 +2223,7 @@ namespace tools
         }
         if (addresses.empty())
         {
-          er.message = std::string("No Monero address found at ") + url;
+          er.message = std::string("No Salvium address found at ") + url;
           return {};
         }
         return addresses[0];
@@ -3041,7 +3041,7 @@ namespace tools
         }
         if (addresses.empty())
         {
-          er.message = std::string("No Monero address found at ") + url;
+          er.message = std::string("No Salvium address found at ") + url;
           return {};
         }
         return addresses[0];
@@ -3095,7 +3095,7 @@ namespace tools
           }
           if (addresses.empty())
           {
-            er.message = std::string("No Monero address found at ") + url;
+            er.message = std::string("No Salvium address found at ") + url;
             return {};
           }
           return addresses[0];
@@ -4403,7 +4403,7 @@ namespace tools
             }
             if (addresses.empty())
             {
-              er.message = std::string("No Monero address found at ") + url;
+              er.message = std::string("No Salvium address found at ") + url;
               return {};
             }
             address = addresses[0];
@@ -4780,7 +4780,7 @@ int main(int argc, char** argv) {
   std::tie(vm, should_terminate) = wallet_args::main(
     argc, argv,
     "salvium-wallet-rpc [--wallet-file=<file>|--generate-from-json=<file>|--wallet-dir=<directory>] [--rpc-bind-port=<port>]",
-    tools::wallet_rpc_server::tr("This is the RPC monero wallet. It needs to connect to a monero\ndaemon to work correctly."),
+    tools::wallet_rpc_server::tr("This is the RPC Salvium wallet. It needs to connect to a Salvium daemon to work correctly."),
     desc_params,
     po::positional_options_description(),
     [](const std::string &s, bool emphasis){ tools::scoped_message_writer(emphasis ? epee::console_color_white : epee::console_color_default, true) << s; },

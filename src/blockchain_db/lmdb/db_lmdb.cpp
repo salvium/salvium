@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2023, The Monero Project
-// Portions Copyright (c) 2023, Salvium (author: SRCG)
+// Portions Copyright (c) 2023-2024, Salvium (author: SRCG)
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without modification, are
@@ -1179,21 +1179,38 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       throw0(DB_ERROR(lmdb_error("Failed to add prunable tx prunable hash to db transaction: ", result).c_str()));
   }
 
+  if (tx.type == cryptonote::transaction_type::MINER) {
+
+    // Update the circulating supply tally because of potentially burnt block_reward proportion
+    MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type("SAL"));
+    boost::multiprecision::int128_t source_tally = 0;
+    result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
+    if (result && (m_height>0 || result != MDB_NOTFOUND))
+      throw0(DB_ERROR(lmdb_error("Failed to get circulating supply tally when adding db transaction: ", result).c_str()));
+    boost::multiprecision::int128_t final_source_tally = source_tally;
+    for (const auto& out: tx.vout) {
+
+      // Sanity check - prevent overflow
+      if (final_source_tally > final_source_tally + out.amount)
+        throw0(DB_ERROR("numeric overflow detected when adding miner_tx for db transaction")); 
+
+      // Fetch the amount for this output
+      final_source_tally += out.amount;
+    }
+    write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
+    LOG_PRINT_L1("tx ID " << tx_id << "\n\tTally before burn = " << source_tally.str() << "\n\tTally after burn = " << final_source_tally.str());
+  }
+  
   if (tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::STAKE) {
 
     // Get the current tally value for the source currency type
     MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
     boost::multiprecision::int128_t source_tally = 0;
     result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
-    boost::multiprecision::int128_t final_source_tally = source_tally - tx.amount_burnt;
+    boost::multiprecision::int128_t final_source_tally = source_tally - tx.amount_burnt - tx.rct_signatures.txnFee;
     boost::multiprecision::int128_t coinbase = get_block_already_generated_coins(m_height-1);
-    if (source_tally == 0 && result == MDB_NOTFOUND) {
-      if (tx.source_asset_type == "SAL") {
-        final_source_tally += coinbase;
-      } else {
-        throw0(DB_ERROR("burn underflow - asset balance is zero for non-SAL asset"));
-      }
-    }
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to get circulating supply tally when adding db transaction: ", result).c_str()));
     write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
     LOG_PRINT_L1("tx ID " << tx_id << "\n\tTally before burn = " << source_tally.str() << "\n\tTally after burn = " << final_source_tally.str());
   }
@@ -1219,6 +1236,8 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       MDB_val_copy<uint64_t> source_idx(asset.first);
       boost::multiprecision::int128_t source_tally = 0;
       result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
+      if (result)
+        throw0(DB_ERROR(lmdb_error("Failed to get circulating supply tally when adding db transaction: ", result).c_str()));
       boost::multiprecision::int128_t final_source_tally = source_tally + asset.second;
       boost::multiprecision::int128_t coinbase = get_block_already_generated_coins(m_height-1);
       if (source_tally == 0 && result == MDB_NOTFOUND) {
@@ -1340,7 +1359,29 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
         throw1(DB_ERROR(lmdb_error("Failed to add removal of prunable hash tx to db transaction: ", result).c_str()));
   }
 
-  if (tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::BURN) {
+  if (tx.type == cryptonote::transaction_type::MINER) {
+
+    // Update the circulating supply tally because of potentially burnt block_reward proportion
+    MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type("SAL"));
+    boost::multiprecision::int128_t source_tally = 0;
+    result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
+    if (result && (m_height>0 || result != MDB_NOTFOUND))
+      throw0(DB_ERROR(lmdb_error("remove_transaction_data() - Failed to get circulating supply tally when removing db transaction: ", result).c_str()));
+    boost::multiprecision::int128_t final_source_tally = source_tally;
+    for (const auto& out: tx.vout) {
+
+      // Sanity check - prevent underflow
+      if (final_source_tally < final_source_tally - out.amount)
+        throw0(DB_ERROR("remove_transaction_data() - numeric underflow detected when removing miner_tx for db transaction")); 
+
+      // Fetch the amount for this output
+      final_source_tally -= out.amount;
+    }
+    write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
+    LOG_PRINT_L1("tx ID " << tip->data.tx_id << "\n\tTally before burn = " << source_tally.str() << "\n\tTally after burn = " << final_source_tally.str());
+  }
+  
+  if (tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::STAKE) {
 
     // Get the current tally value for the source currency type
     MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
@@ -1348,8 +1389,10 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
     result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
     if (result == MDB_NOTFOUND)
       throw0(DB_ERROR("remove_transaction_data() - minted asset not found"));
-    boost::multiprecision::int128_t final_source_tally = source_tally + tx.amount_burnt;
-    boost::multiprecision::int128_t coinbase = get_block_already_generated_coins(m_height-1);
+    // Sanity check - prevent overflow
+    if (source_tally > source_tally + tx.amount_burnt + tx.rct_signatures.txnFee)
+      throw0(DB_ERROR("remove_transaction_data() - numeric overflow detected when processing C/B/S for db transaction")); 
+    boost::multiprecision::int128_t final_source_tally = source_tally + tx.amount_burnt + tx.rct_signatures.txnFee;
     write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
     LOG_PRINT_L1("tx ID " << tip->data.tx_id << "\n\tTally before remint =" << source_tally.str() << "\n\tTally after remint =" << final_source_tally.str());
   }
@@ -1399,17 +1442,28 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
       throw1(DB_ERROR(lmdb_error("Failed to add removal of tx outputs to db transaction: ", result).c_str()));
   }
 
+  // SRCG: The following code is designed to clean up the STAKE transactions, but it is very poorly written
+  // Since transactions are ALWAYS supposed to be created in order, it stands that they should ALWAYS be
+  // removed in REVERSE ORDER. Yet the following loop starts from the beginning - this is the worst possible
+  // implementation in performance terms, since it will ALWAYS take the longest possible time to remove the
+  // correct TX.
+
+  // RECODE TO START FROM THE END OF THE DATABASE TABLE, AND THROW AN EXCEPTION IF YOU DO NOT MATCH FIRST TIME!
+  
   // Is there yield_tx data to remove?
   if (tx.type == cryptonote::transaction_type::STAKE) {
     // Remove any yield_tx data for this transaction
     MDB_val_set(val_height, m_height);
     MDB_val v;
+    MDB_cursor_op op = MDB_SET;
     while (1) {
-      result = mdb_cursor_get(m_cur_yield_txs, &val_height, &v, MDB_SET);
-      if (result == MDB_NOTFOUND)
-        break;
-      else if (result)
+      result = mdb_cursor_get(m_cur_yield_txs, &val_height, &v, op);
+      if (result == MDB_NOTFOUND) {
+        throw1(DB_ERROR("Failed to locate yield tx for removal from db transaction"));
+      } else if (result) {
         throw1(DB_ERROR(lmdb_error("Failed to locate yield_tx data for removal: ", result).c_str()));
+      }
+      op = MDB_NEXT_DUP;
       const yield_tx_info yti = *(const yield_tx_info*)v.mv_data;
       if (yti.tx_hash == tx_hash) {
         result = mdb_cursor_del(m_cur_yield_txs, 0);
@@ -3416,10 +3470,9 @@ std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
   LOG_PRINT_L3("BlockchainLMDB::" << __func__ << " - mined supply for SAL = " << m_coinbase);
 
   // SRCG: For V1, we can simply return this number, because there is no other source of coins
-  circulating_supply["SAL"] = m_coinbase;
-  return circulating_supply;
+  //circulating_supply["SAL"] = m_coinbase;
+  //return circulating_supply;
   
-  /*
   check_open();
   
   TXN_PREFIX_RDONLY();
@@ -3460,8 +3513,8 @@ std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
   if (circulating_supply.empty()) {
     circulating_supply["SAL"] = m_coinbase;
   }
+  circulating_supply["BURN"] = m_coinbase - circulating_supply["SAL"];
   return circulating_supply;
-  */
 }
 
 uint64_t BlockchainLMDB::num_outputs() const

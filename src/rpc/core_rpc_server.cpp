@@ -1486,7 +1486,7 @@ namespace cryptonote
     res.is_background_mining_enabled = lMiner.get_is_background_mining_enabled();
     store_difficulty(m_core.get_blockchain_storage().get_difficulty_for_next_block(), res.difficulty, res.wide_difficulty, res.difficulty_top64);
     
-    res.block_target = m_core.get_blockchain_storage().get_current_hard_fork_version() < 2 ? DIFFICULTY_TARGET_V1 : DIFFICULTY_TARGET_V2;
+    res.block_target = DIFFICULTY_TARGET_V2;
     if ( lMiner.is_mining() ) {
       res.speed = lMiner.get_speed();
       res.threads_count = lMiner.get_threads_count();
@@ -1495,17 +1495,9 @@ namespace cryptonote
     const account_public_address& lMiningAdr = lMiner.get_mining_address();
     if (lMiner.is_mining() || lMiner.get_is_background_mining_enabled())
       res.address = get_account_address_as_str(nettype(), false, lMiningAdr);
-    const uint8_t major_version = m_core.get_blockchain_storage().get_current_hard_fork_version();
-    const unsigned variant = major_version >= 7 ? major_version - 6 : 0;
-    switch (variant)
-    {
-      case 0: res.pow_algorithm = "Cryptonight"; break;
-      case 1: res.pow_algorithm = "CNv1 (Cryptonight variant 1)"; break;
-      case 2: case 3: res.pow_algorithm = "CNv2 (Cryptonight variant 2)"; break;
-      case 4: case 5: res.pow_algorithm = "CNv4 (Cryptonight variant 4)"; break;
-      case 6: case 7: case 8: case 9: res.pow_algorithm = "RandomX"; break;
-      default: res.pow_algorithm = "RandomX"; break; // assumed
-    }
+    
+    res.pow_algorithm = "RandomX";
+    
     if (res.is_background_mining_enabled)
     {
       res.bg_idle_threshold = lMiner.get_idle_threshold();
@@ -2990,13 +2982,13 @@ namespace cryptonote
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  bool core_rpc_server::on_get_circulating_supply(const COMMAND_RPC_GET_CIRCULATING_SUPPLY::request& req, COMMAND_RPC_GET_CIRCULATING_SUPPLY::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
+  bool core_rpc_server::on_get_supply_info(const COMMAND_RPC_GET_SUPPLY_INFO::request& req, COMMAND_RPC_GET_SUPPLY_INFO::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
   {
-    PERF_TIMER(on_get_circulating_supply);
+    PERF_TIMER(on_get_supply_info);
     std::map<std::string, uint64_t> amounts = m_core.get_blockchain_storage().get_db().get_circulating_supply();
     for (const auto &i: amounts)
     {
-      COMMAND_RPC_GET_CIRCULATING_SUPPLY::supply_entry se(i.first, std::to_string(i.second));
+      COMMAND_RPC_GET_SUPPLY_INFO::supply_entry se(i.first, std::to_string(i.second));
       res.supply_tally.push_back(se);
     }
     res.height = m_core.get_current_blockchain_height();
@@ -3014,20 +3006,44 @@ namespace cryptonote
       return true;
     }
     // Iterate over the cache, supplying the data in a more accessible format
+    res.total_burnt = res.total_staked = res.total_yield = res.yield_per_stake = 0;
     res.yield_data.clear();
     for (const auto& entry: ybi_cache) {
-      // Skip this entry if out-of=range
+
+      // Check for last entry
+      if (entry.first == height - 1) {
+        res.total_staked = entry.second.locked_coins_tally;
+        if (entry.second.locked_coins_tally > 0) {
+          boost::multiprecision::uint128_t yield_per_stake = entry.second.slippage_total_this_block;
+          yield_per_stake *= COIN;
+          yield_per_stake /= entry.second.locked_coins_tally;
+          res.yield_per_stake = yield_per_stake.convert_to<uint64_t>();
+        }
+      }
+      
+      // Skip this entry if out-of-range
       if (req.from_height > 0 and entry.first < req.from_height) continue;
       if (req.to_height > 0 and entry.first > req.to_height) continue;
 
-      // Clone the data into the response
-      COMMAND_RPC_GET_YIELD_INFO::yield_data_t yd;
-      yd.block_height = entry.second.block_height;
-      yd.slippage_total_this_block = entry.second.slippage_total_this_block;
-      yd.locked_coins_this_block = entry.second.locked_coins_this_block;
-      yd.locked_coins_tally = entry.second.locked_coins_tally;
-      yd.network_health_percentage = entry.second.network_health_percentage;
-      res.yield_data.push_back(yd);
+      // Do we need to include raw data?
+      if (req.include_raw_data) {
+        
+        // Clone the data into the response
+        COMMAND_RPC_GET_YIELD_INFO::yield_data_t yd;
+        yd.block_height = entry.second.block_height;
+        yd.slippage_total_this_block = entry.second.slippage_total_this_block;
+        yd.locked_coins_this_block = entry.second.locked_coins_this_block;
+        yd.locked_coins_tally = entry.second.locked_coins_tally;
+        yd.network_health_percentage = entry.second.network_health_percentage;
+        res.yield_data.push_back(yd);
+      }
+      
+      // Perform the aggregation
+      if (entry.second.locked_coins_tally == 0) {
+        res.total_burnt += entry.second.slippage_total_this_block;
+      } else {
+        res.total_yield += entry.second.slippage_total_this_block;
+      }
     }
     res.status = CORE_RPC_STATUS_OK;
     return true;

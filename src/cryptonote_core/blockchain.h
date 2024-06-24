@@ -1708,5 +1708,7 @@ namespace cryptonote
      * @param already_generated_coins total coins mined by the network so far
      */
     void send_miner_notifications(uint64_t height, const crypto::hash &seed_hash, const crypto::hash &prev_id, uint64_t already_generated_coins);
+
+    friend struct BlockchainAndPool;
   };
 }  // namespace cryptonote

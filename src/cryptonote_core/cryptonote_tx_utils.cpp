@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2022, The Monero Project
-// Portions Copyright (c) 2023, Salvium (author: SRCG)
+// Portions Copyright (c) 2023-2024, Salvium (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -442,7 +442,7 @@ namespace cryptonote
           // Create the TX output for this refund
           tx_out out;
           //cryptonote::set_tx_out(entry.amount_burnt, entry.source_asset, 0, out_eph_public_key, false, crypto::view_tag{}, out);
-          cryptonote::set_tx_out(entry.amount_burnt, entry.source_asset, 0, entry.return_address, false, crypto::view_tag{}, out);
+          cryptonote::set_tx_out(entry.amount_burnt, entry.source_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
           additional_tx_public_keys.push_back(entry.return_pubkey);
           tx.vout.push_back(out);
         } else {
@@ -467,7 +467,7 @@ namespace cryptonote
           // Create the TX output for this conversion
           tx_out out;
           //cryptonote::set_tx_out(amount_minted, entry.destination_asset, 0, out_eph_public_key, false, crypto::view_tag{}, out);
-          cryptonote::set_tx_out(amount_minted, entry.destination_asset, 0, entry.return_address, false, crypto::view_tag{}, out);
+          cryptonote::set_tx_out(amount_minted, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
           additional_tx_public_keys.push_back(entry.return_pubkey);
           tx.vout.push_back(out);
         }
@@ -480,7 +480,7 @@ namespace cryptonote
         // Create the TX output for this refund
         tx_out out;
         //cryptonote::set_tx_out(entry.amount_burnt, entry.source_asset, 0, out_eph_public_key, false, crypto::view_tag{}, out);
-        cryptonote::set_tx_out(entry.amount_burnt, entry.source_asset, 0, entry.return_address, false, crypto::view_tag{}, out);
+        cryptonote::set_tx_out(entry.amount_burnt, entry.source_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
         additional_tx_public_keys.push_back(entry.return_pubkey);
         tx.vout.push_back(out);
       }
@@ -503,7 +503,7 @@ namespace cryptonote
       CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
     
       tx_out out_miner;
-      cryptonote::set_tx_out(slippage_miner, "SAL", 0, out_eph_public_key, false, crypto::view_tag{}, out_miner);
+      cryptonote::set_tx_out(slippage_miner, "SAL", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, false, crypto::view_tag{}, out_miner);
       tx.vout.push_back(out_miner);
 
       // Add a payout for the treasury
@@ -517,7 +517,7 @@ namespace cryptonote
 
       uint64_t slippage_treasury = slippage_miner >> 1;
       tx_out out_treasury;
-      cryptonote::set_tx_out(slippage_treasury, "SAL", 0, out_eph_public_key_treasury, false, crypto::view_tag{}, out_treasury);
+      cryptonote::set_tx_out(slippage_treasury, "SAL", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key_treasury, false, crypto::view_tag{}, out_treasury);
       tx.vout.push_back(out_treasury);
     }
     

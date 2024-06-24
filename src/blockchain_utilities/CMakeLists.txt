@@ -139,8 +139,11 @@ monero_add_executable(blockchain_import
 
 target_link_libraries(blockchain_import
   PRIVATE
+    crypto
+    cncrypto
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -166,8 +169,11 @@ monero_add_executable(blockchain_export
 
 target_link_libraries(blockchain_export
   PRIVATE
+    crypto
+    cncrypto
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -188,8 +194,11 @@ monero_add_executable(blockchain_blackball
 target_link_libraries(blockchain_blackball
   PRIVATE
     wallet
+    crypto
+    cncrypto
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -210,8 +219,11 @@ monero_add_executable(blockchain_usage
 
 target_link_libraries(blockchain_usage
   PRIVATE
+    crypto
+    cncrypto
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -233,6 +245,7 @@ target_link_libraries(blockchain_ancestry
   PRIVATE
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -254,6 +267,7 @@ target_link_libraries(blockchain_depth
   PRIVATE
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -275,6 +289,7 @@ target_link_libraries(blockchain_stats
   PRIVATE
     cryptonote_core
     blockchain_db
+    oracle
     version
     epee
     ${Boost_FILESYSTEM_LIBRARY}
@@ -294,8 +309,11 @@ monero_add_executable(blockchain_prune_known_spent_data
 
 target_link_libraries(blockchain_prune_known_spent_data
   PRIVATE
+    crypto
+    cncrypto
     cryptonote_core
     blockchain_db
+    oracle
     p2p
     version
     epee
@@ -321,8 +339,11 @@ install(TARGETS blockchain_prune DESTINATION bin)
 
 target_link_libraries(blockchain_prune
   PRIVATE
+    crypto
+    cncrypto
     cryptonote_core
     blockchain_db
+    oracle
     p2p
     version
     epee
