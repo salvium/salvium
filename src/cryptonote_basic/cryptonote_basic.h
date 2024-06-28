@@ -91,7 +91,7 @@ namespace cryptonote
     BEGIN_SERIALIZE_OBJECT()
       FIELD(key)
       FIELD(asset_type)
-      FIELD(unlock_time)
+      VARINT_FIELD(unlock_time)
     END_SERIALIZE()
   };
 

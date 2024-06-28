@@ -208,15 +208,15 @@
 #define HF_VERSION_REJECT_SIGS_IN_COINBASE      1
 #define HF_VERSION_BULLETPROOF_PLUS             1
 #define HF_VERSION_ENABLE_RETURN                1
+#define HF_VERSION_VIEW_TAGS                    1
 
 #define HF_VERSION_LONG_TERM_BLOCK_WEIGHT       2
-#define HF_VERSION_VIEW_TAGS                    2
 #define HF_VERSION_2021_SCALING                 2
 #define HF_VERSION_ENABLE_CONVERT               2
 #define HF_VERSION_ENABLE_ORACLE                2
 #define HF_VERSION_SLIPPAGE_YIELD               2
 
-#define TESTNET_VERSION                         9
+#define TESTNET_VERSION                         10
 #define STAGENET_VERSION                        1
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
@@ -337,7 +337,7 @@ namespace config
     boost::uuids::uuid const NETWORK_ID = { {
         0x12 ,0x30, 0xF1, 0x71 , 0x61, 0x04 , 0x41, 0x61, 0x17, 0x31, 0x82, 0x53, 0x41, 0x4C, 0x00, TESTNET_VERSION
       } };
-    std::string const GENESIS_TX = "020001ff000180c0d0c7bbbff60302800b6eb882218e901c1c36bce474224456d82226260226d252459dfbadf186f70353414c3c00000000000000210171af115cca70fdcfdac362854ed9de472e242c8be5a3684e8a809d54f5dbdb18010000";
+    std::string const GENESIS_TX = "020001ff000180c0d0c7bbbff60302838f76f69b70bb0d0f1961a12f6082a033d22285c07d4f12ec93c28197ae2a600353414c3c2101009e8b0abce686c417a1b1344eb7337176bdca90cc928b0facec8a9516190645010000";
     uint32_t const GENESIS_NONCE = 10001;
 
     const uint64_t STAKE_LOCK_PERIOD = 20;
