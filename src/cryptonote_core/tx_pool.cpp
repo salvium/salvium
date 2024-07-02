@@ -260,6 +260,13 @@ namespace cryptonote
       return false;
     }
 
+    // Check the TX type
+    if (tx.type <= cryptonote::transaction_type::UNSET || tx.type > cryptonote::transaction_type::MAX) {
+      LOG_PRINT_L1("Transaction with id= "<< id << " has invalid type " << (uint8_t)tx.type);
+      tvc.m_verifivation_failed = true;
+      return false;
+    }
+    
     // assume failure during verification steps until success is certain
     tvc.m_verifivation_failed = true;
 

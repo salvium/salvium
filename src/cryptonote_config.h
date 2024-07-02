@@ -52,7 +52,7 @@
 
 // MONEY_SUPPLY - total number coins to be generated
 #define MONEY_SUPPLY                                    ((uint64_t)(18440000000000000ull)) // 184.4M coins * pow(10, 8)
-#define EMISSION_SPEED_FACTOR_PER_MINUTE                (20)
+#define EMISSION_SPEED_FACTOR_PER_MINUTE                (21)
 #define FINAL_SUBSIDY_PER_MINUTE                        ((uint64_t)30000000) // 3 * pow(10, 7)
 
 #define BURN_LOCK_PERIOD                                0
@@ -216,7 +216,7 @@
 #define HF_VERSION_ENABLE_ORACLE                2
 #define HF_VERSION_SLIPPAGE_YIELD               2
 
-#define TESTNET_VERSION                         10
+#define TESTNET_VERSION                         11
 #define STAGENET_VERSION                        1
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8

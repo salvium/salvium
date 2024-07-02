@@ -1439,6 +1439,7 @@ namespace wallet_rpc
     uint64_t amount;
     amounts_container amounts;
     uint64_t fee;
+    std::string asset_type;
     std::string note;
     std::list<transfer_destination> destinations;
     std::string type;
@@ -1460,6 +1461,7 @@ namespace wallet_rpc
       KV_SERIALIZE(amounts);
       KV_SERIALIZE(fee);
       KV_SERIALIZE(note);
+      KV_SERIALIZE(asset_type);
       KV_SERIALIZE(destinations);
       KV_SERIALIZE(type);
       KV_SERIALIZE(unlock_time)

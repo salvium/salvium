@@ -2223,14 +2223,17 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
   {
     tx_scan_info.money_transfered = tools::decodeRct(tx.rct_signatures, tx_scan_info.received->derivation, i, tx_scan_info.mask, m_account.get_device());
   }
-  /*
+  // SRCG: The following "if" block was commented out until v0.3.5 - wonder why???
   if (tx_scan_info.money_transfered == 0)
   {
     MERROR("Invalid output amount, skipping");
     tx_scan_info.error = true;
     return;
   }
-  */
+
+  // Populate the unlock_time
+  THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_unlock_time(tx.vout[i], tx_scan_info.unlock_time), error::wallet_internal_error, "failed to get output unlock_time");
+  
   outs.push_back(i);
   THROW_WALLET_EXCEPTION_IF(tx_money_got_in_outs[tx_scan_info.received->index][tx_scan_info.asset_type] >= std::numeric_limits<uint64_t>::max() - tx_scan_info.money_transfered,
       error::wallet_internal_error, "Overflow in received amounts");
@@ -2382,8 +2385,10 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   if (!miner_tx && !pool)
     process_unconfirmed(txid, tx, height);
 
-  std::string source_asset = tx.source_asset_type;
-  std::string dest_asset = tx.destination_asset_type;
+  std::string source_asset =
+    (tx.type == cryptonote::transaction_type::MINER) ? "SAL" :
+    (tx.type == cryptonote::transaction_type::PROTOCOL) ? "SAL" :
+    tx.source_asset_type;
   
   // per receiving subaddress index
   std::unordered_map<cryptonote::subaddress_index, std::map<std::string, uint64_t>> tx_money_got_in_outs;
@@ -2407,7 +2412,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   size_t pk_index = 0;
   std::vector<tx_scan_info_t> tx_scan_info(tx.vout.size());
   std::deque<bool> output_found(tx.vout.size(), false);
-  uint64_t total_received_1 = 0;
+  std::map<std::string, uint64_t> total_received_1;
   uint64_t td_origin_idx = ((uint64_t)-1);
   while (!tx.vout.empty())
   {
@@ -2679,7 +2684,11 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             if (!ignore_callbacks && 0 != m_callback)
               m_callback->on_money_received(height, txid, tx, td.m_amount, td.asset_type, 0, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time, td.m_td_origin_idx);
           }
-          total_received_1 += amount;
+          std::string asset_type = m_transfers.back().asset_type;
+          if (total_received_1.count(asset_type))
+            total_received_1[asset_type] += amount;
+          else 
+            total_received_1[asset_type] = amount;
           notify = true;
 
           if (tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::STAKE) {
@@ -2790,7 +2799,11 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             if (!ignore_callbacks && 0 != m_callback)
               m_callback->on_money_received(height, txid, tx, td.m_amount, td.asset_type, burnt, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time, td.m_td_origin_idx);
           }
-          total_received_1 += extra_amount;
+          std::string asset_type = m_transfers.back().asset_type;
+          if (total_received_1.count(asset_type))
+            total_received_1[asset_type] += extra_amount;
+          else 
+            total_received_1[asset_type] = extra_amount;
           notify = true;
         }
       }
@@ -2975,51 +2988,84 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
       }
     }
 
-    uint64_t total_received_2 = sub_change;
+    std::map<std::string, uint64_t> total_received_2;
     for (auto& i : tx_money_got_in_outs)
-      total_received_2 += i.second[source_asset];
+      for (auto& asset: i.second)
+        total_received_2[asset.first] += asset.second;
 
     // only for regular transfers
-    if (source_asset == dest_asset && !miner_tx) {
-      if (total_received_1 != total_received_2)
-      {
-        const el::Level level = el::Level::Warning;
-        MCLOG_RED(level, "global", "**********************************************************************");
-        MCLOG_RED(level, "global", "Consistency failure in amounts received");
-        MCLOG_RED(level, "global", "Check transaction " << txid);
-        MCLOG_RED(level, "global", "**********************************************************************");
-        exit(1);
-        return;
+    if (!miner_tx) {
+      for (auto& asset: total_received_1) {
+        if (asset.second != total_received_2[asset.first]) {
+          //if (source_asset == dest_asset && !miner_tx) {
+          //if (total_received_1 != total_received_2)
+          //{
+          const el::Level level = el::Level::Warning;
+          MCLOG_RED(level, "global", "**********************************************************************");
+          MCLOG_RED(level, "global", "Consistency failure in amounts received");
+          MCLOG_RED(level, "global", "Check transaction " << txid);
+          MCLOG_RED(level, "global", "**********************************************************************");
+          exit(1);
+          return;
+        }
       }
     }
 
     bool all_same = true;
-    for (auto& i : tx_money_got_in_outs)
-    {
-      payment_details payment;
-      payment.m_tx_hash      = txid;
-      payment.m_fee          = fee;
+    std::vector<payment_details> temp_payments;
+    for (auto& tsi : tx_scan_info) {
+      if (!tsi.received) continue;
+      cryptonote::subaddress_index si = tsi.received->index;
+      bool updated_payment = false;
+      for (auto& payment : temp_payments) {
+        if (payment.m_subaddr_index == si && payment.m_unlock_time == tsi.unlock_time) {
+          // Add to existing payment
+          payment.m_amount += tsi.amount;
+          payment.m_amounts.push_back(tsi.amount);
+          updated_payment = true;
+        }
+        if (updated_payment) break;
+      }
+      if (updated_payment) continue;
+      
+      // Create a new payment
+      temp_payments.push_back(payment_details{});
+      payment_details& payment = temp_payments.back();
+      payment.m_tx_hash       = txid;
+      payment.m_fee           = fee;
       // SRCG - figure out what this needs to be (pretty sure we should never get here with CONVERT!)
-      payment.m_amount       = source_asset == dest_asset ? i.second[dest_asset] : tx.amount_burnt;
-      payment.m_asset_type   = (tx.type == cryptonote::transaction_type::PROTOCOL) ? "SAL" : dest_asset;
-      payment.m_amounts      = tx_amounts_individual_outs[i.first];
-      payment.m_block_height = height;
-      payment.m_unlock_time  = tx.unlock_time; // SRCG: this is incorrect - work out which vout entry it is and query that
-      payment.m_timestamp    = ts;
-      payment.m_coinbase     = miner_tx;
-      payment.m_subaddr_index = i.first;
-      if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+      payment.m_amount        = tsi.amount;
+      payment.m_asset_type    = tsi.asset_type;
+      payment.m_amounts.push_back(tsi.amount);
+      payment.m_block_height  = height;
+      payment.m_unlock_time   = tsi.unlock_time;
+      payment.m_timestamp     = ts;
+      payment.m_coinbase      = miner_tx;
+      payment.m_subaddr_index = si;
+      if (tx.type == cryptonote::transaction_type::MINER) {
+
+        payment.m_unlock_time = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW; // All protocol_tx payments are coinbase
+        payment.m_tx_type     = cryptonote::transaction_type::MINER;
+          
+      } else if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+
+        payment.m_unlock_time = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW; // All protocol_tx payments are coinbase
         if (td_origin_idx != ((uint64_t)-1)) {
           // Get the origin TD information
-          payment.m_amount   = payment.m_amounts.empty() ? 0 : payment.m_amounts[0];
-          payment.m_tx_type  = m_transfers[td_origin_idx].m_tx.type;
-          payment.m_fee      = m_transfers[td_origin_idx].m_tx.amount_burnt;
+          payment.m_amount    = payment.m_amounts.empty() ? 0 : payment.m_amounts[0];
+          payment.m_tx_type   = m_transfers[td_origin_idx].m_tx.type;
+          payment.m_fee       = m_transfers[td_origin_idx].m_tx.amount_burnt;
         } else {
           assert(false);
         }
+          
       } else {
-        payment.m_tx_type      = tx.type;
+        payment.m_tx_type     = tx.type;
       }
+    }
+
+    // Now iterate over the temp_payment entries
+    for (auto& payment : temp_payments) {
       if (pool) {
         if (emplace_or_replace(m_unconfirmed_payments, payment_id, pool_payment_details{payment, double_spend_seen}))
           all_same = false;
@@ -3030,7 +3076,6 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         m_payments.emplace(payment_id, payment);
       LOG_PRINT_L2("Payment found in " << (pool ? "pool" : "block") << ": " << payment_id << " / " << payment.m_tx_hash << " / " << payment.m_amount);
     }
-
     // if it's a pool tx and we already had it, don't notify again
     if (pool && all_same)
       notify = false;
@@ -6871,14 +6916,16 @@ std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> wallet2::
       }
       else
       {
-        uint64_t unlock_height = td.m_block_height + std::max<uint64_t>(CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE, CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);
-        if (td.m_tx.unlock_time < CRYPTONOTE_MAX_BLOCK_NUMBER && td.m_tx.unlock_time > unlock_height)
-          unlock_height = td.m_tx.unlock_time;
-        if (td.m_tx.type == cryptonote::transaction_type::MINER)
+        uint64_t unlock_height = 0;
+        if (td.m_tx.type == cryptonote::transaction_type::MINER || td.m_tx.type == cryptonote::transaction_type::PROTOCOL)
           unlock_height = td.m_block_height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
-        uint64_t unlock_time = td.m_tx.unlock_time >= CRYPTONOTE_MAX_BLOCK_NUMBER ? td.m_tx.unlock_time : 0;
-        blocks_to_unlock = unlock_height > blockchain_height ? unlock_height - blockchain_height : 0;
-        time_to_unlock = unlock_time > now ? unlock_time - now : 0;
+        else {
+          uint64_t unlock_blocks = 0;
+          THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_unlock_time(td.m_tx.vout[td.m_internal_output_index], unlock_blocks), error::wallet_internal_error, "failed to get unlock_time");
+          unlock_height = td.m_block_height + ((unlock_blocks > CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE) ? unlock_blocks : CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
+        }
+        blocks_to_unlock = (unlock_height > blockchain_height) ? unlock_height - blockchain_height : 0;
+        time_to_unlock = 0;
         amount = 0;
       }
       auto found = amount_per_subaddr.find(td.m_subaddr_index.minor);
