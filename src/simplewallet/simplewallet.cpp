@@ -6592,9 +6592,11 @@ bool simple_wallet::process_ring_members(const std::vector<tools::wallet2::pendi
       ostr
         << tr("\nWarning: Some input keys being spent are from ")
         << (are_keys_from_same_tx ? tr("the same transaction") : tr("blocks that are temporally very close"))
-        << tr(", which can break the anonymity of ring signatures. Make sure this is intentional!");
+        << tr(", which can break the anonymity of ring signatures. Make sure this is intentional!\n")
+        << ENDL;
     }
-    ostr << ENDL;
+    if (verbose)
+      ostr << ENDL;
   }
   return true;
 }
@@ -7621,8 +7623,12 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
       if (subaddr_indices.size() > 1)
         prompt << tr("WARNING: Outputs of multiple addresses are being used together, which might potentially compromise your privacy.\n");
     }
+    
     if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
       return true;
+
+    message_writer() << "\n======\n" << prompt.str() << "\n=====\n";
+    
     if (ptx_vector.size() > 1) {
       prompt << boost::format(tr("Sweeping %s in %llu transactions for a total fee of %s.  Is this okay?")) %
         print_money(total_sent) %
