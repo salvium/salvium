@@ -2223,14 +2223,17 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
   {
     tx_scan_info.money_transfered = tools::decodeRct(tx.rct_signatures, tx_scan_info.received->derivation, i, tx_scan_info.mask, m_account.get_device());
   }
-  // SRCG: The following "if" block was commented out until v0.3.5 - wonder why???
+  // SRCG: The following "if" block is commented out for a GOOD REASON...
+  // 1. Monero doesn't care about 0 amounts, because they don't have a value or purpose.
+  // 2. Salvium NEEDS to care about 0 amounts, because they are the CHANGE for a TX, and we need the CHANGE to accept RETURN_PAYMENTs.
+  /*
   if (tx_scan_info.money_transfered == 0)
   {
     MERROR("Invalid output amount, skipping");
     tx_scan_info.error = true;
     return;
   }
-
+  */
   // Populate the unlock_time
   THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_unlock_time(tx.vout[i], tx_scan_info.unlock_time), error::wallet_internal_error, "failed to get output unlock_time");
   
