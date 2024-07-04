@@ -263,13 +263,13 @@ namespace config
       0x12 ,0x30, 0xF1, 0x71 , 0x61, 0x04 , 0x41, 0x61, 0x17, 0x31, 0x82, 0x53, 0x41, 0x4C, 0xFF, 0x10
     } };
 
-  std::string const GENESIS_TX = "0201ff000180c0d0c7bbbff60302c33815291bac1b6d5c685129c1de6383e550688d005a3ce2b66a96b7050579060353414c3c00000000000000210149117096744b390170a118fc14d8f13edb40a7d2764fde3043d9fbae7d2efdef010000";
+  std::string const GENESIS_TX = "020001ff000180c0d0c7bbbff603031c7d3e2240c8ddbc2966c9dcbf703c3aa99624d34b82fbfebd71dcfa001c59800353414c3cb42101d7be8f8312cdd54e1ae390e86d6733c3d8f1ef7be27f75f5acbf0dc57aa8e60d010000";
   
   uint32_t const GENESIS_NONCE = 10000;
 
   const uint64_t STAKE_LOCK_PERIOD = 30*24*30;
 
-  std::string const TREASURY_ADDRESS = "SaLvdVTaMJp5hrGv2rDWzaCrM6Wrq2T4tNBPX8kvuAJv7iUiYNy4vceFskGRAawnBDiqZ9jWYXZmWemRnEKtWmNMeuSXZg6jwtx";
+  std::string const TREASURY_ADDRESS = "SaLvdZR6w1A21sf2Wh6jYEh1wzY4GSbT7RX6FjyPsnLsffWLrzFQeXUXJcmBLRWDzZC2YXeYe5t7qKsnrg9FpmxmEcxPHsEYfqA";
   
   // Hash domain separators
   const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";

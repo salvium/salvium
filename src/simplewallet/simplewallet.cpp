@@ -7627,8 +7627,6 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
     if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
       return true;
 
-    message_writer() << "\n======\n" << prompt.str() << "\n=====\n";
-    
     if (ptx_vector.size() > 1) {
       prompt << boost::format(tr("Sweeping %s in %llu transactions for a total fee of %s.  Is this okay?")) %
         print_money(total_sent) %
