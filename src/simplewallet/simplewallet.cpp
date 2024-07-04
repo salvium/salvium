@@ -239,7 +239,7 @@ namespace
   const char* USAGE_CHECK_SPEND_PROOF("check_spend_proof <txid> <signature_file> [<message>]");
   const char* USAGE_GET_RESERVE_PROOF("get_reserve_proof (all|<amount>) [<message>]");
   const char* USAGE_CHECK_RESERVE_PROOF("check_reserve_proof <address> <signature_file> [<message>]");
-  const char* USAGE_SHOW_TRANSFERS("show_transfers [in|out|all|pending|failed|pool|coinbase] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]]");
+  const char* USAGE_SHOW_TRANSFERS("show_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]]");
   const char* USAGE_UNSPENT_OUTPUTS("unspent_outputs [index=<N1>[,<N2>,...]] [<min_amount> [<max_amount>]]");
   const char* USAGE_RESCAN_BC("rescan_bc [hard|soft|keep_ki] [start_height=0]");
   const char* USAGE_SET_TX_NOTE("set_tx_note <txid> [free text note]");
@@ -3222,7 +3222,7 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
     message_writer() << tr("\"price_info\" - Display current pricing information for supported assets.");
     message_writer() << tr("\"supply_info\" - Display circulating supply information.");
     message_writer() << tr("\"yield_info\" - Display current stats on Salvium staking / yield.");
-    message_writer() << tr("\"show_transfers [in|out|pending|failed|pool|coinbase|burnt|yield]\" - Show transactions.");
+    message_writer() << tr("\"show_transfers [in|out|pending|failed|pool|coinbase|burnt|staked|yield]\" - Show transactions.");
     message_writer() << tr("\"sweep_all <address>\" - Send whole balance to another wallet.");
     message_writer() << tr("\"seed\" - Show secret 25 words that can be used to recover this wallet.");
     message_writer() << tr("\"refresh\" - Synchronize wallet with the Salvium network.");
@@ -3606,15 +3606,16 @@ simple_wallet::simple_wallet()
                            // Seemingly broken formatting to compensate for the backslash before the quotes.
                            tr("Show the incoming/outgoing transfers within an optional height range.\n\n"
                               "Output format:\n"
-                              "In or Coinbase:    Block Number, \"block\"|\"in\",              Time, Amount,  Transaction Hash, Payment ID, Subaddress Index,                     \"-\", Note\n"
-                              "Out:               Block Number, \"out\",                     Time, Amount*, Transaction Hash, Payment ID, Fee, Destinations, Input addresses**, \"-\", Note\n"
-                              "Pool:                            \"pool\", \"in\",              Time, Amount,  Transaction Hash, Payment Id, Subaddress Index,                     \"-\", Note, Double Spend Note\n"
-                              "Pending or Failed:               \"failed\"|\"pending\", \"out\", Time, Amount*, Transaction Hash, Payment ID, Fee, Input addresses**,               \"-\", Note\n\n"
+                              "In or Coinbase:    Block Number, \"block\"|\"in\",              Time, Amount, Asset Type, Transaction Hash, Payment ID, Subaddress Index,                     \"-\", Note\n"
+                              "Out:               Block Number, \"out\",                     Time, Amount*, Asset Type, Transaction Hash, Payment ID, Fee, Destinations, Input addresses**, \"-\", Note\n"
+                              "Pool:                            \"pool\", \"in\",              Time, Amount, Asset Type, Transaction Hash, Payment Id, Subaddress Index,                     \"-\", Note, Double Spend Note\n"
+                              "Pending or Failed:               \"failed\"|\"pending\", \"out\", Time, Amount*, Transaction Hash, Payment ID, Fee, Input addresses**,               \"-\", Note\n"
+                              "Staked or Burnt:   Block Number, \"out\",                     Time, Amount*, Asset Type, Transaction Hash, Payment ID, Fee, Input addresses**,               \"-\", Note\n\n"
                               "* Excluding change and fee.\n"
                               "** Set of address indices used as inputs in this transfer."));
   m_cmd_binder.set_handler("export_transfers",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::export_transfers, _1),
-                           tr("export_transfers [in|out|all|pending|failed|pool|coinbase|burnt|yield] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]] [output=<filepath>] [option=<with_keys>]"),
+                           tr("export_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]] [output=<filepath>] [option=<with_keys>]"),
                            tr("Export to CSV the incoming/outgoing transfers within an optional height range."));
   m_cmd_binder.set_handler("unspent_outputs",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::unspent_outputs, _1),
@@ -6591,9 +6592,11 @@ bool simple_wallet::process_ring_members(const std::vector<tools::wallet2::pendi
       ostr
         << tr("\nWarning: Some input keys being spent are from ")
         << (are_keys_from_same_tx ? tr("the same transaction") : tr("blocks that are temporally very close"))
-        << tr(", which can break the anonymity of ring signatures. Make sure this is intentional!");
+        << tr(", which can break the anonymity of ring signatures. Make sure this is intentional!\n")
+        << ENDL;
     }
-    ostr << ENDL;
+    if (verbose)
+      ostr << ENDL;
   }
   return true;
 }
@@ -6962,7 +6965,7 @@ bool simple_wallet::transfer_main(
           fail_msg_writer() << tr("failed to get blockchain height: ") << err;
           return false;
         }
-        unlock_block = bc_height + locked_blocks;
+        unlock_block = locked_blocks;
         ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
       break;
       default:
@@ -7092,7 +7095,7 @@ bool simple_wallet::transfer_main(
         if (transfer_type == TransferLocked)
         {
           float days = locked_blocks / 720.0f;
-          prompt << boost::format(tr(".\nThis transaction (including %s change) will unlock on block %llu, in approximately %s days (assuming 2 minutes per block)")) % cryptonote::print_money(change) % ((unsigned long long)unlock_block) % days;
+          prompt << boost::format(tr(".\nThis transaction (including %s change) will unlock in %llu blocks, approximately %s days (assuming 2 minutes per block)")) % cryptonote::print_money(change) % ((unsigned long long)unlock_block) % days;
         }
         if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
           return false;
@@ -7272,7 +7275,7 @@ bool simple_wallet::locked_transfer(const std::vector<std::string> &args_)
     local_args.pop_back();  
   }
   
-  transfer_main(Transfer, source_asset, source_asset, local_args, false);
+  transfer_main(TransferLocked, source_asset, source_asset, local_args, false);
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -7620,8 +7623,10 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
       if (subaddr_indices.size() > 1)
         prompt << tr("WARNING: Outputs of multiple addresses are being used together, which might potentially compromise your privacy.\n");
     }
+    
     if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
       return true;
+
     if (ptx_vector.size() > 1) {
       prompt << boost::format(tr("Sweeping %s in %llu transactions for a total fee of %s.  Is this okay?")) %
         print_money(total_sent) %
@@ -9462,19 +9467,9 @@ bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vec
       if (!unlocked)
       {
         locked_msg = "locked";
-        if (pd.m_unlock_time < CRYPTONOTE_MAX_BLOCK_NUMBER)
-        {
-          uint64_t bh = std::max(pd.m_unlock_time, pd.m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
-          if (bh >= last_block_height)
-            locked_msg = std::to_string(bh - last_block_height) + " blks";
-        }
-        else
-        {
-          const uint64_t adjusted_time = m_wallet->get_daemon_adjusted_time();
-          uint64_t threshold = adjusted_time + (m_wallet->use_fork_rules(2, 0) ? CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS_V2 : CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS_V1);
-          if (threshold < pd.m_unlock_time)
-            locked_msg = get_human_readable_timespan(std::chrono::seconds(pd.m_unlock_time - threshold));
-        }
+        uint64_t bh = pd.m_block_height + std::max(pd.m_unlock_time, (uint64_t)CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
+        if (bh >= last_block_height)
+          locked_msg = std::to_string(bh - last_block_height) + " blks";
       }
       transfers.push_back({
         type,
@@ -9483,7 +9478,7 @@ bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vec
         type,
         true,
         pd.m_amount,
-	pd.m_asset_type,
+        pd.m_asset_type,
         pd.m_tx_hash,
         payment_id,
         (pd.m_tx_type == cryptonote::transaction_type::STAKE) ? pd.m_fee : 0,
@@ -9636,7 +9631,7 @@ bool simple_wallet::show_transfers(const std::vector<std::string> &args_)
   std::vector<std::string> local_args = args_;
 
   if(local_args.size() > 4) {
-    fail_msg_writer() << tr("usage: show_transfers [in|out|all|pending|failed|pool|coinbase] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]]");
+    fail_msg_writer() << tr("usage: show_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]]");
     return true;
   }
 
@@ -9695,7 +9690,7 @@ bool simple_wallet::export_transfers(const std::vector<std::string>& args_)
   std::vector<std::string> local_args = args_;
 
   if(local_args.size() > 6) {
-    fail_msg_writer() << tr("usage: export_transfers [in|out|all|pending|failed|pool|coinbase] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]] [output=<path>] [option=<with_keys>]");
+    fail_msg_writer() << tr("usage: export_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]] [output=<path>] [option=<with_keys>]");
     return true;
   }
 

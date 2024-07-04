@@ -320,12 +320,13 @@ private:
       rct::key mask;
       uint64_t amount;
       std::string asset_type;
+      uint64_t unlock_time;
       uint64_t money_transfered;
       uint64_t origin_idx;
       bool error;
       boost::optional<cryptonote::subaddress_receive_info> received;
 
-      tx_scan_info_t(): amount(0), asset_type(""), money_transfered(0), origin_idx((uint64_t)-1), error(true) {}
+      tx_scan_info_t(): amount(0), asset_type(""), unlock_time(0), money_transfered(0), origin_idx((uint64_t)-1), error(true) {}
     };
 
     struct transfer_details

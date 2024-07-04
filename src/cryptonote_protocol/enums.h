@@ -52,6 +52,7 @@ namespace cryptonote
     CONVERT = 4,
     BURN = 5,
     STAKE = 6,
-    RETURN = 7
+    RETURN = 7,
+    MAX = 7
   };
 }
