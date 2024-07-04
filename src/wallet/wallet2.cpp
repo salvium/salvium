@@ -2687,7 +2687,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             if (!ignore_callbacks && 0 != m_callback)
               m_callback->on_money_received(height, txid, tx, td.m_amount, td.asset_type, 0, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time, td.m_td_origin_idx);
           }
-          std::string asset_type = m_transfers.back().asset_type;
+          std::string asset_type = tx_scan_info[o].asset_type;
           if (total_received_1.count(asset_type))
             total_received_1[asset_type] += amount;
           else 
@@ -2715,8 +2715,10 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             }
             
           } else if (tx.type == cryptonote::transaction_type::TRANSFER) {
+
+            // We might store garbage entries here occasionally, but they shouldn't impact performance significantly
             crypto::public_key P_change = crypto::null_pkey;
-            size_t change_idx = m_transfers.back().m_internal_output_index;
+            size_t change_idx = o;
             THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[change_idx], P_change), error::wallet_internal_error, "Failed to get output public key");
             m_subaddresses[P_change] = {0,0};
             m_salvium_txs.insert({P_change, m_transfers.size()-1});

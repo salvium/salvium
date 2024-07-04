@@ -23,7 +23,7 @@ Portions Copyright (c) 2012-2013 The Cryptonote developers.
 
 - Web: [salvium.io](https://salvium.io)
 - Mail: [dev@salvium.io](mailto:dev@salvium.io)
-- GitHub: [https://github.com/somerandomcryptoguy/salvium](https://github.com/somerandomcryptoguy/salvium)
+- GitHub: [https://github.com/salvium/salvium](https://github.com/salvium/salvium)
 
 ## Introduction
 
@@ -147,7 +147,7 @@ pkg install git gmake cmake pkgconf boost-libs libzmq4 libsodium unbound
 Clone recursively to pull-in needed submodule(s):
 
 ```
-git clone --recursive https://github.com/somerandomcryptoguy/salvium
+git clone --recursive https://github.com/salvium/salvium
 ```
 
 If you already have a repo cloned, initialize and update:
@@ -249,7 +249,7 @@ Tested on a Raspberry Pi Zero with a clean install of minimal Raspbian Stretch (
 * Clone Salvium and checkout the most recent release version:
 
     ```bash
-    git clone https://github.com/somerandomcryptoguy/salvium
+    git clone https://github.com/salvium/salvium
     cd salvium
     git checkout v0.4.0
     ```
@@ -359,7 +359,7 @@ application.
 * To git clone, run:
 
     ```bash
-    git clone --recursive https://github.com/somerandomcryptoguy/salvium
+    git clone --recursive https://github.com/salvium/salvium
     ```
 
 **Building**
@@ -370,7 +370,7 @@ application.
     cd salvium
     ```
 
-* If you would like a specific [version/tag](https://github.com/somerandomcryptoguy/salvium/tags), do a git checkout for that version. eg. 'v0.4.0'. If you don't care about the version and just want binaries from master, skip this step:
+* If you would like a specific [version/tag](https://github.com/salvium/salvium/tags), do a git checkout for that version. eg. 'v0.4.0'. If you don't care about the version and just want binaries from master, skip this step:
 
     ```bash
     git checkout v0.4.0
