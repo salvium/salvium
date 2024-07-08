@@ -1,4 +1,4 @@
-# Salvium Zero v0.4.0
+# Salvium Zero v0.4.1
 
 Copyright (c) 2023-2024, Salvium
 Portions Copyright (c) 2014-2023, The Monero Project
@@ -251,7 +251,7 @@ Tested on a Raspberry Pi Zero with a clean install of minimal Raspbian Stretch (
     ```bash
     git clone https://github.com/salvium/salvium
     cd salvium
-    git checkout v0.4.0
+    git checkout v0.4.1
     ```
 
 * Build:
@@ -370,10 +370,10 @@ application.
     cd salvium
     ```
 
-* If you would like a specific [version/tag](https://github.com/salvium/salvium/tags), do a git checkout for that version. eg. 'v0.4.0'. If you don't care about the version and just want binaries from master, skip this step:
+* If you would like a specific [version/tag](https://github.com/salvium/salvium/tags), do a git checkout for that version. eg. 'v0.4.1'. If you don't care about the version and just want binaries from master, skip this step:
 
     ```bash
-    git checkout v0.4.0
+    git checkout v0.4.1
     ```
 
 * If you are on a 64-bit system, run:

@@ -2720,7 +2720,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             crypto::public_key P_change = crypto::null_pkey;
             size_t change_idx = o;
             THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[change_idx], P_change), error::wallet_internal_error, "Failed to get output public key");
-            m_subaddresses[P_change] = {0,0};
+            m_subaddresses[P_change] = tx_scan_info[o].received->index;//{0,0};
             m_salvium_txs.insert({P_change, m_transfers.size()-1});
           }
         }
@@ -3001,7 +3001,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     // only for regular transfers
     if (!miner_tx) {
       for (auto& asset: total_received_1) {
-        if (asset.second != total_received_2[asset.first]) {
+        if (asset.second != total_received_2[asset.first] + (asset.first == source_asset ? sub_change : 0)) {
           //if (source_asset == dest_asset && !miner_tx) {
           //if (total_received_1 != total_received_2)
           //{

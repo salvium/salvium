@@ -465,9 +465,11 @@ namespace wallet_rpc
   {
     uint64_t amount;
     std::string address;
+    std::string asset_type;
     BEGIN_KV_SERIALIZE_MAP()
       KV_SERIALIZE(amount)
       KV_SERIALIZE(address)
+      KV_SERIALIZE(asset_type)
     END_KV_SERIALIZE_MAP()
   };
 
@@ -921,6 +923,7 @@ namespace wallet_rpc
       bool do_not_relay;
       bool get_tx_hex;
       bool get_tx_metadata;
+      std::string asset_type;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(address)
@@ -934,6 +937,7 @@ namespace wallet_rpc
         KV_SERIALIZE_OPT(do_not_relay, false)
         KV_SERIALIZE_OPT(get_tx_hex, false)
         KV_SERIALIZE_OPT(get_tx_metadata, false)
+        KV_SERIALIZE(asset_type)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<request_t> request;
