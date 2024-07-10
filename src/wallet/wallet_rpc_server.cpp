@@ -462,7 +462,7 @@ namespace tools
     std::string asset_type = req.asset_type.empty() ? "SAL" : boost::algorithm::to_upper_copy(req.asset_type);
     // verify that the asset is in the list of in-wallet assets
     if (std::find(assets_in_wallet.begin(), assets_in_wallet.end(), asset_type) == assets_in_wallet.end()) {
-      er.message = std::string("Invalid source asset specified: ") + asset_type; 
+      er.message = std::string("Source asset '") + asset_type + "' not found in wallet"; 
       return false;
     }
     std::vector<std::string> assets = req.all_assets ? assets_in_wallet : std::vector<std::string>{asset_type};
