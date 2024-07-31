@@ -8444,7 +8444,7 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
     % print_money(total_yield)
     % print_money(yield_per_stake);
 
-  // Now summarise our own YIELD TXs that are yet to amture
+  // Now summarise our own YIELD TXs that are yet to mature
   tools::wallet2::transfer_container transfers;
   m_wallet->get_transfers(transfers);
   if (transfers.empty())

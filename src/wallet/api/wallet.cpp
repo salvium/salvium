@@ -30,6 +30,7 @@
 
 
 #include "wallet.h"
+#include "yield_info.h"
 #include "pending_transaction.h"
 #include "unsigned_transaction.h"
 #include "transaction_history.h"
@@ -2605,6 +2606,13 @@ uint64_t WalletImpl::getBytesReceived()
 uint64_t WalletImpl::getBytesSent()
 {
     return m_wallet->get_bytes_sent();
+}
+
+YieldInfo * WalletImpl::getYieldInfo()
+{
+  auto yi = new YieldInfoImpl(*this);
+  bool ok = m_wallet->get_yield_summary_info(yi->m_burnt, yi->m_supply, yi->m_locked, yi->m_yield, yi->m_yield_per_stake, yi->m_num_entries, yi->m_payouts);
+  return yi;
 }
 
 } // namespace

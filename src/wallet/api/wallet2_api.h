@@ -79,6 +79,28 @@ enum transaction_type {
         bool set;
     };
 
+struct YieldInfo
+{
+  enum Status {
+    Status_Ok,
+    Status_Error
+  };
+
+  virtual ~YieldInfo() = 0;
+  virtual int status() const = 0;
+  virtual std::string errorString() const = 0;
+  virtual bool update() = 0;
+  virtual uint64_t burnt() const = 0;
+  virtual uint64_t locked() const = 0;
+  virtual uint64_t supply() const = 0;
+  virtual uint64_t ybi_data_size() const = 0;
+  virtual uint64_t yield() const = 0;
+  virtual uint64_t yield_per_stake() const = 0;
+  virtual std::string period() const = 0;
+  virtual std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> payouts() const = 0;
+};
+
+  
 /**
  * @brief Transaction-like interface for sending money
  */
@@ -1129,6 +1151,9 @@ struct Wallet
 
     //! get bytes sent
     virtual uint64_t getBytesSent() = 0;
+
+    //! get yield information
+    virtual YieldInfo * getYieldInfo() = 0;
 };
 
 /**

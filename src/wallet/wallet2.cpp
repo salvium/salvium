@@ -2380,6 +2380,105 @@ bool wallet2::get_yield_info(std::vector<cryptonote::yield_block_info>& ybi_data
   }
 }
 //----------------------------------------------------------------------------------------------------
+bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
+                                     uint64_t &total_supply,
+                                     uint64_t &total_locked,
+                                     uint64_t &total_yield,
+                                     uint64_t &yield_per_stake,
+                                     uint64_t &ybi_data_size,
+                                     std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> &payouts
+                                     )
+{
+  // Get the total circulating supply of SALs
+  std::vector<std::pair<std::string, std::string>> supply_amounts;
+  if(!get_circulating_supply(supply_amounts)) {
+    return false;
+  }
+  boost::multiprecision::uint128_t total_supply_128 = 0;
+  for (auto supply_asset: supply_amounts) {
+    if (supply_asset.first == "SAL") {
+      boost::multiprecision::uint128_t supply_128(supply_asset.second);
+      total_supply_128 = supply_128;
+      break;
+    }
+  }
+  total_supply = total_supply_128.convert_to<uint64_t>();
+
+  // Get the yield data from the blockchain
+  std::vector<cryptonote::yield_block_info> ybi_data;
+  bool r = get_yield_info(ybi_data);
+  if (!r)
+    return false;
+
+  ybi_data_size = ybi_data.size();
+  
+  // Scan the entries we have received to gather the state (total yield over period captured)
+  total_burnt = 0;
+  total_yield = 0;
+  yield_per_stake = 0;
+  for (size_t idx=1; idx<ybi_data.size(); ++idx) {
+    if (ybi_data[idx].locked_coins_tally == 0) {
+      total_burnt += ybi_data[idx].slippage_total_this_block;
+    } else {
+      total_yield += ybi_data[idx].slippage_total_this_block;
+    }
+  }
+
+  // Get the total currently locked
+  total_locked = ybi_data.back().locked_coins_tally;
+  
+  // Calculate the yield_per_staked_SAL value
+  if (ybi_data.back().locked_coins_tally > 0) {
+    boost::multiprecision::uint128_t yield_per_stake_128 = ybi_data.back().slippage_total_this_block;
+    yield_per_stake_128 *= COIN;
+    yield_per_stake_128 /= ybi_data.back().locked_coins_tally;
+    yield_per_stake = yield_per_stake_128.convert_to<uint64_t>();
+  }
+
+  // Iterate over the transfers in our wallet
+  std::map<size_t, size_t> map_payouts;
+  for (size_t idx = m_transfers.size()-1; idx>0; --idx) {
+    const tools::wallet2::transfer_details& td = m_transfers[idx];
+    //if (td.m_block_height < ybi_data[0].block_height) break;
+    if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
+      if (map_payouts.count(idx)) {
+        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
+      } else {
+        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
+      }
+    } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
+      // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
+      if (m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE)
+        map_payouts[td.m_td_origin_idx] = idx;
+    }
+  }
+  
+  // Return success to caller
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool wallet2::get_yield_payouts(std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> &payouts) {
+
+  // Iterate over the transfers in our wallet
+  std::map<size_t, size_t> map_payouts;
+  for (size_t idx = m_transfers.size()-1; idx>0; --idx) {
+    const tools::wallet2::transfer_details& td = m_transfers[idx];
+    //if (td.m_block_height < ybi_data[0].block_height) break;
+    if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
+      if (map_payouts.count(idx)) {
+        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
+      } else {
+        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
+      }
+    } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
+      // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
+      if (m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE)
+        map_payouts[td.m_td_origin_idx] = idx;
+    }
+  }
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
 void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote::transaction& tx, const std::vector<uint64_t> &o_indices, const std::vector<uint64_t> &asset_type_output_indices, uint64_t height, uint8_t block_version, uint64_t ts, bool miner_tx, bool pool, bool double_spend_seen, const tx_cache_data &tx_cache_data, std::map<std::pair<uint64_t, uint64_t>, size_t> *output_tracker_cache, bool ignore_callbacks)
 {
   PERF_TIMER(process_new_transaction);

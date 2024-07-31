@@ -42,6 +42,7 @@
 
 namespace Monero {
 class TransactionHistoryImpl;
+class YieldInfoImpl;
 class PendingTransactionImpl;
 class UnsignedTransactionImpl;
 class AddressBookImpl;
@@ -233,6 +234,8 @@ public:
     virtual uint64_t getBytesReceived() override;
     virtual uint64_t getBytesSent() override;
 
+    YieldInfo * getYieldInfo() override;
+
 private:
     void clearStatus() const;
     void setStatusError(const std::string& message) const;
@@ -247,6 +250,7 @@ private:
     bool doInit(const std::string &daemon_address, const std::string &proxy_address, uint64_t upper_transaction_size_limit = 0, bool ssl = false);
 
 private:
+    friend class YieldInfoImpl;
     friend class PendingTransactionImpl;
     friend class UnsignedTransactionImpl;    
     friend class TransactionHistoryImpl;
