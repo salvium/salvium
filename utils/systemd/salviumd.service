@@ -1,0 +1,20 @@
+[Unit]
+Description=Salvium Full Node
+After=network.target
+
+[Service]
+User=salvium
+Group=salvium
+WorkingDirectory=~
+StateDirectory=salvium
+LogsDirectory=salvium
+
+Type=simple
+ExecStart=/usr/bin/salviumd --config-file /etc/salviumd.conf --non-interactive
+StandardOutput=null
+StandardError=null
+
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

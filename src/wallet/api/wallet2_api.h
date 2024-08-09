@@ -49,7 +49,7 @@ enum NetworkType : uint8_t {
     STAGENET
 };
 
-enum transaction_type {
+enum transaction_type : uint8_t {
     UNSET = 0,
     MINER = 1,
     PROTOCOL = 2,
@@ -233,6 +233,7 @@ struct TransactionInfo
     virtual std::string paymentId() const = 0;
     //! only applicable for output transactions
     virtual const std::vector<Transfer> & transfers() const = 0;
+    virtual Monero::transaction_type type() const = 0;
 };
 /**
  * @brief The TransactionHistory - interface for displaying transaction history

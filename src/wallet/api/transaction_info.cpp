@@ -149,4 +149,9 @@ uint64_t TransactionInfoImpl::unlockTime() const
     return m_unlock_time;
 }
 
+Monero::transaction_type TransactionInfoImpl::type() const
+{
+  return m_type;
+}
+  
 } // namespace
