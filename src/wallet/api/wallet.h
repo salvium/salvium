@@ -42,6 +42,7 @@
 
 namespace Monero {
 class TransactionHistoryImpl;
+class YieldInfoImpl;
 class PendingTransactionImpl;
 class UnsignedTransactionImpl;
 class AddressBookImpl;
@@ -152,16 +153,24 @@ public:
     bool hasMultisigPartialKeyImages() const override;
     PendingTransaction*  restoreMultisigTransaction(const std::string& signData) override;
 
-    PendingTransaction * createTransactionMultDest(const std::vector<std::string> &dst_addr, const std::string &payment_id,
-                                        optional<std::vector<uint64_t>> amount, uint32_t mixin_count,
-                                        PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
-                                        uint32_t subaddr_account = 0,
-                                        std::set<uint32_t> subaddr_indices = {}) override;
+    PendingTransaction * createStakeTransaction(uint64_t amount,
+                                                uint32_t mixin_count,
+                                                PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
+                                                uint32_t subaddr_account = 0,
+                                                std::set<uint32_t> subaddr_indices = {}) override;
+    PendingTransaction * createTransactionMultDest(const transaction_type &tx_type,
+                                                   const std::vector<std::string> &dst_addr, const std::string &payment_id,
+                                                   optional<std::vector<uint64_t>> amount, uint32_t mixin_count,
+                                                   const std::string &asset_type, const bool is_return,
+                                                   PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
+                                                   uint32_t subaddr_account = 0,
+                                                   std::set<uint32_t> subaddr_indices = {}) override;
     PendingTransaction * createTransaction(const std::string &dst_addr, const std::string &payment_id,
-                                        optional<uint64_t> amount, uint32_t mixin_count,
-                                        PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
-                                        uint32_t subaddr_account = 0,
-                                        std::set<uint32_t> subaddr_indices = {}) override;
+                                           optional<uint64_t> amount, uint32_t mixin_count,
+                                           const std::string &asset_type, const bool is_return,
+                                           PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
+                                           uint32_t subaddr_account = 0,
+                                           std::set<uint32_t> subaddr_indices = {}) override;
     virtual PendingTransaction * createSweepUnmixableTransaction() override;
     bool submitTransaction(const std::string &fileName) override;
     virtual UnsignedTransaction * loadUnsignedTx(const std::string &unsigned_filename) override;
@@ -225,6 +234,8 @@ public:
     virtual uint64_t getBytesReceived() override;
     virtual uint64_t getBytesSent() override;
 
+    YieldInfo * getYieldInfo() override;
+
 private:
     void clearStatus() const;
     void setStatusError(const std::string& message) const;
@@ -239,6 +250,7 @@ private:
     bool doInit(const std::string &daemon_address, const std::string &proxy_address, uint64_t upper_transaction_size_limit = 0, bool ssl = false);
 
 private:
+    friend class YieldInfoImpl;
     friend class PendingTransactionImpl;
     friend class UnsignedTransactionImpl;    
     friend class TransactionHistoryImpl;

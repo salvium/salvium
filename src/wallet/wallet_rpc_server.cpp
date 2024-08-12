@@ -462,7 +462,7 @@ namespace tools
     std::string asset_type = req.asset_type.empty() ? "SAL" : boost::algorithm::to_upper_copy(req.asset_type);
     // verify that the asset is in the list of in-wallet assets
     if (std::find(assets_in_wallet.begin(), assets_in_wallet.end(), asset_type) == assets_in_wallet.end()) {
-      er.message = std::string("Invalid source asset specified: ") + asset_type; 
+      er.message = std::string("Source asset '") + asset_type + "' not found in wallet"; 
       return false;
     }
     std::vector<std::string> assets = req.all_assets ? assets_in_wallet : std::vector<std::string>{asset_type};
@@ -897,7 +897,7 @@ namespace tools
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  bool wallet_rpc_server::validate_transfer(const std::list<wallet_rpc::transfer_destination>& destinations, const std::string& payment_id, std::vector<cryptonote::tx_destination_entry>& dsts, std::vector<uint8_t>& extra, bool at_least_one_destination, epee::json_rpc::error& er)
+  bool wallet_rpc_server::validate_transfer(const std::list<wallet_rpc::transfer_destination>& destinations, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type& type, const std::string& payment_id, std::vector<cryptonote::tx_destination_entry>& dsts, std::vector<uint8_t>& extra, bool at_least_one_destination, epee::json_rpc::error& er)
   {
     crypto::hash8 integrated_payment_id = crypto::null_hash8;
     std::string extra_nonce;
@@ -932,6 +932,7 @@ namespace tools
       de.is_subaddress = info.is_subaddress;
       de.amount = it->amount;
       de.is_integrated = info.has_payment_id;
+      de.asset_type = it->asset_type;
       dsts.push_back(de);
 
       if (info.has_payment_id)
@@ -1107,8 +1108,11 @@ namespace tools
 
     CHECK_MULTISIG_ENABLED();
 
+    // Cast the TX type into the correct var
+    const cryptonote::transaction_type type = static_cast<cryptonote::transaction_type>(req.tx_type);
+    
     // validate the transfer requested and populate dsts & extra
-    if (!validate_transfer(req.destinations, req.payment_id, dsts, extra, true, er))
+    if (!validate_transfer(req.destinations, req.source_asset, req.dest_asset, type, req.payment_id, dsts, extra, true, er))
     {
       return false;
     }
@@ -1117,7 +1121,7 @@ namespace tools
     {
       uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
       uint32_t priority = m_wallet->adjust_priority(req.priority);
-      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, req.source_asset, req.dest_asset, static_cast<cryptonote::transaction_type>(req.tx_type), mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices, req.subtract_fee_from_outputs);
+      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, req.source_asset, req.dest_asset, type, mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices, req.subtract_fee_from_outputs);
 
       if (ptx_vector.empty())
       {
@@ -1161,8 +1165,11 @@ namespace tools
 
     CHECK_MULTISIG_ENABLED();
 
-    // validate the transfer requested and populate dsts & extra; RPC_TRANSFER::request and RPC_TRANSFER_SPLIT::request are identical types.
-    if (!validate_transfer(req.destinations, req.payment_id, dsts, extra, true, er))
+    // Cast the TX type into the correct var
+    const cryptonote::transaction_type type = static_cast<cryptonote::transaction_type>(req.tx_type);
+    
+    // validate the transfer requested and populate dsts & extra
+    if (!validate_transfer(req.destinations, req.source_asset, req.dest_asset, type, req.payment_id, dsts, extra, true, er))
     {
       return false;
     }
@@ -1172,7 +1179,7 @@ namespace tools
       uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
       uint32_t priority = m_wallet->adjust_priority(req.priority);
       LOG_PRINT_L2("on_transfer_split calling create_transactions_2");
-      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, req.source_asset, req.dest_asset, static_cast<cryptonote::transaction_type>(req.tx_type), mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices);
+      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, req.source_asset, req.dest_asset, type, mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices);
       LOG_PRINT_L2("on_transfer_split called create_transactions_2");
 
       if (ptx_vector.empty())
@@ -1597,13 +1604,17 @@ namespace tools
 
     CHECK_MULTISIG_ENABLED();
 
-    // validate the transfer requested and populate dsts & extra
-    std::list<wallet_rpc::transfer_destination> destination;
-    destination.push_back(wallet_rpc::transfer_destination());
-    destination.back().amount = 0;
-    destination.back().address = req.address;
     std::string asset_type = req.asset_type.empty() ? "SAL" : req.asset_type;
-    if (!validate_transfer(destination, req.payment_id, dsts, extra, true, er))
+    
+    // validate the transfer requested and populate dsts & extra
+    std::list<wallet_rpc::transfer_destination> destinations;
+    destinations.push_back(wallet_rpc::transfer_destination());
+    destinations.back().amount = 0;
+    destinations.back().address = req.address;
+    destinations.back().asset_type = asset_type;
+
+    // validate the transfer requested and populate dsts & extra
+    if (!validate_transfer(destinations, asset_type, asset_type, cryptonote::transaction_type::TRANSFER, req.payment_id, dsts, extra, true, er))
     {
       return false;
     }
@@ -1665,12 +1676,17 @@ namespace tools
 
     CHECK_MULTISIG_ENABLED();
 
+    std::string asset_type = req.asset_type.empty() ? "SAL" : req.asset_type;
+    
     // validate the transfer requested and populate dsts & extra
-    std::list<wallet_rpc::transfer_destination> destination;
-    destination.push_back(wallet_rpc::transfer_destination());
-    destination.back().amount = 0;
-    destination.back().address = req.address;
-    if (!validate_transfer(destination, req.payment_id, dsts, extra, true, er))
+    std::list<wallet_rpc::transfer_destination> destinations;
+    destinations.push_back(wallet_rpc::transfer_destination());
+    destinations.back().amount = 0;
+    destinations.back().address = req.address;
+    destinations.back().asset_type = asset_type;
+
+    // validate the transfer requested and populate dsts & extra
+    if (!validate_transfer(destinations, asset_type, asset_type, cryptonote::transaction_type::TRANSFER, req.payment_id, dsts, extra, true, er))
     {
       return false;
     }

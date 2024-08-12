@@ -2380,6 +2380,105 @@ bool wallet2::get_yield_info(std::vector<cryptonote::yield_block_info>& ybi_data
   }
 }
 //----------------------------------------------------------------------------------------------------
+bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
+                                     uint64_t &total_supply,
+                                     uint64_t &total_locked,
+                                     uint64_t &total_yield,
+                                     uint64_t &yield_per_stake,
+                                     uint64_t &ybi_data_size,
+                                     std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> &payouts
+                                     )
+{
+  // Get the total circulating supply of SALs
+  std::vector<std::pair<std::string, std::string>> supply_amounts;
+  if(!get_circulating_supply(supply_amounts)) {
+    return false;
+  }
+  boost::multiprecision::uint128_t total_supply_128 = 0;
+  for (auto supply_asset: supply_amounts) {
+    if (supply_asset.first == "SAL") {
+      boost::multiprecision::uint128_t supply_128(supply_asset.second);
+      total_supply_128 = supply_128;
+      break;
+    }
+  }
+  total_supply = total_supply_128.convert_to<uint64_t>();
+
+  // Get the yield data from the blockchain
+  std::vector<cryptonote::yield_block_info> ybi_data;
+  bool r = get_yield_info(ybi_data);
+  if (!r)
+    return false;
+
+  ybi_data_size = ybi_data.size();
+  
+  // Scan the entries we have received to gather the state (total yield over period captured)
+  total_burnt = 0;
+  total_yield = 0;
+  yield_per_stake = 0;
+  for (size_t idx=1; idx<ybi_data.size(); ++idx) {
+    if (ybi_data[idx].locked_coins_tally == 0) {
+      total_burnt += ybi_data[idx].slippage_total_this_block;
+    } else {
+      total_yield += ybi_data[idx].slippage_total_this_block;
+    }
+  }
+
+  // Get the total currently locked
+  total_locked = ybi_data.back().locked_coins_tally;
+  
+  // Calculate the yield_per_staked_SAL value
+  if (ybi_data.back().locked_coins_tally > 0) {
+    boost::multiprecision::uint128_t yield_per_stake_128 = ybi_data.back().slippage_total_this_block;
+    yield_per_stake_128 *= COIN;
+    yield_per_stake_128 /= ybi_data.back().locked_coins_tally;
+    yield_per_stake = yield_per_stake_128.convert_to<uint64_t>();
+  }
+
+  // Iterate over the transfers in our wallet
+  std::map<size_t, size_t> map_payouts;
+  for (size_t idx = m_transfers.size()-1; idx>0; --idx) {
+    const tools::wallet2::transfer_details& td = m_transfers[idx];
+    //if (td.m_block_height < ybi_data[0].block_height) break;
+    if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
+      if (map_payouts.count(idx)) {
+        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
+      } else {
+        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
+      }
+    } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
+      // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
+      if (m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE)
+        map_payouts[td.m_td_origin_idx] = idx;
+    }
+  }
+  
+  // Return success to caller
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool wallet2::get_yield_payouts(std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> &payouts) {
+
+  // Iterate over the transfers in our wallet
+  std::map<size_t, size_t> map_payouts;
+  for (size_t idx = m_transfers.size()-1; idx>0; --idx) {
+    const tools::wallet2::transfer_details& td = m_transfers[idx];
+    //if (td.m_block_height < ybi_data[0].block_height) break;
+    if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
+      if (map_payouts.count(idx)) {
+        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
+      } else {
+        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
+      }
+    } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
+      // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
+      if (m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE)
+        map_payouts[td.m_td_origin_idx] = idx;
+    }
+  }
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
 void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote::transaction& tx, const std::vector<uint64_t> &o_indices, const std::vector<uint64_t> &asset_type_output_indices, uint64_t height, uint8_t block_version, uint64_t ts, bool miner_tx, bool pool, bool double_spend_seen, const tx_cache_data &tx_cache_data, std::map<std::pair<uint64_t, uint64_t>, size_t> *output_tracker_cache, bool ignore_callbacks)
 {
   PERF_TIMER(process_new_transaction);
@@ -2687,7 +2786,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             if (!ignore_callbacks && 0 != m_callback)
               m_callback->on_money_received(height, txid, tx, td.m_amount, td.asset_type, 0, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time, td.m_td_origin_idx);
           }
-          std::string asset_type = m_transfers.back().asset_type;
+          std::string asset_type = tx_scan_info[o].asset_type;
           if (total_received_1.count(asset_type))
             total_received_1[asset_type] += amount;
           else 
@@ -2715,10 +2814,12 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             }
             
           } else if (tx.type == cryptonote::transaction_type::TRANSFER) {
+
+            // We might store garbage entries here occasionally, but they shouldn't impact performance significantly
             crypto::public_key P_change = crypto::null_pkey;
-            size_t change_idx = m_transfers.back().m_internal_output_index;
+            size_t change_idx = o;
             THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[change_idx], P_change), error::wallet_internal_error, "Failed to get output public key");
-            m_subaddresses[P_change] = {0,0};
+            m_subaddresses[P_change] = tx_scan_info[o].received->index;//{0,0};
             m_salvium_txs.insert({P_change, m_transfers.size()-1});
           }
         }
@@ -2999,7 +3100,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     // only for regular transfers
     if (!miner_tx) {
       for (auto& asset: total_received_1) {
-        if (asset.second != total_received_2[asset.first]) {
+        if (asset.second != total_received_2[asset.first] + (asset.first == source_asset ? sub_change : 0)) {
           //if (source_asset == dest_asset && !miner_tx) {
           //if (total_received_1 != total_received_2)
           //{
@@ -13005,18 +13106,14 @@ uint64_t wallet2::get_daemon_blockchain_target_height(string &err)
 
 uint64_t wallet2::get_approximate_blockchain_height() const
 {
-  // time of v2 fork
-  const time_t fork_time = m_nettype == TESTNET ? 1448285909 : m_nettype == STAGENET ? 1520937818 : 1458748658;
-  // v2 fork block
-  const uint64_t fork_block = m_nettype == TESTNET ? 624634 : m_nettype == STAGENET ? 32000 : 1009827;
+  // time of v1 fork
+  const time_t fork_time = 1719997643;
+  // v1 fork block
+  const uint64_t fork_block = 0;
   // avg seconds per block
   const int seconds_per_block = DIFFICULTY_TARGET_V2;
   // Calculated blockchain height
   uint64_t approx_blockchain_height = fork_block + (time(NULL) - fork_time)/seconds_per_block;
-  // testnet and stagenet got some huge rollbacks, so the estimation is way off
-  static const uint64_t approximate_rolled_back_blocks = m_nettype == TESTNET ? 342100 : 30000;
-  if ((m_nettype == TESTNET || m_nettype == STAGENET) && approx_blockchain_height > approximate_rolled_back_blocks)
-    approx_blockchain_height -= approximate_rolled_back_blocks;
   LOG_PRINT_L2("Calculated blockchain height: " << approx_blockchain_height);
   return approx_blockchain_height;
 }

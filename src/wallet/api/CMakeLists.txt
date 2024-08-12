@@ -35,6 +35,7 @@ set(wallet_api_sources
   wallet_manager.cpp
   transaction_info.cpp
   transaction_history.cpp
+  yield_info.cpp
   pending_transaction.cpp
   utils.cpp
   address_book.cpp
@@ -50,6 +51,7 @@ set(wallet_api_private_headers
   wallet_manager.h
   transaction_info.h
   transaction_history.h
+  yield_info.h
   pending_transaction.h
   common_defines.h
   address_book.h

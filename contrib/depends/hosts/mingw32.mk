@@ -1,4 +1,4 @@
-mingw32_CFLAGS=-pipe
+mingw32_CFLAGS=-pipe -pthread
 mingw32_CXXFLAGS=$(mingw32_CFLAGS)
 mingw32_ARFLAGS=cr
 

@@ -49,6 +49,18 @@ enum NetworkType : uint8_t {
     STAGENET
 };
 
+enum transaction_type : uint8_t {
+    UNSET = 0,
+    MINER = 1,
+    PROTOCOL = 2,
+    TRANSFER = 3,
+    CONVERT = 4,
+    BURN = 5,
+    STAKE = 6,
+    RETURN = 7,
+    MAX = 7
+};
+  
     namespace Utils {
         bool isAddressLocal(const std::string &hostaddr);
         void onStartup();
@@ -67,6 +79,28 @@ enum NetworkType : uint8_t {
         bool set;
     };
 
+struct YieldInfo
+{
+  enum Status {
+    Status_Ok,
+    Status_Error
+  };
+
+  virtual ~YieldInfo() = 0;
+  virtual int status() const = 0;
+  virtual std::string errorString() const = 0;
+  virtual bool update() = 0;
+  virtual uint64_t burnt() const = 0;
+  virtual uint64_t locked() const = 0;
+  virtual uint64_t supply() const = 0;
+  virtual uint64_t ybi_data_size() const = 0;
+  virtual uint64_t yield() const = 0;
+  virtual uint64_t yield_per_stake() const = 0;
+  virtual std::string period() const = 0;
+  virtual std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> payouts() const = 0;
+};
+
+  
 /**
  * @brief Transaction-like interface for sending money
  */
@@ -199,6 +233,7 @@ struct TransactionInfo
     virtual std::string paymentId() const = 0;
     //! only applicable for output transactions
     virtual const std::vector<Transfer> & transfers() const = 0;
+    virtual Monero::transaction_type type() const = 0;
 };
 /**
  * @brief The TransactionHistory - interface for displaying transaction history
@@ -827,11 +862,31 @@ struct Wallet
     virtual PendingTransaction*  restoreMultisigTransaction(const std::string& signData) = 0;
 
     /*!
+     * \brief createStakeTransaction  creates staking transaction.
+     * \param amount                  amount
+     * \param mixin_count             mixin count. if 0 passed, wallet will use default value
+     * \param subaddr_account         subaddress account from which the input funds are taken
+     * \param subaddr_indices         set of subaddress indices to use for transfer or sweeping. if set empty, all are chosen when sweeping, and one or more are automatically chosen when transferring. after execution, returns the set of actually used indices
+     * \param priority
+     * \return                        PendingTransaction object. caller is responsible to check PendingTransaction::status()
+     *                                after object returned
+     */
+
+    virtual PendingTransaction * createStakeTransaction(uint64_t amount,
+                                                        uint32_t mixin_count,
+                                                        PendingTransaction::Priority = PendingTransaction::Priority_Low,
+                                                        uint32_t subaddr_account = 0,
+                                                        std::set<uint32_t> subaddr_indices = {}) = 0;
+
+    /*!
      * \brief createTransactionMultDest creates transaction with multiple destinations. if dst_addr is an integrated address, payment_id is ignored
+     * \param tx_type                   the type of transaction being created
      * \param dst_addr                  vector of destination address as string
      * \param payment_id                optional payment_id, can be empty string
      * \param amount                    vector of amounts
      * \param mixin_count               mixin count. if 0 passed, wallet will use default value
+     * \param asset_type                type of asset to create as output
+     * \param is_return                 whether this is a return_payment or not
      * \param subaddr_account           subaddress account from which the input funds are taken
      * \param subaddr_indices           set of subaddress indices to use for transfer or sweeping. if set empty, all are chosen when sweeping, and one or more are automatically chosen when transferring. after execution, returns the set of actually used indices
      * \param priority
@@ -839,11 +894,13 @@ struct Wallet
      *                                  after object returned
      */
 
-    virtual PendingTransaction * createTransactionMultDest(const std::vector<std::string> &dst_addr, const std::string &payment_id,
-                                                   optional<std::vector<uint64_t>> amount, uint32_t mixin_count,
-                                                   PendingTransaction::Priority = PendingTransaction::Priority_Low,
-                                                   uint32_t subaddr_account = 0,
-                                                   std::set<uint32_t> subaddr_indices = {}) = 0;
+    virtual PendingTransaction * createTransactionMultDest(const transaction_type &tx_type,
+                                                           const std::vector<std::string> &dst_addr, const std::string &payment_id,
+                                                           optional<std::vector<uint64_t>> amount, uint32_t mixin_count,
+                                                           const std::string &asset_type, const bool is_return,
+                                                           PendingTransaction::Priority = PendingTransaction::Priority_Low,
+                                                           uint32_t subaddr_account = 0,
+                                                           std::set<uint32_t> subaddr_indices = {}) = 0;
 
     /*!
      * \brief createTransaction creates transaction. if dst_addr is an integrated address, payment_id is ignored
@@ -851,6 +908,8 @@ struct Wallet
      * \param payment_id        optional payment_id, can be empty string
      * \param amount            amount
      * \param mixin_count       mixin count. if 0 passed, wallet will use default value
+     * \param asset_type        type of asset to create as output
+     * \param is_return         whether this is a return_payment or not
      * \param subaddr_account   subaddress account from which the input funds are taken
      * \param subaddr_indices   set of subaddress indices to use for transfer or sweeping. if set empty, all are chosen when sweeping, and one or more are automatically chosen when transferring. after execution, returns the set of actually used indices
      * \param priority
@@ -860,6 +919,7 @@ struct Wallet
 
     virtual PendingTransaction * createTransaction(const std::string &dst_addr, const std::string &payment_id,
                                                    optional<uint64_t> amount, uint32_t mixin_count,
+                                                   const std::string &asset_type, const bool is_return,
                                                    PendingTransaction::Priority = PendingTransaction::Priority_Low,
                                                    uint32_t subaddr_account = 0,
                                                    std::set<uint32_t> subaddr_indices = {}) = 0;
@@ -1092,6 +1152,9 @@ struct Wallet
 
     //! get bytes sent
     virtual uint64_t getBytesSent() = 0;
+
+    //! get yield information
+    virtual YieldInfo * getYieldInfo() = 0;
 };
 
 /**
