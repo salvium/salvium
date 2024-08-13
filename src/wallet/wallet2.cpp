@@ -13106,6 +13106,8 @@ uint64_t wallet2::get_daemon_blockchain_target_height(string &err)
 
 uint64_t wallet2::get_approximate_blockchain_height() const
 {
+  if (m_nettype != MAINNET) return 0;
+  
   // time of v1 fork
   const time_t fork_time = 1719997643;
   // v1 fork block
