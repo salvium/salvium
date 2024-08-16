@@ -10592,6 +10592,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
     break;
   case transaction_type::STAKE:
     THROW_WALLET_EXCEPTION_IF(dest_asset != "SAL", error::wallet_internal_error, "Yield TX must specify 'SAL' destination asset type");
+    THROW_WALLET_EXCEPTION_IF(subaddr_account != 0, error::wallet_internal_error, "Staking is only permitted from main account, not secondary accounts");
     break;
   default:
     THROW_WALLET_EXCEPTION(error::wallet_internal_error, "Invalid tx type specified: " + static_cast<uint64_t>(tx_type));

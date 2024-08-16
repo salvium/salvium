@@ -2,7 +2,7 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="de">
 <context>
-    <name>Monero::AddressBookImpl</name>
+    <name>Salvium::AddressBookImpl</name>
     <message>
         <location filename="../src/wallet/api/address_book.cpp" line="53"/>
         <source>Invalid destination address</source>
@@ -15,7 +15,7 @@
     </message>
 </context>
 <context>
-    <name>Monero::PendingTransactionImpl</name>
+    <name>Salvium::PendingTransactionImpl</name>
     <message>
         <location filename="../src/wallet/api/pending_transaction.cpp" line="91"/>
         <source>Attempting to save transaction to file, but specified file(s) exist. Exiting to not risk overwriting. File:</source>
@@ -68,7 +68,7 @@
     </message>
 </context>
 <context>
-    <name>Monero::UnsignedTransactionImpl</name>
+    <name>Salvium::UnsignedTransactionImpl</name>
     <message>
         <location filename="../src/wallet/api/unsigned_transaction.cpp" line="75"/>
         <source>This is a watch only wallet</source>
@@ -122,7 +122,7 @@
     </message>
 </context>
 <context>
-    <name>Monero::WalletImpl</name>
+    <name>Salvium::WalletImpl</name>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1513"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1602"/>
@@ -1634,8 +1634,8 @@ Amount, Spent(&quot;T&quot;|&quot;F&quot;), &quot;frozen&quot;|&quot;locked&quot
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3134"/>
-        <source>Donate &lt;amount&gt; to the development team (donate.getmonero.org).</source>
-        <translation>Spende &lt;Betrag&gt; ans Entwicklerteam (donate.getmonero.org).</translation>
+        <source>Donate &lt;amount&gt; to the development team (donate.getsalvium.org).</source>
+        <translation>Spende &lt;Betrag&gt; ans Entwicklerteam (donate.getsalvium.org).</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3138"/>
@@ -2007,7 +2007,7 @@ Key Image, &quot;absolute&quot;, list of rings</source>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3694"/>
-        <source>monero, millinero, micronero, nanonero, piconero</source>
+        <source>salvium, millinero, micronero, nanonero, piconero</source>
         <translation>Salvium, Millinero, Micronero, Nanonero, Piconero</translation>
     </message>
     <message>
@@ -2378,7 +2378,7 @@ Key Image, &quot;absolute&quot;, list of rings</source>
 To start synchronizing with the daemon, use the &quot;refresh&quot; command.
 Use the &quot;help&quot; command to see the list of available commands.
 Use &quot;help &lt;command&gt;&quot; to see a command&apos;s documentation.
-Always use the &quot;exit&quot; command when closing monero-wallet-cli to save 
+Always use the &quot;exit&quot; command when closing salvium-wallet-cli to save 
 your current session&apos;s state. Otherwise, you might need to synchronize 
 your wallet again (your wallet keys are NOT at risk in any case).
 </source>
@@ -2386,7 +2386,7 @@ your wallet again (your wallet keys are NOT at risk in any case).
 Um die Synchronisation mit dem Hintergrunddienst zu starten, nutze den Befehl &quot;refresh&quot;.
 Nutze den Befehl &quot;help&quot;, um die Liste verfügbarer Befehle anzusehen.
 Nutze &quot;help &lt;command&gt;&quot;, um die Dokumentation eines Befehls anzuzeigen.
-Benutze stets den &quot;exit&quot;-Befehl, wenn du monero-wallet-cli schließt, 
+Benutze stets den &quot;exit&quot;-Befehl, wenn du salvium-wallet-cli schließt, 
 um den Status deiner aktuellen Sitzung zu speichern. Anderenfalls ist es eventuell notwendig, 
 deine Wallet erneut zu synchronisieren (deine Wallet-Schlüssel sind in KEINEM Fall in Gefahr).
 </translation>
@@ -2629,8 +2629,8 @@ deine Wallet erneut zu synchronisieren (deine Wallet-Schlüssel sind in KEINEM F
  ask-password &lt;0|1|2   (or never|action|decrypt)&gt;
    action: ask the password before many actions such as transfer, etc
    decrypt: same as action, but keeps the spend key encrypted in memory when not needed
- unit &lt;monero|millinero|micronero|nanonero|piconero&gt;
-   Set the default monero (sub-)unit.
+ unit &lt;salvium|millinero|micronero|nanonero|piconero&gt;
+   Set the default salvium (sub-)unit.
  min-outputs-count [n]
    Try to keep at least that many outputs of value at least min-outputs-value.
  min-outputs-value [n]
@@ -2664,7 +2664,7 @@ deine Wallet erneut zu synchronisieren (deine Wallet-Schlüssel sind in KEINEM F
  track-uses &lt;1|0&gt;
    Whether to keep track of owned outputs uses.
  setup-background-mining &lt;1|0&gt;
-   Whether to enable background mining. Set this to support the network and to get a chance to receive new monero.
+   Whether to enable background mining. Set this to support the network and to get a chance to receive new salvium.
  device-name &lt;device_name[:device_spec]&gt;
    Device name for hardware wallet.
  export-format &lt;&quot;binary&quot;|&quot;ascii&quot;&gt;
@@ -3609,7 +3609,7 @@ By using &apos;sync&apos; processing of waiting messages with multisig sync info
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5181"/>
-        <source>Enabling this supports the network you are using, and makes you eligible for receiving new monero</source>
+        <source>Enabling this supports the network you are using, and makes you eligible for receiving new salvium</source>
         <translation>Indem du dies einschaltest, unterstützt du das von dir genutzte Netzwerk, und du bist dadurch berechtigt, neue Salvium zu erhalten</translation>
     </message>
     <message>
@@ -4136,7 +4136,7 @@ This transaction (including %s change) will unlock on block %llu, in approximate
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10526"/>
-        <source>mms signer [&lt;number&gt; &lt;label&gt; [&lt;transport_address&gt; [&lt;monero_address&gt;]]]</source>
+        <source>mms signer [&lt;number&gt; &lt;label&gt; [&lt;transport_address&gt; [&lt;salvium_address&gt;]]]</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4525,7 +4525,7 @@ This transaction (including %s change) will unlock on block %llu, in approximate
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7388"/>
-        <source>Donating %s %s to The Salvium Project (donate.getmonero.org or %s).</source>
+        <source>Donating %s %s to The Salvium Project (donate.getsalvium.org or %s).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -5679,7 +5679,7 @@ Use &quot;mms note&quot; to display the waiting notes</source>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10137"/>
-        <source>This is the command line monero wallet. It needs to connect to a monero
+        <source>This is the command line salvium wallet. It needs to connect to a salvium
 daemon to work correctly.
 WARNING: Do not reuse your Salvium keys on another fork, UNLESS this fork has key reuse mitigations built in. Doing so will harm your privacy.</source>
         <translation type="unfinished"></translation>
@@ -5701,7 +5701,7 @@ WARNING: Do not reuse your Salvium keys on another fork, UNLESS this fork has ke
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="168"/>
-        <source>The newly created transaction will not be relayed to the monero network</source>
+        <source>The newly created transaction will not be relayed to the salvium network</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6018,12 +6018,12 @@ WARNING: Do not reuse your Salvium keys on another fork, UNLESS this fork has ke
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="1762"/>
-        <source>Password is needed to compute key image for incoming monero</source>
+        <source>Password is needed to compute key image for incoming salvium</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="1763"/>
-        <source>Invalid password: password is needed to compute key image for incoming monero</source>
+        <source>Invalid password: password is needed to compute key image for incoming salvium</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6118,7 +6118,7 @@ WARNING: Do not reuse your Salvium keys on another fork, UNLESS this fork has ke
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4492"/>
-        <source>This is the RPC monero wallet. It needs to connect to a monero
+        <source>This is the RPC salvium wallet. It needs to connect to a salvium
 daemon to work correctly.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6236,7 +6236,7 @@ daemon to work correctly.</source>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="148"/>
-        <source>This is the command line monero wallet. It needs to connect to a monero
+        <source>This is the command line salvium wallet. It needs to connect to a salvium
 daemon to work correctly.</source>
         <translation type="unfinished"></translation>
     </message>
