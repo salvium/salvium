@@ -459,8 +459,8 @@ private:
   //void migrate_0_1();
   void cleanup_batch();
 
-  virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi);
-  virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container);
+  virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi) const;
+  virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) const;
 
 private:
   MDB_env* m_env;

@@ -1478,7 +1478,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
 }
 //------------------------------------------------------------------
 // SRCG
-bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, std::vector<std::pair<transaction, blobdata>>& txs, const std::map<std::string, uint64_t>& circ_supply, uint8_t hf_version)
+bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, std::vector<std::pair<transaction, blobdata>>& txs, uint8_t hf_version)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   CHECK_AND_ASSERT_MES(b.tx_hashes.size() == txs.size(), false, "Invalid number of TXs / hashes supplied");
@@ -1487,6 +1487,17 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
     // Nothing is created by this TX - check no money is included
     CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "void protocol transaction in the block has outputs");
     return true;
+  }
+
+  if (!b.protocol_tx.vout.size()) {
+    // No money is minted, nothing to verify - bail out
+    return true;
+  }
+
+  // Get the circulating supply so we can verify 
+  std::map<std::string, uint64_t> circ_supply;
+  if (hf_version >= HF_VERSION_ENABLE_CONVERT) {
+    circ_supply = get_db().get_circulating_supply();
   }
   
   // Build a map of outputs from the protocol_tx
@@ -4900,12 +4911,8 @@ leave:
   }
   TIME_MEASURE_FINISH(vmt);
 
-  TIME_MEASURE_START(gcs);
-  std::map<std::string, uint64_t> circ_supply = get_db().get_circulating_supply();
-  TIME_MEASURE_FINISH(gcs);
-
   TIME_MEASURE_START(vpt);
-  if(!validate_protocol_transaction(bl, blockchain_height, txs, circ_supply, m_hardfork->get_current_version()))
+  if(!validate_protocol_transaction(bl, blockchain_height, txs, m_hardfork->get_current_version()))
   {
     MERROR_VER("Block with id: " << id << " has incorrect protocol transaction");
     bvc.m_verifivation_failed = true;
