@@ -1898,7 +1898,7 @@ namespace cryptonote
     if (!tools::check_updates(software, buildtag, version, hash))
       return false;
 
-    if (tools::vercmp(version.c_str(), MONERO_VERSION) <= 0)
+    if (tools::vercmp(version.c_str(), SALVIUM_VERSION) <= 0)
     {
       m_update_available = false;
       return true;

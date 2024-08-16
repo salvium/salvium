@@ -6,10 +6,10 @@ function(_trezor_default_val val_name val_default)
 endfunction()
 
 # Define default options via env vars
-_trezor_default_val(USE_DEVICE_TREZOR ON)
+_trezor_default_val(USE_DEVICE_TREZOR OFF)
 _trezor_default_val(USE_DEVICE_TREZOR_MANDATORY OFF)
-_trezor_default_val(USE_DEVICE_TREZOR_PROTOBUF_TEST ON)
-_trezor_default_val(USE_DEVICE_TREZOR_LIBUSB ON)
+_trezor_default_val(USE_DEVICE_TREZOR_PROTOBUF_TEST OFF)
+_trezor_default_val(USE_DEVICE_TREZOR_LIBUSB OFF)
 _trezor_default_val(USE_DEVICE_TREZOR_UDP_RELEASE OFF)
 _trezor_default_val(USE_DEVICE_TREZOR_DEBUG OFF)
 _trezor_default_val(TREZOR_DEBUG OFF)
