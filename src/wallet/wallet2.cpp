@@ -6921,7 +6921,7 @@ uint64_t wallet2::balance(uint32_t index_major, const std::string& asset_type, b
   uint64_t amount = 0;
   for (const auto& i : balance_per_subaddress(index_major, asset_type, strict))
     amount += i.second;
-  if (asset_type == "SAL") {
+  if (index_major == 0 && asset_type == "SAL") {
     // Iterate over the locked coins, adding them to the _locked_ balance
     for (const auto& i : m_locked_coins)
       amount += i.second.m_amount;
