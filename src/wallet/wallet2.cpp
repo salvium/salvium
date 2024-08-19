@@ -2411,6 +2411,27 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
     return false;
 
   ybi_data_size = ybi_data.size();
+
+  // Iterate over the transfers in our wallet
+  std::map<size_t, size_t> map_payouts;
+  std::map<std::string, std::pair<size_t, std::pair<uint64_t, uint64_t>>> payouts_active;
+  for (size_t idx = m_transfers.size()-1; idx>0; --idx) {
+    const tools::wallet2::transfer_details& td = m_transfers[idx];
+    //if (td.m_block_height < ybi_data[0].block_height) break;
+    if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
+      if (map_payouts.count(idx)) {
+        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
+      } else {
+        //payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
+        payouts_active[epee::string_tools::pod_to_hex(td.m_txid)] = std::make_pair(td.m_block_height, std::make_pair(td.m_tx.amount_burnt, 0));
+      }
+    } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
+      // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
+      if (m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE)
+        map_payouts[td.m_td_origin_idx] = idx;
+    }
+  }
+
   
   // Scan the entries we have received to gather the state (total yield over period captured)
   total_burnt = 0;
@@ -2421,7 +2442,21 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
       total_burnt += ybi_data[idx].slippage_total_this_block;
     } else {
       total_yield += ybi_data[idx].slippage_total_this_block;
+
+      // EXPERIMENTAL - add up yield earned for active STAKE TXs
+      for (auto &payout: payouts_active) {
+        if (ybi_data[idx].block_height < payout.second.first) continue; 
+        boost::multiprecision::uint128_t amount_128 = ybi_data[idx].slippage_total_this_block;
+        amount_128 *= payout.second.second.first;
+        amount_128 /= ybi_data[idx].locked_coins_tally;
+        payout.second.second.second += amount_128.convert_to<uint64_t>();
+      }
     }
+  }
+
+  for (auto &payout: payouts_active) {
+    // Copy to the list of payouts proper
+    payouts.push_back(std::make_tuple(payout.second.first, payout.first, payout.second.second.first, payout.second.second.second));
   }
 
   // Get the total currently locked
@@ -2434,7 +2469,7 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
     yield_per_stake_128 /= ybi_data.back().locked_coins_tally;
     yield_per_stake = yield_per_stake_128.convert_to<uint64_t>();
   }
-
+  /*
   // Iterate over the transfers in our wallet
   std::map<size_t, size_t> map_payouts;
   for (size_t idx = m_transfers.size()-1; idx>0; --idx) {
@@ -2452,7 +2487,7 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
         map_payouts[td.m_td_origin_idx] = idx;
     }
   }
-  
+  */
   // Return success to caller
   return true;
 }
