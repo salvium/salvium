@@ -98,7 +98,7 @@ namespace cryptonote
      , rpc_login({"rpc-login", rpc_args::tr("Specify username[:password] required for RPC server"), "", true})
      , confirm_external_bind({"confirm-external-bind", rpc_args::tr("Confirm rpc-bind-ip value is NOT a loopback (local) IP")})
      , rpc_access_control_origins({"rpc-access-control-origins", rpc_args::tr("Specify a comma separated list of origins to allow cross origin resource sharing"), ""})
-     , rpc_ssl({"rpc-ssl", rpc_args::tr("Enable SSL on RPC connections: enabled|disabled|autodetect"), "autodetect"})
+     , rpc_ssl({"rpc-ssl", rpc_args::tr("Enable SSL on RPC connections: enabled|disabled|autodetect"), "disabled"})
      , rpc_ssl_private_key({"rpc-ssl-private-key", rpc_args::tr("Path to a PEM format private key"), ""})
      , rpc_ssl_certificate({"rpc-ssl-certificate", rpc_args::tr("Path to a PEM format certificate"), ""})
      , rpc_ssl_ca_certificates({"rpc-ssl-ca-certificates", rpc_args::tr("Path to file containing concatenated PEM format certificate(s) to replace system CA(s)."), ""})

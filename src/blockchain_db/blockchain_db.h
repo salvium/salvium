@@ -1915,8 +1915,8 @@ public:
    */
   virtual uint64_t get_database_size() const = 0;
 
-  virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi) = 0;
-  virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) = 0;
+  virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi) const = 0;
+  virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) const = 0;
 
   
   /**

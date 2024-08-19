@@ -10592,6 +10592,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
     break;
   case transaction_type::STAKE:
     THROW_WALLET_EXCEPTION_IF(dest_asset != "SAL", error::wallet_internal_error, "Yield TX must specify 'SAL' destination asset type");
+    THROW_WALLET_EXCEPTION_IF(subaddr_account != 0, error::wallet_internal_error, "Staking is only permitted from main account, not secondary accounts");
     break;
   default:
     THROW_WALLET_EXCEPTION(error::wallet_internal_error, "Invalid tx type specified: " + static_cast<uint64_t>(tx_type));
@@ -13106,6 +13107,8 @@ uint64_t wallet2::get_daemon_blockchain_target_height(string &err)
 
 uint64_t wallet2::get_approximate_blockchain_height() const
 {
+  if (m_nettype != MAINNET) return 0;
+  
   // time of v1 fork
   const time_t fork_time = 1719997643;
   // v1 fork block

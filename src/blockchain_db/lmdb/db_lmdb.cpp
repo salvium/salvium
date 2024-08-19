@@ -800,7 +800,7 @@ estim:
   return threshold_size;
 }
 
-int BlockchainLMDB::get_yield_block_info(const uint64_t height, yield_block_info& ybi)
+int BlockchainLMDB::get_yield_block_info(const uint64_t height, yield_block_info& ybi) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -825,11 +825,13 @@ int BlockchainLMDB::get_yield_block_info(const uint64_t height, yield_block_info
   yield_block_info *p = (yield_block_info*)v.mv_data;
   ybi = *p;
 
+  TXN_POSTFIX_RDONLY();
+
   // Return success to caller
   return ret;
 }
 
-int BlockchainLMDB::get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container)
+int BlockchainLMDB::get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -857,6 +859,8 @@ int BlockchainLMDB::get_yield_tx_info(const uint64_t height, std::vector<yield_t
     yield_tx_info *p = (yield_tx_info*)v.mv_data;
     yti_container.emplace_back(*p);
   }
+
+  TXN_POSTFIX_RDONLY();
 
   // Return success to caller
   return 0;
@@ -3469,9 +3473,12 @@ std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
   uint64_t m_coinbase = get_block_already_generated_coins(m_height-1);
   LOG_PRINT_L3("BlockchainLMDB::" << __func__ << " - mined supply for SAL = " << m_coinbase);
 
-  // SRCG: For V1, we can simply return this number, because there is no other source of coins
-  //circulating_supply["SAL"] = m_coinbase;
-  //return circulating_supply;
+  uint64_t staked_coins = 0;
+  yield_block_info ybi;
+  int result = get_yield_block_info(m_height-1, ybi);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to get YBI when querying supply: ", result).c_str()));
+  staked_coins = ybi.locked_coins_tally;
   
   check_open();
   
@@ -3480,8 +3487,6 @@ std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
 
   MDB_val k;
   MDB_val v;
-  int result = 0;
-
   MDB_cursor_op op = MDB_FIRST;
   while (1)
   {
@@ -3513,7 +3518,11 @@ std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
   if (circulating_supply.empty()) {
     circulating_supply["SAL"] = m_coinbase;
   }
-  circulating_supply["BURN"] = m_coinbase - circulating_supply["SAL"];
+
+  // Adjust the supply to account for the staked coins
+  circulating_supply["STAKE"] = staked_coins;
+  
+  circulating_supply["BURN"] = m_coinbase - circulating_supply["SAL"] - circulating_supply["STAKE"];
   return circulating_supply;
 }
 

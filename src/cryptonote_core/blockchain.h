@@ -1521,7 +1521,7 @@ namespace cryptonote
      *
      * @return false if anything is found wrong with the protocol transaction, otherwise true
      */
-    bool validate_protocol_transaction(const block& b, uint64_t height, std::vector<std::pair<transaction, blobdata>>& txs, const std::map<std::string, uint64_t>& circ_supply, uint8_t hf_version);
+    bool validate_protocol_transaction(const block& b, uint64_t height, std::vector<std::pair<transaction, blobdata>>& txs, uint8_t hf_version);
 
     /**
      * @brief reverts the blockchain to its previous state following a failed switch
