@@ -120,7 +120,7 @@ jobs:
       with:
         command: cp
         source: ./salvium-${{ github.ref_name }}-${{ matrix.toolchain.host }}.zip
-        destination: s3://salvium/salvium-${GITHUB_REF_NAME}-${{ matrix.toolchain.host }}.zip
+        destination: s3://salvium/salvium-${{ github.ref_name }}-${{ matrix.toolchain.host }}.zip
         aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws_region: eu-west-1
