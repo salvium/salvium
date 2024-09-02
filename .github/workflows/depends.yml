@@ -122,4 +122,4 @@ jobs:
         remote-user: ${{secrets.SFTP_USERNAME}}
         ssh-private-key: ${{ secrets.SFTP_KEY }}
         remote-path: "/home/github/"
-        local-path: salvium-${{ GITHUB_REF_NAME }}-${{ matrix.toolchain.host }}.zip
+        local-path: salvium-${ GITHUB_REF_NAME }-${{ matrix.toolchain.host }}.zip
