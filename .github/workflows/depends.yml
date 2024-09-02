@@ -115,7 +115,7 @@ jobs:
       run: |
         zip salvium-${{ env.GITHUB_REF_NAME }}-${{ matrix.host}}.zip /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salvium-wallet-cli /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salviumd
     - name: "Deploy"
-    - uses: milanmk/actions-file-deployer@master
+      uses: milanmk/actions-file-deployer@master
       with:
         remote-protocol: "sftp"
         remote-host: ${{secrets.SFTP_HOST}}
