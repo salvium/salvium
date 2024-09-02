@@ -11,7 +11,7 @@ use XML::LibXML;
 use open qw( :std :encoding(UTF-8) );
 
 #Name of the XML File
-my $xmlfile = "salvium-en.ts";
+my $xmlfile = "salvium.ts";
 my $lang = $ARGV[0];
 if (length($lang) != 2) {
     die "input language code '$lang' is invalid";
@@ -26,7 +26,7 @@ foreach my $context ($dom->findnodes('/TS/context')) {
         my $source = $message->findvalue('./source');
         $source =~ s/\n/\\n/g;
         print CSV $context->findvalue('./name') . "===";
-        print CSV encode_entities($source) . "======";
+        print CSV encode_entities($source,'<>&"') . "======";
         my @locations = ();
         foreach my $location ($message->findnodes('./location')) {
             my $temp = $location->getAttribute('filename') . ":" . $location->getAttribute('line');

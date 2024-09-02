@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1" language="jp">
+<TS version="2.1" language="zh">
 <context>
     <name>Monero::AddressBookImpl</name>
     <message>
         <location filename="../src/wallet/api/address_book.cpp" line="53"/>
         <source>Invalid destination address</source>
-        <translation>宛先アドレスが無効です</translation>
+        <translation>目标地址无效</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/address_book.cpp" line="60"/>
         <source>Payment ID supplied: this is obsolete</source>
-        <translation>指定された支払いID: これは古いものです</translation>
+        <translation>提供的付款 ID：该 ID 已过时</translation>
     </message>
 </context>
 <context>
@@ -19,52 +19,52 @@
     <message>
         <location filename="../src/wallet/api/pending_transaction.cpp" line="92"/>
         <source>Attempting to save transaction to file, but specified file(s) exist. Exiting to not risk overwriting. File:</source>
-        <translation>トランザクションをファイルに保存しようとしましたが、指定されたファイルが存在します。上書きのリスクを回避するために終了します。ファイル:</translation>
+        <translation>正在尝试将事务保存到文件，但指定的文件存在。退出以避免被覆盖的风险。文件：</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/pending_transaction.cpp" line="99"/>
         <source>Failed to write transaction(s) to file</source>
-        <translation>トランザクションをファイルに書き込めませんでした</translation>
+        <translation>无法将交易写入文件</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/pending_transaction.cpp" line="139"/>
         <source>daemon is busy. Please try again later.</source>
-        <translation>デーモンはビジー状態です。しばらくしてからもう一度お試しください。</translation>
+        <translation>守护进程正忙。请稍后重试。</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/pending_transaction.cpp" line="142"/>
         <source>no connection to daemon. Please make sure daemon is running.</source>
-        <translation>デーモンに接続されていません。デーモンが実行中であることを確認してください。</translation>
+        <translation>没有与守护进程的连接。请确保守护进程正在运行。</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/pending_transaction.cpp" line="146"/>
-        <source>transaction %s was rejected by daemon with status:</source>
-        <translation>トランザクション %s はデーモンによってステータスで拒否されました:</translation>
+        <source>transaction %s was rejected by daemon with status: </source>
+        <translation>事务 %s 被守护程序拒绝，状态为： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/pending_transaction.cpp" line="151"/>
-        <source>. Reason:</source>
-        <translation>。 理由：</translation>
+        <source>. Reason: </source>
+        <translation>。原因： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/pending_transaction.cpp" line="153"/>
-        <source>Unknown exception:</source>
-        <translation>不明な例外:</translation>
+        <source>Unknown exception: </source>
+        <translation>未知异常： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/pending_transaction.cpp" line="156"/>
         <source>Unhandled exception</source>
-        <translation>未処理の例外</translation>
+        <translation>未处理的异常</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/pending_transaction.cpp" line="229"/>
-        <source>Couldn&#39;t multisig sign data:</source>
-        <translation>データをマルチ署名できませんでした:</translation>
+        <source>Couldn't multisig sign data: </source>
+        <translation>无法对数据进行多重签名： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/pending_transaction.cpp" line="251"/>
-        <source>Couldn&#39;t sign multisig transaction:</source>
-        <translation>マルチシグトランザクションに署名できませんでした:</translation>
+        <source>Couldn't sign multisig transaction: </source>
+        <translation>无法签署多重签名交易： </translation>
     </message>
 </context>
 <context>
@@ -72,53 +72,53 @@
     <message>
         <location filename="../src/wallet/api/unsigned_transaction.cpp" line="75"/>
         <source>This is a watch only wallet</source>
-        <translation>これは時計専用の財布です</translation>
+        <translation>这是一款仅限手表的钱包</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/unsigned_transaction.cpp" line="85"/>
         <location filename="../src/wallet/api/unsigned_transaction.cpp" line="92"/>
         <source>Failed to sign transaction</source>
-        <translation>トランザクションの署名に失敗しました</translation>
+        <translation>交易签名失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/unsigned_transaction.cpp" line="168"/>
         <source>Claimed change does not go to a paid address</source>
-        <translation>請求されたお釣りは支払済みアドレスに送られません</translation>
+        <translation>已领取的零钱并未发送至付费地址</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/unsigned_transaction.cpp" line="174"/>
         <source>Claimed change is larger than payment to the change address</source>
-        <translation>請求されたお釣りはお釣りのアドレスへの支払い額よりも大きい</translation>
+        <translation>索取的找零金额大于向找零地址支付的金额</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/unsigned_transaction.cpp" line="184"/>
         <source>Change goes to more than one address</source>
-        <translation>変更は複数のアドレスに送られます</translation>
+        <translation>更改会转到多个地址</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/unsigned_transaction.cpp" line="197"/>
         <source>sending %s to %s</source>
-        <translation>%s を %s に送信しています</translation>
+        <translation>将 %s 发送至 %s</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/unsigned_transaction.cpp" line="203"/>
         <source>with no destinations</source>
-        <translation>目的地のない</translation>
+        <translation>没有目的地</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/unsigned_transaction.cpp" line="209"/>
         <source>%s change to %s</source>
-        <translation>%s を %s に変更</translation>
+        <translation>%s 更改为 %s</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/unsigned_transaction.cpp" line="212"/>
         <source>no change</source>
-        <translation>変化なし</translation>
+        <translation>没有变化</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/unsigned_transaction.cpp" line="214"/>
         <source>Loaded %lu transactions, for %s, fee %s, %s, %s, with min ring size %lu. %s</source>
-        <translation>%lu 件のトランザクションを、%s、手数料 %s、%s、%s、最小リング サイズ %lu でロードしました。%s</translation>
+        <translation>已加载 %lu 笔交易，费用为 %s，费用为 %s，%s，%s，最小环大小为 %lu。 %s</translation>
     </message>
 </context>
 <context>
@@ -126,335 +126,335 @@
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="561"/>
         <source>failed to parse address</source>
-        <translation>アドレスの解析に失敗しました</translation>
+        <translation>解析地址失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="572"/>
         <source>failed to parse secret spend key</source>
-        <translation>秘密支出キーの解析に失敗しました</translation>
+        <translation>无法解析秘密支出密钥</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="587"/>
         <source>Neither view key nor spend key supplied, cancelled</source>
-        <translation>表示キーも支出キーも提供されていないため、キャンセルされました</translation>
+        <translation>既不查看密钥也不使用提供的密钥，已取消</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="595"/>
         <source>failed to parse secret view key</source>
-        <translation>シークレットビューキーの解析に失敗しました</translation>
+        <translation>无法解析秘密视图密钥</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="604"/>
         <source>failed to verify secret spend key</source>
-        <translation>秘密支出キーの検証に失敗しました</translation>
+        <translation>无法验证秘密支出密钥</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="608"/>
         <source>spend key does not match address</source>
-        <translation>支出キーがアドレスと一致しません</translation>
+        <translation>花费密钥与地址不匹配</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="614"/>
         <source>failed to verify secret view key</source>
-        <translation>シークレットビューキーの検証に失敗しました</translation>
+        <translation>无法验证秘密视图密钥</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="618"/>
         <source>view key does not match address</source>
-        <translation>ビューキーがアドレスと一致しません</translation>
+        <translation>查看密钥与地址不匹配</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="641"/>
         <location filename="../src/wallet/api/wallet.cpp" line="658"/>
-        <source>failed to generate new wallet:</source>
-        <translation>新しいウォレットの生成に失敗しました:</translation>
+        <source>failed to generate new wallet: </source>
+        <translation>生成新钱包失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="706"/>
         <source>Electrum seed is empty</source>
-        <translation>エレクトラムシードは空です</translation>
+        <translation>金金矿种子为空</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="715"/>
         <source>Electrum-style word list failed verification</source>
-        <translation>Electrum スタイルの単語リストの検証に失敗しました</translation>
+        <translation>Electrum 风格的单词列表验证失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1071"/>
         <source>Failed to load unsigned transactions</source>
-        <translation>署名されていないトランザクションの読み込みに失敗しました</translation>
+        <translation>无法加载未签名的交易</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1094"/>
         <source>Failed to load transaction from file</source>
-        <translation>ファイルからトランザクションをロードできませんでした</translation>
+        <translation>无法从文件加载交易</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1110"/>
         <source>Wallet is view only</source>
-        <translation>ウォレットは表示のみです</translation>
+        <translation>钱包仅供查看</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1118"/>
-        <source>failed to save file</source>
-        <translation>ファイルの保存に失敗しました</translation>
+        <source>failed to save file </source>
+        <translation>保存文件失败 </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1134"/>
         <source>Key images can only be imported with a trusted daemon</source>
-        <translation>キーイメージは信頼できるデーモンでのみインポートできます</translation>
+        <translation>关键图像只能使用受信任的守护进程导入</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1147"/>
-        <source>Failed to import key images:</source>
-        <translation>キー画像のインポートに失敗しました:</translation>
+        <source>Failed to import key images: </source>
+        <translation>导入关键图片失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1158"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1188"/>
         <source>Not supported on HW wallets.</source>
-        <translation>HW ウォレットではサポートされていません。</translation>
+        <translation>硬件钱包不支持。</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1169"/>
-        <source>Failed to save file:</source>
-        <translation>ファイルの保存に失敗しました:</translation>
+        <source>Failed to save file: </source>
+        <translation>保存文件失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1176"/>
-        <source>Error exporting outputs:</source>
-        <translation>出力のエクスポート中にエラーが発生しました:</translation>
+        <source>Error exporting outputs: </source>
+        <translation>导出输出时出错： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1197"/>
-        <source>Failed to read file:</source>
-        <translation>ファイルの読み取りに失敗しました:</translation>
+        <source>Failed to read file: </source>
+        <translation>读取文件失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1209"/>
-        <source>Failed to import outputs:</source>
-        <translation>出力のインポートに失敗しました:</translation>
+        <source>Failed to import outputs: </source>
+        <translation>导入输出失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1220"/>
         <source>Failed to scan transactions: no transaction ids provided.</source>
-        <translation>トランザクションのスキャンに失敗しました: トランザクション ID が提供されていません。</translation>
+        <translation>扫描交易失败：未提供交易 ID。</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1231"/>
-        <source>Invalid txid specified:</source>
-        <translation>無効な txid が指定されました:</translation>
+        <source>Invalid txid specified: </source>
+        <translation>指定的 txid 无效： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1249"/>
-        <source>Failed to scan transaction:</source>
-        <translation>トランザクションのスキャンに失敗しました:</translation>
+        <source>Failed to scan transaction: </source>
+        <translation>扫描交易失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1281"/>
-        <source>Failed to get subaddress label:</source>
-        <translation>サブアドレス ラベルの取得に失敗しました:</translation>
+        <source>Failed to get subaddress label: </source>
+        <translation>获取子地址标签失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1294"/>
-        <source>Failed to set subaddress label:</source>
-        <translation>サブアドレス ラベルの設定に失敗しました:</translation>
+        <source>Failed to set subaddress label: </source>
+        <translation>设置子地址标签失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1311"/>
-        <source>Failed to get multisig info:</source>
-        <translation>マルチシグ情報を取得できませんでした:</translation>
+        <source>Failed to get multisig info: </source>
+        <translation>无法获取多重签名信息： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1328"/>
-        <source>Failed to make multisig:</source>
-        <translation>マルチシグの作成に失敗しました:</translation>
+        <source>Failed to make multisig: </source>
+        <translation>多重签名失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1342"/>
-        <source>Failed to exchange multisig keys:</source>
-        <translation>マルチシグキーの交換に失敗しました:</translation>
+        <source>Failed to exchange multisig keys: </source>
+        <translation>无法交换多重签名密钥： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1358"/>
-        <source>Failed to export multisig images:</source>
-        <translation>マルチシグイメージのエクスポートに失敗しました:</translation>
+        <source>Failed to export multisig images: </source>
+        <translation>导出多重签名图像失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1376"/>
         <source>Failed to parse imported multisig images</source>
-        <translation>インポートされたマルチシグイメージの解析に失敗しました</translation>
+        <translation>无法解析导入的多重签名图像</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1386"/>
-        <source>Failed to import multisig images:</source>
-        <translation>マルチシグイメージのインポートに失敗しました:</translation>
+        <source>Failed to import multisig images: </source>
+        <translation>导入多重签名图像失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1400"/>
-        <source>Failed to check for partial multisig key images:</source>
-        <translation>部分的なマルチシグキーイメージのチェックに失敗しました:</translation>
+        <source>Failed to check for partial multisig key images: </source>
+        <translation>无法检查部分多重签名密钥图像： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1428"/>
-        <source>Failed to restore multisig transaction:</source>
-        <translation>マルチシグトランザクションの復元に失敗しました:</translation>
+        <source>Failed to restore multisig transaction: </source>
+        <translation>无法恢复多重签名交易： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1477"/>
         <source>Sending all requires one destination address</source>
-        <translation>すべてを送信するには、1つの宛先アドレスが必要です</translation>
+        <translation>全部发送需要一个目标地址</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1481"/>
         <source>Destinations and amounts are unequal</source>
-        <translation>行き先と金額が不平等</translation>
+        <translation>目的地和金额不对等</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1489"/>
-        <source>payment id has invalid format, expected 64 character hex string:</source>
-        <translation>支払い ID の形式が無効です。64 文字の 16 進文字列が必要です:</translation>
+        <source>payment id has invalid format, expected 64 character hex string: </source>
+        <translation>付款 ID 的格式无效，应为 64 个字符的十六进制字符串： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1497"/>
         <source>Invalid destination address</source>
-        <translation>宛先アドレスが無効です</translation>
+        <translation>目标地址无效</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1503"/>
         <source>a single transaction cannot use more than one payment id</source>
-        <translation>1回の取引で複数の支払いIDを使用することはできません</translation>
+        <translation>一笔交易不能使用多个付款 ID</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1531"/>
         <source>failed to set up payment id, though it was decoded correctly</source>
-        <translation>支払いIDの設定に失敗しましたが、正しくデコードされました</translation>
+        <translation>尽管解码正确，但无法设置付款 ID</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1556"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1647"/>
         <source>daemon is busy. Please try again later.</source>
-        <translation>デーモンはビジー状態です。しばらくしてからもう一度お試しください。</translation>
+        <translation>守护进程正忙。请稍后重试。</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1558"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1649"/>
         <source>no connection to daemon. Please make sure daemon is running.</source>
-        <translation>デーモンに接続されていません。デーモンが実行中であることを確認してください。</translation>
+        <translation>没有与守护进程的连接。请确保守护进程正在运行。</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1560"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1651"/>
-        <source>RPC error:</source>
-        <translation>RPC エラー:</translation>
+        <source>RPC error: </source>
+        <translation>远程过程调用错误： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1562"/>
         <source>failed to get outputs to mix: %s</source>
-        <translation>出力をミックスできませんでした: %s</translation>
+        <translation>未能混合输出：%s</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1566"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1658"/>
         <source>not enough money to transfer, available only %s, sent amount %s</source>
-        <translation>送金するのに十分な金額がありません。利用可能な金額は %s のみ、送金金額は %s です。</translation>
+        <translation>资金不足，无法转账，仅可用 %s，发送金额 %s</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1573"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1666"/>
         <source>not enough money to transfer, overall balance only %s, sent amount %s</source>
-        <translation>送金するのに十分な金額がありません。全体の残高は %s のみ、送金金額は %s です。</translation>
+        <translation>资金不足，无法转账，总余额只有 %s，发送金额 %s</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1580"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1674"/>
         <source>not enough money to transfer, available only %s, transaction amount %s = %s + %s (fee)</source>
-        <translation>送金するのに十分な金額がありません。%s のみ利用可能です。取引金額 %s = %s + %s (手数料)</translation>
+        <translation>资金不足，无法转账，仅可使用 %s，交易金额 %s = %s + %s（费用）</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1588"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1682"/>
         <source>not enough outputs for specified ring size</source>
-        <translation>指定されたリングサイズに対して出力が足りません</translation>
+        <translation>没有足够的输出来满足指定的环尺寸</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1590"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1684"/>
         <source>output amount</source>
-        <translation>出力量</translation>
+        <translation>输出量</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1590"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1684"/>
         <source>found outputs to use</source>
-        <translation>使用する出力が見つかりました</translation>
+        <translation>找到要使用的输出</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1592"/>
         <source>Please sweep unmixable outputs.</source>
-        <translation>混合できない出力をスイープしてください。</translation>
+        <translation>请扫描不可混合的输出。</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1595"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1688"/>
         <source>transaction was not constructed</source>
-        <translation>トランザクションは構築されませんでした</translation>
+        <translation>交易未构建</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1598"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1691"/>
-        <source>transaction %s was rejected by daemon with status:</source>
-        <translation>トランザクション %s はデーモンによってステータスで拒否されました:</translation>
+        <source>transaction %s was rejected by daemon with status: </source>
+        <translation>事务 %s 被守护程序拒绝，状态为： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1603"/>
         <source>destination amount is zero</source>
-        <translation>目的地の金額はゼロです</translation>
+        <translation>目的地金额为零</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1605"/>
         <source>transaction has no destination</source>
-        <translation>トランザクションに宛先がありません</translation>
+        <translation>交易没有目的地</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1607"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1698"/>
         <source>failed to find a suitable way to split transactions</source>
-        <translation>取引を分割する適切な方法を見つけられなかった</translation>
+        <translation>未能找到合适的方式来分割交易</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1609"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1700"/>
-        <source>unknown transfer error:</source>
-        <translation>不明な転送エラー:</translation>
+        <source>unknown transfer error: </source>
+        <translation>未知的传输错误： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1611"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1702"/>
-        <source>internal error:</source>
-        <translation>内部エラー:</translation>
+        <source>internal error: </source>
+        <translation>内部错误： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1613"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1704"/>
-        <source>unexpected error:</source>
-        <translation>予期しないエラー:</translation>
+        <source>unexpected error: </source>
+        <translation>意外错误： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1615"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1706"/>
         <source>unknown error</source>
-        <translation>不明なエラー</translation>
+        <translation>未知错误</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1653"/>
         <source>failed to get outputs to mix</source>
-        <translation>出力をミックスできませんでした</translation>
+        <translation>无法混合输出</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1696"/>
         <source>one of destinations is zero</source>
-        <translation>目的地の1つがゼロです</translation>
+        <translation>目的地之一为零</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1816"/>
@@ -465,18 +465,18 @@
         <location filename="../src/wallet/api/wallet.cpp" line="1977"/>
         <location filename="../src/wallet/api/wallet.cpp" line="2498"/>
         <source>Failed to parse txid</source>
-        <translation>txid の解析に失敗しました</translation>
+        <translation>无法解析 txid</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1836"/>
         <source>no tx keys found for this txid</source>
-        <translation>この txid の tx キーが見つかりません</translation>
+        <translation>没有找到该 txid 的 tx 密钥</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1860"/>
         <location filename="../src/wallet/api/wallet.cpp" line="1869"/>
         <source>Failed to parse tx key</source>
-        <translation>txキーの解析に失敗しました</translation>
+        <translation>无法解析 tx 密钥</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="1878"/>
@@ -485,85 +485,85 @@
         <location filename="../src/wallet/api/wallet.cpp" line="2016"/>
         <location filename="../src/wallet/api/wallet.cpp" line="2047"/>
         <source>Failed to parse address</source>
-        <translation>アドレスの解析に失敗しました</translation>
+        <translation>解析地址失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2021"/>
         <source>Address must not be a subaddress</source>
-        <translation>アドレスはサブアドレスであってはなりません</translation>
+        <translation>地址不能是子地址</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2052"/>
-        <source>Address doesn&#39;t belong to the wallet</source>
-        <translation>アドレスはウォレットに属していません</translation>
+        <source>Address doesn't belong to the wallet</source>
+        <translation>地址不属于钱包</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2076"/>
         <source>The wallet must be in multisig ready state</source>
-        <translation>ウォレットはマルチシグ準備状態である必要があります</translation>
+        <translation>钱包必须处于多重签名就绪状态</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2098"/>
         <source>Given string is not a key</source>
-        <translation>指定された文字列はキーではありません</translation>
+        <translation>给定的字符串不是键</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2361"/>
         <source>Rescan spent can only be used with a trusted daemon</source>
-        <translation>再スキャンは信頼できるデーモンでのみ使用できます</translation>
+        <translation>重新扫描花费只能与受信任的守护进程一起使用</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2419"/>
-        <source>Invalid output:</source>
-        <translation>無効な出力:</translation>
+        <source>Invalid output: </source>
+        <translation>无效输出： </translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2426"/>
         <source>Failed to mark outputs as spent</source>
-        <translation>出力を使用済みとしてマークできませんでした</translation>
+        <translation>无法将输出标记为已用</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2437"/>
         <location filename="../src/wallet/api/wallet.cpp" line="2459"/>
         <source>Failed to parse output amount</source>
-        <translation>出力量の解析に失敗しました</translation>
+        <translation>无法解析输出金额</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2442"/>
         <location filename="../src/wallet/api/wallet.cpp" line="2464"/>
         <source>Failed to parse output offset</source>
-        <translation>出力オフセットの解析に失敗しました</translation>
+        <translation>无法解析输出偏移量</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2448"/>
         <source>Failed to mark output as spent</source>
-        <translation>出力を使用済みとしてマークできませんでした</translation>
+        <translation>无法将输出标记为已用</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2470"/>
         <source>Failed to mark output as unspent</source>
-        <translation>出力を未使用としてマークできませんでした</translation>
+        <translation>无法将输出标记为未使用</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2481"/>
         <location filename="../src/wallet/api/wallet.cpp" line="2520"/>
         <source>Failed to parse key image</source>
-        <translation>キー画像の解析に失敗しました</translation>
+        <translation>关键图片解析失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2487"/>
         <source>Failed to get ring</source>
-        <translation>リングを取得できませんでした</translation>
+        <translation>获取戒指失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2505"/>
         <source>Failed to get rings</source>
-        <translation>リングを取得できませんでした</translation>
+        <translation>获取戒指失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="2526"/>
         <source>Failed to set ring</source>
-        <translation>リングの設定に失敗しました</translation>
+        <translation>设置响铃失败</translation>
     </message>
 </context>
 <context>
@@ -571,22 +571,22 @@
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="316"/>
         <source>Failed to parse address</source>
-        <translation>アドレスの解析に失敗しました</translation>
+        <translation>解析地址失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="323"/>
         <source>Failed to parse key</source>
-        <translation>キーの解析に失敗しました</translation>
+        <translation>无法解析密钥</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="331"/>
         <source>failed to verify key</source>
-        <translation>キーの検証に失敗しました</translation>
+        <translation>验证密钥失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/api/wallet.cpp" line="341"/>
         <source>key does not match address</source>
-        <translation>キーがアドレスと一致しません</translation>
+        <translation>密钥与地址不匹配</translation>
     </message>
 </context>
 <context>
@@ -594,12 +594,12 @@
     <message>
         <location filename="../src/common/command_line.cpp" line="54"/>
         <source>yes</source>
-        <translation>はい</translation>
+        <translation>是的</translation>
     </message>
     <message>
         <location filename="../src/common/command_line.cpp" line="68"/>
         <source>no</source>
-        <translation>いいえ</translation>
+        <translation>不</translation>
     </message>
 </context>
 <context>
@@ -607,87 +607,87 @@
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="92"/>
         <source>Specify IP to bind RPC server</source>
-        <translation>RPCサーバーをバインドするIPを指定する</translation>
+        <translation>指定IP绑定RPC服务器</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="93"/>
         <source>Specify IPv6 address to bind RPC server</source>
-        <translation>RPCサーバーをバインドするためのIPv6アドレスを指定します</translation>
+        <translation>指定IPv6地址绑定RPC服务器</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="94"/>
         <source>Specify IP to bind restricted RPC server</source>
-        <translation>制限されたRPCサーバーをバインドするIPを指定する</translation>
+        <translation>指定IP绑定受限RPC服务器</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="95"/>
         <source>Specify IPv6 address to bind restricted RPC server</source>
-        <translation>制限されたRPCサーバーをバインドするためのIPv6アドレスを指定します</translation>
+        <translation>指定IPv6地址绑定受限RPC服务器</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="96"/>
         <source>Allow IPv6 for RPC</source>
-        <translation>RPC に IPv6 を許可する</translation>
+        <translation>允许 IPv6 进行 RPC</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="97"/>
         <source>Ignore unsuccessful IPv4 bind for RPC</source>
-        <translation>RPC の失敗した IPv4 バインドを無視する</translation>
+        <translation>忽略 RPC 的不成功 IPv4 绑定</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="98"/>
         <source>Specify username[:password] required for RPC server</source>
-        <translation>RPCサーバーに必要なユーザー名[:パスワード]を指定します</translation>
+        <translation>指定 RPC 服务器所需的用户名[:密码]</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="99"/>
         <source>Confirm rpc-bind-ip value is NOT a loopback (local) IP</source>
-        <translation>rpc-bind-ip 値がループバック (ローカル) IP ではないことを確認する</translation>
+        <translation>确认 rpc-bind-ip 值不是环回（本地）IP</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="100"/>
         <source>Specify a comma separated list of origins to allow cross origin resource sharing</source>
-        <translation>クロスオリジンリソース共有を許可するには、コンマ区切りのオリジンリストを指定します。</translation>
+        <translation>指定逗号分隔的源列表以允许跨源资源共享</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="101"/>
         <source>Enable SSL on RPC connections: enabled|disabled|autodetect</source>
-        <translation>RPC 接続で SSL を有効にする: 有効|無効|自動検出</translation>
+        <translation>在 RPC 连接上启用 SSL：启用|禁用|自动检测</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="102"/>
         <source>Path to a PEM format private key</source>
-        <translation>PEM形式の秘密鍵へのパス</translation>
+        <translation>PEM 格式私钥的路径</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="103"/>
         <source>Path to a PEM format certificate</source>
-        <translation>PEM形式の証明書へのパス</translation>
+        <translation>PEM 格式证书的路径</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="104"/>
         <source>Path to file containing concatenated PEM format certificate(s) to replace system CA(s).</source>
-        <translation>システム CA を置き換える連結された PEM 形式の証明書を含むファイルへのパス。</translation>
+        <translation>包含用于替换系统 CA 的串联 PEM 格式证书的文件路径。</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="105"/>
         <source>List of certificate fingerprints to allow</source>
-        <translation>許可する証明書のフィンガープリントのリスト</translation>
+        <translation>允许的证书指纹列表</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="106"/>
         <source>Allow user (via --rpc-ssl-certificates) chain certificates</source>
-        <translation>ユーザーに（--rpc-ssl-certificates経由で）チェーン証明書を許可する</translation>
+        <translation>允许用户（通过--rpc-ssl-certificates）链证书</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="107"/>
         <source>Allow any peer certificate</source>
-        <translation>任意のピア証明書を許可する</translation>
+        <translation>允许任何对等证书</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="108"/>
         <source>Do not ban hosts on RPC errors</source>
-        <translation>RPCエラーでホストを禁止しない</translation>
+        <translation>不要因 RPC 错误而禁止主机</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="155"/>
@@ -695,23 +695,23 @@
         <location filename="../src/rpc/rpc_args.cpp" line="204"/>
         <location filename="../src/rpc/rpc_args.cpp" line="221"/>
         <source>Invalid IP address given for --</source>
-        <translation>-- に無効な IP アドレスが指定されました</translation>
+        <translation>给定的 IP 地址无效 --</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="163"/>
         <location filename="../src/rpc/rpc_args.cpp" line="191"/>
-        <source>permits inbound unencrypted external connections. Consider SSH tunnel or SSL proxy instead. Override with --</source>
-        <translation>暗号化されていない外部接続の受信を許可します。代わりに SSH トンネルまたは SSL プロキシを検討してください。-- で上書きします。</translation>
+        <source> permits inbound unencrypted external connections. Consider SSH tunnel or SSL proxy instead. Override with --</source>
+        <translation>允许入站未加密的外部连接。请考虑使用 SSH 隧道或 SSL 代理。覆盖--</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="242"/>
         <source>Username specified with --</source>
-        <translation>--で指定されたユーザー名</translation>
+        <translation>用 -- 指定的用户名</translation>
     </message>
     <message>
         <location filename="../src/rpc/rpc_args.cpp" line="242"/>
-        <source>cannot be empty</source>
-        <translation>空にすることはできません</translation>
+        <source> cannot be empty</source>
+        <translation>不能为空</translation>
     </message>
 </context>
 <context>
@@ -719,177 +719,177 @@
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4933"/>
         <source>Daemon uses a different RPC major version (%u) than the wallet (%u): %s. Either update one of them, or use --allow-mismatched-daemon-version.</source>
-        <translation>デーモンはウォレット (%u) とは異なる RPC メジャー バージョン (%u) を使用します: %s。どちらかを更新するか、--allow-mismatched-daemon-version を使用してください。</translation>
+        <translation>守护程序使用与钱包 (%u) 不同的 RPC 主要版本 (%u)：%s。更新其中之一，或使用 --allow-mismatched-daemon-version。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7068"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7622"/>
         <source>Spending from address index %d
 </source>
-        <translation>アドレス インデックス %d からの支出
+        <translation>地址索引 %d 的支出
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7083"/>
         <source>Your transaction needs to be split into %llu transactions.  This will result in a transaction fee being applied to each transaction, for a total fee of %s</source>
-        <translation>トランザクションを %llu 個のトランザクションに分割する必要があります。これにより、各トランザクションにトランザクション手数料が適用され、合計手数料は %s になります。</translation>
+        <translation>您的交易需要拆分为 %llu 笔交易。  这将导致每笔交易都收取交易费，总费用为 %s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7089"/>
         <source>The transaction fee is %s</source>
-        <translation>取引手数料は%sです</translation>
+        <translation>交易费用为%s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7092"/>
         <source>, of which %s is dust from change</source>
-        <translation>、そのうち %s は変化による塵です</translation>
+        <translation>，其中 %s 是变化产生的灰尘</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7093"/>
         <source>A total of %s from dust change will be sent to dust address</source>
-        <translation>ダスト変更の合計%sがダストアドレスに送信されます</translation>
+        <translation>总共 %s 的灰尘变化将被发送到灰尘地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7376"/>
         <source>Not enough money in unlocked balance</source>
-        <translation>ロック解除残高が不足しています</translation>
+        <translation>未锁定余额中没有足够的钱</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7421"/>
         <source>No address given</source>
-        <translation>住所は不明</translation>
+        <translation>没有给出地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7487"/>
         <source>missing lockedblocks parameter</source>
-        <translation>ロックブロックパラメータがありません</translation>
+        <translation>缺少lockedblocks参数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7497"/>
         <source>bad locked_blocks parameter</source>
-        <translation>不正なlocked_blocksパラメータ</translation>
+        <translation>错误的locked_blocks参数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7793"/>
         <source>failed to parse Payment ID</source>
-        <translation>支払いIDの解析に失敗しました</translation>
+        <translation>无法解析付款 ID</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2226"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2273"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7816"/>
         <source>failed to parse key image</source>
-        <translation>キーイメージの解析に失敗しました</translation>
+        <translation>无法解析关键图像</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7854"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8077"/>
         <source>No outputs found</source>
-        <translation>出力が見つかりません</translation>
+        <translation>未找到输出</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7859"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8082"/>
         <source>Multiple transactions are created, which is not supposed to happen</source>
-        <translation>複数のトランザクションが作成されますが、これは発生しないはずです</translation>
+        <translation>创建了多个事务，这是不应该发生的</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7864"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8087"/>
         <source>The transaction uses multiple or no inputs, which is not supposed to happen</source>
-        <translation>トランザクションは複数の入力を使用するか、入力をまったく使用しませんが、これは発生するはずがありません</translation>
+        <translation>交易使用多个输入或不使用输入，这是不应该发生的</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7914"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7941"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8168"/>
-        <source>Money successfully sent, transaction:</source>
-        <translation>送金は正常に完了しました。取引:</translation>
+        <source>Money successfully sent, transaction: </source>
+        <translation>汇款成功，交易： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7989"/>
         <source>missing threshold amount</source>
-        <translation>不足している閾値</translation>
+        <translation>缺少阈值金额</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7995"/>
         <source>invalid amount threshold</source>
-        <translation>無効な金額しきい値</translation>
+        <translation>无效金额阈值</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8579"/>
         <source>Claimed change does not go to a paid address</source>
-        <translation>請求されたお釣りは支払済みアドレスに送られません</translation>
+        <translation>已领取的零钱并未发送至付费地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8584"/>
         <source>Claimed change is larger than payment to the change address</source>
-        <translation>請求されたお釣りはお釣りのアドレスへの支払い額よりも大きい</translation>
+        <translation>索取的找零金额大于向找零地址支付的金额</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8593"/>
         <source>Change goes to more than one address</source>
-        <translation>変更は複数のアドレスに送られます</translation>
+        <translation>更改会转到多个地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8615"/>
         <source>sending %s to %s</source>
-        <translation>%s を %s に送信しています</translation>
+        <translation>将 %s 发送至 %s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8625"/>
-        <source>dummy output(s)</source>
-        <translation>ダミー出力</translation>
+        <source> dummy output(s)</source>
+        <translation>虚拟输出</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8628"/>
         <source>with no destinations</source>
-        <translation>目的地のない</translation>
+        <translation>没有目的地</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8637"/>
         <source>no change</source>
-        <translation>変化なし</translation>
+        <translation>没有变化</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5750"/>
         <source>Daemon is local, assuming trusted</source>
-        <translation>デーモンはローカルであり、信頼されていると仮定します</translation>
+        <translation>守护进程是本地的，假设可信</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5413"/>
         <source>Password for new watch-only wallet</source>
-        <translation>新しいウォッチ専用ウォレットのパスワード</translation>
+        <translation>新手表专用钱包的密码</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="413"/>
         <source>FALSE</source>
-        <translation>FALSE</translation>
+        <translation>错误的</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="775"/>
-        <source>Commands:</source>
-        <translation>コマンド:</translation>
+        <source>Commands: </source>
+        <translation>命令： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="789"/>
-        <source>Unknown command:</source>
-        <translation>不明なコマンド:</translation>
+        <source>Unknown command: </source>
+        <translation>未知命令： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="796"/>
-        <source>Command usage:</source>
-        <translation>コマンドの使用方法:</translation>
+        <source>Command usage: </source>
+        <translation>命令用法： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="799"/>
-        <source>Command description:</source>
-        <translation>コマンドの説明:</translation>
+        <source>Command description: </source>
+        <translation>命令说明： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="825"/>
         <source>wallet is watch-only and has no spend key</source>
-        <translation>ウォレットはウォッチのみで、支出キーはありません</translation>
+        <translation>钱包仅限手表使用，没有消费密钥</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="851"/>
@@ -914,168 +914,168 @@
         <location filename="../src/simplewallet/simplewallet.cpp" line="11096"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11145"/>
         <source>command not supported by HW wallet</source>
-        <translation>コマンドはHWウォレットではサポートされていません</translation>
+        <translation>硬件钱包不支持命令</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="856"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="933"/>
         <source>wallet is watch-only and has no seed</source>
-        <translation>ウォレットはウォッチのみでシードはありません</translation>
+        <translation>钱包仅限手表且无种子</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="865"/>
         <source>wallet is multisig but not yet finalized</source>
-        <translation>ウォレットはマルチシグですが、まだ完成していません</translation>
+        <translation>钱包是多重签名的，但尚未最终确定</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="874"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="943"/>
         <source>wallet is non-deterministic and has no seed</source>
-        <translation>ウォレットは非決定論的であり、シードはない</translation>
+        <translation>钱包是不确定的并且没有种子</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="898"/>
         <source>Failed to retrieve seed</source>
-        <translation>シードを取得できませんでした</translation>
+        <translation>获取种子失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="928"/>
         <source>wallet is multisig and has no seed</source>
-        <translation>ウォレットはマルチシグであり、シードはありません</translation>
+        <translation>钱包是多重签名的并且没有种子</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="953"/>
         <source>Incorrect password</source>
-        <translation>パスワードが間違っています</translation>
+        <translation>密码错误</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="975"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1153"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1236"/>
         <source>Your original password was incorrect.</source>
-        <translation>元のパスワードが間違っていました。</translation>
+        <translation>您的原始密码不正确。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="990"/>
-        <source>Error with wallet rewrite:</source>
-        <translation>ウォレットの書き換えエラー:</translation>
+        <source>Error with wallet rewrite: </source>
+        <translation>钱包重写错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10594"/>
-        <source>Random payment ID:</source>
-        <translation>ランダム支払いID:</translation>
+        <source>Random payment ID: </source>
+        <translation>随机支付ID： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1011"/>
         <source>Current fee is %s %s per %s</source>
-        <translation>現在の料金は %s %s / %s です</translation>
+        <translation>当前费用为每 %s %s %s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="603"/>
-        <source>Payment required, see the &#39;rpc_payment_info&#39; command</source>
-        <translation>支払いが必要です。「rpc_payment_info」コマンドを参照してください。</translation>
+        <source>Payment required, see the 'rpc_payment_info' command</source>
+        <translation>需要付款，请参阅“rpc_ payment_info”命令</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1027"/>
-        <source>Error: failed to estimate backlog array size:</source>
-        <translation>エラー: バックログ配列のサイズを推定できませんでした:</translation>
+        <source>Error: failed to estimate backlog array size: </source>
+        <translation>错误：无法估计待办事项数组大小： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1032"/>
         <source>Error: bad estimated backlog array size</source>
-        <translation>エラー: バックログ配列の推定サイズが不正です</translation>
+        <translation>错误：错误估计积压数组大小</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1044"/>
-        <source>(current)</source>
-        <translation>（現在）</translation>
+        <source> (current)</source>
+        <translation>（当前的）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1047"/>
         <source>%u block (%u minutes) backlog at priority %u%s</source>
-        <translation>優先度 %u%s の %u ブロック (%u 分) バックログ</translation>
+        <translation>%u 块（%u 分钟）积压优先级为 %u%s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1049"/>
         <source>%u to %u block (%u to %u minutes) backlog at priority %u</source>
-        <translation>優先度 %u の %u から %u ブロック (%u から %u 分) のバックログ</translation>
+        <translation>%u 到 %u 块（%u 到 %u 分钟）优先级 %u 积压</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1052"/>
-        <source>No backlog at priority</source>
-        <translation>優先バックログなし</translation>
+        <source>No backlog at priority </source>
+        <translation>优先无积压 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1074"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1121"/>
         <source>This wallet is already multisig</source>
-        <translation>このウォレットはすでにマルチシグです</translation>
+        <translation>这个钱包已经是多重签名的了</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1079"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1126"/>
         <source>wallet is watch-only and cannot be made multisig</source>
-        <translation>ウォレットはウォッチのみで、マルチシグにすることはできません</translation>
+        <translation>钱包仅限手表使用，无法进行多重签名</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1085"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1132"/>
         <source>This wallet has been used before, please use a new wallet to create a multisig wallet</source>
-        <translation>このウォレットは以前に使用されました。新しいウォレットを使用してマルチシグウォレットを作成してください。</translation>
+        <translation>该钱包已被使用过，请使用新钱包创建多重签名钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1093"/>
-        <source>Send this multisig info to all other participants, then use make_multisig &lt;threshold&gt; &lt;info1&gt; [&lt;info2&gt;...] with others&#39; multisig info</source>
-        <translation>このマルチシグ情報を他のすべての参加者に送信し、make_multisig &lt;threshold&gt; &lt;info1&gt; [&lt;info2&gt;...] with others&#39; マルチシグ情報を使用します。</translation>
+        <source>Send this multisig info to all other participants, then use make_multisig &lt;threshold&gt; &lt;info1&gt; [&lt;info2&gt;...] with others' multisig info</source>
+        <translation>将此多重签名信息发送给所有其他参与者，然后使用 make_multisig &lt;threshold> &lt;信息1> [&lt;info2&gt;...] 与其他人的多重签名信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1094"/>
-        <source>This includes the PRIVATE view key, so needs to be disclosed only to that multisig wallet&#39;s participants</source>
-        <translation>これにはプライベートビューキーが含まれるため、そのマルチシグウォレットの参加者にのみ開示する必要があります。</translation>
+        <source>This includes the PRIVATE view key, so needs to be disclosed only to that multisig wallet's participants </source>
+        <translation>这包括私人视图密钥，因此只需向该多重签名钱包的参与者披露 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1146"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2890"/>
         <source>Invalid threshold</source>
-        <translation>無効なしきい値</translation>
+        <translation>阈值无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1168"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1247"/>
         <source>Another step is needed</source>
-        <translation>さらなるステップが必要</translation>
+        <translation>还需要一个步骤</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1180"/>
-        <source>Error creating multisig:</source>
-        <translation>マルチシグの作成中にエラーが発生しました:</translation>
+        <source>Error creating multisig: </source>
+        <translation>创建多重签名时出错： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1187"/>
         <source>Error creating multisig: new wallet is not multisig</source>
-        <translation>マルチシグ作成エラー: 新しいウォレットはマルチシグではありません</translation>
+        <translation>创建多重签名时出错：新钱包不是多重签名</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1190"/>
-        <source>multisig address:</source>
-        <translation>マルチシグアドレス:</translation>
+        <source> multisig address: </source>
+        <translation>多重签名地址： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1224"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1289"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1357"/>
         <source>This wallet is not multisig</source>
-        <translation>このウォレットはマルチシグではありません</translation>
+        <translation>该钱包不是多重签名的</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1229"/>
         <source>This wallet is already finalized</source>
-        <translation>このウォレットはすでに完成しています</translation>
+        <translation>这个钱包已经定型了</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1259"/>
-        <source>Multisig address:</source>
-        <translation>マルチシグアドレス:</translation>
+        <source>Multisig address: </source>
+        <translation>多重签名地址： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1294"/>
@@ -1084,106 +1084,106 @@
         <location filename="../src/simplewallet/simplewallet.cpp" line="1576"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1658"/>
         <source>This multisig wallet is not yet finalized</source>
-        <translation>このマルチシグウォレットはまだ完成していません</translation>
+        <translation>这个多重签名钱包尚未最终确定</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1322"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10969"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11126"/>
-        <source>failed to save file</source>
-        <translation>ファイルの保存に失敗しました</translation>
+        <source>failed to save file </source>
+        <translation>保存文件失败 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1330"/>
-        <source>Error exporting multisig info:</source>
-        <translation>マルチシグ情報のエクスポート中にエラーが発生しました:</translation>
+        <source>Error exporting multisig info: </source>
+        <translation>导出多重签名信息时出错： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1334"/>
-        <source>Multisig info exported to</source>
-        <translation>マルチシグ情報がエクスポートされました</translation>
+        <source>Multisig info exported to </source>
+        <translation>多重签名信息导出至 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1385"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10882"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10908"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11159"/>
-        <source>failed to read file</source>
-        <translation>ファイルの読み取りに失敗しました</translation>
+        <source>failed to read file </source>
+        <translation>读取文件失败 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1406"/>
-        <source>Failed to import multisig info:</source>
-        <translation>マルチシグ情報をインポートできませんでした:</translation>
+        <source>Failed to import multisig info: </source>
+        <translation>导入多重签名信息失败： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1417"/>
-        <source>Failed to update spent status after importing multisig info:</source>
-        <translation>マルチシグ情報をインポートした後、使用済みステータスを更新できませんでした:</translation>
+        <source>Failed to update spent status after importing multisig info: </source>
+        <translation>导入多重签名信息后无法更新支出状态： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1423"/>
         <source>Untrusted daemon, spent status may be incorrect. Use a trusted daemon and run &quot;rescan_spent&quot;</source>
-        <translation>信頼されていないデーモン、使用済みステータスが正しくない可能性があります。信頼できるデーモンを使用して、「rescan_spent」を実行してください。</translation>
+        <translation>不受信任的守护进程，花费状态可能不正确。使用受信任的守护进程并运行“rescan_spent”</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1453"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1571"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1653"/>
         <source>This is not a multisig wallet</source>
-        <translation>これはマルチシグウォレットではありません</translation>
+        <translation>这不是多重签名钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1503"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1512"/>
         <source>Failed to sign multisig transaction</source>
-        <translation>マルチシグトランザクションの署名に失敗しました</translation>
+        <translation>无法签署多重签名交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1519"/>
-        <source>Multisig error:</source>
-        <translation>マルチシグエラー:</translation>
+        <source>Multisig error: </source>
+        <translation>多重签名错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1524"/>
-        <source>Failed to sign multisig transaction:</source>
-        <translation>マルチシグトランザクションへの署名に失敗しました:</translation>
+        <source>Failed to sign multisig transaction: </source>
+        <translation>无法签署多重签名交易： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1533"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1546"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8725"/>
-        <source>Transaction successfully signed to file</source>
-        <translation>トランザクションはファイルに正常に署名されました</translation>
+        <source>Transaction successfully signed to file </source>
+        <translation>交易已成功签署至文件 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1547"/>
         <source>It may be relayed to the network with submit_multisig</source>
-        <translation>submit_multisigでネットワークに中継される可能性がある</translation>
+        <translation>它可以通过submit_multisig转发到网络</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1608"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1679"/>
         <source>Failed to load multisig transaction from file</source>
-        <translation>ファイルからマルチシグトランザクションを読み込めませんでした</translation>
+        <translation>无法从文件加载多重签名交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1614"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1684"/>
         <source>Multisig transaction signed by only %u signers, needs %u more signatures</source>
-        <translation>マルチシグトランザクションは %u 人の署名者によってのみ署名されています。さらに %u 人の署名が必要です。</translation>
+        <translation>多重签名交易仅由 %u 个签名者签名，需要 %u 个签名</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1623"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11369"/>
-        <source>Transaction successfully submitted, transaction</source>
-        <translation>トランザクションが正常に送信されました。トランザクション</translation>
+        <source>Transaction successfully submitted, transaction </source>
+        <translation>交易提交成功，交易 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1624"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11370"/>
         <source>You can check its status by using the `show_transfers` command.</source>
-        <translation>`show_transfers` コマンドを使用してステータスを確認できます。</translation>
+        <translation>您可以使用“show_transfers”命令检查其状态。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1634"/>
@@ -1201,458 +1201,458 @@
         <location filename="../src/simplewallet/simplewallet.cpp" line="8179"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8769"/>
         <source>unknown error</source>
-        <translation>不明なエラー</translation>
+        <translation>未知错误</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1700"/>
-        <source>Failed to export multisig transaction to file</source>
-        <translation>マルチシグトランザクションをファイルにエクスポートできませんでした</translation>
+        <source>Failed to export multisig transaction to file </source>
+        <translation>无法将多重签名交易导出到文件 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1704"/>
-        <source>Saved exported multisig transaction file(s):</source>
-        <translation>保存されたエクスポートされたマルチシグトランザクションファイル:</translation>
+        <source>Saved exported multisig transaction file(s): </source>
+        <translation>保存导出的多重签名交易文件： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1709"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2050"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6114"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6451"/>
-        <source>unexpected error:</source>
-        <translation>予期しないエラー:</translation>
+        <source>unexpected error: </source>
+        <translation>意外错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1732"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1889"/>
         <source>Invalid key image</source>
-        <translation>無効なキー画像</translation>
+        <translation>关键图片无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1738"/>
         <source>Invalid txid</source>
-        <translation>無効なtxid</translation>
+        <translation>无效的txid</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1765"/>
-        <source>Failed to get key image ring:</source>
-        <translation>キーイメージリングを取得できませんでした:</translation>
+        <source>Failed to get key image ring: </source>
+        <translation>获取关键图像环失败： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1780"/>
-        <source>File doesn&#39;t exist</source>
-        <translation>ファイルが存在しません</translation>
+        <source>File doesn't exist</source>
+        <translation>文件不存在</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1802"/>
-        <source>Invalid ring specification:</source>
-        <translation>リングの指定が無効です:</translation>
+        <source>Invalid ring specification: </source>
+        <translation>无效的戒指规格： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1810"/>
-        <source>Invalid key image:</source>
-        <translation>無効なキー画像:</translation>
+        <source>Invalid key image: </source>
+        <translation>无效的关键图像： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1815"/>
-        <source>Invalid ring type, expected relative or abosolute:</source>
-        <translation>リング タイプが無効です。相対または絶対が期待されます:</translation>
+        <source>Invalid ring type, expected relative or abosolute: </source>
+        <translation>环类型无效，预期为相对或绝对： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1821"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1833"/>
-        <source>Error reading line:</source>
-        <translation>行の読み取りエラー:</translation>
+        <source>Error reading line: </source>
+        <translation>读取行时出错： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1844"/>
-        <source>Invalid ring:</source>
-        <translation>無効なリング:</translation>
+        <source>Invalid ring: </source>
+        <translation>无效环： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1853"/>
-        <source>Invalid relative ring:</source>
-        <translation>無効な相対リング:</translation>
+        <source>Invalid relative ring: </source>
+        <translation>无效的相对环： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1865"/>
-        <source>Invalid absolute ring:</source>
-        <translation>無効な絶対リング:</translation>
+        <source>Invalid absolute ring: </source>
+        <translation>无效的绝对环： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1874"/>
-        <source>Failed to set ring for key image:</source>
-        <translation>キー画像のリングを設定できませんでした:</translation>
+        <source>Failed to set ring for key image: </source>
+        <translation>关键图片设置铃声失败： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1874"/>
         <source>Continuing.</source>
-        <translation>継続中。</translation>
+        <translation>继续。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1904"/>
         <source>Missing absolute or relative keyword</source>
-        <translation>絶対キーワードまたは相対キーワードがありません</translation>
+        <translation>缺少绝对或相对关键字</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1914"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1921"/>
         <source>invalid index: must be a strictly positive unsigned integer</source>
-        <translation>無効なインデックス: 厳密に正の符号なし整数である必要があります</translation>
+        <translation>无效索引：必须是严格正的无符号整数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1929"/>
         <source>invalid index: indices wrap</source>
-        <translation>無効なインデックス: インデックスが折り返されています</translation>
+        <translation>无效索引：索引换行</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1939"/>
         <source>invalid index: indices should be in strictly ascending order</source>
-        <translation>無効なインデックス: インデックスは厳密に昇順である必要があります</translation>
+        <translation>无效索引：索引应严格按升序排列</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1946"/>
         <source>failed to set ring</source>
-        <translation>リングの設定に失敗しました</translation>
+        <translation>设置铃声失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1969"/>
         <source>Invalid key image or txid</source>
-        <translation>無効なキーイメージまたはtxid</translation>
+        <translation>关键图像或 txid 无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1978"/>
         <source>failed to unset ring</source>
-        <translation>リングの設定解除に失敗しました</translation>
+        <translation>未能取消设置环</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2001"/>
-        <source>RPC client ID:</source>
-        <translation>RPC クライアント ID:</translation>
+        <source>RPC client ID: </source>
+        <translation>RPC 客户端 ID： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2002"/>
-        <source>RPC client secret key:</source>
-        <translation>RPC クライアント秘密キー:</translation>
+        <source>RPC client secret key: </source>
+        <translation>RPC 客户端密钥： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2005"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2434"/>
         <source>Failed to query daemon</source>
-        <translation>デーモンのクエリに失敗しました</translation>
+        <translation>查询守护进程失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2013"/>
-        <source>Using daemon:</source>
-        <translation>デーモンの使用:</translation>
+        <source>Using daemon: </source>
+        <translation>使用守护进程： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2014"/>
-        <source>Payments required for node use, current credits:</source>
-        <translation>ノード使用に必要な支払い、現在のクレジット:</translation>
+        <source>Payments required for node use, current credits: </source>
+        <translation>节点使用所需付款，当前积分： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2015"/>
-        <source>Credits target:</source>
-        <translation>クレジット目標:</translation>
+        <source>Credits target: </source>
+        <translation>学分目标： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2018"/>
-        <source>Credits spent this session:</source>
-        <translation>このセッションで消費されたクレジット:</translation>
+        <source>Credits spent this session: </source>
+        <translation>本次会议花费的学分： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2020"/>
-        <source>Credit discrepancy this session:</source>
-        <translation>このセッションのクレジットの不一致:</translation>
+        <source>Credit discrepancy this session: </source>
+        <translation>本期信用差异： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2022"/>
-        <source>Difficulty:</source>
-        <translation>困難：</translation>
+        <source>Difficulty: </source>
+        <translation>困难： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2022"/>
-        <source>credits per hash found,</source>
-        <translation>見つかったハッシュごとのクレジット、</translation>
+        <source>credits per hash found, </source>
+        <translation>每个找到的哈希值的积分， </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2022"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2318"/>
         <source>credits/hash</source>
-        <translation>クレジット/ハッシュ</translation>
+        <translation>积分/哈希</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2030"/>
         <source>Mining for payment at %.1f H/s</source>
-        <translation>%.1f H/s で支払いのためのマイニング</translation>
+        <translation>挖矿费用为 %.1f H/s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2035"/>
         <source>Estimated time till %u credits target mined: %s</source>
-        <translation>%u クレジットのターゲットを採掘するまでの推定時間: %s</translation>
+        <translation>预计开采 %u 个积分目标所需时间：%s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2039"/>
         <source>Mining for payment</source>
-        <translation>支払いのための採掘</translation>
+        <translation>挖矿支付</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2042"/>
         <source>Not mining</source>
-        <translation>採掘していない</translation>
+        <translation>不挖矿</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2045"/>
         <source>No payment needed for node use</source>
-        <translation>ノード使用には料金はかかりません</translation>
+        <translation>节点使用无需付费</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2118"/>
-        <source>Bad argument:</source>
-        <translation>悪い議論:</translation>
+        <source>Bad argument: </source>
+        <translation>不好的论点： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2118"/>
         <source>should be &quot;add&quot;</source>
-        <translation>「追加」する必要があります</translation>
+        <translation>应该是“添加”</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2127"/>
         <source>Failed to open file</source>
-        <translation>ファイルを開けませんでした</translation>
+        <translation>无法打开文件</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2211"/>
-        <source>Failed to save known rings:</source>
-        <translation>既知のリングを保存できませんでした:</translation>
+        <source>Failed to save known rings: </source>
+        <translation>无法保存已知环： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2220"/>
         <source>usage: %s &lt;key_image&gt;|&lt;pubkey&gt;</source>
-        <translation>使用法: %s &lt;key_image&gt;|&lt;pubkey&gt;</translation>
+        <translation>用法：%s &lt;key_image>|&lt;pubkey></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2265"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2277"/>
-        <source>Frozen:</source>
-        <translation>凍った：</translation>
+        <source>Frozen: </source>
+        <translation>冷冻： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2279"/>
-        <source>Not frozen:</source>
-        <translation>凍結されていない:</translation>
+        <source>Not frozen: </source>
+        <translation>未冻结： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2293"/>
-        <source>bytes sent</source>
-        <translation>送信バイト数</translation>
+        <source> bytes sent</source>
+        <translation>发送的字节数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2294"/>
-        <source>bytes received</source>
-        <translation>受信バイト数</translation>
+        <source> bytes received</source>
+        <translation>收到的字节数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2306"/>
         <source>No known public nodes</source>
-        <translation>既知の公開ノードはありません</translation>
+        <translation>没有已知的公共节点</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2318"/>
         <source>address</source>
-        <translation>住所</translation>
+        <translation>地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2318"/>
         <source>last_seen</source>
-        <translation>最後に見た</translation>
+        <translation>上次看到的</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2324"/>
         <source>never</source>
-        <translation>一度もない</translation>
+        <translation>绝不</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2332"/>
-        <source>Error retrieving public node list:</source>
-        <translation>パブリック ノード リストの取得中にエラーが発生しました:</translation>
+        <source>Error retrieving public node list: </source>
+        <translation>检索公共节点列表时出错： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2342"/>
         <source>Salvium, like Bitcoin, is a cryptocurrency. That is, it is digital money.</source>
-        <translation>Salvium は、ビットコインと同様に暗号通貨です。つまり、デジタルマネーです。</translation>
+        <translation>Salvium 与比特币一样，是一种加密货币。也就是说，它是数字货币。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2346"/>
         <source>Salvium protects your privacy on the blockchain, and while Salvium strives to improve all the time,</source>
-        <translation>Salviumはブロックチェーン上であなたのプライバシーを保護し、常に改善に努めていますが、</translation>
+        <translation>Salvium 保护您在区块链上的隐私，虽然 Salvium 一直在努力改进，</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2347"/>
         <source>no privacy technology can be 100% perfect, Salvium included.</source>
-        <translation>Salvium を含め、プライバシー テクノロジーは 100% 完璧ではありません。</translation>
+        <translation>没有任何隐私技术可以是 100% 完美的，包括 Salvium。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2348"/>
         <source>Salvium cannot protect you from malware, and it may not be as effective as we hope against powerful adversaries.</source>
-        <translation>Salvium はマルウェアからユーザーを保護することはできませんし、強力な敵に対しては期待するほどの効果が得られない可能性もあります。</translation>
+        <translation>Salvium 无法保护您免受恶意软件的侵害，而且它可能无法像我们希望的那样有效地对抗强大的对手。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2349"/>
         <source>Flaws in Salvium may be discovered in the future, and attacks may be developed to peek under some</source>
-        <translation>将来、サルビウムの欠陥が発見され、その欠陥を覗き見るための攻撃が開発されるかもしれない。</translation>
+        <translation>Salvium 的缺陷将来可能会被发现，并且可能会开发出攻击来窥视某些东西</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2350"/>
         <source>of the layers of privacy Salvium provides. Be safe and practice defense in depth.</source>
-        <translation>Salvium が提供するプライバシーの層。安全を確保し、多層防御を実践しましょう。</translation>
+        <translation>Salvium 提供的隐私层。确保安全并进行纵深防御。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2439"/>
         <source>Daemon does not require payment for RPC access</source>
-        <translation>デーモンはRPCアクセスに料金を支払わない</translation>
+        <translation>Daemon 无需付费即可访问 RPC</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2447"/>
         <source>Starting mining for RPC access: diff %llu, %f credits/hash%s</source>
-        <translation>RPC アクセスのマイニングを開始: diff %llu、%f クレジット/ハッシュ%s</translation>
+        <translation>开始挖掘 RPC 访问：diff %llu, %f 积分/哈希%s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2448"/>
         <source>Run stop_mining_for_rpc to stop</source>
-        <translation>停止するにはstop_mining_for_rpcを実行します</translation>
+        <translation>运行 stop_mining_for_rpc 停止</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2550"/>
         <source>wallet is watch-only and cannot transfer</source>
-        <translation>ウォレットは監視のみで、転送はできません</translation>
+        <translation>钱包只能手表，不能转账</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7117"/>
         <source>WARNING: this is a non default ring size, which may harm your privacy. Default is recommended.</source>
-        <translation>警告: これはデフォルトではないリング サイズであり、プライバシーが侵害される可能性があります。デフォルトを使用することをお勧めします。</translation>
+        <translation>警告：这是非默认戒指尺寸，可能会损害您的隐私。建议使用默认值。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2572"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2595"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2611"/>
-        <source>priority must be either 0, 1, 2, 3, or 4, or one of:</source>
-        <translation>優先度は 0、1、2、3、4 のいずれか、または次のいずれかである必要があります。</translation>
+        <source>priority must be either 0, 1, 2, 3, or 4, or one of: </source>
+        <translation>优先级必须为 0、1、2、3 或 4，或者以下之一： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2616"/>
         <source>could not change default priority</source>
-        <translation>デフォルトの優先度を変更できませんでした</translation>
+        <translation>无法更改默认优先级</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2702"/>
         <source>invalid unit</source>
-        <translation>無効な単位</translation>
+        <translation>无效单位</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2738"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2800"/>
         <source>invalid count: must be an unsigned integer</source>
-        <translation>無効なカウント: 符号なし整数である必要があります</translation>
+        <translation>无效计数：必须是无符号整数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2720"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2756"/>
         <source>invalid value</source>
-        <translation>無効な値</translation>
+        <translation>无效值</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2834"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2952"/>
         <source>Invalid height</source>
-        <translation>高さが無効です</translation>
+        <translation>身高无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2907"/>
         <source>Invalid target</source>
-        <translation>無効なターゲット</translation>
+        <translation>目标无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2983"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3002"/>
         <source>Invalid amount</source>
-        <translation>無効な金額</translation>
+        <translation>金额无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3072"/>
         <source>invalid argument: must be either 1/yes or 0/no</source>
-        <translation>無効な引数: 1/はいまたは 0/いいえのいずれかである必要があります</translation>
+        <translation>无效参数：必须为 1/是 或 0/否</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3340"/>
         <source>Start mining in the daemon (bg_mining and ignore_battery are optional booleans).</source>
-        <translation>デーモンでマイニングを開始します (bg_mining と ignore_battery はオプションのブール値です)。</translation>
+        <translation>在守护进程中开始挖掘（bg_mining 和ignore_battery 是可选布尔值）。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3343"/>
         <source>Stop mining in the daemon.</source>
-        <translation>デーモンでのマイニングを停止します。</translation>
+        <translation>停止在守护进程中挖矿。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3350"/>
         <source>Save the current blockchain data.</source>
-        <translation>現在のブロックチェーンデータを保存します。</translation>
+        <translation>保存当前区块链数据。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3353"/>
         <source>Synchronize the transactions and balance.</source>
-        <translation>取引と残高を同期します。</translation>
+        <translation>同步交易和余额。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3357"/>
-        <source>Show the wallet&#39;s balance of the currently selected account.</source>
-        <translation>現在選択されているアカウントのウォレット残高を表示します。</translation>
+        <source>Show the wallet's balance of the currently selected account.</source>
+        <translation>显示当前所选账户的钱包余额。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3361"/>
         <source>Show the incoming transfers, all or filtered by availability and address index.
 
 Output format:
-Amount, Spent(&quot;T&quot;|&quot;F&quot;), &quot;frozen&quot;|&quot;locked&quot;|&quot;unlocked&quot;, RingCT, Global Index, Transaction Hash, Address Index, [Public Key, Key Image]</source>
-        <translation>受信転送をすべて表示するか、可用性とアドレス インデックスでフィルタリングして表示します。
+Amount, Spent(&quot;T&quot;|&quot;F&quot;), &quot;frozen&quot;|&quot;locked&quot;|&quot;unlocked&quot;, RingCT, Global Index, Transaction Hash, Address Index, [Public Key, Key Image] </source>
+        <translation>显示全部传入转账或按可用性和地址索引过滤的传入转账。
 
-出力形式:
-金額、使用済み (&quot;T&quot;|&quot;F&quot;)、&quot;凍結&quot;|&quot;ロック&quot;|&quot;ロック解除&quot;、RingCT、グローバル インデックス、トランザクション ハッシュ、アドレス インデックス、[公開キー、キー イメージ]</translation>
+输出格式：
+金额、已花费(“T”|“F”)、“冻结”|“锁定”|“解锁”等、RingCT、全局索引、交易哈希、地址索引、[公钥、密钥图像] </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3367"/>
         <source>Show the payments for the given payment IDs.</source>
-        <translation>指定された支払い ID の支払いを表示します。</translation>
+        <translation>显示给定付款 ID 的付款。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3370"/>
         <source>Show the blockchain height.</source>
-        <translation>ブロックチェーンの高さを表示します。</translation>
+        <translation>显示区块链高度。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3384"/>
         <source>Send all unmixable outputs to yourself with ring_size 1</source>
-        <translation>すべてのミックス不可能な出力をring_size 1で自分自身に送信する</translation>
+        <translation>使用ring_size 1 将所有不可混合的输出发送给自己</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3394"/>
         <source>Send all unlocked outputs below the threshold to an address.</source>
-        <translation>しきい値以下のすべてのロック解除された出力をアドレスに送信します。</translation>
+        <translation>将低于阈值的所有未锁定输出发送到某个地址。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3398"/>
         <source>Send a single output of the given key image to an address without change.</source>
-        <translation>指定されたキーイメージの単一の出力を変更せずにアドレスに送信します。</translation>
+        <translation>将给定关键图像的单个输出发送到不进行更改的地址。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3438"/>
         <source>Submit a signed transaction from a file.</source>
-        <translation>ファイルから署名されたトランザクションを送信します。</translation>
+        <translation>从文件提交已签名的交易。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3442"/>
         <source>Change the current log detail (level must be &lt;0-4&gt;).</source>
-        <translation>現在のログの詳細を変更します (レベルは &lt;0-4&gt; である必要があります)。</translation>
+        <translation>更改当前日志详细信息（级别必须为&lt;0-4>）。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3446"/>
@@ -1663,217 +1663,217 @@ If the &quot;label&quot; argument is specified, the wallet sets the label of the
 If the &quot;tag&quot; argument is specified, a tag &lt;tag_name&gt; is assigned to the specified accounts &lt;account_index_1&gt;, &lt;account_index_2&gt;, ....
 If the &quot;untag&quot; argument is specified, the tags assigned to the specified accounts &lt;account_index_1&gt;, &lt;account_index_2&gt; ..., are removed.
 If the &quot;tag_description&quot; argument is specified, the tag &lt;tag_name&gt; is assigned an arbitrary text &lt;description&gt;.</source>
-        <translation>引数が指定されていない場合、ウォレットは既存のすべてのアカウントとその残高を表示します。
-「new」引数が指定されている場合、ウォレットは指定されたラベル テキスト (空の場合もあります) でラベルが初期化された新しいアカウントを作成します。
-「switch」引数が指定されている場合、ウォレットは「index」で指定されたアカウントに切り替えます。
-「label」引数が指定されている場合、ウォレットは「index」で指定されたアカウントのラベルを指定されたラベル テキストに設定します。
-「tag」引数が指定されている場合、指定されたアカウント「account_index_1」、「account_index_2」、... にタグ「tag_name」が割り当てられます。
-「untag」引数が指定されている場合、指定されたアカウント「account_index_1」、「account_index_2」に割り当てられたタグが削除されます。 ... は削除されます。
-&quot;tag_description&quot; 引数が指定されている場合、タグ &lt;tag_name&gt; に任意のテキスト &lt;description&gt; が割り当てられます。</translation>
+        <translation>如果未指定参数，钱包将显示所有现有帐户及其余额。
+如果“新”帐户为指定参数后，钱包将创建一个新帐户，其标签由提供的标签文本（可以为空）初始化。
+如果“switch”是指定参数后，钱包会切换到 &lt;index> 指定的帐户。
+如果“label”为指定参数后，钱包设置由 &lt;index> 指定的帐户的标签。到提供的标签文本。
+如果“tag”是指定参数时，标签 &lt;tag_name>已分配给指定帐户 &lt;account_index_1>、&lt;account_index_2>、...
+如果“untag”为指定参数后，分配给指定帐户的标签 &lt;account_index_1>、&lt;account_index_2> ...，被删除。
+如果“tag_description”是指定参数后，标签 &lt;tag_name>被分配任意文本&lt;描述>。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3460"/>
         <source>Encode a payment ID into an integrated address for the current wallet public address (no argument uses a random payment ID), or decode an integrated address to standard address and payment ID</source>
-        <translation>現在のウォレットの公開アドレスの統合アドレスに支払いIDをエンコードする（引数なしではランダムな支払いIDは使用されない）、または統合アドレスを標準アドレスと支払いIDにデコードする</translation>
+        <translation>将支付ID编码为当前钱包公共地址的集成地址（无参数使用随机支付ID），或将集成地址解码为标准地址和支付ID</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3464"/>
         <source>Print all entries in the address book, optionally adding/deleting an entry to/from it.</source>
-        <translation>アドレス帳のすべてのエントリを印刷します。オプションでエントリを追加/削除することもできます。</translation>
+        <translation>打印地址簿中的所有条目，可以选择向其中添加/删除条目。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3467"/>
         <source>Save the wallet data.</source>
-        <translation>ウォレットデータを保存します。</translation>
+        <translation>保存钱包数据。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3470"/>
         <source>Save a watch-only keys file.</source>
-        <translation>ウォッチ専用のキー ファイルを保存します。</translation>
+        <translation>保存仅供观看的密钥文件。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3473"/>
         <source>Display the private view key.</source>
-        <translation>プライベートビューキーを表示します。</translation>
+        <translation>显示私人查看密钥。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3476"/>
         <source>Display the private spend key.</source>
-        <translation>プライベート支出キーを表示します。</translation>
+        <translation>显示私人支出密钥。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3479"/>
         <source>Display the Electrum-style mnemonic seed</source>
-        <translation>Electrumスタイルの記憶シードを表示する</translation>
+        <translation>显示金银币风格的助记词种子</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3561"/>
         <source>Display the encrypted Electrum-style mnemonic seed.</source>
-        <translation>暗号化された Electrum スタイルのニーモニック シードを表示します。</translation>
+        <translation>显示加密的 Electrum 式助记词种子。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3564"/>
         <source>Rescan the blockchain for spent outputs.</source>
-        <translation>ブロックチェーンを再スキャンして、使用済みの出力を探します。</translation>
+        <translation>重新扫描区块链以查找已用过的输出。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3568"/>
         <source>Get the transaction key (r) for a given &lt;txid&gt;.</source>
-        <translation>指定された &lt;txid&gt; のトランザクション キー (r) を取得します。</translation>
+        <translation>获取给定 &lt;txid> 的交易密钥 (r)。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3572"/>
         <source>Set the transaction key (r) for a given &lt;txid&gt; in case the tx was made by some other device or 3rd party wallet.</source>
-        <translation>トランザクションが他のデバイスまたはサードパーティのウォレットによって行われた場合に備えて、指定された &lt;txid&gt; のトランザクション キー (r) を設定します。</translation>
+        <translation>为给定的&lt;txid>设置事务密钥（r）如果交易是由其他设备或第 3 方钱包进行的。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3576"/>
         <source>Check the amount going to &lt;address&gt; in &lt;txid&gt;.</source>
-        <translation>&lt;txid&gt; の &lt;address&gt; に送金される金額を確認します。</translation>
+        <translation>检查发送至&lt;地址>的金额在 &lt;txid> 中。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3580"/>
-        <source>Generate a signature proving funds sent to &lt;address&gt; in &lt;txid&gt;, optionally with a challenge string &lt;message&gt;, using either the transaction secret key (when &lt;address&gt; is not your wallet&#39;s address) or the view secret key (otherwise), which does not disclose the secret key.</source>
-        <translation>&lt;address&gt; がウォレットのアドレスでない場合はトランザクション秘密鍵、それ以外の場合は秘密鍵を公開しないビュー秘密鍵を使用して、&lt;txid&gt; の &lt;address&gt; に資金が送金されたことを証明する署名を生成します。オプションでチャレンジ文字列 &lt;message&gt; も生成します。</translation>
+        <source>Generate a signature proving funds sent to &lt;address&gt; in &lt;txid&gt;, optionally with a challenge string &lt;message&gt;, using either the transaction secret key (when &lt;address&gt; is not your wallet's address) or the view secret key (otherwise), which does not disclose the secret key.</source>
+        <translation>生成签名证明资金发送到&lt;地址>;在 &lt;txid> 中，可选地使用质询字符串 &lt;message>，使用交易密钥（当 &lt;address> 不是您的钱包地址时）或查看密钥（否则），这不会泄露密钥。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3584"/>
         <source>Check the proof for funds going to &lt;address&gt; in &lt;txid&gt; with the challenge string &lt;message&gt; if any.</source>
-        <translation>チャレンジ文字列 &lt;message&gt; がある場合は、&lt;txid&gt; の &lt;address&gt; に資金が送金されているかどうかの証明を確認します。</translation>
+        <translation>检查资金流向&lt;地址>的证明在 &lt;txid> 中带有挑战字符串 &lt;message>;如果有的话。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3588"/>
         <source>Generate a signature proving that you generated &lt;txid&gt; using the spend secret key, optionally with a challenge string &lt;message&gt;.</source>
-        <translation>オプションでチャレンジ文字列 &lt;message&gt; を使用して、支出秘密キーを使用して &lt;txid&gt; を生成したことを証明する署名を生成します。</translation>
+        <translation>生成一个签名，证明您生成了 &lt;txid>使用支出密钥，可选地使用质询字符串&lt;message>。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3592"/>
         <source>Check a signature proving that the signer generated &lt;txid&gt;, optionally with a challenge string &lt;message&gt;.</source>
-        <translation>署名者が &lt;txid&gt; を生成したことを証明する署名をチェックします。オプションでチャレンジ文字列 &lt;message&gt; もチェックします。</translation>
+        <translation>检查签名，证明签名者生成了 &lt;txid>，可选地带有质询字符串 &lt;message>。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3596"/>
         <source>Generate a signature proving that you own at least this much, optionally with a challenge string &lt;message&gt;.
-If &#39;all&#39; is specified, you prove the entire sum of all of your existing accounts&#39; balances.
+If 'all' is specified, you prove the entire sum of all of your existing accounts' balances.
 Otherwise, you prove the reserve of the smallest possible amount above &lt;amount&gt; available in your current account.</source>
-        <translation>少なくともこの金額を所有していることを証明する署名を生成します。オプションでチャレンジ文字列 &lt;message&gt; も使用できます。
-&#39;all&#39; が指定されている場合は、既存のすべてのアカウントの残高の合計を証明します。
-それ以外の場合は、現在のアカウントで利用可能な &lt;amount&gt; を超える最小金額の準備金を証明します。</translation>
+        <translation>生成一个签名，证明您至少拥有这么多余额，可以选择使用质询字符串 &lt;message>。
+如果指定“all”，您将证明所有现有帐户余额的总和。
+否则，您将证明保留高于&lt;金额>的最小可能金额可在您当前的帐户中使用。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3602"/>
         <source>Check a signature proving that the owner of &lt;address&gt; holds at least this much, optionally with a challenge string &lt;message&gt;.</source>
-        <translation>オプションでチャレンジ文字列 &lt;message&gt; を使用して、&lt;address&gt; の所有者が少なくともこれだけの情報を保有していることを証明する署名を確認します。</translation>
+        <translation>检查签名，证明 &lt;address> 的所有者至少保存这么多，可选地带有挑战字符串&lt;message>。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3623"/>
         <source>Show the unspent outputs of a specified address within an optional amount range.</source>
-        <translation>オプションの金額範囲内で指定されたアドレスの未使用出力を表示します。</translation>
+        <translation>显示可选金额范围内指定地址的未花费输出。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3631"/>
         <source>Set an arbitrary string note for a &lt;txid&gt;.</source>
-        <translation>&lt;txid&gt; に任意の文字列注釈を設定します。</translation>
+        <translation>为 &lt;txid> 设置任意字符串注释。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3635"/>
         <source>Get a string note for a txid.</source>
-        <translation>txid の文字列メモを取得します。</translation>
+        <translation>获取 txid 的字符串注释。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3639"/>
         <source>Set an arbitrary description for the wallet.</source>
-        <translation>ウォレットの任意の説明を設定します。</translation>
+        <translation>为钱包设置任意描述。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3643"/>
         <source>Get the description of the wallet.</source>
-        <translation>ウォレットの説明を取得します。</translation>
+        <translation>获取钱包的描述。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3646"/>
-        <source>Show the wallet&#39;s status.</source>
-        <translation>ウォレットのステータスを表示します。</translation>
+        <source>Show the wallet's status.</source>
+        <translation>显示钱包的状态。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3649"/>
-        <source>Show the wallet&#39;s information.</source>
-        <translation>ウォレットの情報を表示します。</translation>
+        <source>Show the wallet's information.</source>
+        <translation>显示钱包的信息。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3657"/>
         <source>Verify a signature on the contents of a file.</source>
-        <translation>ファイルの内容の署名を検証します。</translation>
+        <translation>验证文件内容的签名。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3665"/>
         <source>Import a signed key images list and verify their spent status.</source>
-        <translation>署名されたキーイメージのリストをインポートし、使用状況を確認します。</translation>
+        <translation>导入已签名的密钥映像列表并验证其使用状态。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3673"/>
         <source>Attempts to reconnect HW wallet.</source>
-        <translation>HW ウォレットの再接続を試みます。</translation>
+        <translation>尝试重新连接硬件钱包。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3677"/>
         <source>Export a set of outputs owned by this wallet.</source>
-        <translation>このウォレットが所有する出力のセットをエクスポートします。</translation>
+        <translation>导出该钱包拥有的一组输出。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3681"/>
         <source>Import a set of outputs owned by this wallet.</source>
-        <translation>このウォレットが所有する出力のセットをインポートします。</translation>
+        <translation>导入该钱包拥有的一组输出。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3685"/>
         <source>Show information about a transfer to/from this address.</source>
-        <translation>このアドレスへの送金またはこのアドレスからの送金に関する情報を表示します。</translation>
+        <translation>显示有关转入/转出该地址的信息。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3688"/>
-        <source>Change the wallet&#39;s password.</source>
-        <translation>ウォレットのパスワードを変更します。</translation>
+        <source>Change the wallet's password.</source>
+        <translation>更改钱包密码。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3695"/>
         <source>Print the information about the current fee and transaction backlog.</source>
-        <translation>現在の手数料と取引のバックログに関する情報を印刷します。</translation>
+        <translation>打印有关当前费用和交易积压的信息。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3697"/>
         <source>Export data needed to create a multisig wallet</source>
-        <translation>マルチシグウォレットの作成に必要なデータをエクスポートする</translation>
+        <translation>导出创建多重签名钱包所需的数据</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3700"/>
         <source>Turn this wallet into a multisig wallet</source>
-        <translation>このウォレットをマルチシグウォレットにする</translation>
+        <translation>将此钱包变成多重签名钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3708"/>
         <source>Export multisig info for other participants</source>
-        <translation>他の参加者のマルチシグ情報をエクスポートする</translation>
+        <translation>导出其他参与者的多重签名信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3712"/>
         <source>Import multisig info from other participants</source>
-        <translation>他の参加者からのマルチシグ情報をインポートする</translation>
+        <translation>从其他参与者导入多重签名信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3716"/>
         <source>Sign a multisig transaction from a file</source>
-        <translation>ファイルからマルチシグトランザクションに署名する</translation>
+        <translation>从文件签署多重签名交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3720"/>
         <source>Submit a signed multisig transaction from a file</source>
-        <translation>ファイルから署名されたマルチシグトランザクションを送信する</translation>
+        <translation>从文件提交已签名的多重签名交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3724"/>
         <source>Export a signed multisig transaction to a file</source>
-        <translation>署名されたマルチシグトランザクションをファイルにエクスポートする</translation>
+        <translation>将已签名的多重签名交易导出到文件</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3815"/>
@@ -1881,90 +1881,90 @@ Otherwise, you prove the reserve of the smallest possible amount above &lt;amoun
 
 Output format:
 Key Image, &quot;absolute&quot;, list of rings</source>
-        <translation>指定されたキー イメージまたはトランザクションを使用するために使用されたリングを出力します (リング サイズが 1 より大きい場合)
+        <translation>打印用于花费给定密钥图像或交易的环（如果环大小 > 1）
 
-出力形式:
-キー イメージ、&quot;absolute&quot;、リングのリスト</translation>
+输出格式：
+密钥图像、“绝对”、环列表</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3821"/>
         <source>Set the ring used for a given key image, so it can be reused in a fork</source>
-        <translation>特定のキーイメージに使用されるリングを設定し、フォークで再利用できるようにします。</translation>
+        <translation>设置用于给定关键图像的环，以便可以在 fork 中重复使用它</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3825"/>
         <source>Unsets the ring used for a given key image or transaction</source>
-        <translation>特定のキーイメージまたはトランザクションに使用されているリングの設定を解除します</translation>
+        <translation>取消设置用于给定关键图像或交易的环</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3829"/>
         <source>Save known rings to the shared rings database</source>
-        <translation>既知のリングを共有リングデータベースに保存する</translation>
+        <translation>将已知环保存到共享环数据库</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3845"/>
         <source>Freeze a single output by key image so it will not be used</source>
-        <translation>キーイメージで単一の出力をフリーズして使用されないようにする</translation>
+        <translation>按关键图像冻结单个输出，这样就不会使用它</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3849"/>
         <source>Thaw a single output by key image so it may be used again</source>
-        <translation>単一の出力をキーイメージで解凍して、再度使用できるようにします。</translation>
+        <translation>按关键图像解冻单个输出，以便可以再次使用它</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3853"/>
         <source>Checks whether a given output is currently frozen by key image</source>
-        <translation>指定された出力が現在キーイメージによってフリーズされているかどうかを確認します</translation>
+        <translation>检查给定输出当前是否被关键图像冻结</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3861"/>
         <source>Prints simple network stats</source>
-        <translation>シンプルなネットワーク統計を出力します</translation>
+        <translation>打印简单的网络统计信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3865"/>
         <source>Lists known public nodes</source>
-        <translation>既知の公開ノードを一覧表示します</translation>
+        <translation>列出已知公共节点</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3869"/>
         <source>Prints basic info about Salvium for first time users</source>
-        <translation>初めてのユーザー向けにSalviumの基本情報を印刷します</translation>
+        <translation>为首次用户打印有关 Salvium 的基本信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3873"/>
         <source>Returns version information</source>
-        <translation>バージョン情報を返します</translation>
+        <translation>返回版本信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3877"/>
         <source>Get info about RPC payments to current node</source>
-        <translation>現在のノードへの RPC 支払いに関する情報を取得します</translation>
+        <translation>获取当前节点的 RPC 支付信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3881"/>
         <source>Start mining to pay for RPC access</source>
-        <translation>RPCアクセスの支払いのためにマイニングを開始</translation>
+        <translation>开始挖矿以支付 RPC 访问费用</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3885"/>
         <source>Stop mining to pay for RPC access</source>
-        <translation>RPCアクセス料金を払うための採掘をやめる</translation>
+        <translation>停止挖矿以支付 RPC 访问费用</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3893"/>
         <source>Show the help section or the documentation about a &lt;command&gt;.</source>
-        <translation>&lt;コマンド&gt;に関するヘルプセクションまたはドキュメントを表示します。</translation>
+        <translation>显示有关&lt;命令>的帮助部分或文档。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3984"/>
         <source>needs an argument</source>
-        <translation>議論が必要</translation>
+        <translation>需要一个论点</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3998"/>
         <source>set seed: needs an argument. available options: language</source>
-        <translation>シードを設定: 引数が必要です。使用可能なオプション: 言語</translation>
+        <translation>设置种子：需要一个参数。可用选项：语言</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4007"/>
@@ -1984,22 +1984,22 @@ Key Image, &quot;absolute&quot;, list of rings</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4041"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4042"/>
         <source>0 or 1</source>
-        <translation>または 1</translation>
+        <translation>0 或 1</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4011"/>
         <source>full (slowest, no assumptions); optimize-coinbase (fast, assumes the whole coinbase is paid to a single address); no-coinbase (fastest, assumes we receive no coinbase transaction), default (same as optimize-coinbase)</source>
-        <translation>full (最も遅い、仮定なし)、optimize-coinbase (速い、coinbase 全体が 1 つのアドレスに支払われると仮定)、no-coinbase (最も速い、coinbase トランザクションを受信しないと仮定)、default (optimize-coinbase と同じ)</translation>
+        <translation>满（最慢，无假设）； optimize-coinbase（快速，假设整个 coinbase 支付到一个地址）； no-coinbase（最快，假设我们没有收到 coinbase 交易），默认（与 optimization-coinbase 相同）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4012"/>
-        <source>0, 1, 2, 3, or 4, or one of</source>
-        <translation>0、1、2、3、4、またはそのうちの1つ</translation>
+        <source>0, 1, 2, 3, or 4, or one of </source>
+        <translation>0、1、2、3 或 4，或其中之一 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4013"/>
         <source>0|1|2 (or never|action|decrypt)</source>
-        <translation>0|1|2 (またはなし|アクション|復号化)</translation>
+        <translation>0|1|2（或从不|操作|解密）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4015"/>
@@ -2008,7 +2008,7 @@ Key Image, &quot;absolute&quot;, list of rings</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4027"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4040"/>
         <source>unsigned integer</source>
-        <translation>符号なし整数</translation>
+        <translation>无符号整数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4017"/>
@@ -2018,112 +2018,112 @@ Key Image, &quot;absolute&quot;, list of rings</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6346"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
         <source>amount</source>
-        <translation>額</translation>
+        <translation>数量</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4022"/>
         <source>block height</source>
-        <translation>ブロックの高さ</translation>
+        <translation>区块高度</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4026"/>
         <source>&lt;major&gt;:&lt;minor&gt;</source>
-        <translation>&lt;メジャー&gt;:&lt;マイナー&gt;</translation>
+        <translation>&lt;主要>：&lt;次要></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4034"/>
         <source>1/yes or 0/no</source>
-        <translation>1/はいまたは0/いいえ</translation>
+        <translation>1/是或 0/否</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4039"/>
         <source>floating point &gt;= 0</source>
-        <translation>浮動小数点数 >gt;= 0</translation>
+        <translation>浮点数 >= 0</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4044"/>
         <source>set: unrecognized argument(s)</source>
-        <translation>set: 認識されない引数</translation>
+        <translation>设置：无法识别的参数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4102"/>
         <source>Wallet name not valid. Please try again or use Ctrl-C to quit.</source>
-        <translation>ウォレット名が無効です。もう一度試すか、Ctrl + C キーを押して終了してください。</translation>
+        <translation>钱包名称无效。请重试或使用 Ctrl-C 退出。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4114"/>
         <source>Attempting to generate or restore wallet, but specified file(s) exist.  Exiting to not risk overwriting.</source>
-        <translation>ウォレットを生成または復元しようとしましたが、指定されたファイルが存在します。上書きのリスクを回避するために終了します。</translation>
+        <translation>尝试生成或恢复钱包，但指定的文件存在。  退出以避免被覆盖的风险。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4119"/>
         <source>Wallet and key files found, loading...</source>
-        <translation>ウォレットとキーファイルが見つかりました。読み込んでいます...</translation>
+        <translation>已找到钱包和密钥文件，正在加载...</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4125"/>
         <source>Key file found but not wallet file. Regenerating...</source>
-        <translation>キー ファイルは見つかりましたが、ウォレット ファイルは見つかりません。再生成しています...</translation>
+        <translation>找到密钥文件，但找不到钱包文件。正在再生...</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4131"/>
-        <source>Key file not found. Failed to open wallet:</source>
-        <translation>キーファイルが見つかりません。ウォレットを開けませんでした:</translation>
+        <source>Key file not found. Failed to open wallet: </source>
+        <translation>未找到密钥文件。打开钱包失败： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4139"/>
-        <source>No wallet found with that name. Confirm creation of new wallet named:</source>
-        <translation>その名前のウォレットは見つかりません。次の名前の新しいウォレットの作成を確認してください:</translation>
+        <source>No wallet found with that name. Confirm creation of new wallet named: </source>
+        <translation>未找到具有该名称的钱包。确认创建新钱包，名称为： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4150"/>
         <source>Generating new wallet...</source>
-        <translation>新しいウォレットを生成しています...</translation>
+        <translation>正在生成新钱包...</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4231"/>
-        <source>Can&#39;t specify more than one of --testnet and --stagenet</source>
-        <translation>--testnet と --stagenet を複数指定することはできません</translation>
+        <source>Can't specify more than one of --testnet and --stagenet</source>
+        <translation>无法指定 --testnet 和 --stagenet 之一以上</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4247"/>
-        <source>can&#39;t specify more than one of --generate-new-wallet=&quot;wallet_name&quot;, --wallet-file=&quot;wallet_name&quot;, --generate-from-view-key=&quot;wallet_name&quot;, --generate-from-spend-key=&quot;wallet_name&quot;, --generate-from-keys=&quot;wallet_name&quot;, --generate-from-multisig-keys=&quot;wallet_name&quot;, --generate-from-json=&quot;jsonfilename&quot; and --generate-from-device=&quot;wallet_name&quot;</source>
-        <translation>--generate-new-wallet=&quot;wallet_name&quot;、--wallet-file=&quot;wallet_name&quot;、--generate-from-view-key=&quot;wallet_name&quot;、--generate-from-spend-key=&quot;wallet_name&quot;、--generate-from-keys=&quot;wallet_name&quot;、--generate-from-multisig-keys=&quot;wallet_name&quot;、--generate-from-json=&quot;jsonfilename&quot;、および --generate-from-device=&quot;wallet_name&quot; のうち 1 つ以上を指定することはできません。</translation>
+        <source>can't specify more than one of --generate-new-wallet=&quot;wallet_name&quot;, --wallet-file=&quot;wallet_name&quot;, --generate-from-view-key=&quot;wallet_name&quot;, --generate-from-spend-key=&quot;wallet_name&quot;, --generate-from-keys=&quot;wallet_name&quot;, --generate-from-multisig-keys=&quot;wallet_name&quot;, --generate-from-json=&quot;jsonfilename&quot; and --generate-from-device=&quot;wallet_name&quot;</source>
+        <translation>无法指定 --generate-new-wallet=“wallet_name”、--wallet-file=“wallet_name”、--generate-from-view-key=“wallet_name”、--generate 之一以上-from-spend-key=“wallet_name”, --generate-from-keys=“wallet_name”, --generate-from-multisig-keys=“wallet_name”, --generate-from-json=” json文件名”和 --generate-from-device=“wallet_name”</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4277"/>
-        <source>can&#39;t specify both --restore-deterministic-wallet or --restore-multisig-wallet and --non-deterministic</source>
-        <translation>--restore-deterministic-wallet または --restore-multisig-wallet と --non-deterministic の両方を指定することはできません</translation>
+        <source>can't specify both --restore-deterministic-wallet or --restore-multisig-wallet and --non-deterministic</source>
+        <translation>不能同时指定 --restore-definistic-wallet 或 --restore-multisig-wallet 和 --non-definistic</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4283"/>
-        <source>--restore-multisig-wallet uses --generate-new-wallet, not --wallet-file</source>
-        <translation>--restore-multisig-wallet は --wallet-file ではなく --generate-new-wallet を使用します。</translation>
+        <source>--restore-multisig-wallet uses --generate-new-wallet	 not --wallet-file</source>
+        <translation>--restore-multisig-wallet uses --generate-new-wallet	 not --wallet-file</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4285"/>
-        <source>--restore-deterministic-wallet uses --generate-new-wallet, not --wallet-file</source>
-        <translation>--restore-deterministic-wallet は --wallet-file ではなく --generate-new-wallet を使用します。</translation>
+        <source>--restore-deterministic-wallet uses --generate-new-wallet	 not --wallet-file</source>
+        <translation>--restore-deterministic-wallet uses --generate-new-wallet	 not --wallet-file</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4299"/>
         <source>specify a recovery parameter with the --electrum-seed=&quot;multisig seed here&quot;</source>
-        <translation>--electrum-seed=&quot;multisig seed here&quot; を使用してリカバリパラメータを指定します。</translation>
+        <translation>使用 --electrum-seed="multisig seeds here" 指定恢复参数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4314"/>
         <source>specify a recovery parameter with the --electrum-seed=&quot;words list here&quot;</source>
-        <translation>--electrum-seed=&quot;words list here&quot; を使用して回復パラメータを指定します。</translation>
+        <translation>使用 --electrum-seed="words list here" 指定恢复参数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4328"/>
         <source>Multisig seed failed verification</source>
-        <translation>マルチシグシードの検証に失敗しました</translation>
+        <translation>多重签名种子验证失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4337"/>
         <source>Electrum-style word list failed verification</source>
-        <translation>Electrum スタイルの単語リストの検証に失敗しました</translation>
+        <translation>Electrum 风格的单词列表验证失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4357"/>
@@ -2137,7 +2137,7 @@ Key Image, &quot;absolute&quot;, list of rings</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4559"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4598"/>
         <source>No data supplied, cancelled</source>
-        <translation>データが提供されなかったためキャンセルされました</translation>
+        <translation>未提供数据，已取消</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4363"/>
@@ -2153,32 +2153,32 @@ Key Image, &quot;absolute&quot;, list of rings</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10646"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10915"/>
         <source>failed to parse address</source>
-        <translation>アドレスの解析に失敗しました</translation>
+        <translation>解析地址失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4368"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4445"/>
         <source>This address is a subaddress which cannot be used here.</source>
-        <translation>このアドレスはサブアドレスなので、ここでは使用できません。</translation>
+        <translation>该地址是子地址，此处不能使用。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4383"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4475"/>
         <source>failed to parse view key secret key</source>
-        <translation>ビューキーの秘密キーを解析できませんでした</translation>
+        <translation>无法解析查看密钥密钥</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4392"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4492"/>
         <source>failed to verify view key secret key</source>
-        <translation>ビューキーの秘密キーの検証に失敗しました</translation>
+        <translation>验证查看密钥秘钥失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4396"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4496"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4578"/>
         <source>view key does not match standard address</source>
-        <translation>ビューキーが標準アドレスと一致しません</translation>
+        <translation>查看键与标准地址不匹配</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4401"/>
@@ -2188,108 +2188,108 @@ Key Image, &quot;absolute&quot;, list of rings</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4661"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4693"/>
         <source>account creation failed</source>
-        <translation>アカウント作成に失敗しました</translation>
+        <translation>帐户创建失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4418"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4460"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4603"/>
         <source>failed to parse spend key secret key</source>
-        <translation>支出キーの秘密キーを解析できませんでした</translation>
+        <translation>无法解析花费密钥密钥</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4484"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4623"/>
         <source>failed to verify spend key secret key</source>
-        <translation>支出キーの秘密キーの検証に失敗しました</translation>
+        <translation>未能验证花费密钥密钥</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4488"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4628"/>
         <source>spend key does not match standard address</source>
-        <translation>支出キーが標準アドレスと一致しません</translation>
+        <translation>花费密钥与标准地址不匹配</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4523"/>
-        <source>Error: expected M/N, but got:</source>
-        <translation>エラー: M/N を期待しましたが、次のようになりました:</translation>
+        <source>Error: expected M/N, but got: </source>
+        <translation>错误：预期 M/N，但得到： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4528"/>
-        <source>Error: expected N &gt; 1 and N &lt;= M, but got:</source>
-        <translation>エラー: N > 1 かつ N &lt;= M を期待しましたが、次のようになりました:</translation>
+        <source>Error: expected N &gt; 1 and N &lt;= M, but got: </source>
+        <translation>错误：预期 N > 1 且 N &lt;= M，但得到： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4533"/>
-        <source>Error: M/N is currently unsupported.</source>
-        <translation>エラー: M/N は現在サポートされていません。</translation>
+        <source>Error: M/N is currently unsupported. </source>
+        <translation>错误：当前不支持 M/N。 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4536"/>
         <source>Generating master wallet from %u of %u multisig wallet keys</source>
-        <translation>マルチシグウォレットキー %u 個のうち %u 個からマスターウォレットを生成しています</translation>
+        <translation>正在从 %u 个多重签名钱包密钥（共 %u 个）生成主钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4565"/>
         <source>failed to parse secret view key</source>
-        <translation>シークレットビューキーの解析に失敗しました</translation>
+        <translation>无法解析秘密视图密钥</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4573"/>
         <source>failed to verify secret view key</source>
-        <translation>シークレットビューキーの検証に失敗しました</translation>
+        <translation>无法验证秘密视图密钥</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4616"/>
         <source>Error: M/N is currently unsupported</source>
-        <translation>エラー: M/N は現在サポートされていません</translation>
+        <translation>错误：目前不支持 M/N</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4668"/>
         <source>No restore height is specified.</source>
-        <translation>復元高さが指定されていません。</translation>
+        <translation>未指定恢复高度。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4669"/>
         <source>Assumed you are creating a new account, restore will be done from current estimated blockchain height.</source>
-        <translation>新しいアカウントを作成していると仮定すると、復元は現在の推定ブロックチェーンの高さから実行されます。</translation>
+        <translation>假设您正在创建一个新帐户，将从当前估计的区块链高度进行恢复。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4674"/>
         <source>account creation aborted</source>
-        <translation>アカウント作成が中止されました</translation>
+        <translation>帐户创建已中止</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4684"/>
         <source>specify a wallet path with --generate-new-wallet (not --wallet-file)</source>
-        <translation>--generate-new-wallet （--wallet-file ではない）でウォレットのパスを指定します。</translation>
+        <translation>使用 --generate-new-wallet （不是 --wallet-file）指定钱包路径</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4748"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4768"/>
-        <source>bad m_restore_height parameter:</source>
-        <translation>不正な m_restore_height パラメータ:</translation>
+        <source>bad m_restore_height parameter: </source>
+        <translation>错误的 m_restore_height 参数： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4712"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4759"/>
-        <source>Restore height is:</source>
-        <translation>復元高さは次のとおりです:</translation>
+        <source>Restore height is: </source>
+        <translation>恢复高度为： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4782"/>
-        <source>Restore height</source>
-        <translation>高さを復元</translation>
+        <source>Restore height </source>
+        <translation>恢复高度 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4798"/>
-        <source>can&#39;t specify --subaddress-lookahead and --wallet-file at the same time</source>
-        <translation>--subaddress-lookahead と --wallet-file を同時に指定することはできません</translation>
+        <source>can't specify --subaddress-lookahead and --wallet-file at the same time</source>
+        <translation>不能同时指定 --subaddress-lookahead 和 --wallet-file</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4802"/>
         <source>failed to open account</source>
-        <translation>アカウント開設に失敗しました</translation>
+        <translation>开户失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4807"/>
@@ -2298,225 +2298,225 @@ Key Image, &quot;absolute&quot;, list of rings</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5791"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8954"/>
         <source>wallet is null</source>
-        <translation>ウォレットはnullです</translation>
+        <translation>钱包为空</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4841"/>
         <source>Failed to initialize ring database: privacy enhancing features will be inactive</source>
-        <translation>リングデータベースの初期化に失敗しました: プライバシー強化機能は無効になります</translation>
+        <translation>无法初始化环形数据库：隐私增强功能将处于非活动状态</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4920"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4924"/>
-        <source>wallet failed to connect to daemon:</source>
-        <translation>ウォレットがデーモンに接続できませんでした:</translation>
+        <source>wallet failed to connect to daemon: </source>
+        <translation>钱包无法连接到守护进程： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4925"/>
-        <source>Daemon either is not started or wrong port was passed. Please make sure daemon is running or change the daemon address using the &#39;set_daemon&#39; command.</source>
-        <translation>デーモンが起動していないか、間違ったポートが渡されました。デーモンが実行中であることを確認するか、&#39;set_daemon&#39; コマンドを使用してデーモンのアドレスを変更してください。</translation>
+        <source>Daemon either is not started or wrong port was passed. Please make sure daemon is running or change the daemon address using the 'set_daemon' command.</source>
+        <translation>守护进程未启动或传递了错误的端口。请确保守护程序正在运行或使用“set_daemon”命令更改守护程序地址。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4954"/>
-        <source>List of available languages for your wallet&#39;s seed:</source>
-        <translation>ウォレットのシードで利用可能な言語のリスト:</translation>
+        <source>List of available languages for your wallet's seed:</source>
+        <translation>您钱包种子的可用语言列表：</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4955"/>
         <source>If your display freezes, exit blind with ^C, then run again with --use-english-language-names</source>
-        <translation>ディスプレイがフリーズした場合は、^Cで終了し、--use-english-language-namesで再度実行してください。</translation>
+        <translation>如果您的显示冻结，请使用 ^C 盲目退出，然后使用 --use-english-language-names 再次运行</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4973"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4978"/>
         <source>invalid language choice entered. Please try again.
 </source>
-        <translation>無効な言語選択が入力されました。もう一度お試しください。
+        <translation>输入的语言选择无效。请重试。
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4992"/>
         <source>invalid password</source>
-        <translation>無効なパスワード</translation>
+        <translation>密码无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5040"/>
         <source>You had been using a deprecated version of the wallet. Please use the new seed that we provide.
 </source>
-        <translation>廃止されたバージョンのウォレットを使用していました。弊社が提供する新しいシードを使用してください。
+        <translation>您一直在使用已弃用的钱包版本。请使用我们提供的新种子。
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5056"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5131"/>
-        <source>Generated new wallet:</source>
-        <translation>新しいウォレットが生成されました:</translation>
+        <source>Generated new wallet: </source>
+        <translation>生成的新钱包： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5059"/>
-        <source>View key:</source>
-        <translation>表示キー:</translation>
+        <source>View key: </source>
+        <translation>查看键： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5065"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5136"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5180"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5244"/>
-        <source>failed to generate new wallet:</source>
-        <translation>新しいウォレットの生成に失敗しました:</translation>
+        <source>failed to generate new wallet: </source>
+        <translation>生成新钱包失败： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5175"/>
-        <source>Generated new wallet on hw device:</source>
-        <translation>ハードウェアデバイスに新しいウォレットが生成されました:</translation>
+        <source>Generated new wallet on hw device: </source>
+        <translation>在硬件设备上生成新钱包： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5236"/>
         <source>failed to generate new mutlisig wallet</source>
-        <translation>新しいマルチシグウォレットを生成できませんでした</translation>
+        <translation>无法生成新的 mutlisig 钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5239"/>
-        <source>Generated new %u/%u multisig wallet:</source>
-        <translation>新しい %u/%u マルチシグウォレットを生成しました:</translation>
+        <source>Generated new %u/%u multisig wallet: </source>
+        <translation>生成了新的 %u/%u 多重签名钱包： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5255"/>
-        <source>wallet file path not valid:</source>
-        <translation>ウォレットファイルパスが無効です:</translation>
+        <source>wallet file path not valid: </source>
+        <translation>钱包文件路径无效： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5265"/>
         <source>Key file not found. Failed to open wallet</source>
-        <translation>キーファイルが見つかりません。ウォレットを開けませんでした</translation>
+        <translation>未找到密钥文件。打开钱包失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5286"/>
         <source>Opened watch-only wallet</source>
-        <translation>時計専用の財布を開封</translation>
+        <translation>打开手表专用钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5288"/>
         <source>Opened %u/%u multisig wallet%s</source>
-        <translation>%u/%u マルチシグウォレット%s を開設しました</translation>
+        <translation>打开 %u/%u 多重签名钱包%s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5290"/>
         <source>Opened wallet</source>
-        <translation>開いた財布</translation>
+        <translation>打开钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5308"/>
         <source>You had been using a deprecated version of the wallet. Please proceed to upgrade your wallet.
 </source>
-        <translation>廃止されたバージョンのウォレットを使用していました。ウォレットのアップグレードを続行してください。
+        <translation>您一直在使用已弃用的钱包版本。请继续升级您的钱包。
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5323"/>
         <source>You had been using a deprecated version of the wallet. Your wallet file format is being upgraded now.
 </source>
-        <translation>これまで使用していたウォレットのバージョンは廃止されました。ウォレットのファイル形式は現在アップグレード中です。
+        <translation>您一直在使用已弃用的钱包版本。您的钱包文件格式正在升级。
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5331"/>
-        <source>failed to load wallet:</source>
-        <translation>ウォレットの読み込みに失敗しました:</translation>
+        <source>failed to load wallet: </source>
+        <translation>加载钱包失败： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5350"/>
-        <source>Use &quot;help &lt;command&gt;&quot; to see a command&#39;s documentation.
+        <source>Use &quot;help &lt;command&gt;&quot; to see a command's documentation.
 </source>
-        <translation>コマンドのドキュメントを表示するには、「help &lt;command&gt;」を使用します。
+        <translation>使用“帮助 &lt;命令>”查看命令的文档。
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5372"/>
         <source>failed to deinitialize wallet</source>
-        <translation>ウォレットの初期化に失敗しました</translation>
+        <translation>钱包初始化失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5395"/>
         <source>Wallet data saved</source>
-        <translation>ウォレットデータが保存されました</translation>
+        <translation>钱包数据已保存</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5409"/>
         <source>wallet is multisig and cannot save a watch-only version</source>
-        <translation>ウォレットはマルチシグであり、ウォッチ専用バージョンを保存できない</translation>
+        <translation>钱包是多重签名的，无法保存仅限手表的版本</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5417"/>
         <source>failed to read wallet password</source>
-        <translation>ウォレットのパスワードの読み取りに失敗しました</translation>
+        <translation>读取钱包密码失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5425"/>
-        <source>Watch only wallet saved as:</source>
-        <translation>ウォッチのみのウォレットは次のように保存されます:</translation>
+        <source>Watch only wallet saved as: </source>
+        <translation>仅观看钱包另存为： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5429"/>
-        <source>Failed to save watch only wallet:</source>
-        <translation>ウォッチのみのウォレットを保存できませんでした:</translation>
+        <source>Failed to save watch only wallet: </source>
+        <translation>无法保存仅限手表的钱包： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5559"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6414"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10993"/>
         <source>this command requires a trusted daemon. Enable with --trusted-daemon</source>
-        <translation>このコマンドには信頼できるデーモンが必要です。--trusted-daemon で有効にします。</translation>
+        <translation>此命令需要受信任的守护进程。使用 --trusted-daemon 启用</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5608"/>
         <source>Mining started in daemon</source>
-        <translation>デーモンで採掘開始</translation>
+        <translation>在守护进程中开始挖矿</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5610"/>
-        <source>mining has NOT been started:</source>
-        <translation>採掘はまだ開始されていません:</translation>
+        <source>mining has NOT been started: </source>
+        <translation>挖矿尚未开始： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5630"/>
         <source>Mining stopped in daemon</source>
-        <translation>デーモンでマイニングが停止しました</translation>
+        <translation>挖矿在守护进程中停止</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5632"/>
-        <source>mining has NOT been stopped:</source>
-        <translation>採掘は停止されていません:</translation>
+        <source>mining has NOT been stopped: </source>
+        <translation>采矿尚未停止： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5687"/>
         <source>Unexpected array length - Exited simple_wallet::set_daemon()</source>
-        <translation>予期しない配列の長さ - simple_wallet::set_daemon() を終了しました</translation>
+        <translation>意外的数组长度 - 退出 simple_wallet::set_daemon()</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5763"/>
         <source>trusted</source>
-        <translation>信頼できる</translation>
+        <translation>值得信赖的</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5763"/>
         <source>untrusted</source>
-        <translation>信頼できない</translation>
+        <translation>不受信任的</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5779"/>
         <source>This does not seem to be a valid daemon URL.</source>
-        <translation>これは有効なデーモン URL ではないようです。</translation>
+        <translation>这似乎不是有效的守护程序 URL。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5799"/>
         <source>Blockchain saved</source>
-        <translation>ブロックチェーンが救われた</translation>
+        <translation>区块链已保存</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5801"/>
-        <source>blockchain can&#39;t be saved:</source>
-        <translation>ブロックチェーンは保存できません:</translation>
+        <source>blockchain can't be saved: </source>
+        <translation>区块链无法保存： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5834"/>
@@ -2526,8 +2526,8 @@ Key Image, &quot;absolute&quot;, list of rings</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5861"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5867"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5923"/>
-        <source>Height</source>
-        <translation>身長</translation>
+        <source>Height </source>
+        <translation>高度 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5835"/>
@@ -2537,190 +2537,190 @@ Key Image, &quot;absolute&quot;, list of rings</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5862"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5868"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5924"/>
-        <source>txid</source>
-        <translation>txid</translation>
+        <source>txid </source>
+        <translation>txid </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5837"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5843"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5870"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5926"/>
-        <source>idx</source>
-        <translation>idx</translation>
+        <source>idx </source>
+        <translation>idx </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5925"/>
-        <source>spent</source>
-        <translation>過ごした</translation>
+        <source>spent </source>
+        <translation>花费 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5952"/>
         <source>Enter password</source>
-        <translation>パスワードを入力してください</translation>
+        <translation>输入密码</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6048"/>
         <source>Starting refresh...</source>
-        <translation>更新を開始しています...</translation>
+        <translation>开始刷新...</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6070"/>
         <source>New transfer received since rescan was started. Key images are incomplete.</source>
-        <translation>再スキャンが開始されてから新しい転送を受信しました。キー イメージが不完全です。</translation>
+        <translation>自重新扫描开始以来收到的新传输。关键图像不完整。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6077"/>
-        <source>Refresh done, blocks received:</source>
-        <translation>更新が完了し、ブロックを受信しました:</translation>
+        <source>Refresh done, blocks received: </source>
+        <translation>刷新完成，收到块： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="612"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6085"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6428"/>
         <source>daemon is busy. Please try again later.</source>
-        <translation>デーモンはビジー状態です。しばらくしてからもう一度お試しください。</translation>
+        <translation>守护进程正忙。请稍后重试。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4816"/>
         <source>RPC client secret key should be 32 byte in hex format</source>
-        <translation>RPCクライアントの秘密鍵は16進形式で32バイトである必要があります</translation>
+        <translation>RPC 客户端密钥应为 32 字节，十六进制格式</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5535"/>
         <source>With background mining enabled, the daemon will mine when idle and not on battery.</source>
-        <translation>バックグラウンド マイニングを有効にすると、デーモンはアイドル状態でバッテリーが使用されていないときにマイニングを実行します。</translation>
+        <translation>启用后台挖掘后，守护进程将在空闲且不使用电池时进行挖掘。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5657"/>
         <source>Error checking daemon RPC access prices</source>
-        <translation>デーモン RPC アクセス価格のエラー チェック</translation>
+        <translation>检查守护进程 RPC 访问价格时出错</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5663"/>
-        <source>Error checking daemon RPC access prices:</source>
-        <translation>デーモン RPC アクセス価格のチェック中にエラーが発生しました:</translation>
+        <source>Error checking daemon RPC access prices: </source>
+        <translation>检查守护进程 RPC 访问价格时出错： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5759"/>
         <source>Failed to connect to daemon</source>
-        <translation>デーモンへの接続に失敗しました</translation>
+        <translation>无法连接到守护进程</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5771"/>
         <source>Daemon RPC credits/hash is less than was claimed. Either this daemon is cheating, or it changed its setup recently.</source>
-        <translation>デーモン RPC クレジット/ハッシュは要求された値より少ないです。このデーモンは不正行為をしているか、最近設定を変更しました。</translation>
+        <translation>守护进程 RPC 积分/哈希值少于声称的值。要么这个守护进程在作弊，要么它最近改变了它的设置。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5772"/>
-        <source>Claimed:</source>
-        <translation>主張:</translation>
+        <source>Claimed: </source>
+        <translation>声称： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5773"/>
-        <source>Actual:</source>
-        <translation>実際の：</translation>
+        <source>Actual: </source>
+        <translation>实际的： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6089"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6432"/>
         <source>no connection to daemon. Please make sure daemon is running.</source>
-        <translation>デーモンに接続されていません。デーモンが実行中であることを確認してください。</translation>
+        <translation>没有与守护进程的连接。请确保守护进程正在运行。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6093"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6436"/>
         <source>payment required.</source>
-        <translation>支払いが必要です。</translation>
+        <translation>需要付款。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6099"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6446"/>
-        <source>RPC error:</source>
-        <translation>RPC エラー:</translation>
+        <source>RPC error: </source>
+        <translation>远程过程调用错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6104"/>
-        <source>refresh error:</source>
-        <translation>更新エラー:</translation>
+        <source>refresh error: </source>
+        <translation>刷新错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6109"/>
-        <source>internal error:</source>
-        <translation>内部エラー:</translation>
+        <source>internal error: </source>
+        <translation>内部错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6124"/>
-        <source>refresh failed:</source>
-        <translation>更新に失敗しました:</translation>
+        <source>refresh failed: </source>
+        <translation>刷新失败： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6124"/>
-        <source>Blocks received:</source>
-        <translation>受信したブロック:</translation>
+        <source>Blocks received: </source>
+        <translation>收到的块： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6153"/>
-        <source>(Some owned outputs have partial key images - import_multisig_info needed)</source>
-        <translation>(所有出力の一部には部分的なキー イメージがあります - import_multisig_info が必要です)</translation>
+        <source> (Some owned outputs have partial key images - import_multisig_info needed)</source>
+        <translation>（某些拥有的输出具有部分关键图像 - 需要 import_multisig_info）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6156"/>
         <source>Currently selected account: [</source>
-        <translation>現在選択されているアカウント: [</translation>
+        <translation>当前选择的帐户：[</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6156"/>
-        <source>]</source>
-        <translation>]</translation>
+        <source>] </source>
+        <translation>] </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6158"/>
         <source>(No tag assigned)</source>
-        <translation>(タグが割り当てられていません)</translation>
+        <translation>（未分配标签）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6158"/>
-        <source>Tag:</source>
-        <translation>タグ：</translation>
+        <source>Tag: </source>
+        <translation>标签： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6172"/>
-        <source>unlocked balance:</source>
-        <translation>ロック解除残高:</translation>
+        <source>unlocked balance: </source>
+        <translation>解锁余额： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6177"/>
         <source>Balance per address:</source>
-        <translation>アドレスごとの残高:</translation>
+        <translation>每个地址的余额：</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6178"/>
         <source>Address</source>
-        <translation>住所</translation>
+        <translation>地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6178"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10362"/>
         <source>Balance</source>
-        <translation>バランス</translation>
+        <translation>平衡</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6178"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10362"/>
         <source>Unlocked balance</source>
-        <translation>ロック解除された残高</translation>
+        <translation>解锁余额</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6178"/>
         <source>Outputs</source>
-        <translation>出力</translation>
+        <translation>输出</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6178"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10362"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11612"/>
         <source>Label</source>
-        <translation>ラベル</translation>
+        <translation>标签</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6186"/>
@@ -2730,75 +2730,75 @@ Key Image, &quot;absolute&quot;, list of rings</source>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6277"/>
         <source>pubkey</source>
-        <translation>公開キー</translation>
+        <translation>公钥</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6277"/>
         <source>key image</source>
-        <translation>キー画像</translation>
+        <translation>关键图像</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6278"/>
         <source>spent</source>
-        <translation>過ごした</translation>
+        <translation>花费</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6278"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6300"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
         <source>unlocked</source>
-        <translation>ロック解除</translation>
+        <translation>解锁</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6278"/>
         <source>ringct</source>
-        <translation>リング</translation>
+        <translation>环形</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6278"/>
         <source>global index</source>
-        <translation>グローバルインデックス</translation>
+        <translation>全球指数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6278"/>
         <source>tx id</source>
-        <translation>送信ID</translation>
+        <translation>交易 ID</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6278"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6346"/>
         <source>addr index</source>
-        <translation>アドレスインデックス</translation>
+        <translation>地址索引</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6294"/>
-        <source>Used at heights:</source>
-        <translation>高所での使用:</translation>
+        <source>Used at heights: </source>
+        <translation>高处使用： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6299"/>
         <source>T</source>
-        <translation>T</translation>
+        <translation>时间</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6299"/>
         <source>F</source>
-        <translation>ふ</translation>
+        <translation>F</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6300"/>
         <source>locked</source>
-        <translation>ロックされた</translation>
+        <translation>锁定</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6300"/>
         <source>[frozen]</source>
-        <translation>[凍った]</translation>
+        <translation>[冻结]</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6301"/>
         <source>RingCT</source>
-        <translation>リングCT</translation>
+        <translation>环形CT</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6301"/>
@@ -2808,89 +2808,89 @@ Key Image, &quot;absolute&quot;, list of rings</source>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6314"/>
         <source>No incoming transfers</source>
-        <translation>転送の受信はありません</translation>
+        <translation>无传入转账</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6318"/>
         <source>No incoming available transfers</source>
-        <translation>利用可能な転送はありません</translation>
+        <translation>没有可用的传入转账</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6322"/>
         <source>No incoming unavailable transfers</source>
-        <translation>利用できない転送はありません</translation>
+        <translation>没有传入的不可用传输</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6346"/>
         <source>payment</source>
-        <translation>支払い</translation>
+        <translation>支付</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6346"/>
         <source>transaction</source>
-        <translation>取引</translation>
+        <translation>交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6346"/>
         <source>height</source>
-        <translation>身長</translation>
+        <translation>高度</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6346"/>
         <source>unlock time</source>
-        <translation>ロック解除時間</translation>
+        <translation>解锁时间</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6358"/>
-        <source>No payments with id</source>
-        <translation>IDによる支払いは不可</translation>
+        <source>No payments with id </source>
+        <translation>没有id付款 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6380"/>
-        <source>payment ID has invalid format, expected 16 or 64 character hex string:</source>
-        <translation>支払い ID の形式が無効です。16 文字または 64 文字の 16 進文字列が必要です:</translation>
+        <source>payment ID has invalid format, expected 16 or 64 character hex string: </source>
+        <translation>付款 ID 的格式无效，应为 16 或 64 个字符的十六进制字符串： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6406"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6504"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6965"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7509"/>
-        <source>failed to get blockchain height:</source>
-        <translation>ブロックチェーンの高さを取得できませんでした:</translation>
+        <source>failed to get blockchain height: </source>
+        <translation>无法获取区块链高度： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6441"/>
         <source>failed to get spent status</source>
-        <translation>使用済みステータスを取得できませんでした</translation>
+        <translation>未能获得已用状态</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6513"/>
         <source>
 Transaction %llu/%llu: txid=%s</source>
         <translation>
-トランザクション %llu/%llu: txid=%s</translation>
+事务 %llu/%llu: txid=%s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6529"/>
         <source>failed to find construction data for tx input</source>
-        <translation>tx入力の構築データが見つかりませんでした</translation>
+        <translation>未能找到 tx 输入的构造数据</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6553"/>
-        <source>failed to get output:</source>
-        <translation>出力を取得できませんでした:</translation>
+        <source>failed to get output: </source>
+        <translation>未能获得输出： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6561"/>
-        <source>output key&#39;s originating block height shouldn&#39;t be higher than the blockchain height</source>
-        <translation>出力キーの元のブロックの高さはブロックチェーンの高さより高くならない</translation>
+        <source>output key's originating block height shouldn't be higher than the blockchain height</source>
+        <translation>输出密钥的原始块高度不应高于区块链高度</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6566"/>
         <source>
-Originating block heights:</source>
+Originating block heights: </source>
         <translation>
-元のブロックの高さ:</translation>
+原始块高度： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6576"/>
@@ -2910,134 +2910,134 @@ Originating block heights:</source>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6593"/>
         <source>
-Warning: Some input keys being spent are from</source>
+Warning: Some input keys being spent are from </source>
         <translation>
-警告: 使用されている入力キーの一部は</translation>
+警告：使用的一些输入键来自 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6594"/>
         <source>the same transaction</source>
-        <translation>同じ取引</translation>
+        <translation>同一笔交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6594"/>
         <source>blocks that are temporally very close</source>
-        <translation>時間的に非常に近いブロック</translation>
+        <translation>时间上非常接近的块</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6748"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7461"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7741"/>
         <source>Ring size must not be 0</source>
-        <translation>リングのサイズは0であってはなりません</translation>
+        <translation>戒指尺寸不能为 0</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6760"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7473"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7753"/>
         <source>ring size %u is too small, minimum is %u</source>
-        <translation>リングのサイズ %u は小さすぎます。最小サイズは %u です。</translation>
+        <translation>戒指尺寸 %u 太小，最小尺寸为 %u</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6765"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7478"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7758"/>
         <source>ring size %u is too large, maximum is %u</source>
-        <translation>リングのサイズ %u は大きすぎます。最大値は %u です。</translation>
+        <translation>戒指尺寸 %u 太大，最大为 %u</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6772"/>
         <source>wrong number of arguments</source>
-        <translation>引数の数が間違っています</translation>
+        <translation>参数数量错误</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6789"/>
         <source>payment id failed to encode</source>
-        <translation>支払いIDのエンコードに失敗しました</translation>
+        <translation>付款 ID 编码失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6808"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7502"/>
-        <source>Locked blocks too high, max 1000000 (&tilde;4 yrs)</source>
-        <translation>ロックされたブロックが多すぎます。最大 1000000 (4 年まで)</translation>
+        <source>Locked blocks too high, max 1000000 (˜4 yrs)</source>
+        <translation>锁定区块太高，最多 1000000（约 4 年）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6856"/>
         <source>failed to parse short payment ID from URI</source>
-        <translation>URI から短い支払い ID を解析できませんでした</translation>
+        <translation>无法从 URI 解析短支付 ID</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6881"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6883"/>
-        <source>Invalid last argument:</source>
-        <translation>最後の引数が無効です:</translation>
+        <source>Invalid last argument: </source>
+        <translation>最后一个参数无效： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6901"/>
         <source>a single transaction cannot use more than one payment id</source>
-        <translation>1回の取引で複数の支払いIDを使用することはできません</translation>
+        <translation>一笔交易不能使用多个付款 ID</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6917"/>
         <source>failed to parse payment id, though it was detected</source>
-        <translation>支払いIDは検出されたものの、解析できませんでした</translation>
+        <translation>尽管检测到，但无法解析付款 ID</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7004"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7014"/>
         <source>Is this okay anyway?</source>
-        <translation>それでも大丈夫でしょうか？</translation>
+        <translation>无论如何，这样可以吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7009"/>
         <source>There is currently a %u block backlog at that fee level. Is this okay?</source>
-        <translation>現在、その料金レベルでは %u ブロックのバックログがあります。これでよろしいですか?</translation>
+        <translation>目前该费用水平有 %u 块积压。这样可以吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7323"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7631"/>
         <source>Sweeping %s in %llu transactions for a total fee of %s.  Is this okay?</source>
-        <translation>合計手数料 %s で %llu トランザクションの %s をスイープします。これでよろしいですか?</translation>
+        <translation>在 %llu 笔交易中扫除 %s，总费用为 %s。  这样可以吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7329"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7637"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7874"/>
         <source>Sweeping %s for a total fee of %s.  Is this okay?</source>
-        <translation>合計料金 %s で %s を掃除します。よろしいですか?</translation>
+        <translation>扫 %s，总费用为 %s。  这样可以吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7377"/>
         <source>Discarding %s of unmixable outputs that cannot be spent, which can be undone by &quot;rescan_spent&quot;.  Is this okay?</source>
-        <translation>使用できない混合不可能な出力 %s を破棄しています。これは &quot;rescan_spent&quot; によって元に戻すことができます。これでよろしいですか?</translation>
+        <translation>丢弃 %s 无法花费的不可混合输出，这可以通过“rescan_spent”撤消。  这样可以吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7522"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7767"/>
         <source>Failed to parse number of outputs</source>
-        <translation>出力数を解析できませんでした</translation>
+        <translation>无法解析输出数量</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7527"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7772"/>
         <source>Amount of outputs should be greater than 0</source>
-        <translation>出力量は0より大きくなければなりません</translation>
+        <translation>输出数量应大于0</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7551"/>
-        <source>payment id has invalid format, expected 16 or 64 character hex string:</source>
-        <translation>支払い ID の形式が無効です。16 文字または 64 文字の 16 進文字列が必要です:</translation>
+        <source>payment id has invalid format, expected 16 or 64 character hex string: </source>
+        <translation>付款 ID 的格式无效，应为 16 或 64 个字符的十六进制字符串： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6803"/>
         <source>bad locked_blocks parameter:</source>
-        <translation>不正なlocked_blocksパラメータ:</translation>
+        <translation>错误的locked_blocks参数：</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7571"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7831"/>
-        <source>a single transaction cannot use more than one payment id:</source>
-        <translation>回の取引で複数の支払い ID を使用することはできません。</translation>
+        <source>a single transaction cannot use more than one payment id: </source>
+        <translation>一笔交易不能使用多个付款 ID： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6923"/>
@@ -3045,469 +3045,469 @@ Warning: Some input keys being spent are from</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7799"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7839"/>
         <source>failed to set up payment id, though it was decoded correctly</source>
-        <translation>支払いIDの設定に失敗しましたが、正しくデコードされました</translation>
+        <translation>尽管解码正确，但无法设置付款 ID</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1170"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1249"/>
-        <source>Send this multisig info to all other participants, then use exchange_multisig_keys &lt;info1&gt; [&lt;info2&gt;...] with others&#39; multisig info</source>
-        <translation>このマルチシグ情報を他のすべての参加者に送信し、 exchange_multisig_keys &lt;info1&gt; [&lt;info2&gt;...] を他のマルチシグ情報と共に使用します。</translation>
+        <source>Send this multisig info to all other participants, then use exchange_multisig_keys &lt;info1&gt; [&lt;info2&gt;...] with others' multisig info</source>
+        <translation>将此多重签名信息发送给所有其他参与者，然后使用 Exchange_multisig_keys &lt;info1> [&lt;info2&gt;...] 与其他人的多重签名信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1258"/>
-        <source>Multisig wallet has been successfully created. Current wallet type:</source>
-        <translation>マルチシグウォレットが正常に作成されました。現在のウォレットタイプ:</translation>
+        <source>Multisig wallet has been successfully created. Current wallet type: </source>
+        <translation>多重签名钱包已成功创建。当前钱包类型： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1264"/>
-        <source>Failed to perform multisig keys exchange:</source>
-        <translation>マルチシグキーの交換に失敗しました:</translation>
+        <source>Failed to perform multisig keys exchange: </source>
+        <translation>无法执行多重签名密钥交换： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1599"/>
         <source>Failed to load multisig transaction from MMS</source>
-        <translation>MMS からマルチシグトランザクションをロードできませんでした</translation>
+        <translation>无法从 MMS 加载多重签名交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2139"/>
-        <source>Failed to mark output spent:</source>
-        <translation>出力の使用済みをマークできませんでした:</translation>
+        <source>Failed to mark output spent: </source>
+        <translation>无法标记已用输出： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2166"/>
-        <source>Failed to mark output unspent:</source>
-        <translation>出力を未使用としてマークできませんでした:</translation>
+        <source>Failed to mark output unspent: </source>
+        <translation>无法将输出标记为未使用： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2190"/>
-        <source>Spent:</source>
-        <translation>過ごした：</translation>
+        <source>Spent: </source>
+        <translation>花费： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2192"/>
-        <source>Not spent:</source>
-        <translation>未使用:</translation>
+        <source>Not spent: </source>
+        <translation>未花费： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2196"/>
-        <source>Failed to check whether output is spent:</source>
-        <translation>出力が使用されたかどうかの確認に失敗しました:</translation>
+        <source>Failed to check whether output is spent: </source>
+        <translation>无法检查输出是否已用： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2385"/>
         <source>Please confirm the transaction on the device</source>
-        <translation>デバイス上で取引を確認してください</translation>
+        <translation>请在设备上确认交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3091"/>
         <source>Device name not specified</source>
-        <translation>デバイス名が指定されていません</translation>
+        <translation>未指定设备名称</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3100"/>
         <source>Device reconnect failed</source>
-        <translation>デバイスの再接続に失敗しました</translation>
+        <translation>设备重新连接失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3105"/>
-        <source>Device reconnect failed:</source>
-        <translation>デバイスの再接続に失敗しました:</translation>
+        <source>Device reconnect failed: </source>
+        <translation>设备重新连接失败： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3619"/>
         <source>Export to CSV the incoming/outgoing transfers within an optional height range.</source>
-        <translation>オプションの高さ範囲内での着信/発信転送を CSV にエクスポートします。</translation>
+        <translation>将可选高度范围内的传入/传出传输导出为 CSV。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3627"/>
         <source>Rescan the blockchain from scratch. If &quot;hard&quot; is specified, you will lose any information which can not be recovered from the blockchain itself.</source>
-        <translation>ブロックチェーンを最初から再スキャンします。「hard」が指定された場合、ブロックチェーン自体から回復できない情報はすべて失われます。</translation>
+        <translation>从头开始重新扫描区块链。如果“硬”的话如果指定，您将丢失无法从区块链本身恢复的任何信息。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3661"/>
         <source>Export a signed set of key images to a &lt;filename&gt;.</source>
-        <translation>署名されたキーイメージのセットを &lt;filename&gt; にエクスポートします。</translation>
+        <translation>将一组签名的关键图像导出到&lt;文件名>。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3669"/>
         <source>Synchronizes key images with the hw wallet.</source>
-        <translation>キーイメージをハードウェアウォレットと同期します。</translation>
+        <translation>与硬件钱包同步关键图像。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3692"/>
         <source>Generate a new random full size payment id (obsolete). These will be unencrypted on the blockchain, see integrated_address for encrypted short payment ids.</source>
-        <translation>新しいランダムなフルサイズの支払い ID (廃止) を生成します。これらはブロックチェーン上で暗号化されません。暗号化された短い支払い ID については、integrated_address を参照してください。</translation>
+        <translation>生成新的随机全尺寸付款 ID（已过时）。这些将在区块链上未加密，请参阅 Integrated_address 以获取加密的短支付 ID。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3704"/>
         <source>Performs extra multisig keys exchange rounds. Needed for arbitrary M/N multisig wallets</source>
-        <translation>追加のマルチシグキー交換ラウンドを実行します。任意のM/Nマルチシグウォレットに必要です。</translation>
+        <translation>执行额外的多重签名密钥交换轮次。任意 M/N 多重签名钱包所需</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3736"/>
         <source>Initialize and configure the MMS for M/N = number of required signers/number of authorized signers multisig</source>
-        <translation>M/N = 必要な署名者数/承認された署名者数マルチシグ用にMMSを初期化して構成します。</translation>
+        <translation>初始化并配置 MMS，M/N = 所需签名者数量/授权签名者数量多重签名</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3740"/>
         <source>Display current MMS configuration</source>
-        <translation>現在のMMS設定を表示する</translation>
+        <translation>显示当前彩信配置</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3744"/>
         <source>Set or modify authorized signer info (single-word label, transport address, Salvium address), or list all signers</source>
-        <translation>承認された署名者情報（単語ラベル、トランスポートアドレス、Salvium アドレス）を設定または変更するか、すべての署名者を一覧表示します。</translation>
+        <translation>设置或修改授权签名者信息（单字标签、传输地址、Salvium 地址），或列出所有签名者</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3748"/>
         <source>List all messages</source>
-        <translation>すべてのメッセージを一覧表示する</translation>
+        <translation>列出所有消息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3752"/>
         <source>Evaluate the next possible multisig-related action(s) according to wallet state, and execute or offer for choice
-By using &#39;sync&#39; processing of waiting messages with multisig sync info can be forced regardless of wallet state</source>
-        <translation>ウォレットの状態に応じて、次に実行可能なマルチシグ関連のアクションを評価し、実行または選択できるようにします
-&#39;sync&#39;を使用すると、ウォレットの状態に関係なく、マルチシグ同期情報を含む待機メッセージの処理を強制できます。</translation>
+By using 'sync' processing of waiting messages with multisig sync info can be forced regardless of wallet state</source>
+        <translation>根据钱包状态评估下一个可能的多重签名相关操作，并执行或提供选择
+通过使用“同步”处理带有多重签名同步信息的等待消息，无论钱包状态如何</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3757"/>
         <source>Force generation of multisig sync info regardless of wallet state, to recover from special situations like &quot;stale data&quot; errors</source>
-        <translation>「古いデータ」エラーなどの特殊な状況から回復するために、ウォレットの状態に関係なく、マルチシグ同期情報を強制的に生成します。</translation>
+        <translation>无论钱包状态如何，都强制生成多重签名同步信息，以从“陈旧数据”等特殊情况中恢复。错误</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3761"/>
-        <source>Initiate transfer with MMS support; arguments identical to normal &#39;transfer&#39; command arguments, for info see there</source>
-        <translation>MMS サポートで転送を開始します。引数は通常の「転送」コマンドの引数と同じです。詳細については、こちらを参照してください。</translation>
+        <source>Initiate transfer with MMS support; arguments identical to normal 'transfer' command arguments, for info see there</source>
+        <translation>通过彩信支持发起传输；参数与普通“传输”命令参数相同，有关信息，请参阅此处</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3765"/>
-        <source>Delete a single message by giving its id, or delete all messages by using &#39;all&#39;</source>
-        <translation>ID を指定して 1 つのメッセージを削除するか、&#39;all&#39; を使用してすべてのメッセージを削除します。</translation>
+        <source>Delete a single message by giving its id, or delete all messages by using 'all'</source>
+        <translation>通过提供 ID 来删除单条消息，或使用“all”删除所有消息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3769"/>
         <source>Send a single message by giving its id, or send all waiting messages</source>
-        <translation>IDを指定して単一のメッセージを送信するか、待機中のすべてのメッセージを送信します。</translation>
+        <translation>通过提供 ID 来发送单个消息，或发送所有等待消息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3773"/>
         <source>Check right away for new messages to receive</source>
-        <translation>受信する新しいメッセージをすぐに確認する</translation>
+        <translation>立即检查是否有新消息接收</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3777"/>
         <source>Write the content of a message to a file &quot;mms_message_content&quot;</source>
-        <translation>メッセージの内容をファイル「mms_message_content」に書き込みます。</translation>
+        <translation>将消息内容写入文件“mms_message_content”</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3781"/>
         <source>Send a one-line message to an authorized signer, identified by its label, or show any waiting unread notes</source>
-        <translation>ラベルで識別される承認された署名者に1行のメッセージを送信するか、待機中の未読のメモを表示します。</translation>
+        <translation>向授权签名者发送一行消息（通过其标签进行识别），或显示任何等待的未读注释</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3785"/>
         <source>Show detailed info about a single message</source>
-        <translation>1つのメッセージに関する詳細情報を表示する</translation>
+        <translation>显示有关单条消息的详细信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3789"/>
         <source>Available options:
  auto-send &lt;1|0&gt;
    Whether to automatically send newly generated messages right away.
-</source>
-        <translation>使用可能なオプション:
- 自動送信 &lt;1|0&gt;
- 新しく生成されたメッセージをすぐに自動的に送信するかどうか。
-</translation>
+ </source>
+        <translation>可用选项:
+ 自动发送 &lt;1|0>
+ 是否立即自动发送新生成的消息。
+ </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3795"/>
         <source>Send completed signer config to all other authorized signers</source>
-        <translation>完了した署名者設定を他のすべての承認済み署名者に送信する</translation>
+        <translation>将完整的签名者配置发送给所有其他授权签名者</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3799"/>
-        <source>Start auto-config at the auto-config manager&#39;s wallet by issuing auto-config tokens and optionally set others&#39; labels</source>
-        <translation>自動設定トークンを発行して自動設定マネージャーのウォレットで自動設定を開始し、必要に応じて他のラベルを設定します。</translation>
+        <source>Start auto-config at the auto-config manager's wallet by issuing auto-config tokens and optionally set others' labels</source>
+        <translation>通过发布自动配置代币并可选择设置其他人的标签，在自动配置管理者的钱包上启动自动配置</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3807"/>
         <source>Delete any auto-config tokens and abort a auto-config process</source>
-        <translation>自動構成トークンを削除し、自動構成プロセスを中止します</translation>
+        <translation>删除所有自动配置令牌并中止自动配置过程</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3811"/>
         <source>Start auto-config by using the token received from the auto-config manager</source>
-        <translation>自動設定マネージャから受信したトークンを使用して自動設定を開始します</translation>
+        <translation>使用从自动配置管理器收到的令牌启动自动配置</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3833"/>
         <source>Mark output(s) as spent so they never get selected as fake outputs in a ring</source>
-        <translation>出力を使用済みとしてマークして、リング内で偽の出力として選択されないようにする</translation>
+        <translation>将输出标记为已用，这样它们就不会被选为环中的假输出</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3837"/>
         <source>Marks an output as unspent so it may get selected as a fake output in a ring</source>
-        <translation>出力を未使用としてマークし、リング内の偽の出力として選択されるようにする</translation>
+        <translation>将输出标记为未使用，因此它可能会被选为环中的假输出</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3841"/>
         <source>Checks whether an output is marked as spent</source>
-        <translation>出力が使用済みとしてマークされているかどうかを確認します</translation>
+        <translation>检查输出是否被标记为已用</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4035"/>
         <source>&lt;device_name[:device_spec]&gt;</source>
-        <translation>&lt;デバイス名[:デバイス仕様]&gt;</translation>
+        <translation>&lt;设备名称[:设备规格]></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4063"/>
         <source>wrong number range, use: %s</source>
-        <translation>番号範囲が間違っています。%s を使用してください。</translation>
+        <translation>数字范围错误，请使用：%s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4168"/>
         <source>NOTE: the following %s can be used to recover access to your wallet. Write them down and store them somewhere safe and secure. Please do not store them in your email or on file storage services outside of your immediate control.
 </source>
-        <translation>注意: 次の %s を使用すると、ウォレットへのアクセスを回復できます。これらを書き留めて、安全な場所に保管してください。直接管理できないメールやファイル ストレージ サービスには保存しないでください。
+        <translation>注意：以下 %s 可用于恢复对您钱包的访问。把它们写下来并存放在安全可靠的地方。请不要将它们存储在您直接控制之外的电子邮件或文件存储服务中。
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4170"/>
         <source>string</source>
-        <translation>弦</translation>
+        <translation>细绳</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4170"/>
         <source>25 words</source>
-        <translation>25語</translation>
+        <translation>25个字</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4593"/>
         <source>Secret spend key (%u of %u)</source>
-        <translation>シークレット支出キー (%u / %u)</translation>
+        <translation>秘密支出密钥（%u，共 %u）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4670"/>
         <source>Use --restore-height or --restore-date if you want to restore an already setup account from a specific height.</source>
-        <translation>すでに設定されているアカウントを特定の高さから復元する場合は、--restore-height または --restore-date を使用します。</translation>
+        <translation>如果您想从特定高度恢复已设置的帐户，请使用 --restore-height 或 --restore-date。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4672"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4760"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7119"/>
         <source>Is this okay?</source>
-        <translation>これでいいですか？</translation>
+        <translation>这样可以吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4783"/>
         <source>Still apply restore height?</source>
-        <translation>復元高さをまだ適用しますか?</translation>
+        <translation>还用恢复高度吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4964"/>
         <source>Enter the number corresponding to the language of your choice</source>
-        <translation>選択した言語に対応する番号を入力してください</translation>
+        <translation>输入与您选择的语言相对应的数字</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5967"/>
         <source>Device requires attention</source>
-        <translation>デバイスに注意が必要です</translation>
+        <translation>设备需要注意</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5973"/>
         <source>Enter device PIN</source>
-        <translation>デバイスのPINを入力してください</translation>
+        <translation>输入设备 PIN 码</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5975"/>
         <source>Failed to read device PIN</source>
-        <translation>デバイスのPINの読み取りに失敗しました</translation>
+        <translation>无法读取设备 PIN</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5985"/>
         <source>Please enter the device passphrase on the device</source>
-        <translation>デバイスにデバイスパスフレーズを入力してください</translation>
+        <translation>请在设备上输入设备密码</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5992"/>
         <source>Enter device passphrase</source>
-        <translation>デバイスのパスフレーズを入力してください</translation>
+        <translation>输入设备密码</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5994"/>
         <source>Failed to read device passphrase</source>
-        <translation>デバイスのパスフレーズの読み取りに失敗しました</translation>
+        <translation>无法读取设备密码</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6018"/>
-        <source>The first refresh has finished for the HW-based wallet with received money. hw_key_images_sync is needed.</source>
-        <translation>受け取ったお金で HW ベースのウォレットの最初の更新が完了しました。hw_key_images_sync が必要です。</translation>
+        <source>The first refresh has finished for the HW-based wallet with received money. hw_key_images_sync is needed. </source>
+        <translation>基于硬件的钱包的第一次刷新已完成并已收到资金。需要hw_key_images_sync。 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5537"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6020"/>
-        <source>Do you want to do it now? (Y/Yes/N/No):</source>
-        <translation>今実行しますか? (Y/はい/N/いいえ):</translation>
+        <source>Do you want to do it now? (Y/Yes/N/No): </source>
+        <translation>你想现在就做吗？ （是/是/否/否）： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2366"/>
-        <source>Unknown command &#39;%s&#39;, try &#39;help&#39;</source>
-        <translation>不明なコマンド &#39;%s&#39;、&#39;help&#39; を試してください</translation>
+        <source>Unknown command '%s', try 'help'</source>
+        <translation>未知命令“%s”，请尝试“帮助”</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3040"/>
         <source>Inactivity lock timeout disabled on Windows</source>
-        <translation>Windows で非アクティブ ロック タイムアウトが無効になっています</translation>
+        <translation>Windows 上禁用不活动锁定超时</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3054"/>
         <source>Invalid number of seconds</source>
-        <translation>秒数が無効です</translation>
+        <translation>秒数无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3116"/>
         <source>Export format not specified</source>
-        <translation>エクスポート形式が指定されていません</translation>
+        <translation>未指定导出格式</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3130"/>
         <source>Export format not recognized.</source>
-        <translation>エクスポート形式が認識されません。</translation>
+        <translation>无法识别导出格式。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3482"/>
         <source>Display the restore height</source>
-        <translation>復元高さを表示</translation>
+        <translation>显示恢复高度</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3857"/>
         <source>Lock the wallet console, requiring the wallet password to continue</source>
-        <translation>ウォレットコンソールをロックし、続行するにはウォレットパスワードが必要です</translation>
+        <translation>锁定钱包控制台，需要钱包密码才能继续</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4033"/>
         <source>unsigned integer (seconds, 0 to disable)</source>
-        <translation>符号なし整数（秒、無効にする場合は 0）</translation>
+        <translation>无符号整数（秒，0 表示禁用）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4036"/>
         <source>&quot;binary&quot; or &quot;ascii&quot;</source>
-        <translation>&quot;binary&quot; または &quot;ascii&quot;</translation>
+        <translation>“二进制”或“ascii”</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4824"/>
         <source>Warning: using an untrusted daemon at %s</source>
-        <translation>警告: %s で信頼できないデーモンを使用しています</translation>
+        <translation>警告：在 %s 使用不受信任的守护程序</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4825"/>
         <source>Using a third party daemon can be detrimental to your security and privacy</source>
-        <translation>サードパーティのデーモンを使用すると、セキュリティとプライバシーに悪影響を与える可能性があります。</translation>
+        <translation>使用第三方守护程序可能会损害您的安全和隐私</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4828"/>
         <source>Using your own without SSL exposes your RPC traffic to monitoring</source>
-        <translation>SSLなしで独自のものを使用すると、RPCトラフィックが監視対象になります。</translation>
+        <translation>使用您自己的而不使用 SSL 会将您的 RPC 流量暴露给监控</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4829"/>
         <source>You are strongly encouraged to connect to the Salvium network using your own daemon</source>
-        <translation>独自のデーモンを使用してSalviumネットワークに接続することを強くお勧めします</translation>
+        <translation>强烈建议您使用自己的守护进程连接到 Salvium 网络</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4830"/>
         <source>If you or someone you trust are operating this daemon, you can use --trusted-daemon</source>
-        <translation>あなたまたはあなたが信頼する誰かがこのデーモンを操作している場合は、--trusted-daemonを使用できます。</translation>
+        <translation>如果您或您信任的人正在操作此守护程序，您可以使用 --trusted-daemon</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4837"/>
         <source>Moreover, a daemon is also less secure when running in bootstrap mode</source>
-        <translation>さらに、デーモンはブートストラップモードで実行されている場合も安全性が低くなります。</translation>
+        <translation>此外，守护进程在引导模式下运行时也不太安全</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4850"/>
         <source>If you are new to Salvium, type &quot;welcome&quot; for a brief overview.</source>
-        <translation>Salvium を初めてご利用になる場合は、「welcome」と入力して簡単な概要をご覧ください。</translation>
+        <translation>如果您是 Salvium 新手，请输入“欢迎”进行简要概述。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5003"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5101"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5149"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5192"/>
-        <source>Error creating wallet:</source>
-        <translation>ウォレットの作成中にエラーが発生しました:</translation>
+        <source>Error creating wallet: </source>
+        <translation>创建钱包时出错： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5445"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5477"/>
-        <source>Failed to query mining status:</source>
-        <translation>マイニングステータスの照会に失敗しました:</translation>
+        <source>Failed to query mining status: </source>
+        <translation>查询挖矿状态失败： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5460"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5488"/>
-        <source>Failed to setup background mining:</source>
-        <translation>バックグラウンドマイニングの設定に失敗しました:</translation>
+        <source>Failed to setup background mining: </source>
+        <translation>无法设置后台挖掘： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5464"/>
         <source>Background mining enabled. Thank you for supporting the Salvium network.</source>
-        <translation>バックグラウンドマイニングが有効になりました。Salvium ネットワークをサポートしていただきありがとうございます。</translation>
+        <translation>启用后台挖掘。感谢您对 Salvium 网络的支持。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5492"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5500"/>
         <source>Background mining not enabled. Run &quot;set setup-background-mining 1&quot; to change.</source>
-        <translation>バックグラウンド マイニングが有効になっていません。変更するには、「set setup-background-mining 1」を実行してください。</translation>
+        <translation>未启用后台挖掘。运行“set setup-background-mining 1”改变。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5506"/>
         <source>Using an untrusted daemon, skipping background mining check</source>
-        <translation>信頼できないデーモンを使用して、バックグラウンドマイニングチェックをスキップする</translation>
+        <translation>使用不受信任的守护进程，跳过后台挖掘检查</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5534"/>
         <source>The daemon is not set up to background mine.</source>
-        <translation>デーモンはバックグラウンドで実行するように設定されていません。</translation>
+        <translation>该守护进程未设置为后台我的。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5541"/>
         <source>Background mining not enabled. Set setup-background-mining to 1 to change.</source>
-        <translation>バックグラウンド マイニングが有効になっていません。変更するには、setup-background-mining を 1 に設定してください。</translation>
+        <translation>未启用后台挖掘。将 setup-background-mining 设置为 1 即可更改。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5903"/>
-        <source>NOTE: This transaction is locked, see details with: show_transfer</source>
-        <translation>注意: この取引はロックされています。詳細は show_transfer で確認してください。</translation>
+        <source>NOTE: This transaction is locked, see details with: show_transfer </source>
+        <translation>注意：此交易已被锁定，请通过以下方式查看详细信息：show_transfer </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6022"/>
         <source>hw_key_images_sync skipped. Run command manually before a transfer.</source>
-        <translation>hw_key_images_sync はスキップされました。転送前にコマンドを手動で実行してください。</translation>
+        <translation>hw_key_images_sync 已跳过。在传输之前手动运行命令。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6247"/>
-        <source>Invalid keyword:</source>
-        <translation>無効なキーワード:</translation>
+        <source>Invalid keyword: </source>
+        <translation>无效关键字： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6535"/>
         <source>
 Input %llu/%llu (%s): amount=%s</source>
         <translation>
-%llu/%llu (%s) を入力してください: 量=%s</translation>
+输入 %llu/%llu (%s): 金额=%s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6628"/>
         <source>Transaction spends more than one very old output. Privacy would be better if they were sent separately.</source>
-        <translation>トランザクションは複数の非常に古い出力を使用します。別々に送信するとプライバシーが向上します。</translation>
+        <translation>交易花费了不止一个非常旧的输出。如果分开发送，隐私会更好。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6629"/>
         <source>Spend them now anyway?</source>
-        <translation>とにかく今使ってみますか？</translation>
+        <translation>现在还是把它们花掉吧？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6871"/>
@@ -3515,14 +3515,14 @@ Input %llu/%llu (%s): amount=%s</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9215"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9784"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9792"/>
-        <source>amount is wrong:</source>
-        <translation>金額が間違っています:</translation>
+        <source>amount is wrong: </source>
+        <translation>金额错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6872"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8465"/>
-        <source>expected number from 0 to</source>
-        <translation>0から予想される数値</translation>
+        <source>expected number from 0 to </source>
+        <translation>预期数量从 0 到 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7025"/>
@@ -3534,53 +3534,53 @@ Input %llu/%llu (%s): amount=%s</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7882"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8105"/>
         <source>transaction cancelled.</source>
-        <translation>取引はキャンセルされました。</translation>
+        <translation>交易已取消。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6981"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7595"/>
         <source>No outputs found, or daemon is not ready</source>
-        <translation>出力が見つからないか、デーモンの準備ができていません</translation>
+        <translation>未找到输出，或守护进程未准备好</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2343"/>
         <source>Unlike Bitcoin, your Salvium transactions and balance stay private and are not visible to the world by default.</source>
-        <translation>Bitcoin とは異なり、Salvium の取引と残高は非公開のままであり、デフォルトでは世界に公開されません。</translation>
+        <translation>与比特币不同，您的 Salvium 交易和余额是私密的，默认情况下不对世界可见。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2344"/>
         <source>However, you have the option of making those available to select parties if you choose to.</source>
-        <translation>ただし、必要に応じて、特定の当事者にそれらを公開することもできます。</translation>
+        <translation>但是，如果您愿意，您可以选择将这些内容提供给选定的各方。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5895"/>
         <source>NOTE: this transaction uses an encrypted payment ID: consider using subaddresses instead</source>
-        <translation>注意: この取引では暗号化された支払いIDを使用します。代わりにサブアドレスの使用を検討してください。</translation>
+        <translation>注意：此交易使用加密的支付 ID：请考虑使用子地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5900"/>
         <source>WARNING: this transaction uses an unencrypted payment ID: these are obsolete and ignored. Use subaddresses instead.</source>
-        <translation>警告: このトランザクションでは暗号化されていない支払い ID が使用されています。これらは古いため無視されます。代わりにサブアドレスを使用してください。</translation>
+        <translation>警告：此交易使用未加密的付款 ID：这些已过时并被忽略。请改用子地址。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7014"/>
-        <source>Failed to check for backlog:</source>
-        <translation>バックログの確認に失敗しました:</translation>
+        <source>Failed to check for backlog: </source>
+        <translation>未能检查积压： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7063"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7617"/>
         <source>
-Transaction</source>
+Transaction </source>
         <translation>
-トランザクション</translation>
+交易 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7070"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7624"/>
         <source>WARNING: Outputs of multiple addresses are being used together, which might potentially compromise your privacy.
 </source>
-        <translation>警告: 複数のアドレスの出力が一緒に使用されているため、プライバシーが侵害される可能性があります。
+        <translation>警告：多个地址的输出一起使用，这可能会损害您的隐私。
 </translation>
     </message>
     <message>
@@ -3591,7 +3591,7 @@ Transaction</source>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7139"/>
         <source>Unsigned transaction(s) successfully written to MMS</source>
-        <translation>署名されていないトランザクションが MMS に正常に書き込まれました</translation>
+        <translation>未签名的交易已成功写入 MMS</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7147"/>
@@ -3605,7 +3605,7 @@ Transaction</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8116"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8158"/>
         <source>Failed to write transaction(s) to file</source>
-        <translation>トランザクションをファイルに書き込めませんでした</translation>
+        <translation>无法将交易写入文件</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7152"/>
@@ -3618,40 +3618,40 @@ Transaction</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7935"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8120"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8162"/>
-        <source>Unsigned transaction(s) successfully written to file:</source>
-        <translation>署名されていないトランザクションがファイルに正常に書き込まれました:</translation>
+        <source>Unsigned transaction(s) successfully written to file: </source>
+        <translation>未签名的交易已成功写入文件： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7161"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7674"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7909"/>
         <source>Failed to cold sign transaction with HW wallet</source>
-        <translation>HW ウォレットでコールドサイントランザクションに失敗しました</translation>
+        <translation>无法使用硬件钱包冷签名交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7308"/>
         <source>No unmixable outputs found</source>
-        <translation>混合できない出力が見つかりません</translation>
+        <translation>未找到不可混合的输出</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7321"/>
-        <source>Sweeping</source>
-        <translation>掃除</translation>
+        <source>Sweeping </source>
+        <translation>扫地 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8476"/>
-        <source>Failed to parse donation address:</source>
-        <translation>寄付アドレスの解析に失敗しました:</translation>
+        <source>Failed to parse donation address: </source>
+        <translation>无法解析捐赠地址： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8492"/>
         <source>Donating %s %s to %s.</source>
-        <translation>%s %s を %s に寄付します。</translation>
+        <translation>将 %s %s 捐赠给 %s。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8640"/>
         <source>Loaded %lu transactions, for %s, fee %s, %s, %s, with min ring size %lu, %s. %sIs this okay?</source>
-        <translation>%lu 件のトランザクションを、%s、手数料 %s、%s、%s、最小リング サイズ %lu、%s で読み込みました。%sこれでよろしいですか?</translation>
+        <translation>已加载 %lu 笔交易，费用为 %s，费用为 %s，%s，%s，最小环大小为 %lu，%s。 %s这样可以吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
@@ -3661,374 +3661,374 @@ Transaction</source>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
         <source>timestamp</source>
-        <translation>タイムスタンプ</translation>
+        <translation>时间戳</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
         <source>running balance</source>
-        <translation>ランニングバランス</translation>
+        <translation>运行平衡</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
         <source>hash</source>
-        <translation>ハッシュ</translation>
+        <translation>散列</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
         <source>payment ID</source>
-        <translation>支払いID</translation>
+        <translation>付款ID</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
         <source>fee</source>
-        <translation>手数料</translation>
+        <translation>费用</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
         <source>destination</source>
-        <translation>行き先</translation>
+        <translation>目的地</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
         <source>index</source>
-        <translation>索引</translation>
+        <translation>指数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
         <source>note</source>
-        <translation>注記</translation>
+        <translation>笔记</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9756"/>
-        <source>CSV exported to</source>
-        <translation>CSVをエクスポート</translation>
+        <source>CSV exported to </source>
+        <translation>CSV 导出到 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9941"/>
         <source>Rescan anyway?</source>
-        <translation>とにかく再スキャンしますか?</translation>
+        <translation>还是重新扫描？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9952"/>
-        <source>Warning: your restore height is higher than wallet restore height:</source>
-        <translation>警告: 復元の高さがウォレットの復元の高さよりも高くなっています:</translation>
+        <source>Warning: your restore height is higher than wallet restore height: </source>
+        <translation>警告：您的恢复高度高于钱包恢复高度： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9953"/>
-        <source>Rescan anyway ? (Y/Yes/N/No):</source>
-        <translation>それでも再スキャンしますか? (Y/はい/N/いいえ):</translation>
+        <source>Rescan anyway ? (Y/Yes/N/No): </source>
+        <translation>还是要重新扫描吗？ （是/是/否/否）： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9974"/>
         <source>MMS received new message</source>
-        <translation>MMS に新しいメッセージが受信されました</translation>
+        <translation>彩信收到新消息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10143"/>
         <source>locked due to inactivity</source>
-        <translation>非アクティブのためロックされています</translation>
+        <translation>由于不活动而被锁定</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10545"/>
         <source>&lt;index&gt; is out of bounds</source>
-        <translation>&lt;index&gt; は範囲外です</translation>
+        <translation>&lt;索引>超出范围</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10821"/>
         <source>Normal</source>
-        <translation>普通</translation>
+        <translation>普通的</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10822"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11670"/>
-        <source>Type:</source>
-        <translation>タイプ：</translation>
+        <source>Type: </source>
+        <translation>类型： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6680"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10823"/>
-        <source>Network type:</source>
-        <translation>ネットワークタイプ:</translation>
+        <source>Network type: </source>
+        <translation>网络类型： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1402"/>
-        <source>Multisig info imported. Number of outputs updated:</source>
-        <translation>マルチシグ情報がインポートされました。出力数が更新されました:</translation>
+        <source>Multisig info imported. Number of outputs updated: </source>
+        <translation>导入多重签名信息。更新的输出数量： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="1750"/>
         <source>Key image either not spent, or spent with ring size 1</source>
-        <translation>キー画像は未使用、またはリングサイズ1で使用済み</translation>
+        <translation>关键图像要么未花费，要么与戒指尺寸 1 一起花费</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2334"/>
         <source>Most of these nodes are probably spies. You should not use them unless connecting via Tor or I2P</source>
-        <translation>これらのノードのほとんどはおそらくスパイです。TorまたはI2P経由で接続しない限り、使用しないでください。</translation>
+        <translation>这些节点中的大多数可能是间谍。除非通过 Tor 或 I2P 连接，否则不应使用它们</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2340"/>
         <source>Welcome to Salvium, the new and improved private cryptocurrency.</source>
-        <translation>新しく改良されたプライベート暗号通貨、Salvium へようこそ。</translation>
+        <translation>欢迎来到 Salvium，这是一种经过改进的新型私人加密货币。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2352"/>
         <source>Welcome to Salvium and compliant financial privacy. For more information see https://salvium.io</source>
-        <translation>Salvium とコンプライアンス準拠の金融プライバシーへようこそ。詳細については、https://salvium.io をご覧ください。</translation>
+        <translation>欢迎来到 Salvium 和合规的财务隐私。欲了解更多信息，请参阅 https://salvium.io</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2471"/>
         <source>invalid index: must be an unsigned integer</source>
-        <translation>無効なインデックス: 符号なし整数である必要があります</translation>
+        <translation>无效索引：必须是无符号整数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2476"/>
         <source>&lt;subaddress_index&gt; is out of bounds</source>
-        <translation>&lt;subaddress_index&gt; は範囲外です</translation>
+        <translation>&lt;子地址索引>超出范围</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2514"/>
         <source>Failed to generate QR code, input too large</source>
-        <translation>QRコードを生成できませんでした。入力が大きすぎます</translation>
+        <translation>生成二维码失败，输入太大</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3145"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3167"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3186"/>
         <source>Value not specified</source>
-        <translation>値が指定されていません</translation>
+        <translation>未指定值</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3157"/>
         <source>Warning: deprecated formats use boost serialization, which has buffer overflows and crashers. Only load deprecated formats from sources you trust.</source>
-        <translation>警告: 非推奨のフォーマットは、バッファ オーバーフローとクラッシュを引き起こす boost シリアル化を使用します。信頼できるソースからのみ非推奨のフォーマットを読み込んでください。</translation>
+        <translation>警告：已弃用的格式使用 boost 序列化，这会导致缓冲区溢出和崩溃。仅从您信任的来源加载已弃用的格式。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3206"/>
         <source>Important commands:</source>
-        <translation>重要なコマンド:</translation>
+        <translation>重要命令：</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3208"/>
         <source>&quot;welcome&quot; - Show welcome message.</source>
-        <translation>「ようこそ」 - ようこそメッセージを表示します。</translation>
+        <translation>“欢迎” - 显示欢迎信息。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3209"/>
         <source>&quot;help all&quot; - Show the list of all available commands.</source>
-        <translation>&quot;help all&quot; - 使用可能なすべてのコマンドのリストを表示します。</translation>
+        <translation>“帮助所有人” - 显示所有可用命令的列表。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3210"/>
-        <source>&quot;help &lt;command&gt;&quot; - Show a command&#39;s documentation.</source>
-        <translation>&quot;help &lt;command&gt;&quot; - コマンドのドキュメントを表示します。</translation>
+        <source>&quot;help &lt;command&gt;&quot; - Show a command's documentation.</source>
+        <translation>“帮助&lt;命令>” - 显示命令的文档。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3211"/>
         <source>&quot;apropos &lt;keyword&gt;&quot; - Show commands related to a keyword.</source>
-        <translation>&quot;apropos &lt;keyword&gt;&quot; - キーワードに関連するコマンドを表示します。</translation>
+        <translation>“apropos &lt;关键字>” - 显示与关键字相关的命令。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3213"/>
         <source>&quot;wallet_info&quot; - Show wallet main address and other info.</source>
-        <translation>&quot;wallet_info&quot; - ウォレットのメインアドレスとその他の情報を表示します。</translation>
+        <translation>“钱包信息” - 显示钱包主地址和其他信息。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3214"/>
         <source>&quot;balance&quot; - Show balance.</source>
-        <translation>「バランス」 - バランスを表示します。</translation>
+        <translation>“平衡” - 显示平衡。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3215"/>
         <source>&quot;address all&quot; - Show all addresses.</source>
-        <translation>「address all」 - すべてのアドレスを表示します。</translation>
+        <translation>“解决所有问题” - 显示所有地址。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3216"/>
         <source>&quot;address new&quot; - Create new subaddress.</source>
-        <translation>「address new」 - 新しいサブアドレスを作成します。</translation>
+        <translation>“新地址” - 创建新的子地址。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3217"/>
         <source>&quot;transfer &lt;address&gt; &lt;amount&gt; [&lt;asset_type&gt;]&quot; - Send SAL to an address.</source>
-        <translation>&quot;transfer &lt;address&gt; &lt;amount&gt; [&lt;asset_type&gt;]&quot; - SAL をアドレスに送信します。</translation>
+        <translation>“转账&lt;地址>” &lt;金额> [&lt;asset_type>]” - 将 SAL 发送到某个地址。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3218"/>
         <source>&quot;return_payment &lt;tx_hash&gt;&quot; - Return a previously-received amount to sender.</source>
-        <translation>&quot;return_payment &lt;tx_hash&gt;&quot; - 以前に受け取った金額を送信者に返します。</translation>
+        <translation>“return_ payment &lt;tx_hash>” - 将先前收到的金额退还给发件人。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3219"/>
         <source>&quot;burn &lt;amount&gt; &lt;asset_type&gt;&quot; - destroy coins forever.</source>
-        <translation>&quot;burn &lt;amount&gt; &lt;asset_type&gt;&quot; - コインを永久に破壊します。</translation>
+        <translation>“燃烧&lt;数量>” &lt;资产类型>” - 永远销毁硬币。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3220"/>
         <source>&quot;convert &lt;amount&gt; &lt;source_asset&gt; &lt;dest_asset&gt; [&lt;slippage_limit&gt;]&quot; - convert between coin types.</source>
-        <translation>&quot;convert &lt;amount&gt; &lt;source_asset&gt; &lt;dest_asset&gt; [&lt;slippage_limit&gt;]&quot; - コインタイプを変換します。</translation>
+        <translation>“转换&lt;金额>” &lt;源资产> &lt;目标资产> [&lt;slippage_limit&gt;]” - 硬币类型之间的转换。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3221"/>
         <source>&quot;stake &lt;amount&gt;&quot; - stake SAL for 30 days to earn yield.</source>
-        <translation>&quot;stake &lt;amount&gt;&quot; - 利回りを得るために 30 日間 SAL をステークします。</translation>
+        <translation>“赌注&lt;金额&gt;” - 质押 SAL 30 天以获得收益。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3222"/>
         <source>&quot;price_info&quot; - Display current pricing information for supported assets.</source>
-        <translation>&quot;price_info&quot; - サポートされているアセットの現在の価格情報を表示します。</translation>
+        <translation>“价格信息” - 显示受支持资产的当前定价信息。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3223"/>
         <source>&quot;supply_info&quot; - Display circulating supply information.</source>
-        <translation>&quot;supply_info&quot; - 循環供給情報を表示します。</translation>
+        <translation>“供应信息” - 显示流通供应信息。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3224"/>
         <source>&quot;yield_info&quot; - Display current stats on Salvium staking / yield.</source>
-        <translation>&quot;yield_info&quot; - Salvium ステーキング/利回りの現在の統計を表示します。</translation>
+        <translation>“产量信息” - 显示 Salvium 质押/收益的当前统计数据。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3225"/>
         <source>&quot;show_transfers [in|out|pending|failed|pool|coinbase|burnt|staked|yield]&quot; - Show transactions.</source>
-        <translation>&quot;show_transfers [in|out|pending|failed|pool|coinbase|burnt|staked|yield]&quot; - トランザクションを表示します。</translation>
+        <translation>“show_transfers [in|out|pending|failed|pool|coinbase|burnt|stake|yield]” - 显示交易。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3226"/>
         <source>&quot;sweep_all &lt;address&gt;&quot; - Send whole balance to another wallet.</source>
-        <translation>&quot;sweep_all &lt;address&gt;&quot; - 残高全体を別のウォレットに送信します。</translation>
+        <translation>“sweep_all &lt;地址>” - 将全部余额发送到另一个钱包。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3227"/>
         <source>&quot;seed&quot; - Show secret 25 words that can be used to recover this wallet.</source>
-        <translation>「seed」 - このウォレットを復元するために使用できる秘密の 25 個の単語を表示します。</translation>
+        <translation>“种子” - 显示可用于恢复此钱包的 25 个秘密单词。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3228"/>
         <source>&quot;refresh&quot; - Synchronize wallet with the Salvium network.</source>
-        <translation>「更新」 - ウォレットをSalviumネットワークと同期します。</translation>
+        <translation>“刷新” - 将钱包与 Salvium 网络同步。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3229"/>
         <source>&quot;status&quot; - Check current status of wallet.</source>
-        <translation>&quot;status&quot; - ウォレットの現在のステータスを確認します。</translation>
+        <translation>“状态” - 检查钱包的当前状态。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3230"/>
         <source>&quot;version&quot; - Check software version.</source>
-        <translation>「バージョン」 - ソフトウェアのバージョンを確認します。</translation>
+        <translation>“版本” - 检查软件版本。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3231"/>
         <source>&quot;exit&quot; - Exit wallet.</source>
-        <translation>「exit」 - ウォレットを終了します。</translation>
+        <translation>“退出” - 退出钱包。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3233"/>
         <source>&quot;donate &lt;amount&gt;&quot; - Donate SAL to the development team.</source>
-        <translation>&quot;donate &lt;amount&gt;&quot; - 開発チームに SAL を寄付します。</translation>
+        <translation>“捐赠&lt;金额>” - 向开发团队捐赠 SAL。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3263"/>
         <source>No commands found mentioning keyword(s)</source>
-        <translation>キーワードを指定したコマンドが見つかりません</translation>
+        <translation>未找到提及关键字的命令</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3293"/>
-        <source>Invalid txid specified:</source>
-        <translation>無効な txid が指定されました:</translation>
+        <source>Invalid txid specified: </source>
+        <translation>指定的 txid 无效： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3300"/>
         <source>WARNING: this operation may reveal the txids to the remote node and affect your privacy</source>
-        <translation>警告: この操作により、txid がリモート ノードに公開され、プライバシーが侵害される可能性があります。</translation>
+        <translation>警告：此操作可能会将 txids 泄露给远程节点并影响您的隐私</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3302"/>
         <source>You have canceled the operation</source>
-        <translation>操作をキャンセルしました</translation>
+        <translation>您已取消操作</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3347"/>
-        <source>Set another daemon to connect to. If it&#39;s not yours, it&#39;ll probably spy on you.</source>
-        <translation>接続する別のデーモンを設定します。それが自分のデーモンでない場合は、おそらくあなたをスパイするでしょう。</translation>
+        <source>Set another daemon to connect to. If it's not yours, it'll probably spy on you.</source>
+        <translation>设置要连接的另一个守护进程。如果它不是你的，它可能会监视你。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3373"/>
-        <source>Transfer &lt;amount&gt; of &lt;asset_type&gt; to &lt;address&gt;. If the parameter &quot;index=&lt;N1&gt;[,&lt;N2&gt;,...]&quot; is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. &lt;priority&gt; is the priority of the transaction. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command &quot;set priority&quot;) is used. &lt;ring_size&gt; is the number of inputs to include for untraceability. Multiple payments can be made at once by adding URI_2 or &lt;address_2&gt; &lt;amount_2&gt; etcetera (before the payment ID, if it&#39;s included). The &quot;subtractfeefrom=&quot; list allows you to choose which destinations to fund the tx fee from instead of the change output. The fee will be split across the chosen destinations proportionally equally. For example, to make 3 transfers where the fee is taken from the first and third destinations, one could do: &quot;transfer &lt;addr1&gt; 3 &lt;addr2&gt; 0.5 &lt;addr3&gt; 1 subtractfeefrom=0,2&quot;. Let&#39;s say the tx fee is 0.1. The balance would drop by exactly 4.5 SAL including fees, and addr1 &amp; addr3 would receive 2.925 &amp; 0.975 SAL, respectively. Use &quot;subtractfeefrom=all&quot; to spread the fee across all destinations.</source>
-        <translation>&lt;asset_type&gt; の &lt;amount&gt; を &lt;address&gt; に転送します。パラメータ &quot;index=&lt;N1&gt;[,&lt;N2&gt;,...]&quot; が指定されている場合、ウォレットはそれらのインデックスのアドレスによって受信された出力を使用します。省略されている場合、ウォレットは使用するアドレス インデックスをランダムに選択します。いずれの場合も、複数のアドレスにまたがる出力を結合しないように最善を尽くします。 &lt;priority&gt; はトランザクションの優先度です。優先度が高いほど、トランザクション手数料が高くなります。優先度順 (最低から最高) の有効な値は、unimportant、normal、elevated、priority です。省略されている場合は、デフォルト値 (コマンド &quot;set priority&gt; を参照) が使用されます。 &lt;ring_size&gt; は追跡不可能にするために含める入力の数です。URI_2 または &lt;address_2&gt; &lt;amount_2&gt; を追加することで、一度に複数の支払いを行うことができます。など（支払い ID が含まれている場合は、その前）。「subtractfeefrom=」リストを使用すると、お釣りの出力の代わりに、どの送金先から送金手数料を賄うかを選択できます。手数料は、選択した送金先に均等に比例配分されます。たとえば、手数料が最初の送金先と 3 番目の送金先から取られる 3 回の送金を行うには、「transfer &lt;addr1&gt; 3 &lt;addr2&gt; 0.5 &lt;addr3&gt; 1 subtractfeefrom=0,2」とします。送金手数料が 0.1 だとします。手数料を含めて残高はちょうど 4.5 SAL 減少し、addr1 と addr3 はそれぞれ 2.925 と 0.975 SAL を受け取ります。手数料をすべての送金先に分散するには、「subtractfeefrom=all」を使用します。</translation>
+        <source>Transfer &lt;amount&gt; of &lt;asset_type&gt; to &lt;address&gt;. If the parameter &quot;index=&lt;N1&gt;[,&lt;N2&gt;,...]&quot; is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. &lt;priority&gt; is the priority of the transaction. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command &quot;set priority&quot;) is used. &lt;ring_size&gt; is the number of inputs to include for untraceability. Multiple payments can be made at once by adding URI_2 or &lt;address_2&gt; &lt;amount_2&gt; etcetera (before the payment ID, if it's included). The &quot;subtractfeefrom=&quot; list allows you to choose which destinations to fund the tx fee from instead of the change output. The fee will be split across the chosen destinations proportionally equally. For example, to make 3 transfers where the fee is taken from the first and third destinations, one could do: &quot;transfer &lt;addr1&gt; 3 &lt;addr2&gt; 0.5 &lt;addr3&gt; 1 subtractfeefrom=0,2&quot;. Let's say the tx fee is 0.1. The balance would drop by exactly 4.5 SAL including fees, and addr1 &amp; addr3 would receive 2.925 &amp; 0.975 SAL, respectively. Use &quot;subtractfeefrom=all&quot; to spread the fee across all destinations.</source>
+        <translation>转账&lt;金额> &lt;asset_type> 的到&lt;地址>。如果参数“index=&lt;N1&gt;[,&lt;N2&gt;,...]”指定后，钱包使用这些索引地址收到的输出。如果省略，钱包会随机选择要使用的地址索引。无论如何，它都会尽力不组合多个地址的输出。 &lt;优先&gt;是事务的优先级。优先级越高，交易费用越高。按优先级顺序排列的有效值（从最低到最高）为：不重要、正常、提升、优先级。如果省略，则使用默认值（参见命令“设置优先级”）。 &lt;戒指尺寸>是为了实现不可追踪性而包含的输入数量。通过添加 URI_2 或 &lt;address_2> 可以一次进行多次付款。 &lt;金额_2>等等（在付款 ID 之前，如果包含的话）。 “subtractfeefrom＝”列表允许您选择从哪些目的地支付交易费用，而不是找零输出。费用将按比例平均分配给所选目的地。例如，为了进行3次转账，其中从第一和第三目的地收取费用，可以执行：“transfer &lt;addr1>”。 3 &lt;地址2> 0.5 &lt;地址3> 1减去费用=0,2”。假设交易费用为 0.1。余额将减少 4.5 SAL（包括费用）以及 addr1 和 addr1。 addr3 将收到 2.925 &amp;分别为 0.975 SAL。使用“subtractfeefrom=all”将费用分摊到所有目的地。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3381"/>
         <source>Send all unlocked balance to an address and lock it for &lt;lockblocks&gt; (max. 1000000). If the parameter &quot;index=&lt;N1&gt;[,&lt;N2&gt;,...]&quot; or &quot;index=all&quot; is specified, the wallet sweeps outputs received by those or all address indices, respectively. If omitted, the wallet randomly chooses an address index to be used. &lt;priority&gt; is the priority of the sweep. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command &quot;set priority&quot;) is used. &lt;ring_size&gt; is the number of inputs to include for untraceability.</source>
-        <translation>ロックされていない残高をすべてアドレスに送信し、&lt;lockblocks&gt; の間ロックします (最大 1000000)。パラメータ &quot;index=&lt;N1&gt;[,&lt;N2&gt;,...]&quot; または &quot;index=all&quot; が指定されている場合、ウォレットはそれぞれそれらのアドレス インデックスまたはすべてのアドレス インデックスで受信した出力をスイープします。省略されている場合、ウォレットは使用するアドレス インデックスをランダムに選択します。&lt;priority&gt; はスイープの優先度です。優先度が高いほど、トランザクション手数料が高くなります。優先度順 (最低から最高) の有効な値は、unimportant、normal、elevated、priority です。省略されている場合は、デフォルト値 (コマンド &quot;set priority&quot; を参照) が使用されます。&lt;ring_size&gt; は追跡不可能にするために含める入力の数です。</translation>
+        <translation>将所有未锁定的余额发送到一个地址并将其锁定为&lt;lockblocks> （最多 1000000）。如果参数“index=&lt;N1&gt;[,&lt;N2&gt;,...]”或“索引=全部”指定后，钱包分别扫描那些或所有地址索引接收到的输出。如果省略，钱包会随机选择要使用的地址索引。 &lt;优先&gt;是扫描的优先级。优先级越高，交易费用越高。按优先级顺序排列的有效值（从最低到最高）为：不重要、正常、提升、优先级。如果省略，则使用默认值（参见命令“设置优先级”）。 &lt;戒指尺寸>是为了实现不可追踪性而包含的输入数量。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3387"/>
         <source>Send all unlocked balance to an address. If the parameter &quot;index=&lt;N1&gt;[,&lt;N2&gt;,...]&quot; or &quot;index=all&quot; is specified, the wallet sweeps outputs received by those or all address indices, respectively. If omitted, the wallet randomly chooses an address index to be used. If the parameter &quot;outputs=&lt;N&gt;&quot; is specified and  N &gt; 0, wallet splits the transaction into N even outputs.</source>
-        <translation>すべてのロック解除された残高をアドレスに送信します。パラメータ「index=<N1>[,<N2>,...]」または「index=all」が指定されている場合、ウォレットはそれぞれそれらのアドレス インデックスまたはすべてのアドレス インデックスで受信した出力をスイープします。省略されている場合、ウォレットは使用するアドレス インデックスをランダムに選択します。パラメータ「outputs=<N>」が指定され、N > 0 の場合、ウォレットはトランザクションを N 個の均等な出力に分割します。</translation>
+        <translation>将所有未锁定的余额发送到一个地址。如果参数“index=&lt;N1&gt;[,&lt;N2&gt;,...]”或“索引=全部”指定后，钱包分别扫描那些或所有地址索引接收到的输出。如果省略，钱包会随机选择要使用的地址索引。如果参数“outputs＝&lt;N&gt;”是被指定并且N> 0，钱包将交易分成 N 个偶数输出。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3390"/>
         <source>Send all unlocked balance from a given account to an address. If the parameter &quot;index=&lt;N1&gt;[,&lt;N2&gt;,...]&quot; or &quot;index=all&quot; is specified, the wallet sweeps outputs received by those or all address indices, respectively. If omitted, the wallet randomly chooses an address index to be used. If the parameter &quot;outputs=&lt;N&gt;&quot; is specified and  N &gt; 0, wallet splits the transaction into N even outputs.</source>
-        <translation>指定されたアカウントのロック解除された残高をすべてアドレスに送信します。パラメータ「index=<N1>[,<N2>,...]」または「index=all」が指定されている場合、ウォレットはそれぞれそれらのアドレス インデックスまたはすべてのアドレス インデックスで受信した出力をスイープします。省略されている場合、ウォレットは使用するアドレス インデックスをランダムに選択します。パラメータ「outputs=<N>」が指定され、N > 0 の場合、ウォレットはトランザクションを N 個の均等な出力に分割します。</translation>
+        <translation>将所有未锁定的余额从给定帐户发送到某个地址。如果参数“index=&lt;N1&gt;[,&lt;N2&gt;,...]”或“索引=全部”指定后，钱包分别扫描那些或所有地址索引接收到的输出。如果省略，钱包会随机选择要使用的地址索引。如果参数“outputs＝&lt;N&gt;”是被指定并且N> 0，钱包将交易分成 N 个偶数输出。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3402"/>
         <source>Returns the payment(s) received in TX &lt;tx_hash&gt; to the original sender.</source>
-        <translation>TX &lt;tx_hash&gt; で受け取った支払いを元の送信者に返します。</translation>
+        <translation>返回 TX &lt;tx_hash> 中收到的付款至原始发件人。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3406"/>
         <source>PERMANENTLY destroys (burns) &lt;amount&gt; of &lt;asset_type&gt;</source>
-        <translation>&lt;amount&gt; の &lt;asset_type&gt; を永久に破壊 (焼却) します。</translation>
+        <translation>永久破坏（燃烧）&lt;数量> &lt;asset_type> 的</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3410"/>
         <source>Converts &lt;amount&gt; &lt;source_asset&gt; into &lt;dest_asset&gt;, with optional &lt;slippage_limit&gt;</source>
-        <translation>オプションの &lt;slippage_limit&gt; を使用して、&lt;amount&gt; &lt;source_asset&gt; を &lt;dest_asset&gt; に変換します。</translation>
+        <translation>将&lt;金额>转换为&lt;源资产>进入 &lt;dest_asset>，带有可选的 &lt;slippage_limit></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3414"/>
         <source>Locks &lt;amount&gt; of SAL as stake in order to earn yield</source>
-        <translation>利回りを得るためにSALの&lt;量&gt;をステークとしてロックする</translation>
+        <translation>锁定&lt;数量> SAL 作为股权以获得收益</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3418"/>
         <source>Displays the current exchange rate information for SAL &lt;--&gt; VSD conversions</source>
-        <translation>SAL &lt;--&gt; VSD 変換の現在の為替レート情報を表示します</translation>
+        <translation>显示 SAL 的当前汇率信息&lt;--> VSD 转换</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3422"/>
         <source>Displays the current circulating supply information for SAL and VSD currencies</source>
-        <translation>SALおよびVSD通貨の現在の流通供給情報を表示します</translation>
+        <translation>显示SAL和VSD货币的当前流通供应信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3426"/>
         <source>Displays the statistics for yield returns over the last &lt;NN&gt; blocks</source>
-        <translation>過去 NN ブロックの利回りの統計を表示します。</translation>
+        <translation>显示最后一个&lt;NN>的收益率回报统计数据块</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3430"/>
         <source>Donate &lt;amount&gt; to the development team (donate.salvium.io).</source>
-        <translation>開発チームに &lt;amount&gt; を寄付してください (donate.salvium.io)。</translation>
+        <translation>捐赠&lt;金额>致开发团队 (donate.salvium.io)。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3434"/>
         <source>Sign a transaction from a file. If the parameter &quot;export_raw&quot; is specified, transaction raw hex data suitable for the daemon RPC /sendrawtransaction is exported.
 Use the parameter &lt;filename&gt; to specify the file to read from. If not specified, the default &quot;unsigned_monero_tx&quot; will be used.</source>
-        <translation>ファイルからトランザクションに署名します。パラメータ「export_raw」が指定されている場合、デーモン RPC /sendrawtransaction に適したトランザクションの生の 16 進データがエクスポートされます。
-パラメータ「filename」を使用して、読み取り元のファイルを指定します。指定されていない場合は、デフォルトの「unsigned_monero_tx」が使用されます。</translation>
+        <translation>从文件中签署交易。如果参数“export_raw”是指定后，将导出适合守护进程 RPC /sendrawtransaction 的事务原始十六进制数据。
+使用参数 &lt;filename>指定要读取的文件。如果未指定，则默认“unsigned_monero_tx”将被使用。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3456"/>
         <source>If no arguments are specified or &lt;index&gt; is specified, the wallet shows the default or specified address. If &quot;all&quot; is specified, the wallet shows all the existing addresses in the currently selected account. If &quot;new &quot; is specified, the wallet creates a new address with the provided label text (which can be empty). If &quot;mnew&quot; is specified, the wallet creates as many new addresses as specified by the argument; the default label is set for the new addresses. If &quot;label&quot; is specified, the wallet sets the label of the address specified by &lt;index&gt; to the provided label text. If &quot;one-off&quot; is specified, the address for the specified index is generated and displayed, and remembered by the wallet</source>
-        <translation>引数が指定されていないか、&lt;index&gt; が指定されている場合、ウォレットはデフォルトまたは指定されたアドレスを表示します。&quot;all&quot; が指定されている場合、ウォレットは現在選択されているアカウントの既存のアドレスをすべて表示します。&quot;new&quot; が指定されている場合、ウォレットは指定されたラベル テキスト (空でも可) で新しいアドレスを作成します。&quot;mnew&quot; が指定されている場合、ウォレットは引数で指定された数の新しいアドレスを作成し、新しいアドレスにはデフォルトのラベルが設定されます。&quot;label&quot; が指定されている場合、ウォレットは &lt;index&gt; で指定されたアドレスのラベルを指定されたラベル テキストに設定します。&quot;one-off&quot; が指定されている場合、指定されたインデックスのアドレスが生成されて表示され、ウォレットによって記憶されます。</translation>
+        <translation>如果没有指定参数或 &lt;index>指定后，钱包显示默认或指定地址。如果“全部”是指定后，钱包会显示当前所选账户中的所有现有地址。如果“新的”指定后，钱包会使用提供的标签文本（可以为空）创建一个新地址。如果“mnew”是指定后，钱包将创建与参数指定的数量一样多的新地址；为新地址设置默认标签。如果“标签”是指定后，钱包设置&lt;index>指定的地址的标签。到提供的标签文本。如果“一次性”指定后，将生成并显示指定索引的地址，并由钱包记住</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3486"/>
         <source>Available options:
  seed language
-   Set the wallet&#39;s seed language.
+   Set the wallet's seed language.
  always-confirm-transfers &lt;1|0&gt;
    Whether to confirm unsplit txes.
  print-ring-members &lt;1|0&gt;
@@ -4038,7 +4038,7 @@ Use the parameter &lt;filename&gt; to specify the file to read from. If not spec
  auto-refresh &lt;1|0&gt;
    Whether to automatically synchronize new blocks from the daemon.
  refresh-type &lt;full|optimize-coinbase|no-coinbase|default&gt;
-   Set the wallet&#39;s refresh behaviour.
+   Set the wallet's refresh behaviour.
  priority [0|1|2|3|4]
    Set the fee to default/unimportant/normal/elevated/priority.
  confirm-missing-payment-id &lt;1|0&gt; (obsolete)
@@ -4062,7 +4062,7 @@ Use the parameter &lt;filename&gt; to specify the file to read from. If not spec
  refresh-from-block-height [n]
    Set the height before which to ignore blocks.
  auto-low-priority &lt;1|0&gt;
-   Whether to automatically use the low priority fee level when it&#39;s safe to do so.
+   Whether to automatically use the low priority fee level when it's safe to do so.
  segregate-pre-fork-outputs &lt;1|0&gt;
    Set this if you intend to spend outputs on both Salvium AND a key reusing fork.
  key-reuse-mitigation2 &lt;1|0&gt;
@@ -4099,79 +4099,78 @@ credits-target &lt;unsigned int&gt;
    How many seconds to wait before locking the wallet (0 to disable).
 freeze-incoming-payments &lt;1|0&gt;
    Whether to have incoming payments automatically frozen, so they cannot be spent erroneously.</source>
-        <translation>使用可能なオプション:
- seed language
- ウォレットのシード言語を設定します。
- always-confirm-transfers &lt;1|0&gt;
- 分割されていないトランザクションを確認するかどうか。
- print-ring-members &lt;1|0&gt;
- 確認中にリング メンバーに関する詳細情報を出力するかどうか。
- store-tx-info &lt;1|0&gt;
- 送信トランザクション情報 (送信先アドレス、支払い ID、トランザクション シークレット キー) を将来の参照用に保存するかどうか。
- auto-refresh &lt;1|0&gt;
- デーモンからの新しいブロックを自動的に同期するかどうか。
- refresh-type &lt;full|optimize-coinbase|no-coinbase|default&gt;
- ウォレットの更新動作を設定します。
- priority [0|1|2|3|4]
- 手数料を default/unimportant/normal/elevated/priority に設定します。
- confirm-missing-payment-id &lt;1|0&gt; (廃止)
- ask-password &lt;0|1|2 (または never|action|decrypt)&gt;
- action: transfer などの多くのアクションの前にパスワードを尋ねます
- decrypt: action と同じですが、不要な場合はメモリ内に暗号化された消費キーを保持します
- unit &lt;sal|millisal|microsal&gt;
- デフォルトの salvium (サブ) 単位を設定します。
- min-outputs-count [n]
- min-outputs-value 以上の出力を少なくともその数だけ保持しようとします。
+        <translation>可用选项:
+ 种子语言
+ 设置钱包的种子语言。
+ Always-confirm-transfers &lt;1|0>
+ 是否确认未分割的交易。
+ print-ring-members &lt;1|0>\ n 是否在确认期间打印有关环成员的详细信息。
+ store-tx-info &lt;1|0>
+ 是否存储传出交易信息（目标地址、付款 ID、交易密钥）以供将来参考。
+ auto-refresh &lt;1|0>
+ 是否自动从守护进程同步新块。
+ refresh-type &lt;full|optimize-coinbase|no-coinbase|default>
+ 设置钱包的刷新行为。
+优先级 [0|1|2|3|4]
+ 将费用设置为默认/不重要/正常/提升/优先级。
+ inform-missing- payment-id &lt;1|0> （已过时）
+询问密码&lt;0|1|2（或never|action|解密）>
+操作：在许多操作（例如传输等）之前询问密码
+解密：与操作相同，但保留不需要时在内存中加密的支出密钥
+ 单位 &lt;sal|millisal|microsal>
+ 设置默认的 Salvium（子）单位。
+ 最小输出计数 [n]
+ 尝试至少保留该值许多输出的值至少为 min-outputs-value。
  min-outputs-value [n]
- min-outputs-count 以上の出力を少なくともその値だけ保持しようとします。
- merge-destinations &lt;1|0&gt;
- 複数の支払いを同じ宛先アドレスにマージするかどうか。
- confirm-backlog &lt;1|0&gt;
- トランザクションのバックログがある場合に警告するかどうか。
- confirm-backlog-threshold [n]
- 警告のみを行うための confirm-backlog のしきい値を設定しますトランザクション バックログが n ブロックより大きい場合。
- confirm-export-overwrite &lt;1|0&gt;
- エクスポートするファイルがすでに存在する場合に警告するかどうか。
- refresh-from-block-height [n]
- ブロックを無視する高さを設定します。
- auto-low-priority &lt;1|0&gt;
- 安全な場合に低優先度料金レベルを自動的に使用するかどうか。
- segregate-pre-fork-outputs &lt;1|0&gt;
- 出力を Salvium とキー再利用フォークの両方に使用する場合はこれを設定します。
- key-reuse-mitigation2 &lt;1|0&gt;
- 後でキー再利用 Salvium フォークに使用するかどうかわからない場合はこれを設定します。
- subaddress-lookahead &lt;major&gt;:&lt;minor&gt;
- サブアドレス ハッシュ テーブルの先読みサイズを設定します。
- segregation-height &lt;n&gt;
- 使用するキー再利用フォークの高さに設定します。デフォルトを使用する場合は 0 です。
- ignore-fractional-outputs &lt;1|0&gt;
- 手数料により支出時に純損失となる小数出力を無視するかどうか。
- ignore-outputs-above &lt;amount&gt;
- 支出時にこのしきい値を超える出力を無視します。値 0 は最大値 (1800 万) に変換され、このフィルターが無効になります。
- ignore-outputs-below &lt;amount&gt;
- 支出時にこのしきい値を下回る出力を無視します。
- track-uses &lt;1|0&gt;
- 所有出力の使用を追跡するかどうか。
- setup-background-mining &lt;1|0&gt;
- バックグラウンド マイニングを有効にするかどうか。ネットワークをサポートし、新しい Salvium を受け取るチャンスを得るためにこれを設定します。
- device-name &lt;device_name[:device_spec]&gt;
- ハードウェア ウォレットのデバイス名。
- export-format &lt;&quot;binary&quot;|&quot;ascii&quot;&gt;
- エクスポートされたすべてのファイルをバイナリ (コピーして貼り付けることはできません) または ASCII (コピーして貼り付けることができます) として保存します。
- persistent-rpc-client-id &lt;1|0&gt;
- ウォレットの再起動後も RPC 支払いに同じクライアント ID を使い続けるかどうか。
-auto-mine-for-rpc-payment-threshold &lt;float&gt;
- デーモンが要求した場合に RPC 支払いのマイニングを自動的に開始するかどうか。
-credits-target &lt;unsigned int&gt;
- RPC 支払いのクレジット残高 (デフォルトは 0)。
- show-wallet-name-when-locked &lt;1|0&gt;
-ロック時にウォレット名を表示します。
- enable-multisig-experimental &lt;1|0&gt;
- マルチシグコマンドを許可するにはこれを設定します。現在、マルチシグは、当事者がお互いを信頼していない場合、悪用される可能性があります。
- inactivity-lock-timeout &lt;unsigned int&gt;
- ウォレットをロックするまでの待機秒数 (無効にするには 0)。
-freeze-incoming-payments &lt;1|0&gt;
- 誤って使用されないように、着信支払いを自動的に凍結するかどうか。</translation>
+ 尝试保持至少 min-outputs-count 输出至少为该值。
+ merge-destinations &lt;1| 0>
+ 是否将多笔支付合并到同一个目的地址。
+ inform-b​​acklog &lt;1|0>
+ 是否有交易积压警告。
+ inform-b​​acklog-threshold [n]
+ 设置确认积压的阈值，仅在事务积压大于 n 块时发出警告。
+ 确认导出覆盖 &lt;1|0>
+ 如果要导出的文件已存在，是否发出警告。
+ 刷新- from-block-height [n]
+ 设置忽略块之前的高度。
+ auto-low-priority &lt;1|0>
+ 在安全的情况下是否自动使用低优先级费用级别。 
+ segregate-pre-fork-outputs &lt;1|0>
+ 如果您打算将输出花费在 Salvium 和密钥重用分叉上，请设置此项。
+ key-reuse-mitigation2 &lt;1|0>
+ 设置如果您不确定稍后是否会在重复使用 Salvium 分叉的密钥上花费此操作。
+ subaddress-lookahead &lt;major>:&lt;minor>
+ 设置子地址哈希表的lookahead 大小。
+ segregation-height &lt; ;n>
+ 设置为要使用的密钥重用分叉的高度，0 使用默认值。
+ignore-fractional-outputs &lt;1|0>
+ 是否忽略导致净损失的小数输出因费用而支出。
+ignore-outputs-above &lt;amount>
+ 支出时忽略金额高于此阈值的输出。值 0 被转换为禁用此过滤器的最大值（1800 万）。
+ignore-outputs-below &lt;amount>
+ 支出时忽略低于此阈值的输出。
+ track-uses &lt;1|0> ;
+ 是否跟踪拥有的输出使用。
+ setup-background-mining &lt;1|0>
+ 是否启用后台挖掘。设置此项以支持网络并有机会接收新的 Salvium。
+ 设备名称 &lt;device_name[:device_spec]>
+ 硬件钱包的设备名称。
+ 导出格式 &lt;“binary”| "ascii"&gt;
+ 将所有导出的文件保存为二进制文件（无法复制粘贴）或 ascii 文件（可以）。
+ permanent-rpc-client-id &lt;1|0>
+ 是否继续使用通过钱包重新启动 RPC 支付的相同客户端 ID。
+auto-mine-for-rpc- payment-threshold &lt;float>
+ 如果守护进程需要，是否自动开始挖掘 RPC 支付。
+credits-target &lt;unsigned int> ;
+ RPC 付款将余额记入目标（默认为 0）。
+ show-wallet-name-when-locked &lt;1|0>
+ 如果您想在锁定时显示钱包名称，请设置此项。\ n enable-multisig-experimental &lt;1|0>
+ 设置此项以允许多重签名命令。如果双方不信任对方，多重签名目前可能会被利用。
+ inactivity-lock-timeout &lt;unsigned int>
+ 锁定钱包之前要等待多少秒（0 表示禁用）。
+freeze-incoming- payments &lt;unsigned int>
+ 锁定钱包之前需要等待多少秒（0 表示禁用）。 1|0>
+ 是否自动冻结收款，以免错误支出。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3607"/>
@@ -4186,27 +4185,26 @@ Staked or Burnt:   Block Number, &quot;out&quot;,                     Time, Amou
 
 * Excluding change and fee.
 ** Set of address indices used as inputs in this transfer.</source>
-        <translation>オプションの高さ範囲内で着信/発信転送を表示します。
+        <translation>显示可选高度范围内的传入/传出传输。
 
-出力形式:
-In または Coinbase: ブロック番号、「block」|「in」、時間、金額、資産タイプ、トランザクション ハッシュ、支払い ID、サブアドレス インデックス、「-」、注記
-Out: ブロック番号、「out」、時間、金額*、資産タイプ、トランザクション ハッシュ、支払い ID、手数料、宛先、入力アドレス**、「-」、注記
-プール: 「pool」、 「in」、時間、金額、資産タイプ、トランザクション ハッシュ、支払い ID、サブアドレス インデックス、「-」、注記、二重支払い注記
-保留中または失敗: 「failed」|「pending」、 「out」、時間、金額*、トランザクション ハッシュ、支払い ID、手数料、入力アドレス**、 &quot;-&quot;、注記
-ステークまたはバーン: ブロック番号、&quot;out&quot;、時間、金額*、資産タイプ、トランザクションハッシュ、支払い ID、手数料、入力アドレス**、&quot;-&quot;、注記
-
-* お釣りと手数料は除きます。
-** この転送で入力として使用されるアドレスインデックスのセット。</translation>
+输出格式：
+在或 Coinbase 中： 块号，“块”|“in”，          时间、金额、资产类型、交易哈希、支付 ID、子地址索引、                 “-”，注意
+输出：           区块号、“出”、时间、金额*、资产类型、交易哈希、支付 ID、费用、目的地、输入地址**、“-”、备注
+池：“池”、“入” ,          时间、金额、资产类型、交易哈希、付款 ID、子地址索引、                 “-”、注释、双花注释
+待处理或失败：“失败”|“待处理”、“退出”、时间、金额*、交易哈希、付款 ID、费用、输入地址**、“ ;-”，注释
+质押或销毁：区块号、“出”、时间、金额*、资产类型、交易哈希、支付 ID、费用、输入地址**、“-”、注释
+\ n* 不包括找零和费用。
+** 用作本次转账输入的地址索引集。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3618"/>
         <source>export_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=&lt;N1&gt;[,&lt;N2&gt;,...]] [&lt;min_height&gt; [&lt;max_height&gt;]] [output=&lt;filepath&gt;] [option=&lt;with_keys&gt;]</source>
-        <translation>export_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=&lt;N1&gt;[,&lt;N2&gt;,...]] [&lt;min_height&gt; [&lt;max_height&gt;]] [output=&lt;filepath&gt;] [option=&lt;with_keys&gt;]</translation>
+        <translation>export_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=&lt;N1>[,&lt;N2>,...]] [&lt;min_height>; [&lt;max_height>]] [输出=&lt;文件路径>] [选项=&lt;with_keys>]</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3653"/>
         <source>Sign the contents of a file with the given subaddress (or the main address if not specified)</source>
-        <translation>指定されたサブアドレス（指定されていない場合はメインアドレス）でファイルの内容に署名します。</translation>
+        <translation>使用给定的子地址（如果未指定，则为主地址）对文件的内容进行签名</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3728"/>
@@ -4215,76 +4213,76 @@ Out: ブロック番号、「out」、時間、金額*、資産タイプ、ト�
   init, info, signer, list, next, sync, transfer, delete, send, receive, export, note, show, set, help
   send_signer_config, start_auto_config, stop_auto_config, auto_config, config_checksum
 Get help about a subcommand with: help mms &lt;subcommand&gt;, or help mms &lt;subcommand&gt;</source>
-        <translation>MMS (マルチシグ メッセージング システム) とのインターフェイス
-&lt;サブコマンド&gt; は次のいずれかです:
+        <translation>与 MMS（多重消息系统）的接口
+&lt;子命令>是以下之一：
  init、info、signer、list、next、sync、transfer、delete、send、receive、export、note、show、set、help
  send_signer_config、start_auto_config、stop_auto_config、auto_config、config_checksum
-サブコマンドに関するヘルプを取得するには、help mms &lt;サブコマンド&gt; または help mms &lt;サブコマンド&gt; を使用します。</translation>
+获取有关以下内容的帮助包含以下内容的子命令：help mms &lt;子命令>，或 help mms &lt;子命令></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3803"/>
         <source>Get a checksum that allows signers to easily check for identical MMS configuration</source>
-        <translation>署名者がMMS構成が同一かどうかを簡単に確認できるチェックサムを取得します。</translation>
+        <translation>获取校验和，使签名者可以轻松检查相同的彩信配置</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3889"/>
         <source>Show address as QR code</source>
-        <translation>住所をQRコードで表示</translation>
+        <translation>以二维码形式显示地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3897"/>
         <source>Search all command descriptions for keyword(s)</source>
-        <translation>すべてのコマンドの説明をキーワードで検索</translation>
+        <translation>搜索关键字的所有命令描述</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3901"/>
         <source>Scan the transactions given by &lt;txid&gt;(s), processing them and looking for outputs</source>
-        <translation>&lt;txid&gt;で指定されたトランザクションをスキャンし、処理して出力を探します。</translation>
+        <translation>扫描 &lt;txid>(s) 给出的交易，处理它们并寻找输出</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4014"/>
         <source>sal, millisal, microsal</source>
-        <translation>サル、ミリサル、ミクロサル</translation>
+        <translation>萨尔, 米利萨尔, 微萨尔</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4032"/>
         <source>1 or 0</source>
-        <translation>1または0</translation>
+        <translation>1或0</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4257"/>
         <source>Multisig is disabled.</source>
-        <translation>マルチシグは無効です。</translation>
+        <translation>多重签名已禁用。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4258"/>
-        <source>Multisig is an experimental feature and may have bugs. Things that could go wrong include: funds sent to a multisig wallet can&#39;t be spent at all, can only be spent with the participation of a malicious group member, or can be stolen by a malicious group member.</source>
-        <translation>マルチシグは実験的な機能であり、バグがある可能性があります。問題が発生する可能性のある状況としては、マルチシグ ウォレットに送信された資金がまったく使用できない、悪意のあるグループ メンバーの参加がある場合にのみ使用できる、または悪意のあるグループ メンバーによって盗まれる、などが挙げられます。</translation>
+        <source>Multisig is an experimental feature and may have bugs. Things that could go wrong include: funds sent to a multisig wallet can't be spent at all, can only be spent with the participation of a malicious group member, or can be stolen by a malicious group member.</source>
+        <translation>多重签名是一项实验性功能，可能存在错误。可能出现问题的情况包括：发送到多重签名钱包的资金根本无法使用，只能在恶意群组成员的参与下使用，或者可能被恶意群组成员窃取。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4260"/>
         <source>You have canceled restoring a multisig wallet.</source>
-        <translation>マルチシグウォレットの復元をキャンセルしました。</translation>
+        <translation>您已取消恢复多重签名钱包。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4915"/>
         <source>wallet failed to connect to daemon, because it is set to offline mode</source>
-        <translation>ウォレットはオフラインモードに設定されているため、デーモンに接続できませんでした</translation>
+        <translation>钱包无法连接守护进程，因为它设置为离线模式</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4917"/>
-        <source>wallet failed to connect to daemon, because it is not up to date.</source>
-        <translation>ウォレットは最新ではないため、デーモンに接続できませんでした。</translation>
+        <source>wallet failed to connect to daemon, because it is not up to date. </source>
+        <translation>钱包无法连接到守护程序，因为它不是最新的。 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4918"/>
         <source>Please make sure you are running the latest wallet.</source>
-        <translation>最新のウォレットを実行していることを確認してください。</translation>
+        <translation>请确保您运行的是最新的钱包。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4921"/>
-        <source>Daemon is not up to date. Please make sure the daemon is running the latest version or change the daemon address using the &#39;set_daemon&#39; command.</source>
-        <translation>デーモンは最新ではありません。デーモンが最新バージョンを実行していることを確認するか、&#39;set_daemon&#39; コマンドを使用してデーモンのアドレスを変更してください。</translation>
+        <source>Daemon is not up to date. Please make sure the daemon is running the latest version or change the daemon address using the 'set_daemon' command.</source>
+        <translation>守护进程不是最新的。请确保守护程序正在运行最新版本或使用“set_daemon”命令更改守护程序地址。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5076"/>
@@ -4292,263 +4290,265 @@ Get help about a subcommand with: help mms &lt;subcommand&gt;, or help mms &lt;s
 To start synchronizing with the daemon, use the &quot;refresh&quot; command.
 Use the &quot;help&quot; command to see a simplified list of available commands.
 Use &quot;help all&quot; command to see the list of all available commands.
-Use &quot;help &lt;command&gt;&quot; to see a command&#39;s documentation.
+Use &quot;help &lt;command&gt;&quot; to see a command's documentation.
 Always use the &quot;exit&quot; command when closing salvium-wallet-cli to save 
-your current session&#39;s state. Otherwise, you might need to synchronize 
+your current session's state. Otherwise, you might need to synchronize 
 your wallet again (your wallet keys are NOT at risk in any case).
 </source>
-        <translation>ウォレットが生成されました!
-デーモンとの同期を開始するには、「refresh」コマンドを使用します。
-使用可能なコマンドの簡略化されたリストを表示するには、「help」コマンドを使用します。
-使用可能なすべてのコマンドのリストを表示するには、「help all」コマンドを使用します。
-コマンドのドキュメントを表示するには、「help &lt;command&gt;」を使用します。
-現在のセッションの状態を保存するために、salvium-wallet-cli を閉じるときは常に「exit」コマンドを使用してください。そうしないと、ウォレットを再度同期する必要がある場合があります (ウォレット キーはいずれの場合も危険にさらされません)。
+        <translation>您的钱包已生成！
+要开始与守护程序同步，请使用“刷新”按钮命令。
+使用“帮助”命令查看可用命令的简化列表。
+使用“help all”命令查看所有可用命令的列表。
+使用“help &lt;command>”查看命令的文档。
+始终使用“退出”键关闭 salvium-wallet-cli 时使用命令来保存
+当前会话的状态。否则，您可能需要再次同步
+您的钱包（在任何情况下您的钱包密钥都不会面临风险）。
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5348"/>
         <source>Use the &quot;help&quot; command to see a simplified list of available commands.
 </source>
-        <translation>使用可能なコマンドの簡略化されたリストを表示するには、「help」コマンドを使用します。
+        <translation>使用“帮助”命令来查看可用命令的简化列表。
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5349"/>
         <source>Use &quot;help all&quot; to see the list of all available commands.
 </source>
-        <translation>使用可能なすべてのコマンドのリストを表示するには、「help all」を使用します。
+        <translation>使用“帮助所有人”查看所有可用命令的列表。
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5536"/>
         <source>Enabling this supports the network you are using, and makes you eligible for receiving new SALs</source>
-        <translation>これを有効にすると、使用しているネットワークがサポートされ、新しいSALを受け取る資格が得られます。</translation>
+        <translation>启用此功能可支持您正在使用的网络，并使您有资格接收新的 SAL</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5703"/>
         <source>Failed to parse address</source>
-        <translation>アドレスの解析に失敗しました</translation>
+        <translation>解析地址失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5718"/>
-        <source>Expected trusted, untrusted or this-is-probably-a-spy-node got</source>
-        <translation>信頼済み、信頼されていない、またはスパイノードである可能性があると予想されました</translation>
+        <source>Expected trusted, untrusted or this-is-probably-a-spy-node got </source>
+        <translation>预期受信任、不受信任或这可能是间谍节点 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5727"/>
         <source>This is not Tor/I2P address, and is not a trusted daemon.</source>
-        <translation>これは Tor/I2P アドレスではなく、信頼できるデーモンでもありません。</translation>
+        <translation>这不是 Tor/I2P 地址，也不是受信任的守护进程。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5728"/>
         <source>Either use your own trusted node, connect via Tor or I2P, or pass this-is-probably-a-spy-node and be spied on.</source>
-        <translation>独自の信頼できるノードを使用するか、Tor または I2P 経由で接続するか、またはおそらくスパイノードを渡してスパイされるかのいずれかです。</translation>
+        <translation>要么使用您自己的可信节点，通过 Tor 或 I2P 连接，要么传递这个“可能是间谍”节点并被监视。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5733"/>
         <source>Warning: connecting to a non-local daemon without SSL, passive adversaries will be able to spy on you.</source>
-        <translation>警告: SSL を使用せずに非ローカルデーモンに接続すると、受動的な敵があなたをスパイできるようになります。</translation>
+        <translation>警告：在没有 SSL 的情况下连接到非本地守护程序，被动的对手将能够监视您。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5836"/>
-        <source>stake returned</source>
-        <translation>返還されたステーク</translation>
+        <source>stake returned </source>
+        <translation>返还赌注 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5842"/>
-        <source>yield earned</source>
-        <translation>獲得した収益</translation>
+        <source>yield earned </source>
+        <translation>赚取的收益 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5853"/>
-        <source>burnt</source>
-        <translation>焼けた</translation>
+        <source>burnt </source>
+        <translation>烧焦的 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5858"/>
-        <source>converting</source>
-        <translation>変換する</translation>
+        <source>converting </source>
+        <translation>转换 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5863"/>
-        <source>staked</source>
-        <translation>賭けた</translation>
+        <source>staked </source>
+        <translation>押注的 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5982"/>
         <source>Device asks for passphrase. Do you want to enter the passphrase on device (Y) (or on the host (N))?</source>
-        <translation>デバイスがパスフレーズを要求します。デバイス (Y) (またはホスト (N)) でパスフレーズを入力しますか?</translation>
+        <translation>设备要求输入密码。您想在设备 (Y)（或主机 (N)）上输入密码吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6005"/>
-        <source>The wallet&#39;s refresh-from-block-height setting is higher than the daemon&#39;s height: this may mean your wallet will skip over transactions</source>
-        <translation>ウォレットのブロック高さのリフレッシュ設定がデーモンの高さよりも高いため、ウォレットがトランザクションをスキップする可能性があります。</translation>
+        <source>The wallet's refresh-from-block-height setting is higher than the daemon's height: this may mean your wallet will skip over transactions</source>
+        <translation>钱包的刷新块高度设置高于守护进程的高度：这可能意味着您的钱包将跳过交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6155"/>
-        <source>(Some owned outputs have missing key images - export_outputs, import_outputs, export_key_images, and import_key_images needed)</source>
-        <translation>(所有出力の一部にキー イメージが欠落しています - export_outputs、import_outputs、export_key_images、import_key_images が必要です)</translation>
+        <source> (Some owned outputs have missing key images - export_outputs, import_outputs, export_key_images, and import_key_images needed)</source>
+        <translation>（某些拥有的输出缺少关键图像 - 需要 export_outputs、import_outputs、export_key_images 和 import_key_images）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6171"/>
-        <source>Asset:</source>
-        <translation>資産：</translation>
+        <source>Asset: </source>
+        <translation>资产： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6171"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10339"/>
-        <source>, balance:</source>
-        <translation>、 バランス：</translation>
+        <source>, balance: </source>
+        <translation>， 平衡： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6494"/>
         <source>failed to connect to daemon</source>
-        <translation>デーモンへの接続に失敗しました</translation>
+        <translation>无法连接到守护进程</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6595"/>
         <source>, which can break the anonymity of ring signatures. Make sure this is intentional!
 </source>
-        <translation>、これはリング署名の匿名性を破る可能性があります。これは意図的なものであることを確認してください!
+        <translation>，这可以打破环签名的匿名性。确保这是故意的！
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6653"/>
         <source>I locked your Salvium wallet to protect you while you were away
 see &quot;help set&quot; to configure/disable</source>
-        <translation>あなたが留守の間、あなたを守るためにSalviumウォレットをロックしました
-設定/無効化については「ヘルプ設定」をご覧ください</translation>
+        <translation>我锁定了您的 Salvium 钱包，以在您离开时保护您
+请参阅“帮助设置”配置/禁用</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6673"/>
         <source>Locked due to inactivity.</source>
-        <translation>非アクティブのためロックされています。</translation>
+        <translation>由于不活动而被锁定。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6674"/>
         <source>The wallet password is required to unlock the console.</source>
-        <translation>コンソールのロックを解除するにはウォレットのパスワードが必要です。</translation>
+        <translation>解锁控制台需要钱包密码。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6681"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10824"/>
         <source>Testnet</source>
-        <translation>テストネット</translation>
+        <translation>测试网</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6682"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10825"/>
         <source>Stagenet</source>
-        <translation>ステージネット</translation>
+        <translation>舞台网</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6682"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10825"/>
         <source>Mainnet</source>
-        <translation>メインネット</translation>
+        <translation>主网</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7073"/>
-        <source>Burning %s %s.</source>
-        <translation>%s %s を書き込み中。</translation>
+        <source>Burning %s %s.  </source>
+        <translation>正在燃烧 %s %s。  </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7075"/>
-        <source>Converting %s %s to %s.</source>
-        <translation>%s %s を %s に変換しています。</translation>
+        <source>Converting %s %s to %s.  </source>
+        <translation>正在将 %s %s 转换为 %s。  </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7077"/>
-        <source>Staking %s %s for yield accrual.</source>
-        <translation>利回り獲得のために %s %s をステーキングします。</translation>
+        <source>Staking %s %s for yield accrual.  </source>
+        <translation>质押 %s %s 以获取收益。  </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7079"/>
-        <source>Sending %s %s.</source>
-        <translation>%s %s を送信しています。</translation>
+        <source>Sending %s %s.  </source>
+        <translation>正在发送 %s %s。  </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7098"/>
         <source>.
 This transaction (including %s change) will unlock in %llu blocks, approximately %s days (assuming 2 minutes per block)</source>
-        <translation>
-このトランザクション (%s の変更を含む) は、%llu ブロック、約 %s 日でロック解除されます (ブロックあたり 2 分と想定)</translation>
+        <translation>.
+此交易（包括 %s 更改）将在 %llu 块中解锁，大约 %s 天（假设每个块 2 分钟）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="7975"/>
         <source>Invalid account</source>
-        <translation>無効なアカウント</translation>
+        <translation>帐户无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8006"/>
         <source>return_payments are disabled</source>
-        <translation>return_payments は無効です</translation>
+        <translation>return_ payment 被禁用</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8042"/>
-        <source>incorrect TX type for txid</source>
-        <translation>txid の TX タイプが正しくありません</translation>
+        <source>incorrect TX type for txid </source>
+        <translation>txid 的 TX 类型不正确 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8048"/>
-        <source>invalid return_address/return_pubkey for txid</source>
-        <translation>txid の return_address/return_pubkey が無効です</translation>
+        <source>invalid return_address/return_pubkey for txid </source>
+        <translation>txid 的 return_address/return_pubkey 无效 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8054"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8065"/>
-        <source>key image is unavailable (partial / unknown / spent / frozen) for txid</source>
-        <translation>txid のキー イメージが利用できません (部分的 / 不明 / 使用済み / 凍結済み)</translation>
+        <source>key image is unavailable (partial / unknown / spent / frozen) for txid </source>
+        <translation>txid 的关键图像不可用（部分/未知/已用/已冻结） </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8097"/>
         <source>Returning %s for a total fee of %s.  Is this okay?</source>
-        <translation>合計料金 %s で %s を返品します。よろしいですか?</translation>
+        <translation>返回 %s，总费用为 %s。  这样可以吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8127"/>
         <source>cold-signing of return TXs not yet implemented</source>
-        <translation>返送TXのコールド署名はまだ実装されていません</translation>
+        <translation>返回 TX 的冷签名尚未实施</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8217"/>
-        <source>conversions are disabled until hard fork</source>
-        <translation>ハードフォークまで変換は無効です</translation>
+        <source>conversions are disabled until hard fork </source>
+        <translation>在硬分叉之前转换将被禁用 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8224"/>
         <source>missing / extraneous argument(s)</source>
-        <translation>欠落している/不要な引数</translation>
+        <translation>缺少/无关的参数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8240"/>
-        <source>invalid slippage_limit value : expected 0.0-90.0, got</source>
-        <translation>無効なslippage_limit値: 0.0-90.0が期待されましたが、</translation>
+        <source>invalid slippage_limit value : expected 0.0-90.0, got </source>
+        <translation>无效的 slippage_limit 值：预期 0.0-90.0，已得到 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8251"/>
-        <source>invalid argument(s):</source>
-        <translation>無効な引数:</translation>
+        <source>invalid argument(s): </source>
+        <translation>无效参数： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8257"/>
-        <source>out of range for slippage limit:</source>
-        <translation>スリッページ制限の範囲外:</translation>
+        <source>out of range for slippage limit: </source>
+        <translation>超出滑点限制范围： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8267"/>
         <source>invalid destination asset_type</source>
-        <translation>無効な宛先アセットタイプ</translation>
+        <translation>目标 asset_type 无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8277"/>
         <source>invalid source asset_type</source>
-        <translation>無効なソースアセットタイプ</translation>
+        <translation>源 asset_type 无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8286"/>
         <source>invalid conversion - asset_type is unchanged</source>
-        <translation>無効な変換 - asset_type は変更されていません</translation>
+        <translation>无效转换 - asset_type 未更改</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8343"/>
@@ -4556,35 +4556,35 @@ This transaction (including %s change) will unlock in %llu blocks, approximately
 	SPOT:	%d
 	MA:	%d</source>
         <translation>%s
-	スポット:	%d
+	SPOT:	%d
 	MA:	%d</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8367"/>
         <source>SUPPLY INFO</source>
-        <translation>供給情報</translation>
+        <translation>供应信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8378"/>
         <source>	%6s : %21.8d</source>
-        <translation>	%6秒: %21.8日</translation>
+        <translation>	%6s: %21.8d</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8405"/>
         <source>
 STAKED FUNDS:</source>
         <translation>
-ステークされた資金:</translation>
+质押资金：</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8411"/>
         <source>Height %d, txid %s, staked %s SAL, earned %s SAL</source>
-        <translation>高さ %d、txid %s、賭けた SAL %s、獲得した SAL %s</translation>
+        <translation>高度 %d，txid %s，质押 %s SAL，赚取 %s SAL</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8417"/>
         <source>Height %d, txid %s, staked %s SAL, %s SAL accrued so far</source>
-        <translation>高さ %d、txid %s、ステークされた SAL %s、これまでに蓄積された SAL %s</translation>
+        <translation>高度 %d，txid %s，质押 %s SAL，到目前为止累计 %s SAL</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8425"/>
@@ -4595,150 +4595,150 @@ YIELD INFO:
 	Yield accrued over last %s: %d
 	Yield per SAL staked: %d</source>
         <translation>
-利回り情報:
-	過去 %s にバーンされた供給コイン: %d
-	ロックされたコインの合計: %d
-	過去 %s に発生した利回り: %d
-	ステークされた SAL あたりの利回り: %d</translation>
+收益信息：
+	过去 %s 燃烧的供应币：%d
+	锁定的币总数：%d
+	过去 %s 累积的收益：%d
+	每个 SAL 质押的收益：%d</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8490"/>
         <source>Donating %s %s to The Salvium Team (donate.salvium.io or %s).</source>
-        <translation>%s %s を The Salvium Team (donate.salvium.io または %s) に寄付します。</translation>
+        <translation>向 Salvium 团队捐赠 %s %s（donate.salvium.io 或 %s）。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8841"/>
         <source>Last argument is an address, but not a subaddress</source>
-        <translation>最後の引数はアドレスですが、サブアドレスではありません</translation>
+        <translation>最后一个参数是地址，但不是子地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8895"/>
         <source>It could be because the transfer was to a subaddress. If this is the case, pass the subaddress last</source>
-        <translation>転送先がサブアドレスだったためかもしれません。その場合は、サブアドレスを最後に渡してください。</translation>
+        <translation>这可能是因为转移到了子地址。如果是这种情况，请最后传递子地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9590"/>
         <source>usage: show_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=&lt;N1&gt;[,&lt;N2&gt;,...]] [&lt;min_height&gt; [&lt;max_height&gt;]]</source>
-        <translation>使用方法: show_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=&lt;N1&gt;[,&lt;N2&gt;,...]] [&lt;min_height&gt; [&lt;max_height&gt;]]</translation>
+        <translation>用法： show_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=&lt;N1>[,&lt;N2>,...]] [&lt;min_height>; [&lt;最大高度>]]</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9649"/>
         <source>usage: export_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=&lt;N1&gt;[,&lt;N2&gt;,...]] [&lt;min_height&gt; [&lt;max_height&gt;]] [output=&lt;path&gt;] [option=&lt;with_keys&gt;]</source>
-        <translation>使用方法: export_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=&lt;N1&gt;[,&lt;N2&gt;,...]] [&lt;min_height&gt; [&lt;max_height&gt;]] [output=&lt;path&gt;] [option=&lt;with_keys&gt;]</translation>
+        <translation>用法：export_transfers [in|out|all|pending|failed|pool|coinbase|burnt|staked|yield] [index=&lt;N1>[,&lt;N2>,...]] [&lt;min_height>; [&lt;max_height>]] [输出=&lt;路径>] [选项=&lt;with_keys>]</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
         <source>tx key</source>
-        <translation>送信キー</translation>
+        <translation>发送键</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10338"/>
         <source>
 Grand total:
-  Asset:</source>
+  Asset: </source>
         <translation>
-合計:
- 資産:</translation>
+总计：
+ 资产： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10362"/>
         <source>Asset</source>
-        <translation>資産</translation>
+        <translation>资产</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10376"/>
-        <source>%c%8u %6s %21s %21s %21s %21s</source>
+        <source> %c%8u %6s %21s %21s %21s %21s</source>
         <translation>%c%8u %6s %21s %21s %21s %21s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10390"/>
         <source>------------------------------------------------------------------------------------</source>
-        <translation>------------------------------------------------------------------------------------</translation>
+        <translation>-------------------------------------------------- ----------------------------------</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10392"/>
         <source>%15s   %21s %21s  %15s</source>
-        <translation>%15秒 %21秒 %21秒 %15秒</translation>
+        <translation>%15s %21s %21s %15s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10447"/>
         <source>Expected exactly one argument for the amount of new addresses</source>
-        <translation>新しいアドレスの数を表す引数が 1 つだけ必要です</translation>
+        <translation>预计新地址数量只有一个参数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10453"/>
-        <source>failed to parse the amount of new addresses:</source>
-        <translation>新しいアドレスの数を解析できませんでした:</translation>
+        <source>failed to parse the amount of new addresses: </source>
+        <translation>无法解析新地址数量： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10458"/>
-        <source>the amount of new addresses must be lower or equal to</source>
-        <translation>新しいアドレスの数は以下である必要があります</translation>
+        <source>the amount of new addresses must be lower or equal to </source>
+        <translation>新地址的数量必须低于或等于 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10473"/>
         <source>Expected exactly two arguments for index</source>
-        <translation>インデックスには正確に 2 つの引数が必要です</translation>
+        <translation>预计索引正好有两个参数</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10483"/>
         <source>Address at %u %u: %s</source>
-        <translation>%u %u の住所: %s</translation>
+        <translation>地址位于 %u %u：%s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10616"/>
         <source>Standard address: %s, payment ID: %s</source>
-        <translation>標準アドレス: %s、支払い ID: %s</translation>
+        <translation>标准地址：%s，付款 ID：%s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10872"/>
-        <source>Invalid subaddress index format, and not a signature type:</source>
-        <translation>サブアドレス インデックス形式が無効であり、署名タイプではありません:</translation>
+        <source>Invalid subaddress index format, and not a signature type: </source>
+        <translation>无效的子地址索引格式，而不是签名类型： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11497"/>
-        <source>(Y/Yes/N/No):</source>
-        <translation>(はい/いいえ/いいえ):</translation>
+        <source> (Y/Yes/N/No): </source>
+        <translation>（是/是/否/否）： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11503"/>
         <source>WARNING: Using MMS auto-config mechanisms is not trustless</source>
-        <translation>警告: MMS自動設定メカニズムの使用は信頼できないものではありません</translation>
+        <translation>警告：使用彩信自动配置机制并非不可信</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11504"/>
-        <source>A malicious auto-config manager could send you info about own wallets instead of other signers&#39; info</source>
-        <translation>悪意のある自動設定マネージャーは、他の署名者の情報ではなく、自分のウォレットに関する情報を送信する可能性があります。</translation>
+        <source>A malicious auto-config manager could send you info about own wallets instead of other signers' info</source>
+        <translation>恶意自动配置管理器可能会向您发送有关自己钱包的信息，而不是其他签名者的信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11505"/>
         <source>If in doubt do not use auto-config or at least compare configs using the &quot;mms config_checksum&quot; command</source>
-        <translation>疑わしい場合は自動設定を使用しないか、少なくとも「mms config_checksum」コマンドを使用して設定を比較してください。</translation>
+        <translation>如果有疑问，请勿使用自动配置或至少使用“mms config_checksum”比较配置。命令</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11532"/>
         <source>Choose processing:</source>
-        <translation>処理を選択してください:</translation>
+        <translation>选择加工：</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11541"/>
         <source>Sign tx</source>
-        <translation>署名tx</translation>
+        <translation>签署交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11549"/>
-        <source>Send the tx for submission to</source>
-        <translation>送信用のtxを</translation>
+        <source>Send the tx for submission to </source>
+        <translation>将提交的 tx 发送至 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11553"/>
-        <source>Send the tx for signing to</source>
-        <translation>署名のためのtxを送信する</translation>
+        <source>Send the tx for signing to </source>
+        <translation>将用于签名的 tx 发送至 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11560"/>
         <source>Submit tx</source>
-        <translation>送信</translation>
+        <translation>提交交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11563"/>
@@ -4747,57 +4747,57 @@ Grand total:
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11569"/>
-        <source>Choice:</source>
-        <translation>選択：</translation>
+        <source>Choice: </source>
+        <translation>选择： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11581"/>
         <source>Wrong choice</source>
-        <translation>間違った選択</translation>
+        <translation>错误的选择</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11588"/>
         <source>Id</source>
-        <translation>識別子</translation>
+        <translation>ID</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11588"/>
         <source>I/O</source>
-        <translation>入出力</translation>
+        <translation>输入/输出</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11588"/>
         <source>Authorized Signer</source>
-        <translation>承認された署名者</translation>
+        <translation>授权签署人</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11589"/>
         <source>Message Type</source>
-        <translation>メッセージタイプ</translation>
+        <translation>消息类型</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11589"/>
         <source>Height</source>
-        <translation>身長</translation>
+        <translation>高度</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11589"/>
         <source>R</source>
-        <translation>R</translation>
+        <translation>右</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11589"/>
         <source>Message State</source>
-        <translation>メッセージの状態</translation>
+        <translation>消息状态</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11589"/>
         <source>Since</source>
-        <translation>以来</translation>
+        <translation>自从</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11606"/>
-        <source>ago</source>
+        <source> ago</source>
         <translation>前</translation>
     </message>
     <message>
@@ -4808,548 +4808,548 @@ Grand total:
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11612"/>
         <source>Transport Address</source>
-        <translation>輸送先住所</translation>
+        <translation>运输地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11613"/>
         <source>Auto-Config Token</source>
-        <translation>自動設定トークン</translation>
+        <translation>自动配置令牌</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11613"/>
         <source>Salvium Address</source>
-        <translation>サルビウム住所</translation>
+        <translation>丹参地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11617"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11625"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11627"/>
         <source>&lt;not set&gt;</source>
-        <translation>&lt;未設定&gt;</translation>
+        <translation>&lt;未设置></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11668"/>
-        <source>Message</source>
-        <translation>メッセージ</translation>
+        <source>Message </source>
+        <translation>信息 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11669"/>
-        <source>In/out:</source>
-        <translation>入退出:</translation>
+        <source>In/out: </source>
+        <translation>输入/输出： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11671"/>
-        <source>State:</source>
-        <translation>州：</translation>
+        <source>State: </source>
+        <translation>状态： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11671"/>
         <source>%s since %s, %s ago</source>
-        <translation>%s から %s、%s 前</translation>
+        <translation>%s 自 %s 起，%s 前</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11675"/>
         <source>Sent: Never</source>
-        <translation>送信済み: なし</translation>
+        <translation>发送：从未</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11679"/>
         <source>Sent: %s, %s ago</source>
-        <translation>送信日: %s、%s 前</translation>
+        <translation>发送时间：%s, %s 前</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11682"/>
-        <source>Authorized signer:</source>
-        <translation>承認された署名者:</translation>
+        <source>Authorized signer: </source>
+        <translation>授权签字人： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11683"/>
-        <source>Content size:</source>
-        <translation>コンテンツサイズ:</translation>
+        <source>Content size: </source>
+        <translation>内容大小： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11683"/>
-        <source>bytes</source>
-        <translation>バイト</translation>
+        <source> bytes</source>
+        <translation>字节</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11684"/>
-        <source>Content:</source>
-        <translation>コンテンツ：</translation>
+        <source>Content: </source>
+        <translation>内容： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11684"/>
         <source>(binary data)</source>
-        <translation>(バイナリデータ)</translation>
+        <translation>（二进制数据）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11714"/>
         <source>Send these messages now?</source>
-        <translation>これらのメッセージを今すぐ送信しますか?</translation>
+        <translation>现在发送这些消息吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11724"/>
         <source>Queued for sending.</source>
-        <translation>送信待ちキューに追加されました。</translation>
+        <translation>排队等待发送。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11744"/>
         <source>Invalid message id</source>
-        <translation>無効なメッセージ ID</translation>
+        <translation>消息 ID 无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11753"/>
         <source>usage: mms init &lt;required_signers&gt;/&lt;authorized_signers&gt; &lt;own_label&gt; &lt;own_transport_address&gt;</source>
-        <translation>使用方法: mms init &lt;required_signers&gt;/&lt;authorized_signers&gt; &lt;own_label&gt; &lt;own_transport_address&gt;</translation>
+        <translation>用法：mms init &lt;required_signers>/&lt;authorized_signers> &lt;自己的标签> &lt;自己的交通地址></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11759"/>
         <source>The MMS is already initialized. Re-initialize by deleting all signer info and messages?</source>
-        <translation>MMS はすでに初期化されています。署名者情報とメッセージをすべて削除して再度初期化しますか?</translation>
+        <translation>彩信已初始化。通过删除所有签名者信息和消息来重新初始化？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11774"/>
         <source>Error in the number of required signers and/or authorized signers</source>
-        <translation>必要な署名者数および/または承認された署名者の数に誤りがある</translation>
+        <translation>所需签名者和/或授权签名者数量错误</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11791"/>
         <source>The MMS is not active.</source>
-        <translation>MMS はアクティブではありません。</translation>
+        <translation>彩信未激活。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11814"/>
-        <source>Invalid signer number</source>
-        <translation>署名者番号が無効です</translation>
+        <source>Invalid signer number </source>
+        <translation>签名人号码无效 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11819"/>
         <source>mms signer [&lt;number&gt; &lt;label&gt; [&lt;transport_address&gt; [&lt;salvium_address&gt;]]]</source>
-        <translation>mms 署名者 [<number> &lt;label&gt; [<transport_address> [<salvium_address>]]]</translation>
+        <translation>彩信签名者 [&lt;number&gt; &lt;标签> [&lt;运输地址> [&lt;salvium_address>]]]</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11838"/>
         <source>Invalid Salvium address</source>
-        <translation>無効なSalviumアドレス</translation>
+        <translation>Salvium 地址无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11845"/>
         <source>Wallet state does not allow changing Salvium addresses anymore</source>
-        <translation>ウォレットの状態により、Salvium アドレスの変更は許可されなくなりました</translation>
+        <translation>钱包状态不再允许更改 Salvium 地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11857"/>
         <source>Usage: mms list</source>
-        <translation>使用法: mms リスト</translation>
+        <translation>用途：彩信列表</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11870"/>
         <source>Usage: mms next [sync]</source>
-        <translation>使用方法: mms next [sync]</translation>
+        <translation>用法：彩信下一个[同步]</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11895"/>
-        <source>No next step:</source>
-        <translation>次のステップはありません:</translation>
+        <source>No next step: </source>
+        <translation>没有下一步： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11905"/>
         <source>prepare_multisig</source>
-        <translation>マルチシグを準備する</translation>
+        <translation>准备多重签名</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11911"/>
         <source>make_multisig</source>
-        <translation>マルチシグを作る</translation>
+        <translation>make_multisig</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11926"/>
         <source>exchange_multisig_keys</source>
-        <translation>マルチシグキーの交換</translation>
+        <translation>交换多重签名密钥</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11942"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12066"/>
         <source>export_multisig_info</source>
-        <translation>エクスポート_マルチシグ情報</translation>
+        <translation>导出多重签名信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11951"/>
         <source>import_multisig_info</source>
-        <translation>インポート_マルチシグ情報</translation>
+        <translation>导入多重签名信息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11964"/>
         <source>sign_multisig</source>
-        <translation>マルチシグ</translation>
+        <translation>签名多重签名</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11974"/>
         <source>submit_multisig</source>
-        <translation>マルチシグを送信</translation>
+        <translation>提交多重签名</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11984"/>
         <source>Send tx</source>
-        <translation>送信</translation>
+        <translation>发送交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11995"/>
         <source>Process signer config</source>
-        <translation>プロセス署名者設定</translation>
+        <translation>进程签名者配置</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12007"/>
         <source>Replace current signer config with the one displayed above?</source>
-        <translation>現在の署名者設定を上に表示されているものに置き換えますか?</translation>
+        <translation>将当前签名者配置替换为上面显示的配置？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12013"/>
         <source>You can use the &quot;mms delete&quot; command to delete any unwanted message</source>
-        <translation>不要なメッセージを削除するには、「mms delete」コマンドを使用します。</translation>
+        <translation>您可以使用“彩信删除”命令删除任何不需要的消息</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12026"/>
         <source>Process auto config data</source>
-        <translation>自動設定データを処理する</translation>
+        <translation>处理自动配置数据</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12040"/>
         <source>Nothing ready to process</source>
-        <translation>処理する準備ができていません</translation>
+        <translation>没有准备好处理</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12059"/>
         <source>Usage: mms sync</source>
-        <translation>使用方法: mms 同期</translation>
+        <translation>用途：彩信同步</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12083"/>
         <source>Usage: mms delete (&lt;message_id&gt; | all)</source>
-        <translation>使用方法: mms delete (&lt;message_id&gt; | all)</translation>
+        <translation>用法：彩信删除（&lt;message_id> | 全部）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12090"/>
         <source>Delete all messages?</source>
-        <translation>すべてのメッセージを削除しますか?</translation>
+        <translation>删除所有消息？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12116"/>
         <source>Usage: mms send [&lt;message_id&gt;]</source>
-        <translation>使用方法: mms send [&lt;message_id&gt;]</translation>
+        <translation>用法：彩信发送 [&lt;message_id>]</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12133"/>
         <source>Usage: mms receive</source>
-        <translation>使用法: mms 受信</translation>
+        <translation>用途：彩信接收</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12150"/>
         <source>Usage: mms export &lt;message_id&gt;</source>
-        <translation>使用方法: mms export &lt;message_id&gt;</translation>
+        <translation>用法：彩信导出&lt;message_id></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12161"/>
-        <source>Message content saved to:</source>
-        <translation>メッセージの内容が保存されました:</translation>
+        <source>Message content saved to: </source>
+        <translation>留言内容保存至： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12165"/>
         <source>Failed to to save message content</source>
-        <translation>メッセージの内容を保存できませんでした</translation>
+        <translation>保存消息内容失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12189"/>
         <source>Usage: mms note [&lt;label&gt; &lt;text&gt;]</source>
-        <translation>使用方法: mms note [&lt;label&gt; &lt;text&gt;]</translation>
+        <translation>用法：彩信备注[&lt;标签> &lt;正文>]</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12196"/>
-        <source>No signer found with label</source>
-        <translation>ラベルの署名者が見つかりません</translation>
+        <source>No signer found with label </source>
+        <translation>找不到带有标签的签名者 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12218"/>
         <source>Usage: mms show &lt;message_id&gt;</source>
-        <translation>使用方法: mms show &lt;message_id&gt;</translation>
+        <translation>用法：彩信显示&lt;message_id></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12236"/>
         <source>Usage: mms set &lt;option_name&gt; [&lt;option_value&gt;]</source>
-        <translation>使用方法: mms set &lt;option_name&gt; [&lt;option_value&gt;]</translation>
+        <translation>用法：mms set &lt;选项名称> [&lt;选项值>]</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12253"/>
         <source>Wrong option value</source>
-        <translation>オプション値が間違っています</translation>
+        <translation>选项值错误</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12258"/>
         <source>Auto-send is on</source>
-        <translation>自動送信がオンになっています</translation>
+        <translation>自动发送已开启</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12258"/>
         <source>Auto-send is off</source>
-        <translation>自動送信はオフです</translation>
+        <translation>自动发送已关闭</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12263"/>
         <source>Unknown option</source>
-        <translation>不明なオプション</translation>
+        <translation>未知选项</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12271"/>
         <source>Usage: help mms [&lt;subcommand&gt;]</source>
-        <translation>使用方法: help mms [&lt;サブコマンド&gt;]</translation>
+        <translation>用法：help mms [&lt;子命令>]</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12287"/>
         <source>Usage: mms send_signer_config</source>
-        <translation>使用方法: mms send_signer_config</translation>
+        <translation>用法：彩信发送_签名者_配置</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12293"/>
         <source>Signer config not yet complete</source>
-        <translation>署名者の設定がまだ完了していません</translation>
+        <translation>签名者配置尚未完成</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12308"/>
         <source>Usage: mms start_auto_config [&lt;label&gt; &lt;label&gt; ...]</source>
-        <translation>使用方法: mms start_auto_config [&lt;label&gt; &lt;label&gt; ...]</translation>
+        <translation>用法：mms start_auto_config [&lt;标签>; &lt;标签> ...]</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12313"/>
         <source>There are signers without a label set. Complete labels before auto-config or specify them as parameters here.</source>
-        <translation>ラベルが設定されていない署名者がいます。自動構成の前にラベルを完了するか、ここでパラメータとして指定してください。</translation>
+        <translation>有些签名者没有设置标签。在自动配置之前完成标签或在此处将它们指定为参数。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12319"/>
         <source>Auto-config is already running. Cancel and restart?</source>
-        <translation>自動構成はすでに実行されています。キャンセルして再起動しますか?</translation>
+        <translation>自动配置已在运行。取消并重新启动？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12343"/>
         <source>Usage: mms config_checksum</source>
-        <translation>使用法: mms config_checksum</translation>
+        <translation>用法：mms config_checksum</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12355"/>
         <source>Usage: mms stop_auto_config</source>
-        <translation>使用方法: mms stop_auto_config</translation>
+        <translation>用法：彩信停止_自动_配置</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12358"/>
         <source>Delete any auto-config tokens and stop auto-config?</source>
-        <translation>自動構成トークンを削除して自動構成を停止しますか?</translation>
+        <translation>删除任何自动配置令牌并停止自动配置？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12371"/>
         <source>Usage: mms auto_config &lt;auto_config_token&gt;</source>
-        <translation>使用方法: mms auto_config &lt;auto_config_token&gt;</translation>
+        <translation>用法：mms auto_config &lt;auto_config_token></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12378"/>
         <source>Invalid auto-config token</source>
-        <translation>無効な自動設定トークン</translation>
+        <translation>自动配置令牌无效</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12388"/>
         <source>Auto-config already running. Cancel and restart?</source>
-        <translation>自動構成はすでに実行されています。キャンセルして再起動しますか?</translation>
+        <translation>自动配置已在运行。取消并重新启动？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12407"/>
         <source>MMS not available in this wallet</source>
-        <translation>このウォレットではMMSは利用できません</translation>
+        <translation>此钱包不支持彩信</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12431"/>
         <source>The MMS is not active. Activate using the &quot;mms init&quot; command</source>
-        <translation>MMS がアクティブではありません。「mms init」コマンドを使用してアクティブ化してください。</translation>
+        <translation>彩信未激活。使用“mms init”激活命令</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12512"/>
         <source>Invalid MMS subcommand</source>
-        <translation>無効な MMS サブコマンド</translation>
+        <translation>无效的 MMS 子命令</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12517"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="12521"/>
-        <source>Error in MMS command:</source>
-        <translation>MMS コマンドのエラー:</translation>
+        <source>Error in MMS command: </source>
+        <translation>彩信命令错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10843"/>
         <source>wallet is watch-only and cannot sign</source>
-        <translation>ウォレットは監視のみで署名はできません</translation>
+        <translation>钱包仅供手表使用，无法签名</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10848"/>
         <source>This wallet is multisig and cannot sign</source>
-        <translation>このウォレットはマルチシグなので署名できません</translation>
+        <translation>该钱包是多重签名的，无法签名</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10922"/>
-        <source>Bad signature from</source>
-        <translation>不正な署名</translation>
+        <source>Bad signature from </source>
+        <translation>错误签名来自 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10926"/>
-        <source>Good signature from</source>
-        <translation>良い署名</translation>
+        <source>Good signature from </source>
+        <translation>好的签名来自 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10942"/>
         <source>wallet is watch-only and cannot export key images</source>
-        <translation>ウォレットはウォッチのみで、キー画像をエクスポートすることはできません</translation>
+        <translation>钱包仅供手表使用，无法导出关键图片</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10980"/>
-        <source>Signed key images exported to</source>
-        <translation>署名されたキーイメージをエクスポート</translation>
+        <source>Signed key images exported to </source>
+        <translation>签名的密钥图像导出到 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11025"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11071"/>
         <source>command only supported by HW wallet</source>
-        <translation>コマンドはHWウォレットでのみサポートされます</translation>
+        <translation>仅硬件钱包支持的命令</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11030"/>
         <source>hw wallet does not support cold KI sync</source>
-        <translation>hwウォレットはコールドKI同期をサポートしていません</translation>
+        <translation>hw钱包不支持冷KI同步</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11042"/>
         <source>Please confirm the key image sync on the device</source>
-        <translation>デバイス上のキー画像の同期を確認してください</translation>
+        <translation>请确认设备上的关键图像同步</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11048"/>
-        <source>Key images synchronized to height</source>
-        <translation>高さに合わせてキー画像を同期</translation>
+        <source>Key images synchronized to height </source>
+        <translation>关键图像与高度同步 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11051"/>
         <source>Running untrusted daemon, cannot determine which transaction output is spent. Use a trusted daemon with --trusted-daemon and run rescan_spent</source>
-        <translation>信頼できないデーモンを実行しているため、どのトランザクション出力が使用されたかを判断できません。--trusted-daemon で信頼できるデーモンを使用し、rescan_spent を実行してください。</translation>
+        <translation>运行不受信任的守护进程，无法确定花费了哪个交易输出。使用受信任的守护进程 --trusted-daemon 并运行 rescan_spent</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11054"/>
-        <source>spent,</source>
-        <translation>過ごした、</translation>
+        <source> spent, </source>
+        <translation>花费， </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11054"/>
-        <source>unspent</source>
-        <translation>未使用</translation>
+        <source> unspent</source>
+        <translation>未花费的</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11058"/>
         <source>Failed to import key images</source>
-        <translation>キー画像のインポートに失敗しました</translation>
+        <translation>关键图片导入失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11063"/>
-        <source>Failed to import key images:</source>
-        <translation>キー画像のインポートに失敗しました:</translation>
+        <source>Failed to import key images: </source>
+        <translation>导入关键图片失败： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11080"/>
         <source>Failed to reconnect device</source>
-        <translation>デバイスの再接続に失敗しました</translation>
+        <translation>无法重新连接设备</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11085"/>
-        <source>Failed to reconnect device:</source>
-        <translation>デバイスの再接続に失敗しました:</translation>
+        <source>Failed to reconnect device: </source>
+        <translation>无法重新连接设备： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11137"/>
-        <source>Outputs exported to</source>
-        <translation>出力は</translation>
+        <source>Outputs exported to </source>
+        <translation>输出导出到 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11292"/>
         <source>Double spend seen on the network: this transaction may or may not end up being mined</source>
-        <translation>ネットワーク上で二重支払いが見られました。このトランザクションは採掘されるかされないかのどちらかです。</translation>
+        <translation>网络上出现的双花：这笔交易可能会也可能不会被开采</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11327"/>
         <source>Transaction ID not found</source>
-        <translation>取引IDが見つかりません</translation>
+        <translation>未找到交易 ID</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11362"/>
-        <source>Transaction successfully saved to</source>
-        <translation>取引が正常に保存されました</translation>
+        <source>Transaction successfully saved to </source>
+        <translation>交易已成功保存至 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11362"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11364"/>
-        <source>, txid</source>
-        <translation>、txid</translation>
+        <source>, txid </source>
+        <translation>, txid </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11364"/>
-        <source>Failed to save transaction to</source>
-        <translation>取引を保存できませんでした</translation>
+        <source>Failed to save transaction to </source>
+        <translation>无法将交易保存到 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="408"/>
         <source>TRUE</source>
-        <translation>TRUE</translation>
+        <translation>真的</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="461"/>
         <source>failed to parse refresh type</source>
-        <translation>更新タイプの解析に失敗しました</translation>
+        <translation>无法解析刷新类型</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="881"/>
         <source>Enter optional seed offset passphrase, empty to see raw seed</source>
-        <translation>オプションのシードオフセットパスフレーズを入力します。空にすると生のシードが表示されます。</translation>
+        <translation>输入可选的种子偏移密码，留空即可查看原始种子</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="4342"/>
         <source>Enter seed offset passphrase, empty if none</source>
-        <translation>シードオフセットパスフレーズを入力します。ない場合は空白にします。</translation>
+        <translation>输入种子偏移密码，如果没有则为空</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5342"/>
         <source>You may want to remove the file &quot;%s&quot; and try again</source>
-        <translation>ファイル「%s」を削除してもう一度お試しください</translation>
+        <translation>您可能想要删除文件“%s”然后再试一次</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8671"/>
         <source>This is a multisig wallet, it can only sign with sign_multisig</source>
-        <translation>これはマルチシグウォレットであり、sign_multisigでのみ署名できます。</translation>
+        <translation>这是一个多重签名钱包，只能使用sign_multisig进行签名</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8676"/>
         <source>This is a watch only wallet</source>
-        <translation>これは時計専用の財布です</translation>
+        <translation>这是一款仅限手表的钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8708"/>
         <source>Failed to sign transaction</source>
-        <translation>トランザクションの署名に失敗しました</translation>
+        <translation>交易签名失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8714"/>
-        <source>Failed to sign transaction:</source>
-        <translation>トランザクションの署名に失敗しました:</translation>
+        <source>Failed to sign transaction: </source>
+        <translation>交易签名失败： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8735"/>
-        <source>Transaction raw hex data exported to</source>
-        <translation>トランザクションの生の16進データがエクスポートされました</translation>
+        <source>Transaction raw hex data exported to </source>
+        <translation>交易原始十六进制数据导出到 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8756"/>
         <source>Failed to load transaction from file</source>
-        <translation>ファイルからトランザクションをロードできませんでした</translation>
+        <translation>无法从文件加载交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8024"/>
@@ -5364,259 +5364,259 @@ Grand total:
         <location filename="../src/simplewallet/simplewallet.cpp" line="10730"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11189"/>
         <source>failed to parse txid</source>
-        <translation>txid の解析に失敗しました</translation>
+        <translation>无法解析 txid</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8814"/>
-        <source>Tx key:</source>
-        <translation>送信キー:</translation>
+        <source>Tx key: </source>
+        <translation>发送键： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8819"/>
         <source>no tx keys found for this txid</source>
-        <translation>この txid の tx キーが見つかりません</translation>
+        <translation>没有找到该 txid 的 tx 密钥</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8862"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8873"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8880"/>
         <source>failed to parse tx_key</source>
-        <translation>tx_key の解析に失敗しました</translation>
+        <translation>解析 tx_key 失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8889"/>
         <source>Tx key successfully stored.</source>
-        <translation>Tx キーが正常に保存されました。</translation>
+        <translation>Tx 密钥已成功存储。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8893"/>
-        <source>Failed to store tx key:</source>
-        <translation>tx キーの保存に失敗しました:</translation>
+        <source>Failed to store tx key: </source>
+        <translation>无法存储 tx 密钥： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8929"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9141"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9230"/>
-        <source>signature file saved to:</source>
-        <translation>署名ファイルは次の場所に保存されます:</translation>
+        <source>signature file saved to: </source>
+        <translation>签名文件保存到： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8931"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9143"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9232"/>
         <source>failed to save signature file</source>
-        <translation>署名ファイルの保存に失敗しました</translation>
+        <translation>保存签名文件失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8935"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9023"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9101"/>
-        <source>error:</source>
-        <translation>エラー：</translation>
+        <source>error: </source>
+        <translation>错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8968"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8977"/>
         <source>failed to parse tx key</source>
-        <translation>txキーの解析に失敗しました</translation>
+        <translation>无法解析 tx 密钥</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8999"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9072"/>
         <source>received</source>
-        <translation>受け取った</translation>
+        <translation>已收到</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8999"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9072"/>
         <source>in txid</source>
-        <translation>txidで</translation>
+        <translation>在txid中</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9002"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9075"/>
         <source>WARNING: this transaction is not yet included in the blockchain!</source>
-        <translation>警告: このトランザクションはまだブロックチェーンに含まれていません。</translation>
+        <translation>警告：该交易尚未包含在区块链中！</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9012"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9085"/>
         <source>WARNING: failed to determine number of confirmations!</source>
-        <translation>警告: 確認回数を決定できませんでした。</translation>
+        <translation>警告：无法确定确认数量！</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9018"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9091"/>
         <source>received nothing in txid</source>
-        <translation>txid で何も受信されませんでした</translation>
+        <translation>txid 中没有收到任何内容</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9058"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9172"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9266"/>
         <source>failed to load signature file</source>
-        <translation>署名ファイルの読み込みに失敗しました</translation>
+        <translation>加载签名文件失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9069"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9179"/>
         <source>Good signature</source>
-        <translation>良い署名</translation>
+        <translation>签名好</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9096"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9181"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9281"/>
         <source>Bad signature</source>
-        <translation>署名が間違っている</translation>
+        <translation>签名错误</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9120"/>
         <source>wallet is watch-only and cannot generate the proof</source>
-        <translation>ウォレットは監視のみであり、証明を生成することはできない</translation>
+        <translation>钱包仅供手表使用，无法生成证明</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9204"/>
         <source>The reserve proof can be generated only by a full wallet</source>
-        <translation>準備金証明はフルウォレットによってのみ生成できる</translation>
+        <translation>储备证明只能由完整钱包生成</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9259"/>
         <source>Address must not be a subaddress</source>
-        <translation>アドレスはサブアドレスであってはなりません</translation>
+        <translation>地址不能是子地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9386"/>
         <source>bad min_height parameter:</source>
-        <translation>不正な min_height パラメータ:</translation>
+        <translation>错误的 min_height 参数：</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9398"/>
         <source>bad max_height parameter:</source>
-        <translation>不正な max_height パラメータ:</translation>
+        <translation>错误的 max_height 参数：</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9420"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9691"/>
         <source>block</source>
-        <translation>ブロック</translation>
+        <translation>堵塞</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9420"/>
         <source>in</source>
-        <translation>で</translation>
+        <translation>在</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9511"/>
-        <source>[Double spend seen on the network: this transaction may or may not end up being mined]</source>
-        <translation>[ネットワーク上で二重支出が見られました: このトランザクションは最終的にマイニングされるかどうかはわかりません]</translation>
+        <source>[Double spend seen on the network: this transaction may or may not end up being mined] </source>
+        <translation>[网络上出现的双花：这笔交易最终可能会也可能不会被开采] </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9799"/>
         <source>&lt;min_amount&gt; should be smaller than &lt;max_amount&gt;</source>
-        <translation>&lt;min_amount&gt; は &lt;max_amount&gt; より小さくする必要があります</translation>
+        <translation>&lt;最小金额>应小于 &lt;max_amount></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9825"/>
         <source>There is no unspent output in the specified address</source>
-        <translation>指定されたアドレスには未使用の出力がありません</translation>
+        <translation>指定地址没有未花费的输出</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9831"/>
         <source>
-Amount:</source>
+Amount: </source>
         <translation>
-金額:</translation>
+金额： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9831"/>
-        <source>, number of keys:</source>
-        <translation>、キーの数:</translation>
+        <source>, number of keys: </source>
+        <translation>，按键数量： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9836"/>
-        <source></source>
+        <source> </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9841"/>
         <source>
-Min block height:</source>
+Min block height: </source>
         <translation>
-最小ブロック高さ:</translation>
+最小块高度： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9842"/>
         <source>
-Max block height:</source>
+Max block height: </source>
         <translation>
-最大ブロック高さ:</translation>
+最大块高度： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9843"/>
         <source>
-Min amount found:</source>
+Min amount found: </source>
         <translation>
-見つかった最小量:</translation>
+找到的最小数量： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9844"/>
         <source>
-Max amount found:</source>
+Max amount found: </source>
         <translation>
-見つかった最大量:</translation>
+发现的最大数量： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9845"/>
         <source>
-Total count:</source>
+Total count: </source>
         <translation>
-合計数:</translation>
+总计数： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9885"/>
         <source>
-Bin size:</source>
+Bin size: </source>
         <translation>
-ビンサイズ:</translation>
+垃圾箱大小： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9886"/>
         <source>
-Outputs per *:</source>
+Outputs per *: </source>
         <translation>
-出力数 *:</translation>
+每个 * 的输出： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9888"/>
         <source>count
   ^
 </source>
-        <translation>カウント
+        <translation>计数
  ^
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9890"/>
-        <source>|</source>
-        <translation>|</translation>
+        <source>  |</source>
+        <translation>  |</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9892"/>
-        <source>+</source>
-        <translation>+</translation>
+        <source>  +</source>
+        <translation>  +</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9892"/>
         <source>+--&gt; block height
 </source>
-        <translation>+--&gt; block height
+        <translation>+-->块高度
 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9893"/>
-        <source>^</source>
-        <translation>^</translation>
+        <source>   ^</source>
+        <translation>  ^</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9893"/>
@@ -5627,94 +5627,94 @@ Outputs per *:</source>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9894"/>
-        <source></source>
-        <translation type="unfinished"></translation>
+        <source>  </source>
+        <translation>  </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9939"/>
         <source>Warning: this will lose any information which can not be recovered from the blockchain.</source>
-        <translation>警告: これにより、ブロックチェーンから回復できない情報はすべて失われます。</translation>
+        <translation>警告：这将丢失无法从区块链恢复的任何信息。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9940"/>
         <source>This includes destination addresses, tx secret keys, tx notes, etc</source>
-        <translation>これには、宛先アドレス、送信秘密鍵、送信メモなどが含まれます。</translation>
+        <translation>这包括目标地址、交易密钥、交易备注等</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9277"/>
         <source>Good signature -- total: %s, spent: %s, unspent: %s</source>
-        <translation>署名は良好です -- 合計: %s、使用済み: %s、未使用: %s</translation>
+        <translation>良好的签名 -- 总计：%s，已用：%s，未用：%s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2094"/>
         <source>First line is not an amount</source>
-        <translation>最初の行は金額ではありません</translation>
+        <translation>第一行不是金额</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2108"/>
-        <source>Invalid output:</source>
-        <translation>無効な出力:</translation>
+        <source>Invalid output: </source>
+        <translation>无效输出： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2133"/>
-        <source>Invalid output key, and file doesn&#39;t exist</source>
-        <translation>出力キーが無効で、ファイルが存在しません</translation>
+        <source>Invalid output key, and file doesn't exist</source>
+        <translation>输出密钥无效，文件不存在</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2156"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2183"/>
         <source>Invalid output</source>
-        <translation>出力が無効です</translation>
+        <translation>无效输出</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="2671"/>
         <source>invalid argument: must be either 0/never, 1/action, or 2/encrypt/decrypt</source>
-        <translation>無効な引数: 0/なし、1/アクション、または 2/暗号化/復号化のいずれかである必要があります</translation>
+        <translation>无效参数：必须为 0/从不、1/操作或 2/加密/解密</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="3377"/>
-        <source>Transfer &lt;amount&gt; to &lt;address&gt; and lock it for &lt;lockblocks&gt; (max. 1000000). If the parameter &quot;index=&lt;N1&gt;[,&lt;N2&gt;,...]&quot; is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. &lt;priority&gt; is the priority of the transaction. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command &quot;set priority&quot;) is used. &lt;ring_size&gt; is the number of inputs to include for untraceability. Multiple payments can be made at once by adding URI_2 or &lt;address_2&gt; &lt;amount_2&gt; etcetera (before the payment ID, if it&#39;s included)</source>
-        <translation>&lt;amount&gt; を &lt;address&gt; に転送し、&lt;lockblocks&gt; の間ロックします (最大 1000000)。パラメータ &quot;index=&lt;N1&gt;[,&lt;N2&gt;,...]&quot; が指定されている場合、ウォレットはそれらのインデックスのアドレスによって受信された出力を使用します。省略されている場合、ウォレットは使用するアドレス インデックスをランダムに選択します。いずれの場合も、複数のアドレスにまたがる出力を結合しないように最善を尽くします。 &lt;priority&gt; はトランザクションの優先度です。優先度が高いほど、トランザクション手数料が高くなります。優先度順 (最低から最高) の有効な値は、unimportant、normal、elevated、priority です。省略されている場合は、デフォルト値 (コマンド &quot;set priority&gt; を参照) が使用されます。 &lt;ring_size&gt; は追跡不可能にするために含める入力の数です。URI_2 または &lt;address_2&gt; を追加することで、一度に複数の支払いを行うことができます。 &lt;amount_2&gt; など（支払い ID が含まれている場合は、その前）</translation>
+        <source>Transfer &lt;amount&gt; to &lt;address&gt; and lock it for &lt;lockblocks&gt; (max. 1000000). If the parameter &quot;index=&lt;N1&gt;[,&lt;N2&gt;,...]&quot; is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. &lt;priority&gt; is the priority of the transaction. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command &quot;set priority&quot;) is used. &lt;ring_size&gt; is the number of inputs to include for untraceability. Multiple payments can be made at once by adding URI_2 or &lt;address_2&gt; &lt;amount_2&gt; etcetera (before the payment ID, if it's included)</source>
+        <translation>转账&lt;金额>至&lt;地址>并将其锁定为&lt;lockblocks> （最多 1000000）。如果参数“index=&lt;N1&gt;[,&lt;N2&gt;,...]”指定后，钱包使用这些索引地址收到的输出。如果省略，钱包会随机选择要使用的地址索引。无论如何，它都会尽力不组合多个地址的输出。 &lt;优先&gt;是事务的优先级。优先级越高，交易费用越高。按优先级顺序排列的有效值（从最低到最高）为：不重要、正常、提升、优先级。如果省略，则使用默认值（参见命令“设置优先级”）。 &lt;戒指尺寸>是为了实现不可追踪性而包含的输入数量。通过添加 URI_2 或 &lt;address_2> 可以一次进行多次付款。 &lt;金额_2>等等（在付款 ID 之前，如果包含的话）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5946"/>
         <source>Password needed (%s) - use the refresh command</source>
-        <translation>パスワードが必要です (%s) - 更新コマンドを使用してください</translation>
+        <translation>需要密码 (%s) - 使用刷新命令</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10100"/>
         <source>Daemon requests payment at diff %llu, with %f credits/hash%s. Run start_mining_for_rpc to start mining to pay for RPC access, or use another daemon</source>
-        <translation>デーモンは diff %llu で %f クレジット/ハッシュ %s で支払いを要求しています。RPC アクセスの支払いのためにマイニングを開始するには、start_mining_for_rpc を実行するか、別のデーモンを使用してください。</translation>
+        <translation>守护程序请求以 diff %llu 付款，使用 %f 积分/哈希%s。运行 start_mining_for_rpc 开始挖矿以支付 RPC 访问费用，或使用其他守护进程</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10127"/>
-        <source>Error mining to daemon:</source>
-        <translation>デーモンへのマイニングエラー:</translation>
+        <source>Error mining to daemon: </source>
+        <translation>挖掘守护进程时出错： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10133"/>
         <source>Failed to start mining for RPC payment</source>
-        <translation>RPC支払いのマイニングを開始できませんでした</translation>
+        <translation>RPC支付挖矿启动失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10145"/>
         <source>wallet</source>
-        <translation>財布</translation>
+        <translation>钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10147"/>
-        <source>(no daemon)</source>
-        <translation>(デーモンなし)</translation>
+        <source> (no daemon)</source>
+        <translation>（无守护进程）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10149"/>
-        <source>(out of sync)</source>
-        <translation>(同期していない)</translation>
+        <source> (out of sync)</source>
+        <translation>（不同步）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10200"/>
         <source>(Untitled account)</source>
-        <translation>(無題アカウント)</translation>
+        <translation>（无标题帐户）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10213"/>
@@ -5725,160 +5725,160 @@ Outputs per *:</source>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10489"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10512"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10540"/>
-        <source>failed to parse index:</source>
-        <translation>インデックスの解析に失敗しました:</translation>
+        <source>failed to parse index: </source>
+        <translation>无法解析索引： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10218"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10494"/>
-        <source>specify an index between 0 and</source>
-        <translation>0から</translation>
+        <source>specify an index between 0 and </source>
+        <translation>指定 0 到之间的索引 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10340"/>
-        <source>, unlocked balance:</source>
-        <translation>、ロック解除残高:</translation>
+        <source>, unlocked balance: </source>
+        <translation>，解锁余额： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10350"/>
         <source>Untagged accounts:</source>
-        <translation>タグ付けされていないアカウント:</translation>
+        <translation>未标记的帐户：</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10356"/>
         <source>Tag %s is unregistered.</source>
-        <translation>タグ %s は登録されていません。</translation>
+        <translation>标签 %s 未注册。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10359"/>
-        <source>Accounts with tag:</source>
-        <translation>タグの付いたアカウント:</translation>
+        <source>Accounts with tag: </source>
+        <translation>带有标签的帐户： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10360"/>
-        <source>Tag&#39;s description:</source>
-        <translation>タグの説明:</translation>
+        <source>Tag's description: </source>
+        <translation>标签的描述： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10362"/>
         <source>Account</source>
-        <translation>アカウント</translation>
+        <translation>帐户</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10416"/>
         <source>Primary address</source>
-        <translation>主な住所</translation>
+        <translation>主要地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10416"/>
         <source>(used)</source>
-        <translation>（使用済み）</translation>
+        <translation>（用过的）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10437"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10463"/>
         <source>(Untitled address)</source>
-        <translation>（無題のアドレス）</translation>
+        <translation>（无标题地址）</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10521"/>
         <source>&lt;index_min&gt; is already out of bound</source>
-        <translation>&lt;index_min&gt; はすでに範囲外です</translation>
+        <translation>&lt;index_min>已经出界了</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10526"/>
         <source>&lt;index_max&gt; exceeds the bound</source>
-        <translation>&lt;index_max&gt; が境界を超えています</translation>
+        <translation>&lt;index_max>超出界限</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10590"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10603"/>
         <source>Integrated addresses can only be created for account 0</source>
-        <translation>統合アドレスはアカウント0に対してのみ作成できます</translation>
+        <translation>只能为帐户 0 创建集成地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10595"/>
-        <source>Matching integrated address:</source>
-        <translation>一致する統合アドレス:</translation>
+        <source>Matching integrated address: </source>
+        <translation>匹配综合地址： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10622"/>
-        <source>Subaddress:</source>
-        <translation>サブアドレス:</translation>
+        <source>Subaddress: </source>
+        <translation>子地址： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10622"/>
-        <source>Standard address:</source>
-        <translation>標準アドレス:</translation>
+        <source>Standard address: </source>
+        <translation>标准地址： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10627"/>
         <source>failed to parse payment ID or address</source>
-        <translation>支払いIDまたはアドレスを解析できませんでした</translation>
+        <translation>无法解析付款 ID 或地址</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10664"/>
         <source>failed to parse index</source>
-        <translation>インデックスの解析に失敗しました</translation>
+        <translation>解析索引失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10672"/>
         <source>Address book is empty.</source>
-        <translation>アドレス帳が空です。</translation>
+        <translation>地址簿为空。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10678"/>
-        <source>Index:</source>
-        <translation>索引：</translation>
+        <source>Index: </source>
+        <translation>指数： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10684"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10814"/>
-        <source>Address:</source>
-        <translation>住所：</translation>
+        <source>Address: </source>
+        <translation>地址： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10685"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10813"/>
-        <source>Description:</source>
-        <translation>説明：</translation>
+        <source>Description: </source>
+        <translation>描述： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10770"/>
         <source>no description found</source>
-        <translation>説明が見つかりません</translation>
+        <translation>没有找到描述</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10772"/>
-        <source>description found:</source>
-        <translation>説明が見つかりました:</translation>
+        <source>description found: </source>
+        <translation>发现描述： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="6679"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10812"/>
-        <source>Filename:</source>
-        <translation>ファイル名：</translation>
+        <source>Filename: </source>
+        <translation>文件名： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10817"/>
         <source>Watch only</source>
-        <translation>視聴のみ</translation>
+        <translation>仅供观看</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="10819"/>
         <source>%u/%u multisig%s</source>
-        <translation>%u/%u マルチシグ%s</translation>
+        <translation>%u/%u 多重签名%s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="8634"/>
         <source>%s change to %s</source>
-        <translation>%s を %s に変更</translation>
+        <translation>%s 更改为 %s</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9008"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9081"/>
         <source>This transaction has %u confirmations</source>
-        <translation>この取引には %u 件の確認があります</translation>
+        <translation>此交易有 %u 个确认</translation>
     </message>
 </context>
 <context>
@@ -5886,65 +5886,65 @@ Outputs per *:</source>
     <message>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="61"/>
         <source>Filename to save the certificate</source>
-        <translation>証明書を保存するファイル名</translation>
+        <translation>保存证书的文件名</translation>
     </message>
     <message>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="62"/>
         <source>Filename to save the private key</source>
-        <translation>秘密鍵を保存するファイル名</translation>
+        <translation>保存私钥的文件名</translation>
     </message>
     <message>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="63"/>
         <source>Passphrase with which to encrypt the private key</source>
-        <translation>秘密鍵を暗号化するためのパスフレーズ</translation>
+        <translation>用于加密私钥的密码</translation>
     </message>
     <message>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="64"/>
         <source>File containing the passphrase with which to encrypt the private key</source>
-        <translation>秘密鍵を暗号化するためのパスフレーズを含むファイル</translation>
+        <translation>包含用于加密私钥的密码的文件</translation>
     </message>
     <message>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="65"/>
         <source>Prompt for a passphrase with which to encrypt the private key</source>
-        <translation>秘密鍵を暗号化するためのパスフレーズの入力を求める</translation>
+        <translation>提示输入用于加密私钥的密码</translation>
     </message>
     <message>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="137"/>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="143"/>
-        <source>Argument is needed:</source>
-        <translation>議論が必要です:</translation>
+        <source>Argument is needed: </source>
+        <translation>需要论证： </translation>
     </message>
     <message>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="153"/>
         <source>Failed to read passphrase</source>
-        <translation>パスフレーズの読み取りに失敗しました</translation>
+        <translation>无法读取密码</translation>
     </message>
     <message>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="188"/>
         <source>Failed to create certificate</source>
-        <translation>証明書の作成に失敗しました</translation>
+        <translation>创建证书失败</translation>
     </message>
     <message>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="198"/>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="206"/>
-        <source>Failed to write certificate:</source>
-        <translation>証明書の書き込みに失敗しました:</translation>
+        <source>Failed to write certificate: </source>
+        <translation>写入证书失败： </translation>
     </message>
     <message>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="218"/>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="226"/>
-        <source>Failed to write private key:</source>
-        <translation>秘密鍵の書き込みに失敗しました:</translation>
+        <source>Failed to write private key: </source>
+        <translation>私钥写入失败： </translation>
     </message>
     <message>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="237"/>
         <source>Failed to save certificate file</source>
-        <translation>証明書ファイルの保存に失敗しました</translation>
+        <translation>保存证书文件失败</translation>
     </message>
     <message>
         <location filename="../src/gen_ssl_cert/gen_ssl_cert.cpp" line="243"/>
         <source>Failed to save private key file</source>
-        <translation>秘密鍵ファイルの保存に失敗しました</translation>
+        <translation>保存私钥文件失败</translation>
     </message>
 </context>
 <context>
@@ -5952,83 +5952,83 @@ Outputs per *:</source>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="69"/>
         <source>Base filename (-1, -2, etc suffixes will be appended as needed)</source>
-        <translation>基本ファイル名（必要に応じて -1、-2 などのサフィックスが追加されます）</translation>
+        <translation>基本文件名（-1、-2等后缀将根据需要附加）</translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="70"/>
         <source>Give threshold and participants at once as M/N</source>
-        <translation>閾値と参加者をM/Nとして一度に与える</translation>
+        <translation>立即给出阈值和参与者作为 M/N</translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="71"/>
         <source>How many participants will share parts of the multisig wallet</source>
-        <translation>マルチシグウォレットの一部を共有する参加者の数は</translation>
+        <translation>有多少参与者将共享多重签名钱包的部分内容</translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="72"/>
         <source>How many signers are required to sign a valid transaction</source>
-        <translation>有効な取引に署名するために必要な署名者の数</translation>
+        <translation>需要多少个签名者才能签署有效交易</translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="73"/>
         <source>Create testnet multisig wallets</source>
-        <translation>テストネットマルチシグウォレットを作成する</translation>
+        <translation>创建测试网多重签名钱包</translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="74"/>
         <source>Create stagenet multisig wallets</source>
-        <translation>ステージネットマルチシグウォレットを作成する</translation>
+        <translation>创建 stagenet 多重签名钱包</translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="75"/>
         <source>Create an address file for new wallets</source>
-        <translation>新しいウォレットのアドレスファイルを作成する</translation>
+        <translation>为新钱包创建地址文件</translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="80"/>
         <source>Generating %u %u/%u multisig wallets</source>
-        <translation>%u %u/%u マルチシグウォレットを生成しています</translation>
+        <translation>正在生成 %u %u/%u 个多重签名钱包</translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="137"/>
-        <source>Generated multisig wallets for address</source>
-        <translation>アドレス用に生成されたマルチシグウォレット</translation>
+        <source>Generated multisig wallets for address </source>
+        <translation>为地址生成多重签名钱包 </translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="141"/>
-        <source>Error creating multisig wallets:</source>
-        <translation>マルチシグウォレットの作成中にエラーが発生しました:</translation>
+        <source>Error creating multisig wallets: </source>
+        <translation>创建多重签名钱包时出错： </translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="166"/>
         <source>This program generates a set of multisig wallets - use this simpler scheme only if all the participants trust each other</source>
-        <translation>このプログラムは、マルチシグウォレットのセットを生成します。参加者全員がお互いを信頼している場合にのみ、このよりシンプルなスキームを使用してください。</translation>
+        <translation>该程序生成一组多重签名钱包 - 仅当所有参与者都相互信任时才使用此更简单的方案</translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="185"/>
-        <source>Error: Can&#39;t specify more than one of --testnet and --stagenet</source>
-        <translation>エラー: --testnet と --stagenet を複数指定することはできません</translation>
+        <source>Error: Can't specify more than one of --testnet and --stagenet</source>
+        <translation>错误：无法指定 --testnet 和 --stagenet 之一以上</translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="192"/>
-        <source>Error: expected N/M, but got:</source>
-        <translation>エラー: N/M を期待しましたが、次のようになりました:</translation>
+        <source>Error: expected N/M, but got: </source>
+        <translation>错误：预期 N/M，但得到： </translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="200"/>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="209"/>
         <source>Error: either --scheme or both of --threshold and --participants may be given</source>
-        <translation>エラー: --scheme または --threshold と --participants の両方が指定されている可能性があります</translation>
+        <translation>错误：可能给出 --scheme 或 --threshold 和 --participants 两者之一</translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="216"/>
         <source>Error: expected N &gt; 1 and N &lt;= M, but got N==%u and M==%d</source>
-        <translation>エラー: N > 1 かつ N &lt;= M を期待しましたが、N==%u かつ M==%d でした</translation>
+        <translation>错误：预期 N > 1 且 N &lt;= M，但得到 N==%u 且 M==%d</translation>
     </message>
     <message>
         <location filename="../src/gen_multisig/gen_multisig.cpp" line="225"/>
         <source>Error: --filename-base is required</source>
-        <translation>エラー: --filename-base が必要です</translation>
+        <translation>错误：--filename-base 是必需的</translation>
     </message>
 </context>
 <context>
@@ -6036,151 +6036,151 @@ Outputs per *:</source>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="72"/>
         <source>Use PyBitmessage instance at URL &lt;arg&gt;</source>
-        <translation>URL &lt;arg&gt; で PyBitmessage インスタンスを使用します。</translation>
+        <translation>在 URL &lt;arg> 处使用 PyBitmessage 实例</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="73"/>
         <source>Specify &lt;arg&gt; as username:password for PyBitmessage API</source>
-        <translation>PyBitmessage API のユーザー名:パスワードとして &lt;arg&gt; を指定します</translation>
+        <translation>指定 &lt;arg>作为 PyBitmessage API 的用户名:密码</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="911"/>
         <source>Auto-config cannot proceed because auto config data from other signers is not complete</source>
-        <translation>他の署名者からの自動構成データが完了していないため、自動構成を続行できません</translation>
+        <translation>自动配置无法继续，因为来自其他签名者的自动配置数据不完整</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="936"/>
         <source>The signer config is not complete.</source>
-        <translation>署名者の構成が完了していません。</translation>
+        <translation>签名者配置不完整。</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="988"/>
-        <source>Wallet can&#39;t go multisig because key sets from other signers are missing or not complete.</source>
-        <translation>他の署名者からのキーセットが欠落しているか不完全であるため、ウォレットはマルチシグを実行できません。</translation>
+        <source>Wallet can't go multisig because key sets from other signers are missing or not complete.</source>
+        <translation>钱包无法进行多重签名，因为其他签名者的密钥集丢失或不完整。</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1030"/>
-        <source>Wallet can&#39;t start another key exchange round because key sets from other signers are missing or not complete.</source>
-        <translation>他の署名者からの鍵セットが欠落しているか不完全であるため、ウォレットは別の鍵交換ラウンドを開始できません。</translation>
+        <source>Wallet can't start another key exchange round because key sets from other signers are missing or not complete.</source>
+        <translation>钱包无法启动另一轮密钥交换，因为其他签名者的密钥集丢失或不完整。</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1094"/>
         <source>Syncing not done because multisig sync data from other signers are missing or not complete.</source>
-        <translation>他の署名者からのマルチシグ同期データが欠落しているか不完全であるため、同期は実行されません。</translation>
+        <translation>同步未完成，因为来自其他签名者的多重签名同步数据丢失或不完整。</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1208"/>
         <source>There are waiting messages, but nothing is ready to process under normal circumstances</source>
-        <translation>待機中のメッセージはありますが、通常の状況では処理できるものはありません</translation>
+        <translation>有等待消息，但正常情况下没有准备好处理</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1211"/>
         <source>
 Use &quot;mms next sync&quot; if you want to force processing of the waiting sync data</source>
         <translation>
-待機中の同期データの処理を強制したい場合は、「mms next sync」を使用します</translation>
+使用“彩信下次同步”如果你想强制处理等待的同步数据</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1215"/>
         <source>
 Use &quot;mms note&quot; to display the waiting notes</source>
         <translation>
-「mms note」を使用して待機中のメモを表示します</translation>
+使用“彩信”显示等待备注</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1220"/>
         <source>There are no messages waiting to be processed.</source>
-        <translation>処理待ちのメッセージはありません。</translation>
+        <translation>没有等待处理的消息。</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1441"/>
         <source>key set</source>
-        <translation>キーセット</translation>
+        <translation>按键设置</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1443"/>
         <source>additional key set</source>
-        <translation>追加キーセット</translation>
+        <translation>附加按键组</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1445"/>
         <source>multisig sync data</source>
-        <translation>マルチシグ同期データ</translation>
+        <translation>多重签名同步数据</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1447"/>
         <source>partially signed tx</source>
-        <translation>部分的に署名された tx</translation>
+        <translation>部分签署的交易</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1449"/>
         <source>fully signed tx</source>
-        <translation>完全に署名されたtx</translation>
+        <translation>完全签名的交易</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1451"/>
         <source>note</source>
-        <translation>注記</translation>
+        <translation>笔记</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1453"/>
         <source>signer config</source>
-        <translation>署名者設定</translation>
+        <translation>签名者配置</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1455"/>
         <source>auto-config data</source>
-        <translation>自動設定データ</translation>
+        <translation>自动配置数据</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1457"/>
         <source>unknown message type</source>
-        <translation>不明なメッセージタイプ</translation>
+        <translation>未知消息类型</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1466"/>
         <source>in</source>
-        <translation>で</translation>
+        <translation>在</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1468"/>
         <source>out</source>
-        <translation>外</translation>
+        <translation>出去</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1470"/>
         <source>unknown message direction</source>
-        <translation>不明なメッセージの方向</translation>
+        <translation>未知消息方向</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1479"/>
         <source>ready to send</source>
-        <translation>送信準備完了</translation>
+        <translation>准备发送</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1481"/>
         <source>sent</source>
-        <translation>送信済み</translation>
+        <translation>发送</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1483"/>
         <source>waiting</source>
-        <translation>待っている</translation>
+        <translation>等待</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1485"/>
         <source>processed</source>
-        <translation>処理された</translation>
+        <translation>加工过的</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1487"/>
         <source>cancelled</source>
-        <translation>キャンセル</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <location filename="../src/wallet/message_store.cpp" line="1489"/>
         <source>unknown message state</source>
-        <translation>不明なメッセージ状態</translation>
+        <translation>未知消息状态</translation>
     </message>
 </context>
 <context>
@@ -6188,320 +6188,320 @@ Use &quot;mms note&quot; to display the waiting notes</source>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="177"/>
         <source>Generate new wallet and save it to &lt;arg&gt;</source>
-        <translation>新しいウォレットを生成し、&lt;arg&gt; に保存します。</translation>
+        <translation>生成新钱包并将其保存到 &lt;arg>;</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="178"/>
         <source>Generate new wallet from device and save it to &lt;arg&gt;</source>
-        <translation>デバイスから新しいウォレットを生成し、&lt;arg&gt; に保存します。</translation>
+        <translation>从设备生成新钱包并将其保存到 &lt;arg>;</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="179"/>
         <source>Generate incoming-only wallet from view key</source>
-        <translation>ビューキーから受信専用ウォレットを生成する</translation>
+        <translation>从查看密钥生成仅限传入的钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="180"/>
         <source>Generate deterministic wallet from spend key</source>
-        <translation>支出キーから決定論的ウォレットを生成する</translation>
+        <translation>从支出密钥生成确定性钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="181"/>
         <source>Generate wallet from private keys</source>
-        <translation>秘密鍵からウォレットを生成する</translation>
+        <translation>从私钥生成钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="182"/>
         <source>Generate a master wallet from multisig wallet keys</source>
-        <translation>マルチシグウォレットキーからマスターウォレットを生成する</translation>
+        <translation>从多重签名钱包密钥生成主钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="184"/>
         <source>Language for mnemonic</source>
-        <translation>記憶のための言語</translation>
+        <translation>助记符语言</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="185"/>
         <source>Specify Electrum seed for wallet recovery/creation</source>
-        <translation>ウォレットの回復/作成のためのElectrumシードを指定する</translation>
+        <translation>指定用于钱包恢复/创建的 Electrum 种子</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="186"/>
         <source>Recover wallet using Electrum-style mnemonic seed</source>
-        <translation>Electrumスタイルのニーモニックシードを使用してウォレットを回復する</translation>
+        <translation>使用 Electrum 式助记词种子恢复钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="187"/>
         <source>alias for --restore-deterministic-wallet</source>
-        <translation>--restore-deterministic-wallet のエイリアス</translation>
+        <translation>--restore-确定性钱包的别名</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="188"/>
         <source>Recover multisig wallet using Electrum-style mnemonic seed</source>
-        <translation>Electrumスタイルのニーモニックシードを使用してマルチシグウォレットを復元する</translation>
+        <translation>使用 Electrum 风格的助记词种子恢复多重签名钱包</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="189"/>
         <source>Generate non-deterministic view and spend keys</source>
-        <translation>非決定論的なビューと支出キーを生成する</translation>
+        <translation>生成非确定性视图并花费密钥</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="191"/>
         <source>Restore from estimated blockchain height on specified date</source>
-        <translation>指定された日付のブロックチェーンの推定高さから復元</translation>
+        <translation>从指定日期的估计区块链高度恢复</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="192"/>
         <source>The newly created transaction will not be relayed to the Salvium network</source>
-        <translation>新しく作成されたトランザクションはSalviumネットワークに中継されません。</translation>
+        <translation>新创建的交易不会转发到 Salvium 网络</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="348"/>
         <source>failed to read wallet password</source>
-        <translation>ウォレットのパスワードの読み取りに失敗しました</translation>
+        <translation>读取钱包密码失败</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="355"/>
         <source>Enter a new password for the wallet</source>
-        <translation>ウォレットの新しいパスワードを入力してください</translation>
+        <translation>输入钱包的新密码</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="355"/>
         <source>Wallet password</source>
-        <translation>ウォレットパスワード</translation>
+        <translation>钱包密码</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="433"/>
         <source>invalid argument: must be either 0/1, true/false, y/n, yes/no</source>
-        <translation>無効な引数: 0/1、true/false、y/n、yes/no のいずれかである必要があります</translation>
+        <translation>无效参数：必须是 0/1、true/false、y/n、yes/no</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="489"/>
         <source>DNSSEC validation passed</source>
-        <translation>DNSSEC検証に合格</translation>
+        <translation>DNSSEC 验证已通过</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="493"/>
         <source>WARNING: DNSSEC validation was unsuccessful, this address may not be correct!</source>
-        <translation>警告: DNSSEC 検証に失敗しました。このアドレスが正しくない可能性があります。</translation>
+        <translation>警告：DNSSEC 验证失败，该地址可能不正确！</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="496"/>
-        <source>For URL:</source>
-        <translation>URLの場合:</translation>
+        <source>For URL: </source>
+        <translation>对于网址： </translation>
     </message>
     <message>
-        <location filename="=../src/simplewallet/simplewallet.cpp" line="498"/>
-        <source>Salvium Address </source>
-        <translation>=サルビウムアドレス </translation>
+        <location filename="../src/simplewallet/simplewallet.cpp" line="498"/>
+        <source> Salvium Address = </source>
+        <translation>Salvium地址= </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="510"/>
         <source>you have cancelled the transfer request</source>
-        <translation>振替依頼をキャンセルしました</translation>
+        <translation>您已取消转账请求</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="531"/>
-        <source>failed to parse index:</source>
-        <translation>インデックスの解析に失敗しました:</translation>
+        <source>failed to parse index: </source>
+        <translation>无法解析索引： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="544"/>
         <source>invalid format for subaddress lookahead; must be &lt;major&gt;:&lt;minor&gt;</source>
-        <translation>サブアドレス先読みの形式が無効です。&lt;major&gt;:&lt;minor&gt; である必要があります。</translation>
+        <translation>子地址前瞻格式无效；必须是&lt;主要>:&lt;次要></translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="608"/>
         <source>no connection to daemon. Please make sure daemon is running.</source>
-        <translation>デーモンに接続されていません。デーモンが実行中であることを確認してください。</translation>
+        <translation>没有与守护进程的连接。请确保守护进程正在运行。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="617"/>
-        <source>RPC error:</source>
-        <translation>RPC エラー:</translation>
+        <source>RPC error: </source>
+        <translation>远程过程调用错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="621"/>
-        <source>failed to get random outputs to mix:</source>
-        <translation>ランダム出力をミックスできませんでした:</translation>
+        <source>failed to get random outputs to mix: </source>
+        <translation>未能获得随机输出来混合： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="628"/>
         <location filename="../src/simplewallet/simplewallet.cpp" line="636"/>
         <source>Not enough money in unlocked balance</source>
-        <translation>ロック解除残高が不足しています</translation>
+        <translation>未锁定余额中没有足够的钱</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="646"/>
         <source>Failed to find a way to create transactions. This is usually due to dust which is so small it cannot pay for itself in fees, or trying to send more money than the unlocked balance, or not leaving enough for fees</source>
-        <translation>トランザクションを作成する方法が見つかりませんでした。これは通常、手数料で支払うことができないほど小さいダスト、ロック解除された残高よりも多くのお金を送ろうとしている、または手数料に十分な金額が残っていないことが原因です。</translation>
+        <translation>未能找到创建交易的方法。这通常是由于灰尘太小而无法支付费用，或者试图发送比未锁定余额更多的钱，或者没有留下足够的费用</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="652"/>
         <source>not enough outputs for specified ring size</source>
-        <translation>指定されたリングサイズに対して出力が足りません</translation>
+        <translation>没有足够的输出来满足指定的环尺寸</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="655"/>
         <source>output amount</source>
-        <translation>出力量</translation>
+        <translation>输出量</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="655"/>
         <source>found outputs to use</source>
-        <translation>使用する出力が見つかりました</translation>
+        <translation>找到要使用的输出</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="657"/>
         <source>Please use sweep_unmixable.</source>
-        <translation>sweep_unmixableを使用してください。</translation>
+        <translation>请使用sweep_unmixable。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="661"/>
         <source>transaction was not constructed</source>
-        <translation>トランザクションは構築されませんでした</translation>
+        <translation>交易未构建</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="669"/>
-        <source>Reason:</source>
-        <translation>理由：</translation>
+        <source>Reason: </source>
+        <translation>原因： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="688"/>
         <source>failed to find a suitable way to split transactions</source>
-        <translation>取引を分割する適切な方法を見つけられなかった</translation>
+        <translation>未能找到合适的方式来分割交易</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="694"/>
-        <source>unknown transfer error:</source>
-        <translation>不明な転送エラー:</translation>
+        <source>unknown transfer error: </source>
+        <translation>未知的传输错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="699"/>
-        <source>Multisig error:</source>
-        <translation>マルチシグエラー:</translation>
+        <source>Multisig error: </source>
+        <translation>多重签名错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="705"/>
-        <source>internal error:</source>
-        <translation>内部エラー:</translation>
+        <source>internal error: </source>
+        <translation>内部错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="710"/>
-        <source>unexpected error:</source>
-        <translation>予期しないエラー:</translation>
+        <source>unexpected error: </source>
+        <translation>意外错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="714"/>
         <source>There was an error, which could mean the node may be trying to get you to retry creating a transaction, and zero in on which outputs you own. Or it could be a bona fide error. It may be prudent to disconnect from this node, and not try to send a transaction immediately. Alternatively, connect to another node so the original node cannot correlate information.</source>
-        <translation>エラーが発生し、ノードがトランザクションの作成を再試行し、所有する出力に焦点を絞るように要求している可能性があります。または、正当なエラーである可能性もあります。このノードから切断し、すぐにトランザクションを送信しないようにするのが賢明です。または、元のノードが情報を関連付けることができないように、別のノードに接続します。</translation>
+        <translation>出现错误，这可能意味着节点可能试图让您重试创建交易，并将您拥有的输出归零。或者这可能是一个善意的错误。谨慎的做法是断开与该节点的连接，并且不要尝试立即发送交易。或者，连接到另一个节点，以便原始节点无法关联信息。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="726"/>
         <source>File %s likely stores wallet private keys! Use a different file name.</source>
-        <translation>ファイル %s にはウォレットの秘密鍵が保存されている可能性があります。別のファイル名を使用してください。</translation>
+        <translation>文件 %s 可能存储钱包私钥！使用不同的文件名。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9295"/>
-        <source>seconds</source>
+        <source> seconds</source>
         <translation>秒</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9297"/>
-        <source>minutes</source>
-        <translation>分</translation>
+        <source> minutes</source>
+        <translation>分钟</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9299"/>
-        <source>hours</source>
-        <translation>時間</translation>
+        <source> hours</source>
+        <translation>小时</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9301"/>
-        <source>days</source>
-        <translation>日</translation>
+        <source> days</source>
+        <translation>天</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9303"/>
-        <source>months</source>
-        <translation>ヶ月</translation>
+        <source> months</source>
+        <translation>月</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="9304"/>
         <source>a long time</source>
-        <translation>長い間</translation>
+        <translation>很长一段时间</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11447"/>
-        <source>Unknown command:</source>
-        <translation>不明なコマンド:</translation>
+        <source>Unknown command: </source>
+        <translation>未知命令： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="190"/>
         <source>Restore from specific blockchain height</source>
-        <translation>特定のブロックチェーンの高さから復元</translation>
+        <translation>从特定区块链高度恢复</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="193"/>
         <source>Create an address file for new wallets</source>
-        <translation>新しいウォレットのアドレスファイルを作成する</translation>
+        <translation>为新钱包创建地址文件</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="195"/>
         <source>Display English language names</source>
-        <translation>英語名を表示する</translation>
+        <translation>显示英文名称</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="365"/>
         <source>daemon is busy. Please try again later.</source>
-        <translation>デーモンはビジー状態です。しばらくしてからもう一度お試しください。</translation>
+        <translation>守护进程正忙。请稍后重试。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="374"/>
         <source>possibly lost connection to daemon</source>
-        <translation>デーモンへの接続が失われた可能性があります</translation>
+        <translation>可能失去与守护进程的连接</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="391"/>
-        <source>Error:</source>
-        <translation>エラー：</translation>
+        <source>Error: </source>
+        <translation>错误： </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="500"/>
         <source>Is this OK?</source>
-        <translation>これでいいですか？</translation>
+        <translation>这样可以吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="666"/>
         <source>transaction %s was rejected by daemon</source>
-        <translation>トランザクション %s はデーモンによって拒否されました</translation>
+        <translation>事务 %s 被守护程序拒绝</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="678"/>
         <source>destination amount is zero</source>
-        <translation>目的地の金額はゼロです</translation>
+        <translation>目的地金额为零</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="683"/>
         <source>transaction has no destination</source>
-        <translation>トランザクションに宛先がありません</translation>
+        <translation>交易没有目的地</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="729"/>
         <source>File %s already exists. Are you sure to overwrite it?</source>
-        <translation>ファイル %s は既に存在します。上書きしてもよろしいですか?</translation>
+        <translation>文件 %s 已存在。您确定要覆盖它吗？</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11422"/>
         <source>This is the command line Salvium wallet. It needs to connect to a Salvium daemon to work correctly.
 WARNING: Do not reuse your Salvium keys on another fork, UNLESS this fork has key reuse mitigations built in. Doing so will harm your privacy.</source>
-        <translation>これはコマンドラインの Salvium ウォレットです。正しく動作するには、Salvium デーモンに接続する必要があります。
-警告: このフォークにキー再利用の緩和策が組み込まれていない限り、Salvium キーを別のフォークで再利用しないでください。これを行うと、プライバシーが侵害されます。</translation>
+        <translation>这是命令行 Salvium 钱包。它需要连接到 Salvium 守护程序才能正常工作。
+警告：请勿在另一个分叉上重复使用您的 Salvium 密钥，除非此分叉内置了密钥重用缓解措施。这样做会损害您的隐私。</translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="11441"/>
         <source>Failed to initialize wallet</source>
-        <translation>ウォレットの初期化に失敗しました</translation>
+        <translation>钱包初始化失败</translation>
     </message>
 </context>
 <context>
@@ -6509,479 +6509,479 @@ WARNING: Do not reuse your Salvium keys on another fork, UNLESS this fork has ke
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="244"/>
         <source>Use daemon instance at &lt;host&gt;:&lt;port&gt;</source>
-        <translation>&lt;host&gt;:&lt;port&gt; のデーモンインスタンスを使用します</translation>
+        <translation>在&lt;主机>:&lt;端口>处使用守护进程实例</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="245"/>
         <source>Use daemon instance at host &lt;arg&gt; instead of localhost</source>
-        <translation>localhost の代わりにホスト &lt;arg&gt; のデーモンインスタンスを使用する</translation>
+        <translation>在主机 &lt;arg> 上使用守护进程实例而不是本地主机</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="251"/>
         <source>Use daemon instance at port &lt;arg&gt; instead of 18081</source>
-        <translation>18081 の代わりにポート &lt;arg&gt; のデーモンインスタンスを使用する</translation>
+        <translation>在端口 &lt;arg> 使用守护进程实例而不是 18081</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="260"/>
         <source>For testnet. Daemon must also be launched with --testnet flag</source>
-        <translation>テストネットの場合、デーモンも --testnet フラグ付きで起動する必要があります。</translation>
+        <translation>对于测试网。守护进程还必须使用 --testnet 标志启动</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="280"/>
         <source>File containing extra entropy to initialize the PRNG (any data, aim for 256 bits of entropy to be useful, which typically means more than 256 bits of data)</source>
-        <translation>PRNG を初期化するための追加のエントロピーを含むファイル (任意のデータ、256 ビットのエントロピーが有効になることを目標とし、通常は 256 ビットを超えるデータを意味します)</translation>
+        <translation>包含用于初始化 PRNG 的额外熵的文件（任何数据，目标是 256 位熵有用，这通常意味着超过 256 位数据）</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="281"/>
         <source>Allow communicating with a daemon that uses a different version</source>
-        <translation>異なるバージョンを使用するデーモンとの通信を許可する</translation>
+        <translation>允许与使用不同版本的守护程序通信</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="375"/>
-        <source>can&#39;t specify daemon host or port more than once</source>
-        <translation>デーモンホストまたはポートを複数回指定することはできません</translation>
+        <source>can't specify daemon host or port more than once</source>
+        <translation>无法多次指定守护程序主机或端口</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="511"/>
-        <source>can&#39;t specify more than one of --password and --password-file</source>
-        <translation>--password と --password-file を複数指定することはできません</translation>
+        <source>can't specify more than one of --password and --password-file</source>
+        <translation>无法指定 --password 和 --password-file 之一以上</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="525"/>
         <source>the password file specified could not be read</source>
-        <translation>指定されたパスワードファイルを読み取ることができませんでした</translation>
+        <translation>无法读取指定的密码文件</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="551"/>
-        <source>Failed to load file</source>
-        <translation>ファイルの読み込みに失敗しました</translation>
+        <source>Failed to load file </source>
+        <translation>加载文件失败 </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="249"/>
         <source>Wallet password (escape/quote as needed)</source>
-        <translation>ウォレットのパスワード（必要に応じてエスケープ/引用符を使用）</translation>
+        <translation>钱包密码（根据需要转义/引用）</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="246"/>
         <source>[&lt;ip&gt;:]&lt;port&gt; socks proxy to use for daemon connections</source>
-        <translation>[&lt;ip&gt;:]&lt;port&gt; デーモン接続に使用するSOCKSプロキシ</translation>
+        <translation>[&lt;ip>:]&lt;端口>用于守护进程连接的袜子代理</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="247"/>
         <source>Enable commands which rely on a trusted daemon</source>
-        <translation>信頼できるデーモンに依存するコマンドを有効にする</translation>
+        <translation>启用依赖于受信任守护进程的命令</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="248"/>
         <source>Disable commands which rely on a trusted daemon</source>
-        <translation>信頼できるデーモンに依存するコマンドを無効にする</translation>
+        <translation>禁用依赖于受信任守护进程的命令</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="252"/>
         <source>Specify username[:password] for daemon RPC client</source>
-        <translation>デーモンRPCクライアントのユーザー名[:パスワード]を指定します</translation>
+        <translation>为守护进程 RPC 客户端指定用户名[:密码]</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="253"/>
         <source>Enable SSL on daemon RPC connections: enabled|disabled|autodetect</source>
-        <translation>デーモン RPC 接続で SSL を有効にする: enabled|disabled|autodetect</translation>
+        <translation>在守护进程 RPC 连接上启用 SSL：启用|禁用|自动检测</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="257"/>
         <source>List of valid fingerprints of allowed RPC servers</source>
-        <translation>許可された RPC サーバーの有効なフィンガープリントのリスト</translation>
+        <translation>允许的 RPC 服务器的有效指纹列表</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="258"/>
         <source>Allow any SSL certificate from the daemon</source>
-        <translation>デーモンからのSSL証明書を許可する</translation>
+        <translation>允许来自守护程序的任何 SSL 证书</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="259"/>
         <source>Allow user (via --daemon-ssl-ca-certificates) chain certificates</source>
-        <translation>ユーザーに（--daemon-ssl-ca-certificates経由で）チェーン証明書を許可する</translation>
+        <translation>允许用户（通过--daemon-ssl-ca-certificates）链证书</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="261"/>
         <source>For stagenet. Daemon must also be launched with --stagenet flag</source>
-        <translation>stagenetの場合、デーモンは--stagenetフラグ付きで起動する必要があります。</translation>
+        <translation>对于舞台网。守护进程还必须使用 --stagenet 标志启动</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="263"/>
         <source>Set shared ring database path</source>
-        <translation>共有リングデータベースパスを設定する</translation>
+        <translation>设置共享环数据库路径</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="274"/>
         <source>Number of rounds for the key derivation function</source>
-        <translation>鍵導出関数のラウンド数</translation>
+        <translation>密钥导出函数的轮数</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="275"/>
         <source>HW device to use</source>
-        <translation>使用するHWデバイス</translation>
+        <translation>要使用的硬件设备</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="276"/>
         <source>HW device wallet derivation path (e.g., SLIP-10)</source>
-        <translation>HWデバイスウォレット導出パス（例：SLIP-10）</translation>
+        <translation>硬件设备钱包派生路径（例如 SLIP-10）</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="278"/>
         <source>Do not use DNS</source>
-        <translation>DNSを使用しない</translation>
+        <translation>不使用 DNS</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="279"/>
         <source>Do not connect to a daemon, nor use DNS</source>
-        <translation>デーモンに接続したりDNSを使用したりしないでください</translation>
+        <translation>不连接到守护程序，也不使用 DNS</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="367"/>
-        <source>Invalid argument for</source>
-        <translation>無効な引数</translation>
+        <source>Invalid argument for </source>
+        <translation>无效参数 </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="428"/>
         <source>Enabling --</source>
-        <translation>有効化 --</translation>
+        <translation>启用——</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="428"/>
-        <source>requires --</source>
-        <translation>必要 -</translation>
+        <source> requires --</source>
+        <translation>需要——</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="429"/>
         <location filename="../src/wallet/wallet2.cpp" line="430"/>
-        <source>or --</source>
-        <translation>または -</translation>
+        <source> or --</source>
+        <translation>或者  - </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="430"/>
-        <source>or use of a .onion/.i2p domain</source>
-        <translation>または.onion/.i2pドメインの使用</translation>
+        <source> or use of a .onion/.i2p domain</source>
+        <translation>或使用 .onion/.i2p 域</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="448"/>
-        <source>--trusted-daemon and --untrusted-daemon are both seen, assuming untrusted</source>
-        <translation>--trusted-daemon と --untrusted-daemon の両方が見られ、信頼できないと想定されます</translation>
+        <source>#NAME?</source>
+        <translation>＃姓名？</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="458"/>
         <source>Daemon is local, assuming trusted</source>
-        <translation>デーモンはローカルであり、信頼されていると仮定します</translation>
+        <translation>守护进程是本地的，假设可信</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="468"/>
         <source>failed to initialize the wallet</source>
-        <translation>ウォレットの初期化に失敗しました</translation>
+        <translation>钱包初始化失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="532"/>
         <source>no password specified; use --prompt-for-password to prompt for a password</source>
-        <translation>パスワードが指定されていません。パスワードの入力を求めるには --prompt-for-password を使用してください。</translation>
+        <translation>未指定密码；使用 --prompt-for-password 提示输入密码</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="534"/>
         <source>Enter a new password for the wallet</source>
-        <translation>ウォレットの新しいパスワードを入力してください</translation>
+        <translation>输入钱包的新密码</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="534"/>
         <source>Wallet password</source>
-        <translation>ウォレットパスワード</translation>
+        <translation>钱包密码</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="557"/>
         <source>Failed to parse JSON</source>
-        <translation>JSON の解析に失敗しました</translation>
+        <translation>解析 JSON 失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="564"/>
         <source>Version %u too new, we can only grok up to %u</source>
-        <translation>バージョン %u は新しすぎるため、%u までしか理解できません</translation>
+        <translation>版本 %u 太新，我们最多只能了解 %u</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="580"/>
         <source>failed to parse view key secret key</source>
-        <translation>ビューキーの秘密キーを解析できませんでした</translation>
+        <translation>无法解析查看密钥密钥</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="585"/>
         <source>view secret key may not be all zeroes</source>
-        <translation>表示秘密鍵はすべてゼロではない可能性があります</translation>
+        <translation>查看密钥可能不全为零</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="587"/>
         <location filename="../src/wallet/wallet2.cpp" line="657"/>
         <location filename="../src/wallet/wallet2.cpp" line="702"/>
         <source>failed to verify view key secret key</source>
-        <translation>ビューキーの秘密キーの検証に失敗しました</translation>
+        <translation>验证查看密钥秘钥失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="598"/>
         <source>failed to parse spend key secret key</source>
-        <translation>支出キーの秘密キーを解析できませんでした</translation>
+        <translation>无法解析花费密钥密钥</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="603"/>
         <source>spend secret key may not be all zeroes</source>
-        <translation>使用秘密鍵はすべてゼロではない可能性があります</translation>
+        <translation>花费密钥可能不全为零</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="605"/>
         <location filename="../src/wallet/wallet2.cpp" line="667"/>
         <location filename="../src/wallet/wallet2.cpp" line="728"/>
         <source>failed to verify spend key secret key</source>
-        <translation>支出キーの秘密キーの検証に失敗しました</translation>
+        <translation>未能验证花费密钥密钥</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="617"/>
         <source>Electrum-style word list failed verification</source>
-        <translation>Electrum スタイルの単語リストの検証に失敗しました</translation>
+        <translation>Electrum 风格的单词列表验证失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="637"/>
         <source>At least one of either an Electrum-style word list, private view key, or private spend key must be specified</source>
-        <translation>Electrumスタイルの単語リスト、プライベートビューキー、プライベート支出キーのいずれかを少なくとも1つ指定する必要があります。</translation>
+        <translation>必须至少指定 Electrum 风格的单词列表、私有视图密钥或私有支出密钥之一</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="641"/>
         <source>Both Electrum-style word list and private key(s) specified</source>
-        <translation>Electrum形式の単語リストと秘密鍵の両方が指定されている</translation>
+        <translation>指定了 Electrum 风格的单词列表和私钥</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="651"/>
         <source>invalid address</source>
-        <translation>無効なアドレス</translation>
+        <translation>地址无效</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="660"/>
         <source>view key does not match standard address</source>
-        <translation>ビューキーが標準アドレスと一致しません</translation>
+        <translation>查看键与标准地址不匹配</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="670"/>
         <source>spend key does not match standard address</source>
-        <translation>支出キーが標準アドレスと一致しません</translation>
+        <translation>花费密钥与标准地址不匹配</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="678"/>
         <source>Cannot generate deprecated wallets from JSON</source>
-        <translation>JSON から非推奨のウォレットを生成できません</translation>
+        <translation>无法从 JSON 生成已弃用的钱包</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="714"/>
-        <source>failed to parse address:</source>
-        <translation>アドレスの解析に失敗しました:</translation>
+        <source>failed to parse address: </source>
+        <translation>解析地址失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="720"/>
         <source>Address must be specified in order to create watch-only wallet</source>
-        <translation>ウォッチ専用ウォレットを作成するにはアドレスを指定する必要があります</translation>
+        <translation>必须指定地址才能创建手表钱包</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="737"/>
-        <source>failed to generate new wallet:</source>
-        <translation>新しいウォレットの生成に失敗しました:</translation>
+        <source>failed to generate new wallet: </source>
+        <translation>生成新钱包失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="2172"/>
         <source>Password is needed to compute key image for incoming SALs</source>
-        <translation>受信SALのキーイメージを計算するにはパスワードが必要です</translation>
+        <translation>需要密码来计算传入 SAL 的密钥映像</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="2173"/>
         <source>Invalid password: password is needed to compute key image for incoming SALs</source>
-        <translation>無効なパスワード: 受信 SAL のキー イメージを計算するにはパスワードが必要です</translation>
+        <translation>密码无效：需要密码才能计算传入 SAL 的密钥映像</translation>
     </message>
     <message>
-        <location filename="../src/wallet/wallet2.cpp" line="3751"/>
-        <source>reorg exceeds maximum allowed depth, use &#39;set max-reorg-depth N&#39; to allow it, reorg depth:</source>
-        <translation>再編成が最大許容深度を超えています。許可するには「set max-reorg-depth N」を使用してください。再編成深度:</translation>
+        <location filename="../src/wallet/wallet2.cpp" line="3752"/>
+        <source>reorg exceeds maximum allowed depth, use 'set max-reorg-depth N' to allow it, reorg depth: </source>
+        <translation>重组超过允许的最大深度，使用“set max-reorg-depth N”来允许它，重组深度： </translation>
     </message>
     <message>
-        <location filename="../src/wallet/wallet2.cpp" line="5639"/>
-        <location filename="../src/wallet/wallet2.cpp" line="6220"/>
-        <location filename="../src/wallet/wallet2.cpp" line="6709"/>
+        <location filename="../src/wallet/wallet2.cpp" line="5640"/>
+        <location filename="../src/wallet/wallet2.cpp" line="6221"/>
+        <location filename="../src/wallet/wallet2.cpp" line="6710"/>
         <source>Primary account</source>
-        <translation>プライマリアカウント</translation>
+        <translation>主账户</translation>
     </message>
     <message>
-        <location filename="../src/wallet/wallet2.cpp" line="9078"/>
+        <location filename="../src/wallet/wallet2.cpp" line="9079"/>
         <source>Transaction sanity check failed</source>
-        <translation>トランザクションの健全性チェックに失敗しました</translation>
+        <translation>交易健全性检查失败</translation>
     </message>
     <message>
-        <location filename="../src/wallet/wallet2.cpp" line="12641"/>
+        <location filename="../src/wallet/wallet2.cpp" line="12642"/>
         <source>No funds received in this tx.</source>
-        <translation>このトランザクションでは資金は受け取られていません。</translation>
+        <translation>本次交易中未收到任何资金。</translation>
     </message>
     <message>
-        <location filename="../src/wallet/wallet2.cpp" line="13553"/>
-        <source>failed to read file</source>
-        <translation>ファイルの読み取りに失敗しました</translation>
+        <location filename="../src/wallet/wallet2.cpp" line="13554"/>
+        <source>failed to read file </source>
+        <translation>读取文件失败 </translation>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="194"/>
         <source>Set subaddress lookahead sizes to &lt;major&gt;:&lt;minor&gt;</source>
-        <translation>サブアドレスの先読みサイズを &lt;major&gt;:&lt;minor&gt; に設定します。</translation>
+        <translation>将子地址先行大小设置为 &lt;major>:&lt;minor></translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="254"/>
         <source>Path to a PEM format private key</source>
-        <translation>PEM形式の秘密鍵へのパス</translation>
+        <translation>PEM 格式私钥的路径</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="255"/>
         <source>Path to a PEM format certificate</source>
-        <translation>PEM形式の証明書へのパス</translation>
+        <translation>PEM 格式证书的路径</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet2.cpp" line="256"/>
         <source>Path to file containing concatenated PEM format certificate(s) to replace system CA(s).</source>
-        <translation>システム CA を置き換える連結された PEM 形式の証明書を含むファイルへのパス。</translation>
+        <translation>包含用于替换系统 CA 的串联 PEM 格式证书的文件路径。</translation>
     </message>
 </context>
 <context>
     <name>tools::wallet_rpc_server</name>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="219"/>
-        <source>Failed to create directory</source>
-        <translation>ディレクトリの作成に失敗しました</translation>
+        <source>Failed to create directory </source>
+        <translation>创建目录失败 </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="221"/>
         <source>Failed to create directory %s: %s</source>
-        <translation>ディレクトリ %s の作成に失敗しました: %s</translation>
+        <translation>未能创建目录 %s: %s</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="232"/>
         <source>Cannot specify --</source>
-        <translation>指定できません --</translation>
+        <translation>无法指定——</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="232"/>
-        <source>and --</source>
-        <translation>そして -</translation>
+        <source> and --</source>
+        <translation>和  - </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="251"/>
-        <source>Failed to create file</source>
-        <translation>ファイルの作成に失敗しました</translation>
+        <source>Failed to create file </source>
+        <translation>创建文件失败 </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="251"/>
         <source>. Check permissions or remove file</source>
-        <translation>権限を確認するか、ファイルを削除してください</translation>
+        <translation>。检查权限或删除文件</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="261"/>
-        <source>Error writing to file</source>
-        <translation>ファイルへの書き込みエラー</translation>
+        <source>Error writing to file </source>
+        <translation>写入文件时出错 </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="264"/>
-        <source>RPC username/password is stored in file</source>
-        <translation>RPCユーザー名/パスワードはファイルに保存されます</translation>
+        <source>RPC username/password is stored in file </source>
+        <translation>RPC用户名/密码存储在文件中 </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="665"/>
         <source>Tag %s is unregistered.</source>
-        <translation>タグ %s は登録されていません。</translation>
+        <translation>标签 %s 未注册。</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="693"/>
         <source>No matches for regex filter %s .</source>
-        <translation>正規表現フィルター %s に一致するものはありません。</translation>
+        <translation>正则表达式过滤器 %s 没有匹配项。</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="3586"/>
         <source>Transaction not possible. Available only %s, transaction amount %s = %s + %s (fee)</source>
-        <translation>取引できません。%s のみ利用可能です。取引金額 %s = %s + %s (手数料)</translation>
+        <translation>无法进行交易。仅适用于 %s，交易金额 %s = %s + %s（费用）</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4594"/>
-        <source>Can&#39;t specify more than one of --testnet and --stagenet</source>
-        <translation>--testnet と --stagenet を複数指定することはできません</translation>
+        <source>Can't specify more than one of --testnet and --stagenet</source>
+        <translation>无法指定 --testnet 和 --stagenet 之一以上</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4613"/>
-        <source>Can&#39;t specify more than one of --wallet-file and --generate-from-json</source>
-        <translation>--wallet-file と --generate-from-json を複数指定することはできません</translation>
+        <source>Can't specify more than one of --wallet-file and --generate-from-json</source>
+        <translation>无法指定 --wallet-file 和 --generate-from-json 之一以上</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4619"/>
-        <source>--password-file is not allowed in combination with --wallet-dir</source>
-        <translation>--password-file は --wallet-dir と組み合わせて使用することはできません</translation>
+        <source>#NAME?</source>
+        <translation>＃姓名？</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4631"/>
         <source>Must specify --wallet-file or --generate-from-json or --wallet-dir</source>
-        <translation>--wallet-file または --generate-from-json または --wallet-dir を指定する必要があります</translation>
+        <translation>必须指定 --wallet-file 或 --generate-from-json 或 --wallet-dir</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4635"/>
         <source>Loading wallet...</source>
-        <translation>ウォレットを読み込んでいます...</translation>
+        <translation>正在加载钱包...</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4683"/>
-        <source>Initial refresh failed:</source>
-        <translation>初期更新に失敗しました:</translation>
+        <source>Initial refresh failed: </source>
+        <translation>初始刷新失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4688"/>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4720"/>
         <source>Saving wallet...</source>
-        <translation>ウォレットを保存しています...</translation>
+        <translation>拯救钱包...</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4690"/>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4722"/>
         <source>Successfully saved</source>
-        <translation>保存に成功しました</translation>
+        <translation>保存成功</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4693"/>
         <source>Successfully loaded</source>
-        <translation>正常に読み込まれました</translation>
+        <translation>加载成功</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4697"/>
-        <source>Wallet initialization failed:</source>
-        <translation>ウォレットの初期化に失敗しました:</translation>
+        <source>Wallet initialization failed: </source>
+        <translation>钱包初始化失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4703"/>
         <source>Failed to initialize wallet RPC server</source>
-        <translation>ウォレット RPC サーバーの初期化に失敗しました</translation>
+        <translation>初始化钱包RPC服务器失败</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4707"/>
         <source>Starting wallet RPC server</source>
-        <translation>ウォレットRPCサーバーの起動</translation>
+        <translation>启动钱包RPC服务器</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4714"/>
-        <source>Failed to run wallet:</source>
-        <translation>ウォレットの実行に失敗しました:</translation>
+        <source>Failed to run wallet: </source>
+        <translation>钱包运行失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4717"/>
         <source>Stopped wallet RPC server</source>
-        <translation>ウォレットRPCサーバーを停止しました</translation>
+        <translation>已停止钱包 RPC 服务器</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4726"/>
-        <source>Failed to save wallet:</source>
-        <translation>ウォレットの保存に失敗しました:</translation>
+        <source>Failed to save wallet: </source>
+        <translation>保存钱包失败： </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4800"/>
         <source>This is the RPC Salvium wallet. It needs to connect to a Salvium daemon to work correctly.</source>
-        <translation>これは RPC Salvium ウォレットです。正しく動作するには Salvium デーモンに接続する必要があります。</translation>
+        <translation>这是 RPC Salvium 钱包。它需要连接到 Salvium 守护进程才能正常工作。</translation>
     </message>
 </context>
 <context>
@@ -6991,82 +6991,82 @@ WARNING: Do not reuse your Salvium keys on another fork, UNLESS this fork has ke
         <location filename="../src/simplewallet/simplewallet.cpp" line="11388"/>
         <location filename="../src/wallet/wallet_rpc_server.cpp" line="4779"/>
         <source>Wallet options</source>
-        <translation>ウォレットオプション</translation>
+        <translation>钱包选项</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="73"/>
         <source>Generate wallet from JSON format file</source>
-        <translation>JSON形式のファイルからウォレットを生成する</translation>
+        <translation>从JSON格式文件生成钱包</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="77"/>
         <source>Use wallet &lt;arg&gt;</source>
-        <translation>ウォレット&lt;arg&gt;を使用する</translation>
+        <translation>使用钱包 &lt;arg>;</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="81"/>
         <source>Set RPC client secret key for RPC payments</source>
-        <translation>RPC 支払い用の RPC クライアント秘密鍵を設定する</translation>
+        <translation>设置 RPC 支付的 RPC 客户端密钥</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="85"/>
         <source>Wallet password file</source>
-        <translation>ウォレットパスワードファイル</translation>
+        <translation>钱包密码文件</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="113"/>
         <source>Max number of threads to use for a parallel job</source>
-        <translation>並列ジョブに使用するスレッドの最大数</translation>
+        <translation>用于并行作业的最大线程数</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="114"/>
         <source>Specify log file</source>
-        <translation>ログファイルを指定する</translation>
+        <translation>指定日志文件</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="115"/>
         <source>Config file</source>
-        <translation>設定ファイル</translation>
+        <translation>配置文件</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="127"/>
         <source>General options</source>
-        <translation>一般的なオプション</translation>
+        <translation>一般选项</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="152"/>
         <source>This is the command line Salvium wallet. It needs to connect to a Salvium daemon to work correctly.</source>
-        <translation>これはコマンドラインの Salvium ウォレットです。正しく動作するには Salvium デーモンに接続する必要があります。</translation>
+        <translation>这是命令行 Salvium 钱包。它需要连接到 Salvium 守护程序才能正常工作。</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="176"/>
-        <source>Can&#39;t find config file</source>
-        <translation>設定ファイルが見つかりません</translation>
+        <source>Can't find config file </source>
+        <translation>找不到配置文件 </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="220"/>
-        <source>Logging to:</source>
-        <translation>ログイン先:</translation>
+        <source>Logging to: </source>
+        <translation>记录到： </translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="222"/>
         <source>Logging to %s</source>
-        <translation>%s にログ記録中</translation>
+        <translation>记录到 %s</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="226"/>
         <source>WARNING: You may not have a high enough lockable memory limit</source>
-        <translation>警告: ロック可能なメモリ制限が十分でない可能性があります</translation>
+        <translation>警告：您可能没有足够高的可锁定内存限制</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="228"/>
         <source>see ulimit -l</source>
-        <translation>ulimit -l を参照</translation>
+        <translation>请参见 ulimit -l</translation>
     </message>
     <message>
         <location filename="../src/wallet/wallet_args.cpp" line="153"/>
         <source>Usage:</source>
-        <translation>使用法：</translation>
+        <translation>用法：</translation>
     </message>
 </context>
 </TS>

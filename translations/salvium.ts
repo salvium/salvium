@@ -6641,29 +6641,29 @@ WARNING: Do not reuse your Salvium keys on another fork, UNLESS this fork has ke
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/wallet/wallet2.cpp" line="3751"/>
+        <location filename="../src/wallet/wallet2.cpp" line="3752"/>
         <source>reorg exceeds maximum allowed depth, use &apos;set max-reorg-depth N&apos; to allow it, reorg depth: </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/wallet/wallet2.cpp" line="5639"/>
-        <location filename="../src/wallet/wallet2.cpp" line="6220"/>
-        <location filename="../src/wallet/wallet2.cpp" line="6709"/>
+        <location filename="../src/wallet/wallet2.cpp" line="5640"/>
+        <location filename="../src/wallet/wallet2.cpp" line="6221"/>
+        <location filename="../src/wallet/wallet2.cpp" line="6710"/>
         <source>Primary account</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/wallet/wallet2.cpp" line="9078"/>
+        <location filename="../src/wallet/wallet2.cpp" line="9079"/>
         <source>Transaction sanity check failed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/wallet/wallet2.cpp" line="12641"/>
+        <location filename="../src/wallet/wallet2.cpp" line="12642"/>
         <source>No funds received in this tx.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/wallet/wallet2.cpp" line="13553"/>
+        <location filename="../src/wallet/wallet2.cpp" line="13554"/>
         <source>failed to read file </source>
         <translation type="unfinished"></translation>
     </message>
