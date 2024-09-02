@@ -123,4 +123,4 @@ jobs:
         username: ${{secrets.SFTP_USERNAME}}
         key: ${{ secrets.SFTP_KEY }}
         target: /home/${{secrets.SFTP_USERNAME}}/
-        source: "salvium-${{ env.GITHUB_REF_NAME }}-${{ matrix.toolchain.host }}.zip"
+        source: "salvium-${GITHUB_REF_NAME}-${{ matrix.toolchain.host }}.zip"
