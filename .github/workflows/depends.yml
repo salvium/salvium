@@ -113,7 +113,7 @@ jobs:
           /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salviumd*
     - name: zip daemon & cli
       run: |
-        zip salvium-${GITHUB_REF_NAME}-${{ matrix.toolchain.host }}.zip /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salvium-wallet-cli /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salviumd
+        zip salvium-${{ GITHUB_REF_NAME }}-${{ matrix.toolchain.host }}.zip /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salvium-wallet-cli /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salviumd
     - name: "Deploy"
       uses: milanmk/actions-file-deployer@master
       with:
@@ -122,4 +122,4 @@ jobs:
         remote-user: ${{secrets.SFTP_USERNAME}}
         ssh-private-key: ${{ secrets.SFTP_KEY }}
         remote-path: "/home/github/"
-        local-path: salvium-${GITHUB_REF_NAME}-${{ matrix.host}}.zip
+        local-path: salvium-${{ GITHUB_REF_NAME }}-${{ matrix.toolchain.host }}.zip
