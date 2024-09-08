@@ -967,7 +967,13 @@ start:
   }
 
   size_t target = get_difficulty_target();
-  difficulty_type diff = next_difficulty(timestamps, difficulties, target);
+  difficulty_type diff;
+  uint8_t version = get_current_hard_fork_version();
+  if (version == 1) {
+    diff = next_difficulty(timestamps, difficulties, target);
+  } else {
+    diff = next_difficulty_v2(timestamps, difficulties, target);
+  }
 
   CRITICAL_REGION_LOCAL1(m_difficulty_lock);
   m_difficulty_for_next_block_top_hash = top_hash;
@@ -1026,6 +1032,7 @@ size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_heig
 
   std::vector<uint64_t> timestamps;
   std::vector<difficulty_type> difficulties;
+  uint8_t version = get_current_hard_fork_version();
   timestamps.reserve(DIFFICULTY_BLOCKS_COUNT + 1);
   difficulties.reserve(DIFFICULTY_BLOCKS_COUNT + 1);
   if (start_height > 1)
@@ -1045,7 +1052,9 @@ size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_heig
   for (uint64_t height = start_height; height <= top_height; ++height)
   {
     size_t target = DIFFICULTY_TARGET_V2;
-    difficulty_type recalculated_diff = next_difficulty(timestamps, difficulties, target);
+    difficulty_type recalculated_diff = (version == 1)
+      ? next_difficulty(timestamps, difficulties, target)
+      : next_difficulty_v2(timestamps, difficulties, target);
 
     boost::multiprecision::uint256_t recalculated_cum_diff_256 = boost::multiprecision::uint256_t(recalculated_diff) + last_cum_diff;
     CHECK_AND_ASSERT_THROW_MES(recalculated_cum_diff_256 <= std::numeric_limits<difficulty_type>::max(), "Difficulty overflow!");
@@ -1299,6 +1308,7 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
   LOG_PRINT_L3("Blockchain::" << __func__);
   std::vector<uint64_t> timestamps;
   std::vector<difficulty_type> cumulative_difficulties;
+  uint8_t version = get_current_hard_fork_version();
 
   // if the alt chain isn't long enough to calculate the difficulty target
   // based on its blocks alone, need to get more blocks from the main chain
@@ -1354,7 +1364,11 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
   size_t target = DIFFICULTY_TARGET_V2;
 
   // calculate the difficulty target for the block and return it
-  return next_difficulty(timestamps, cumulative_difficulties, target);
+  if (version == 1) {
+    return next_difficulty(timestamps, cumulative_difficulties, target);
+  } else {
+    return next_difficulty_v2(timestamps, cumulative_difficulties, target);
+  }
 }
 //------------------------------------------------------------------
 // This function does a sanity check on basic things that all miner
@@ -3573,6 +3587,34 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
     return false;
   }
 
+  return true;
+}
+//------------------------------------------------------------------
+bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verification_context &tvc) const
+{
+  LOG_PRINT_L3("Blockchain::" << __func__);
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+
+  const uint8_t hf_version = m_hardfork->get_current_version();
+
+  // Prior to v2, only allow TX v1/v2
+  if (hf_version < HF_VERSION_ENABLE_N_OUTS) {
+    if (tx.version >= TRANSACTION_VERSION_N_OUTS) {
+      MERROR_VER("N-out TXs are not permitted prior to v" + std::to_string(HF_VERSION_ENABLE_N_OUTS));
+      tvc.m_version_mismatch = true;
+      return false;
+    }
+  }
+
+  // After v2 allow N-out TXs for TRANSFER ONLY
+  if (hf_version >= HF_VERSION_ENABLE_N_OUTS) {
+    if (tx.version >= TRANSACTION_VERSION_N_OUTS && tx.type != cryptonote::transaction_type::TRANSFER) {
+      MERROR("N-out TXs are only permitted for TRANSFER TX type");
+      tvc.m_version_mismatch = true;
+      return false;
+    }
+  }
+  
   return true;
 }
 //------------------------------------------------------------------
