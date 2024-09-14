@@ -11383,26 +11383,84 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   uint32_t priority = adjust_priority(0);
   std::vector<uint8_t> extra; // No need for a TX extra beyond that which will be calculated herein
 
+  // To return a payment, we need to know the y value to process the F value
+  // ...but the y value is calculated differently depending on the original TX
+  ec_scalar y;
+  crypto::public_key return_address = null_pkey;
+  
   // Get P_change from the TX
   crypto::public_key P_change = crypto::null_pkey;
-  size_t change_index = (td_origin.m_internal_output_index == 0) ? 1 : 0;
+  size_t change_index;
+  uint32_t hf_version = get_current_hard_fork();
+  if (hf_version >= HF_VERSION_ENABLE_N_OUTS) {
+
+    // Calculate z_i (the shared secret between sender and ourselves for the original TX)
+    crypto::public_key txkey_pub = null_pkey;
+    const std::vector<crypto::public_key> in_additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(td_origin.m_tx);
+    if (td_origin.m_tx.vout.size()>2) {
+      THROW_WALLET_EXCEPTION_IF(td_origin.m_internal_output_index >= in_additional_tx_pub_keys.size(),
+                                error::wallet_internal_error,
+                                "at create_transactions_return(): incorrect number of additional TX pubkeys in origin for return_payment");
+      txkey_pub = in_additional_tx_pub_keys[td_origin.m_internal_output_index];
+    } else {
+      txkey_pub = get_tx_pub_key_from_extra(td_origin.m_tx);
+    }
+    crypto::key_derivation derivation;
+    THROW_WALLET_EXCEPTION_IF(!generate_key_derivation(txkey_pub, m_account.get_keys().m_view_secret_key, derivation), error::wallet_internal_error, "at create_transactions_return(): failed to generate_key_derivation");
+    crypto::secret_key z_i;
+    derivation_to_scalar(derivation, td_origin.m_internal_output_index, z_i);
+    
+    // Calculate the y value for return_payment support
+    struct {
+      char domain_separator[8];
+      rct::key amount_key;
+    } buf;
+    std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+    std::strncpy(buf.domain_separator, "RETURN", 7);
+    buf.amount_key = rct::sk2rct(z_i);
+    crypto::hash_to_scalar(&buf, sizeof(buf), y);
+        
+    // The change_index needs decoding too
+    uint8_t eci_data = td_origin.m_tx.return_address_change_mask[td_origin.m_internal_output_index];
+
+    // Calculate the encrypted_change_index data for this output
+    std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+    std::strncpy(buf.domain_separator, "CHG_IDX", 8);
+    crypto::secret_key eci_out;
+    keccak((uint8_t *)&buf, sizeof(buf), (uint8_t*)&eci_out, sizeof(eci_out));
+    assert(false);
+    change_index = eci_data ^ eci_out.data[0];
+
+    return_address = td_origin.m_tx.return_address_list[td_origin.m_internal_output_index];
+    
+  } else {
+    
+    // Calculate y
+    struct {
+      char domain_separator[8];
+      crypto::public_key pubkey;
+    } buf;
+    std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+    std::strncpy(buf.domain_separator, "RETURN", 6);
+    buf.pubkey = P_change;
+    crypto::hash_to_scalar(&buf, sizeof(buf), y);
+
+    // Change index is the one we didn't receive
+    change_index = (td_origin.m_internal_output_index == 0) ? 1 : 0;
+
+    return_address = td_origin.m_tx.return_address;
+  }
   THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(td_origin.m_tx.vout[change_index], P_change), error::wallet_internal_error, "Failed to identify change output");
-
+  
   // Calculate yF
-  ec_scalar y;
-  struct {
-    char domain_separator[8];
-    crypto::public_key pubkey;
-  } buf;
-  std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-  std::strncpy(buf.domain_separator, "RETURN", 6);
-  buf.pubkey = P_change;
-  crypto::hash_to_scalar(&buf, sizeof(buf), y);
-
   rct::key key_y         = (rct::key&)(y);
   rct::key key_F         = (rct::key&)(td_origin.m_tx.return_address);
   rct::key key_yF        = rct::scalarmultKey(key_F, key_y);
 
+  // Sanity check that we aren't attempting to return our own TX output to ourselves
+  rct::key key_yF_check   = rct::scalarmultKey(rct::sk2rct(m_account.get_keys().m_view_secret_key), rct::pk2rct(P_change));
+  THROW_WALLET_EXCEPTION_IF(key_yF_check == key_yF, error::wallet_internal_error, "Attempting to return a payment to ourself");
+  
   // Build the subaddress to send the return to
   cryptonote::account_public_address address;
   address.m_spend_public_key = P_change;

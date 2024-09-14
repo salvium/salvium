@@ -133,6 +133,16 @@ monero_private_headers(blockchain_stats
 	  ${blockchain_stats_private_headers})
 
 
+set(blockchain_scanner_sources
+  blockchain_scanner.cpp
+  )
+
+set(blockchain_scanner_private_headers)
+
+monero_private_headers(blockchain_scanner
+	  ${blockchain_scanner_private_headers})
+
+
 monero_add_executable(blockchain_import
   ${blockchain_import_sources}
   ${blockchain_import_private_headers})
@@ -280,6 +290,27 @@ set_property(TARGET blockchain_depth
 	PROPERTY
 	OUTPUT_NAME "salvium-blockchain-depth")
 install(TARGETS blockchain_depth DESTINATION bin)
+
+monero_add_executable(blockchain_scanner
+  ${blockchain_scanner_sources}
+  ${blockchain_scanner_private_headers})
+
+target_link_libraries(blockchain_scanner
+  PRIVATE
+    cryptonote_core
+    blockchain_db
+    version
+    epee
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES})
+
+set_property(TARGET blockchain_scanner
+	PROPERTY
+	OUTPUT_NAME "salvium-blockchain-scanner")
+install(TARGETS blockchain_scanner DESTINATION bin)
 
 monero_add_executable(blockchain_stats
   ${blockchain_stats_sources}

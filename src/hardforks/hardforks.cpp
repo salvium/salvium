@@ -45,8 +45,8 @@ const hardfork_t testnet_hard_forks[] = {
   // version 1 from the start of the blockchain
   { 1, 1, 0, 1341378000 },
 
-  // version 2 starts from block 1000, which is on or around the 23rd of November, 2015. Fork time finalised on 2015-11-20. No fork voting occurs for the v2 fork.
-  //{ 2, 1000, 0, 1445355000 },
+  // version 2 starts from block 250
+  { 2, 250, 0, 1445355000 },
 };
 const size_t num_testnet_hard_forks = sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]);
 const uint64_t testnet_hard_fork_version_1_till = ((uint64_t)-1);

@@ -1261,7 +1261,17 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
     yield_tx_info yield_data;
     yield_data.block_height = m_height;
     yield_data.tx_hash = tx_hash;
-    yield_data.return_address = tx.return_address;
+    if (tx.version == TRANSACTION_VERSION_2_OUTS) {
+      if (tx.return_address == crypto::null_pkey)
+        throw0(DB_ERROR("missing return_address entry (needed to create yield data for PROTOCOL_TX)  - v2 STAKE"));
+      yield_data.return_address = tx.return_address;
+    } else if (tx.version >= TRANSACTION_VERSION_N_OUTS) {
+      if (tx.return_address_list.empty())
+        throw0(DB_ERROR("no return_address_list entry (needed to create yield data for the PROTOCOL_TX)"));
+      else if (tx.return_address_list.size() > 1)
+        throw0(DB_ERROR("too many return_address_list entries provided (only one needed to create yield data for the PROTOCOL_TX)"));
+      yield_data.return_address = tx.return_address_list[0];
+    }
     yield_data.locked_coins = tx.amount_burnt;
     if (tx.vin.empty())
       throw0(DB_ERROR("tx.vin is empty (needed to create yield data for the PROTOCOL_TX)"));

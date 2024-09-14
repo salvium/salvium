@@ -166,24 +166,7 @@ namespace boost
   inline void serialize(Archive &a, cryptonote::transaction_prefix &x, const boost::serialization::version_type ver)
   {
     a & x.version;
-    a & x.vin;
-    a & x.vout;
-    a & x.extra;
-    a & x.type;
-    if (x.type != cryptonote::transaction_type::MINER && x.type != cryptonote::transaction_type::PROTOCOL) {
-      a & x.return_address;
-      a & x.return_pubkey;
-      a & x.source_asset_type;
-      a & x.destination_asset_type;
-      a & x.amount_burnt;
-      a & x.amount_slippage_limit;
-    }
-  }
-
-  template <class Archive>
-  inline void serialize(Archive &a, cryptonote::transaction &x, const boost::serialization::version_type ver)
-  {
-    a & x.version;
+    a & x.unlock_time;
     a & x.vin;
     a & x.vout;
     a & x.extra;
@@ -191,8 +174,39 @@ namespace boost
     if (x.type != cryptonote::transaction_type::PROTOCOL) {
       a & x.amount_burnt;
       if (x.type != cryptonote::transaction_type::MINER) {
-        a & x.return_address;
-        a & x.return_pubkey;
+        if (x.type == cryptonote::transaction_type::TRANSFER && x.version >= TRANSACTION_VERSION_N_OUTS) {
+          a & x.return_address_list;
+          a & x.return_address_change_mask;
+        } else {
+          a & x.return_address;
+          a & x.return_pubkey;
+        }
+        a & x.source_asset_type;
+        a & x.destination_asset_type;
+        a & x.amount_slippage_limit;
+      }
+    }
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::transaction &x, const boost::serialization::version_type ver)
+  {
+    a & x.version;
+    a & x.unlock_time;
+    a & x.vin;
+    a & x.vout;
+    a & x.extra;
+    a & x.type;
+    if (x.type != cryptonote::transaction_type::PROTOCOL) {
+      a & x.amount_burnt;
+      if (x.type != cryptonote::transaction_type::MINER) {
+        if (x.type == cryptonote::transaction_type::TRANSFER && x.version >= TRANSACTION_VERSION_N_OUTS) {
+          a & x.return_address_list;
+          a & x.return_address_change_mask;
+        } else {
+          a & x.return_address;
+          a & x.return_pubkey;
+        }
         a & x.source_asset_type;
         a & x.destination_asset_type;
         a & x.amount_slippage_limit;
