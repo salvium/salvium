@@ -84,13 +84,15 @@ namespace multisig
   }
   //----------------------------------------------------------------------------------------------------------------------
   bool generate_multisig_composite_key_image(const cryptonote::account_keys &keys,
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddresses,
-    const crypto::public_key &out_key,
-    const crypto::public_key &tx_public_key,
-    const std::vector<crypto::public_key> &additional_tx_public_keys,
-    std::size_t real_output_index,
-    const std::vector<crypto::key_image> &pkis,
-    crypto::key_image &ki)
+                                             const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddresses,
+                                             const crypto::public_key &out_key,
+                                             const crypto::public_key &tx_public_key,
+                                             const std::vector<crypto::public_key> &additional_tx_public_keys,
+                                             std::size_t real_output_index,
+                                             const std::vector<crypto::key_image> &pkis,
+                                             crypto::key_image &ki,
+                                             const bool use_origin_data,
+                                             const cryptonote::origin_data& origin_tx_data)
   {
     // create a multisig partial key image
     // KI_partial = ([view key component] + [subaddress component] + [multisig privkeys]) * Hp(output one-time address)
@@ -98,11 +100,7 @@ namespace multisig
     // - later, we add in the components held by other participants
     cryptonote::keypair in_ephemeral;
 
-    // Populate this struct if you want to make use of multisig for Salvium!!!
-    assert(false);
-    cryptonote::origin_data origin_tx_data;
-    
-    if (!cryptonote::generate_key_image_helper(keys, subaddresses, out_key, tx_public_key, additional_tx_public_keys, real_output_index, in_ephemeral, ki, keys.get_device(), true, origin_tx_data))
+    if (!cryptonote::generate_key_image_helper(keys, subaddresses, out_key, tx_public_key, additional_tx_public_keys, real_output_index, in_ephemeral, ki, keys.get_device(), use_origin_data, origin_tx_data))
       return false;
     std::unordered_set<crypto::key_image> used;
 

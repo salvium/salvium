@@ -625,7 +625,7 @@ private:
     };
 
     typedef std::vector<transfer_details> transfer_container;
-    typedef serializable_unordered_map<std::string, std::vector<size_t>> transfer_details_indices;
+    typedef serializable_unordered_map<std::string, std::set<size_t>> transfer_details_indices;
     typedef serializable_unordered_multimap<crypto::hash, payment_details> payment_container;
     typedef std::set<uint32_t> unique_index_container;
 
