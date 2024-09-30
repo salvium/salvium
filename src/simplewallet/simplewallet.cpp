@@ -8414,8 +8414,9 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
         % print_money(burnt)
         % print_money(yield);
     else 
-      message_writer(console_color_green, false) << boost::format(tr("Height %d, txid %s, staked %s SAL, %s SAL accrued so far"))
+      message_writer(console_color_green, false) << boost::format(tr("Height %d (matures %d), txid %s, staked %s SAL, %s SAL accrued so far"))
         % height
+        % (height + 21601)
         % txid
         % print_money(burnt)
         % print_money(yield);
