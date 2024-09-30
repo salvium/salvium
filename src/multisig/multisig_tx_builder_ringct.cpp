@@ -402,27 +402,25 @@ static bool compute_keys_for_destinations(
   std::vector<crypto::secret_key>& tx_aux_secret_keys,
   rct::keyV& output_public_keys,
   rct::keyV& output_amount_secret_keys,
+  std::vector<std::string>& asset_types,
   std::vector<crypto::view_tag>& view_tags,
+  const cryptonote::transaction_type& tx_type,
   cryptonote::transaction& unsigned_tx
 )
 {
   hw::device &hwdev = account_keys.get_device();
 
-  // check non-zero change amount case
-  if (change.amount > 0)
-  {
-    // the change output must be directed to the local account
-    if (change.addr != hwdev.get_subaddress(account_keys, {subaddr_account}))
-      return false;
+  // the change output must be directed to the local account
+  if (change.addr != hwdev.get_subaddress(account_keys, {subaddr_account}))
+    return false;
 
-    // expect the change destination to be in the destination set
-    if (std::find_if(destinations.begin(), destinations.end(),
-        [&change](const auto &destination) -> bool
-        {
-          return destination.addr == change.addr;
-        }) == destinations.end())
-      return false;
-  }
+  // expect the change destination to be in the destination set
+  if (std::find_if(destinations.begin(), destinations.end(),
+                   [&change](const auto &destination) -> bool
+                   {
+                     return destination.addr == change.addr;
+                   }) == destinations.end())
+    return false;
 
   // collect non-change recipients into normal/subaddress buckets
   std::unordered_set<cryptonote::account_public_address> unique_subbaddr_recipients;
@@ -493,6 +491,23 @@ static bool compute_keys_for_destinations(
   crypto::public_key temp_output_public_key;
 
   for (std::size_t i = 0; i < num_destinations; ++i) {
+
+    // Is this a BURN or CONVERT TX?
+    if (tx_type == cryptonote::transaction_type::BURN || tx_type == cryptonote::transaction_type::CONVERT) {
+      // Do not create outputs that are for the destination asset type - discard them as unused
+      if (destinations[i].asset_type == unsigned_tx.destination_asset_type) {
+        unsigned_tx.amount_burnt += destinations[i].amount;
+        unsigned_tx.amount_slippage_limit = destinations[i].slippage_limit;
+        continue;
+      }
+    } else if (tx_type == cryptonote::transaction_type::STAKE) {
+      // Do not create outputs that are staked for yield - discard them as unused
+      if (!destinations[i].is_change) {
+        unsigned_tx.amount_burnt += destinations[i].amount;
+        continue;
+      }
+    }
+
     if (not hwdev.generate_output_ephemeral_keys(
       unsigned_tx.version,
       account_keys,
@@ -564,7 +579,11 @@ static bool onetime_addresses_are_unique(const rct::keyV& output_public_keys)
 }
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
-static bool set_tx_outputs(const rct::keyV& output_public_keys, cryptonote::transaction& unsigned_tx)
+static bool set_tx_outputs(
+  const rct::keyV& output_public_keys,
+  const std::vector<std::string>& asset_types,
+  cryptonote::transaction& unsigned_tx
+)
 {
   // sanity check: all onetime addresses should be unique
   if (not onetime_addresses_are_unique(output_public_keys))
@@ -572,9 +591,11 @@ static bool set_tx_outputs(const rct::keyV& output_public_keys, cryptonote::tran
 
   // set the tx outputs
   const std::size_t num_destinations = output_public_keys.size();
+  CHECK_AND_ASSERT_MES(asset_types.size() == num_destinations, false,
+    "multisig signing protocol: internal error, asset_type array size mismatch.");
   unsigned_tx.vout.resize(num_destinations);
   for (std::size_t i = 0; i < num_destinations; ++i)
-    cryptonote::set_tx_out(0, "SAL", 0, rct::rct2pk(output_public_keys[i]), false, crypto::view_tag{}, unsigned_tx.vout[i]);
+    cryptonote::set_tx_out(0, asset_types[i], 0, rct::rct2pk(output_public_keys[i]), false, crypto::view_tag{}, unsigned_tx.vout[i]);
 
   return true;
 }
@@ -582,6 +603,7 @@ static bool set_tx_outputs(const rct::keyV& output_public_keys, cryptonote::tran
 //----------------------------------------------------------------------------------------------------------------------
 static bool set_tx_outputs_with_view_tags(
   const rct::keyV& output_public_keys,
+  const std::vector<std::string>& asset_types,
   const std::vector<crypto::view_tag>& view_tags,
   cryptonote::transaction& unsigned_tx
 )
@@ -592,11 +614,13 @@ static bool set_tx_outputs_with_view_tags(
 
   // set the tx outputs (with view tags)
   const std::size_t num_destinations = output_public_keys.size();
+  CHECK_AND_ASSERT_MES(asset_types.size() == num_destinations, false,
+    "multisig signing protocol: internal error, asset_type array size mismatch.");
   CHECK_AND_ASSERT_MES(view_tags.size() == num_destinations, false,
     "multisig signing protocol: internal error, view tag size mismatch.");
   unsigned_tx.vout.resize(num_destinations);
   for (std::size_t i = 0; i < num_destinations; ++i)
-    cryptonote::set_tx_out(0, "SAL", 0, rct::rct2pk(output_public_keys[i]), true, view_tags[i], unsigned_tx.vout[i]);
+    cryptonote::set_tx_out(0, asset_types[i], 0, rct::rct2pk(output_public_keys[i]), true, view_tags[i], unsigned_tx.vout[i]);
 
   return true;
 }
@@ -982,7 +1006,7 @@ tx_builder_ringct_t::~tx_builder_ringct_t()
 bool tx_builder_ringct_t::init(
   const cryptonote::account_keys& account_keys,
   const std::vector<std::uint8_t>& extra,
-  const cryptonote::transaction_type& type,
+  const cryptonote::transaction_type& tx_type,
   const std::uint64_t unlock_time,
   const std::uint32_t subaddr_account,
   const std::set<std::uint32_t>& subaddr_minor_indices,
@@ -1018,9 +1042,9 @@ bool tx_builder_ringct_t::init(
   // misc. fields
   unsigned_tx.version = 2;  //rct = 2
   unsigned_tx.unlock_time = unlock_time;
-  unsigned_tx.type = (type == cryptonote::transaction_type::RETURN) ? cryptonote::TRANSFER : type;
+  unsigned_tx.type = (tx_type == cryptonote::transaction_type::RETURN) ? cryptonote::TRANSFER : tx_type;
   unsigned_tx.source_asset_type = "SAL";
-  if (type == cryptonote::transaction_type::BURN)
+  if (tx_type == cryptonote::transaction_type::BURN)
     unsigned_tx.destination_asset_type = "BURN";
   else
     unsigned_tx.destination_asset_type = "SAL";
@@ -1060,6 +1084,7 @@ bool tx_builder_ringct_t::init(
   // prepare outputs
   rct::keyV output_public_keys;
   rct::keyV output_amount_secret_keys;
+  std::vector<std::string> asset_types;
   std::vector<crypto::view_tag> view_tags;
   auto output_amount_secret_keys_wiper = epee::misc_utils::create_scope_leave_handler([&]{
     memwipe(static_cast<rct::key *>(output_amount_secret_keys.data()), output_amount_secret_keys.size() * sizeof(rct::key));
@@ -1076,7 +1101,9 @@ bool tx_builder_ringct_t::init(
       tx_aux_secret_keys,
       output_public_keys,
       output_amount_secret_keys,
+      asset_types,
       view_tags,
+      tx_type,
       unsigned_tx))
     return false;
 
@@ -1086,9 +1113,9 @@ bool tx_builder_ringct_t::init(
   // add output one-time addresses to tx
   bool set_tx_outputs_result{false};
   if (use_view_tags)
-    set_tx_outputs_result = set_tx_outputs_with_view_tags(output_public_keys, view_tags, unsigned_tx);
+    set_tx_outputs_result = set_tx_outputs_with_view_tags(output_public_keys, asset_types, view_tags, unsigned_tx);
   else
-    set_tx_outputs_result = set_tx_outputs(output_public_keys, unsigned_tx);
+    set_tx_outputs_result = set_tx_outputs(output_public_keys, asset_types, unsigned_tx);
 
   if (not set_tx_outputs_result)
     return false;
