@@ -2470,48 +2470,8 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
     yield_per_stake_128 /= ybi_data.back().locked_coins_tally;
     yield_per_stake = yield_per_stake_128.convert_to<uint64_t>();
   }
-  /*
-  // Iterate over the transfers in our wallet
-  std::map<size_t, size_t> map_payouts;
-  for (size_t idx = m_transfers.size()-1; idx>0; --idx) {
-    const tools::wallet2::transfer_details& td = m_transfers[idx];
-    //if (td.m_block_height < ybi_data[0].block_height) break;
-    if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
-      if (map_payouts.count(idx)) {
-        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
-      } else {
-        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
-      }
-    } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
-      // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
-      if (m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE)
-        map_payouts[td.m_td_origin_idx] = idx;
-    }
-  }
-  */
+  
   // Return success to caller
-  return true;
-}
-//----------------------------------------------------------------------------------------------------
-bool wallet2::get_yield_payouts(std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> &payouts) {
-
-  // Iterate over the transfers in our wallet
-  std::map<size_t, size_t> map_payouts;
-  for (size_t idx = m_transfers.size()-1; idx>0; --idx) {
-    const tools::wallet2::transfer_details& td = m_transfers[idx];
-    //if (td.m_block_height < ybi_data[0].block_height) break;
-    if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
-      if (map_payouts.count(idx)) {
-        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
-      } else {
-        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
-      }
-    } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
-      // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
-      if (m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE)
-        map_payouts[td.m_td_origin_idx] = idx;
-    }
-  }
   return true;
 }
 //----------------------------------------------------------------------------------------------------

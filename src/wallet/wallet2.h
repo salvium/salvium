@@ -1755,7 +1755,6 @@ private:
                                 uint64_t &ybi_data_size,
                                 std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> &payouts
                                 );
-    bool get_yield_payouts(std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> &payouts);
     
   private:
     /*!
