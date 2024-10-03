@@ -1110,7 +1110,6 @@ namespace rct {
       const cryptonote::transaction_type tx_type,
       const std::string& in_asset_type,
       const std::vector<std::string> & destination_asset_types,
-      const std::vector<bool> &zero_masks,
       const std::vector<xmr_amount> &inamounts,
       const std::vector<xmr_amount> &outamounts,
       xmr_amount txnFee,
@@ -1127,7 +1126,6 @@ namespace rct {
         CHECK_AND_ASSERT_THROW_MES(inamounts.size() == inSk.size(), "Different number of inamounts/inSk");
         CHECK_AND_ASSERT_THROW_MES(outamounts.size() == destinations.size(), "Different number of amounts/destinations");
         CHECK_AND_ASSERT_THROW_MES(amount_keys.size() == destinations.size(), "Different number of amount_keys/destinations");
-        CHECK_AND_ASSERT_THROW_MES(zero_masks.size() == destinations.size(), "Different number of zero_masks/destinations");
         CHECK_AND_ASSERT_THROW_MES(index.size() == inSk.size(), "Different number of index/inSk");
         CHECK_AND_ASSERT_THROW_MES(mixRing.size() == inSk.size(), "Different number of mixRing/inSk");
         for (size_t n = 0; n < mixRing.size(); ++n) {
@@ -1312,7 +1310,6 @@ namespace rct {
       const cryptonote::transaction_type tx_type,
       const std::string& in_asset_type,
       const std::vector<std::string> & destination_asset_types,
-      const std::vector<bool> &zero_masks,
       const std::vector<xmr_amount> &inamounts,
       const std::vector<xmr_amount> &outamounts,
       const keyV &amount_keys,
@@ -1330,7 +1327,7 @@ namespace rct {
           mixRing[i].resize(mixin+1);
           index[i] = populateFromBlockchainSimple(mixRing[i], inPk[i], mixin);
         }
-        return genRctSimple(message, inSk, destinations, tx_type, in_asset_type, destination_asset_types, zero_masks, inamounts, outamounts, txnFee, mixRing, amount_keys, index, outSk, rct_config, hwdev);
+        return genRctSimple(message, inSk, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, txnFee, mixRing, amount_keys, index, outSk, rct_config, hwdev);
     }
 
     //RingCT protocol

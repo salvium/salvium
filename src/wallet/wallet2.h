@@ -625,7 +625,7 @@ private:
     };
 
     typedef std::vector<transfer_details> transfer_container;
-    typedef serializable_unordered_map<std::string, std::vector<size_t>> transfer_details_indices;
+    typedef serializable_unordered_map<std::string, std::set<size_t>> transfer_details_indices;
     typedef serializable_unordered_multimap<crypto::hash, payment_details> payment_container;
     typedef std::set<uint32_t> unique_index_container;
 
@@ -1755,7 +1755,6 @@ private:
                                 uint64_t &ybi_data_size,
                                 std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> &payouts
                                 );
-    bool get_yield_payouts(std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> &payouts);
     
   private:
     /*!

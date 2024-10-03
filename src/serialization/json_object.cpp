@@ -269,6 +269,17 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
   INSERT_INTO_JSON_OBJECT(dest, inputs, tx.vin);
   INSERT_INTO_JSON_OBJECT(dest, outputs, tx.vout);
   INSERT_INTO_JSON_OBJECT(dest, extra, tx.extra);
+  INSERT_INTO_JSON_OBJECT(dest, type, static_cast<uint8_t>(tx.type));
+  if (tx.type != cryptonote::transaction_type::PROTOCOL) {
+    INSERT_INTO_JSON_OBJECT(dest, amount_burnt, tx.amount_burnt);
+    if (tx.type != cryptonote::transaction_type::MINER) {
+      INSERT_INTO_JSON_OBJECT(dest, return_address, tx.return_address);
+      INSERT_INTO_JSON_OBJECT(dest, return_pubkey, tx.return_pubkey);
+      INSERT_INTO_JSON_OBJECT(dest, source_asset_type, tx.source_asset_type);
+      INSERT_INTO_JSON_OBJECT(dest, destination_asset_type, tx.destination_asset_type);
+      INSERT_INTO_JSON_OBJECT(dest, amount_slippage_limit, tx.amount_slippage_limit);
+    }
+  }
   if (!tx.pruned)
   {
     INSERT_INTO_JSON_OBJECT(dest, signatures, tx.signatures);
@@ -291,6 +302,19 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
   GET_FROM_JSON_OBJECT(val, tx.vin, inputs);
   GET_FROM_JSON_OBJECT(val, tx.vout, outputs);
   GET_FROM_JSON_OBJECT(val, tx.extra, extra);
+  uint8_t tx_type = 0;
+  GET_FROM_JSON_OBJECT(val, tx_type, type);
+  tx.type = static_cast<cryptonote::transaction_type>(tx_type);
+  if (tx.type != cryptonote::transaction_type::PROTOCOL) {
+    GET_FROM_JSON_OBJECT(val, tx.amount_burnt, amount_burnt);
+    if (tx.type != cryptonote::transaction_type::MINER) {
+      GET_FROM_JSON_OBJECT(val, tx.return_address, return_address);
+      GET_FROM_JSON_OBJECT(val, tx.return_pubkey, return_pubkey);
+      GET_FROM_JSON_OBJECT(val, tx.source_asset_type, source_asset_type);
+      GET_FROM_JSON_OBJECT(val, tx.destination_asset_type, destination_asset_type);
+      GET_FROM_JSON_OBJECT(val, tx.amount_slippage_limit, amount_slippage_limit);
+    }
+  }
   GET_FROM_JSON_OBJECT(val, tx.rct_signatures, ringct);
 
   const auto& sigs = val.FindMember("signatures");
@@ -1138,6 +1162,7 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::rctSig& 
     INSERT_INTO_JSON_OBJECT(dest, encrypted, sig.ecdhInfo);
     INSERT_INTO_JSON_OBJECT(dest, commitments, transform(sig.outPk, just_mask));
     INSERT_INTO_JSON_OBJECT(dest, fee, sig.txnFee);
+    INSERT_INTO_JSON_OBJECT(dest, p_r, sig.p_r);
   }
 
   // prunable
@@ -1174,6 +1199,7 @@ void fromJsonValue(const rapidjson::Value& val, rct::rctSig& sig)
     GET_FROM_JSON_OBJECT(val, sig.ecdhInfo, encrypted);
     GET_FROM_JSON_OBJECT(val, sig.outPk, commitments);
     GET_FROM_JSON_OBJECT(val, sig.txnFee, fee);
+    GET_FROM_JSON_OBJECT(val, sig.p_r, p_r);
   }
 
   // prunable

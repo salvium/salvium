@@ -58,6 +58,67 @@
 
 namespace multisig {
 
+  rct::key sm(rct::key y, int n, const rct::key &x)
+  {
+    while (n--)
+      sc_mul(y.bytes, y.bytes, y.bytes);
+    sc_mul(y.bytes, y.bytes, x.bytes);
+    return y;
+  }
+
+  // Compute the inverse of a scalar, the clever way
+  rct::key invert(const rct::key &x)
+  {
+    rct::key _1, _10, _100, _11, _101, _111, _1001, _1011, _1111;
+
+    _1 = x;
+    sc_mul(_10.bytes, _1.bytes, _1.bytes);
+    sc_mul(_100.bytes, _10.bytes, _10.bytes);
+    sc_mul(_11.bytes, _10.bytes, _1.bytes);
+    sc_mul(_101.bytes, _10.bytes, _11.bytes);
+    sc_mul(_111.bytes, _10.bytes, _101.bytes);
+    sc_mul(_1001.bytes, _10.bytes, _111.bytes);
+    sc_mul(_1011.bytes, _10.bytes, _1001.bytes);
+    sc_mul(_1111.bytes, _100.bytes, _1011.bytes);
+
+    rct::key inv;
+    sc_mul(inv.bytes, _1111.bytes, _1.bytes);
+
+    inv = sm(inv, 123 + 3, _101);
+    inv = sm(inv, 2 + 2, _11);
+    inv = sm(inv, 1 + 4, _1111);
+    inv = sm(inv, 1 + 4, _1111);
+    inv = sm(inv, 4, _1001);
+    inv = sm(inv, 2, _11);
+    inv = sm(inv, 1 + 4, _1111);
+    inv = sm(inv, 1 + 3, _101);
+    inv = sm(inv, 3 + 3, _101);
+    inv = sm(inv, 3, _111);
+    inv = sm(inv, 1 + 4, _1111);
+    inv = sm(inv, 2 + 3, _111);
+    inv = sm(inv, 2 + 2, _11);
+    inv = sm(inv, 1 + 4, _1011);
+    inv = sm(inv, 2 + 4, _1011);
+    inv = sm(inv, 6 + 4, _1001);
+    inv = sm(inv, 2 + 2, _11);
+    inv = sm(inv, 3 + 2, _11);
+    inv = sm(inv, 3 + 2, _11);
+    inv = sm(inv, 1 + 4, _1001);
+    inv = sm(inv, 1 + 3, _111);
+    inv = sm(inv, 2 + 4, _1111);
+    inv = sm(inv, 1 + 4, _1011);
+    inv = sm(inv, 3, _101);
+    inv = sm(inv, 2 + 4, _1111);
+    inv = sm(inv, 3, _101);
+    inv = sm(inv, 1 + 2, _11);
+
+    // Sanity check for successful inversion
+    rct::key tmp;
+    sc_mul(tmp.bytes, inv.bytes, x.bytes);
+    CHECK_AND_ASSERT_THROW_MES(tmp == rct::identity(), "invert failed");
+    return inv;
+  }
+  
 namespace signing {
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
@@ -108,9 +169,12 @@ static bool compute_keys_for_sources(
     if (src.real_output >= src.outputs.size())
       return false;
 
+    /*
     // Populate this struct if you want to make use of multisig for Salvium!!!
     assert(false);
     cryptonote::origin_data origin_tx_data;
+    */
+    bool use_origin_data = (src.origin_tx_data.tx_type != cryptonote::transaction_type::UNSET);
 
     if (not cryptonote::generate_key_image_helper(
       account_keys,
@@ -122,8 +186,8 @@ static bool compute_keys_for_sources(
       tmp_keys,
       tmp_key_image,
       hwdev,
-      true,
-      origin_tx_data
+      use_origin_data,
+      src.origin_tx_data
     )) {
       return false;
     }
@@ -338,27 +402,28 @@ static bool compute_keys_for_destinations(
   std::vector<crypto::secret_key>& tx_aux_secret_keys,
   rct::keyV& output_public_keys,
   rct::keyV& output_amount_secret_keys,
+  std::vector<std::string>& asset_types,
   std::vector<crypto::view_tag>& view_tags,
+  std::vector<uint64_t>& destination_amounts,
+  const cryptonote::transaction_type& tx_type,
+  bool& found_change,
+  std::size_t& change_index,
   cryptonote::transaction& unsigned_tx
 )
 {
   hw::device &hwdev = account_keys.get_device();
 
-  // check non-zero change amount case
-  if (change.amount > 0)
-  {
-    // the change output must be directed to the local account
-    if (change.addr != hwdev.get_subaddress(account_keys, {subaddr_account}))
-      return false;
+  // the change output must be directed to the local account
+  if (change.addr != hwdev.get_subaddress(account_keys, {subaddr_account}))
+    return false;
 
-    // expect the change destination to be in the destination set
-    if (std::find_if(destinations.begin(), destinations.end(),
-        [&change](const auto &destination) -> bool
-        {
-          return destination.addr == change.addr;
-        }) == destinations.end())
-      return false;
-  }
+  // expect the change destination to be in the destination set
+  if (std::find_if(destinations.begin(), destinations.end(),
+                   [&change](const auto &destination) -> bool
+                   {
+                     return destination.addr == change.addr;
+                   }) == destinations.end())
+    return false;
 
   // collect non-change recipients into normal/subaddress buckets
   std::unordered_set<cryptonote::account_public_address> unique_subbaddr_recipients;
@@ -423,12 +488,35 @@ static bool compute_keys_for_destinations(
   }
 
   // additional tx pubkeys: R_t
-  output_public_keys.resize(num_destinations);
-  view_tags.resize(num_destinations);
+  output_public_keys.clear();
+  view_tags.clear();
+  asset_types.clear();
+  destination_amounts.clear();
+  found_change = false;
   std::vector<crypto::public_key> tx_aux_public_keys;
   crypto::public_key temp_output_public_key;
-
+  size_t output_index = 0;
+  uint64_t amount_burnt = 0;
+  uint64_t amount_slippage_limit = 0;
   for (std::size_t i = 0; i < num_destinations; ++i) {
+
+    // Is this a BURN or CONVERT TX?
+    if (tx_type == cryptonote::transaction_type::BURN || tx_type == cryptonote::transaction_type::CONVERT) {
+      // Do not create outputs that are for the destination asset type - discard them as unused
+      if (destinations[i].asset_type == unsigned_tx.destination_asset_type) {
+        amount_burnt += destinations[i].amount;
+        amount_slippage_limit = destinations[i].slippage_limit;
+        continue;
+      }
+    } else if (tx_type == cryptonote::transaction_type::STAKE) {
+      // Do not create outputs that are staked for yield - discard them as unused
+      if (!destinations[i].is_change) {
+        amount_burnt += destinations[i].amount;
+        continue;
+      }
+    }
+
+    crypto::view_tag vt; // Temporary variable to hold the view tag in case we create one
     if (not hwdev.generate_output_ephemeral_keys(
       unsigned_tx.version,
       account_keys,
@@ -436,23 +524,42 @@ static bool compute_keys_for_destinations(
       tx_secret_key,
       destinations[i],
       change.addr,
-      i,
+      output_index,
       need_tx_aux_keys,
       tx_aux_secret_keys,
       tx_aux_public_keys,
       output_amount_secret_keys,
       temp_output_public_key,
       use_view_tags,
-      view_tags[i]  //unused variable if use_view_tags is not set
+      vt
     )) {
       return false;
     }
-    output_public_keys[i] = rct::pk2rct(temp_output_public_key);
+    output_public_keys.push_back(rct::pk2rct(temp_output_public_key));
+    asset_types.push_back(destinations[i].asset_type);
+    if (use_view_tags)
+      view_tags.push_back(vt);
+    destination_amounts.push_back(destinations[i].amount);    
+    if (destinations[i].is_change) {
+      found_change = true;
+      change_index = output_index; // Store the change_index - we will need this
+    }    
+    output_index++;
   }
 
-  if (num_destinations != output_amount_secret_keys.size())
-    return false;
+  //if (num_destinations != output_amount_secret_keys.size())
+  //  return false;
 
+  if (reconstruction) {
+    // Verify the values match the unsigned_tx
+    CHECK_AND_ASSERT_MES(amount_burnt == unsigned_tx.amount_burnt, false, "Internal error - amount_burnt does not match unsigned_tx");
+    CHECK_AND_ASSERT_MES(amount_slippage_limit == unsigned_tx.amount_slippage_limit, false, "Internal error - amount_slippage_limit does not match unsigned_tx");
+  } else {
+    // Store the calculated values
+    unsigned_tx.amount_burnt = amount_burnt;
+    unsigned_tx.amount_slippage_limit = amount_slippage_limit;
+  }
+  
   CHECK_AND_ASSERT_MES(
     tx_aux_public_keys.size() == tx_aux_secret_keys.size(),
     false,
@@ -500,7 +607,11 @@ static bool onetime_addresses_are_unique(const rct::keyV& output_public_keys)
 }
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
-static bool set_tx_outputs(const rct::keyV& output_public_keys, cryptonote::transaction& unsigned_tx)
+static bool set_tx_outputs(
+  const rct::keyV& output_public_keys,
+  const std::vector<std::string>& asset_types,
+  cryptonote::transaction& unsigned_tx
+)
 {
   // sanity check: all onetime addresses should be unique
   if (not onetime_addresses_are_unique(output_public_keys))
@@ -508,9 +619,11 @@ static bool set_tx_outputs(const rct::keyV& output_public_keys, cryptonote::tran
 
   // set the tx outputs
   const std::size_t num_destinations = output_public_keys.size();
+  CHECK_AND_ASSERT_MES(asset_types.size() == num_destinations, false,
+    "multisig signing protocol: internal error, asset_type array size mismatch.");
   unsigned_tx.vout.resize(num_destinations);
   for (std::size_t i = 0; i < num_destinations; ++i)
-    cryptonote::set_tx_out(0, "SAL", 0, rct::rct2pk(output_public_keys[i]), false, crypto::view_tag{}, unsigned_tx.vout[i]);
+    cryptonote::set_tx_out(0, asset_types[i], 0, rct::rct2pk(output_public_keys[i]), false, crypto::view_tag{}, unsigned_tx.vout[i]);
 
   return true;
 }
@@ -518,6 +631,7 @@ static bool set_tx_outputs(const rct::keyV& output_public_keys, cryptonote::tran
 //----------------------------------------------------------------------------------------------------------------------
 static bool set_tx_outputs_with_view_tags(
   const rct::keyV& output_public_keys,
+  const std::vector<std::string>& asset_types,
   const std::vector<crypto::view_tag>& view_tags,
   cryptonote::transaction& unsigned_tx
 )
@@ -528,11 +642,13 @@ static bool set_tx_outputs_with_view_tags(
 
   // set the tx outputs (with view tags)
   const std::size_t num_destinations = output_public_keys.size();
+  CHECK_AND_ASSERT_MES(asset_types.size() == num_destinations, false,
+    "multisig signing protocol: internal error, asset_type array size mismatch.");
   CHECK_AND_ASSERT_MES(view_tags.size() == num_destinations, false,
     "multisig signing protocol: internal error, view tag size mismatch.");
   unsigned_tx.vout.resize(num_destinations);
   for (std::size_t i = 0; i < num_destinations; ++i)
-    cryptonote::set_tx_out(0, "SAL", 0, rct::rct2pk(output_public_keys[i]), true, view_tags[i], unsigned_tx.vout[i]);
+    cryptonote::set_tx_out(0, asset_types[i], 0, rct::rct2pk(output_public_keys[i]), true, view_tags[i], unsigned_tx.vout[i]);
 
   return true;
 }
@@ -589,11 +705,101 @@ static bool try_reconstruct_range_proofs(const int bp_version,
   return false;
 }
 //----------------------------------------------------------------------------------------------------------------------
+static bool set_tx_return_address_information(const cryptonote::account_keys& account_keys,
+                                              size_t change_index,
+                                              crypto::public_key& txkey_pub,
+                                              cryptonote::transaction& unsigned_tx
+                                              )
+{
+  if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER || unsigned_tx.type == cryptonote::transaction_type::STAKE) {
+
+    // Get the output public key for the change output
+    crypto::public_key P_change = crypto::null_pkey;
+    if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER)
+      CHECK_AND_ASSERT_MES(unsigned_tx.vout.size() == 2, false, "Internal error - incorrect number of outputs (!=2) for TRANSFER tx");
+    else if (unsigned_tx.type == cryptonote::transaction_type::STAKE)
+      CHECK_AND_ASSERT_MES(unsigned_tx.vout.size() == 1, false, "Internal error - incorrect number of outputs (!=1) for YIELD tx");
+    CHECK_AND_ASSERT_MES(change_index < unsigned_tx.vout.size(), false, "Internal error - invalid change_index");
+    CHECK_AND_ASSERT_MES(cryptonote::get_output_public_key(unsigned_tx.vout[change_index], P_change), false, "Internal error - failed to get TX change output public key");
+    CHECK_AND_ASSERT_MES(P_change != crypto::null_pkey, false, "Internal error - not found TX change output for TRANSFER tx");
+      
+    // Get the uniqueness for this TX
+    crypto::ec_scalar y;
+    struct {
+      char domain_separator[8];
+      crypto::public_key pubkey;
+    } buf;
+    std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+    std::strncpy(buf.domain_separator, "RETURN", 7);
+    buf.pubkey = P_change;
+    crypto::hash_to_scalar(&buf, sizeof(buf), y);
+
+    hw::device& hwdev = account_keys.get_device();
+  
+    // First, we need to produce the multiplicative inverse of the scalar "y" (aka "y^-1")
+    rct::key key_y        = (rct::key&)(y);
+    rct::key key_inv_y    = invert(key_y);
+    crypto::public_key pk_aP_change = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(P_change), rct::sk2rct(account_keys.m_view_secret_key)));
+
+    // Sanity check that we can reverse the invert safely
+    rct::key key_aP_change = rct::pk2rct(pk_aP_change);
+    rct::key key_F         = rct::scalarmultKey(key_aP_change, key_inv_y);
+    rct::key key_verify    = rct::scalarmultKey(key_F, key_y);
+    CHECK_AND_ASSERT_MES(key_verify == key_aP_change, false, "at get_return_address: failed to verify invert() function with smK() approach");
+
+    if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER) {
+
+      // Store the F point - we do not need to generate a full return address in this instance
+      unsigned_tx.return_address = rct::rct2pk(key_F);
+      
+      // Clear the pubkey, because it isn't used
+      unsigned_tx.return_pubkey = crypto::null_pkey;
+
+    } else if (unsigned_tx.type == cryptonote::transaction_type::STAKE) {
+      
+      // CONVERT / YIELD Semantics
+      // From this point forward, we are departing from the original "return address" scheme
+      // We have to derive the full return address and TX pubkey, because PROTOCOL_TX cannot
+
+      // First, create a secret TX key (= s) - this will be lost at the end of this function, but that's OK
+      crypto::secret_key s = cryptonote::keypair::generate(hw::get_device("default")).sec;
+      
+      // Next, calculate the corresponding TX public key (= sP_change)
+      // This has to be done using smK() call because of g_k_d() performing a torsion clear
+      unsigned_tx.return_pubkey = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(P_change), rct::sk2rct(s)));
+
+      // Next, calculate a derivation using the TX public key and our secret view key
+      crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+      bool r = hwdev.generate_key_derivation(unsigned_tx.return_pubkey, account_keys.m_view_secret_key, derivation);
+      CHECK_AND_ASSERT_MES(r, false, "in get_return_address(): failed to generate_key_derivation(" << unsigned_tx.return_pubkey << ", <view secret key>)");
+
+      // Finally, calculate the onetime address to be used for returns
+      crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
+      r = crypto::derive_public_key(derivation, 0, P_change, out_eph_public_key);
+      CHECK_AND_ASSERT_MES(r, false, "in get_return_address(): failed to derive_public_key(" << derivation << ", " << key_y << ", "<< P_change << ")");
+
+      // Sanity checks
+      crypto::public_key P_change_verify = crypto::null_pkey;
+      r = crypto::derive_subaddress_public_key(out_eph_public_key, derivation, 0, P_change_verify);
+      CHECK_AND_ASSERT_MES(r, false, "in get_return_address(): failed sanity check derive_subaddress_public_key(" << out_eph_public_key << ", " << derivation << ", " << key_y << ", " << P_change_verify << ")");
+      CHECK_AND_ASSERT_MES(P_change == P_change_verify, false, "in get_return_address(): failed sanity check (keys do not match)");
+
+      // All is well - copy the return address
+      unsigned_tx.return_address = out_eph_public_key;
+
+    } else {
+
+      assert(false);
+    }
+  }
+  
+  return true;
+}
 //----------------------------------------------------------------------------------------------------------------------
 static bool set_tx_rct_signatures(
   const std::uint64_t fee,
   const std::vector<cryptonote::tx_source_entry>& sources,
-  const std::vector<cryptonote::tx_destination_entry>& destinations,
+  const std::vector<uint64_t>& destination_amounts,
   const rct::keyV& input_secret_keys,
   const rct::keyV& output_public_keys,
   const rct::keyV& output_amount_secret_keys,
@@ -610,7 +816,7 @@ static bool set_tx_rct_signatures(
   if (rct_config.range_proof_type != rct::RangeProofPaddedBulletproof)
     return false;
 
-  const std::size_t num_destinations = destinations.size();
+  const std::size_t num_destinations = destination_amounts.size();
   const std::size_t num_sources = sources.size();
 
   // rct_signatures component of tx
@@ -633,7 +839,7 @@ static bool set_tx_rct_signatures(
   rv.outPk.resize(num_destinations);
   for (std::size_t i = 0; i < num_destinations; ++i) {
     rv.outPk[i].dest = output_public_keys[i];
-    output_amounts[i] = destinations[i].amount;
+    output_amounts[i] = destination_amounts[i];
     output_amount_masks[i] = genCommitmentMask(output_amount_secret_keys[i]);
     rv.ecdhInfo[i].amount = rct::d2h(output_amounts[i]);
     rct::addKeys2(
@@ -677,35 +883,38 @@ static bool set_tx_rct_signatures(
   if (not reconstruction) {
     a.resize(num_sources);
     rv.p.pseudoOuts.resize(num_sources);
-    a[num_sources - 1] = rct::zero();
+    rct::key difference = rct::zero();
+    rct::key sumpouts = rct::zero();
+    rct::key sumouts = rct::zero();
     for (std::size_t i = 0; i < num_destinations; ++i) {
       sc_add(
-        a[num_sources - 1].bytes,
-        a[num_sources - 1].bytes,
+        sumouts.bytes,
+        sumouts.bytes,
         output_amount_masks[i].bytes
       );
     }
-    for (std::size_t i = 0; i < num_sources - 1; ++i) {
+    for (std::size_t i = 0; i < num_sources; ++i) {
       rct::skGen(a[i]);
-      sc_sub(
-        a[num_sources - 1].bytes,
-        a[num_sources - 1].bytes,
+      sc_add(
+        sumpouts.bytes,
+        sumpouts.bytes,
         a[i].bytes
       );
       rct::genC(rv.p.pseudoOuts[i], a[i], sources[i].amount);
     }
-    rct::genC(
-      rv.p.pseudoOuts[num_sources - 1],
-      a[num_sources - 1],
-      sources[num_sources - 1].amount
-    );
+    sc_sub(difference.bytes, sumpouts.bytes, sumouts.bytes);
+    rct::genC(rv.p_r, difference, 0);
   }
   // check balance if reconstructing the tx
   else {
     rv.p.pseudoOuts = unsigned_tx.rct_signatures.p.pseudoOuts;
+    rv.p_r = unsigned_tx.rct_signatures.p_r;
     if (num_sources != rv.p.pseudoOuts.size())
       return false;
     rct::key balance_accumulator = rct::scalarmultH(rct::d2h(fee));
+    rct::key txnAmountBurntKey = rct::scalarmultH(rct::d2h(unsigned_tx.amount_burnt));
+    rct::addKeys(balance_accumulator, balance_accumulator, rv.p_r);
+    rct::addKeys(balance_accumulator, balance_accumulator, txnAmountBurntKey);
     for (const auto& e: rv.outPk)
       rct::addKeys(balance_accumulator, balance_accumulator, e.mask);
     for (const auto& pseudoOut: rv.p.pseudoOuts)
@@ -828,6 +1037,7 @@ tx_builder_ringct_t::~tx_builder_ringct_t()
 bool tx_builder_ringct_t::init(
   const cryptonote::account_keys& account_keys,
   const std::vector<std::uint8_t>& extra,
+  const cryptonote::transaction_type& tx_type,
   const std::uint64_t unlock_time,
   const std::uint32_t subaddr_account,
   const std::set<std::uint32_t>& subaddr_minor_indices,
@@ -863,6 +1073,12 @@ bool tx_builder_ringct_t::init(
   // misc. fields
   unsigned_tx.version = 2;  //rct = 2
   unsigned_tx.unlock_time = unlock_time;
+  unsigned_tx.type = (tx_type == cryptonote::transaction_type::RETURN) ? cryptonote::TRANSFER : tx_type;
+  unsigned_tx.source_asset_type = "SAL";
+  if (tx_type == cryptonote::transaction_type::BURN)
+    unsigned_tx.destination_asset_type = "BURN";
+  else
+    unsigned_tx.destination_asset_type = "SAL";
 
   // sort inputs
   sort_sources(sources);
@@ -899,7 +1115,11 @@ bool tx_builder_ringct_t::init(
   // prepare outputs
   rct::keyV output_public_keys;
   rct::keyV output_amount_secret_keys;
+  std::vector<std::string> asset_types;
   std::vector<crypto::view_tag> view_tags;
+  std::vector<uint64_t> destination_amounts;
+  bool found_change{false};
+  std::size_t change_index;
   auto output_amount_secret_keys_wiper = epee::misc_utils::create_scope_leave_handler([&]{
     memwipe(static_cast<rct::key *>(output_amount_secret_keys.data()), output_amount_secret_keys.size() * sizeof(rct::key));
   });
@@ -915,25 +1135,44 @@ bool tx_builder_ringct_t::init(
       tx_aux_secret_keys,
       output_public_keys,
       output_amount_secret_keys,
+      asset_types,
       view_tags,
+      destination_amounts,
+      tx_type,
+      found_change,
+      change_index,
       unsigned_tx))
     return false;
 
+  // Check that the change element was found
+  if (!found_change)
+    return false;
+  
   // add inputs to tx
   set_tx_inputs(sources, unsigned_tx);
 
   // add output one-time addresses to tx
   bool set_tx_outputs_result{false};
   if (use_view_tags)
-    set_tx_outputs_result = set_tx_outputs_with_view_tags(output_public_keys, view_tags, unsigned_tx);
+    set_tx_outputs_result = set_tx_outputs_with_view_tags(output_public_keys, asset_types, view_tags, unsigned_tx);
   else
-    set_tx_outputs_result = set_tx_outputs(output_public_keys, unsigned_tx);
+    set_tx_outputs_result = set_tx_outputs(output_public_keys, asset_types, unsigned_tx);
 
   if (not set_tx_outputs_result)
     return false;
 
+  if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER || unsigned_tx.type == cryptonote::transaction_type::STAKE) {
+
+    // Get the tx public key
+    crypto::public_key txkey_pub = crypto::null_pkey;
+    
+    // Calculate the return_address information needed
+    if (not set_tx_return_address_information(account_keys, change_index, txkey_pub, unsigned_tx))
+      return false;
+  }
+
   // prepare input signatures
-  if (not set_tx_rct_signatures(fee, sources, destinations, input_secret_keys, output_public_keys, output_amount_secret_keys,
+  if (not set_tx_rct_signatures(fee, sources, destination_amounts, input_secret_keys, output_public_keys, output_amount_secret_keys,
       rct_config, reconstruction, unsigned_tx, CLSAG_contexts, cached_w))
     return false;
 
