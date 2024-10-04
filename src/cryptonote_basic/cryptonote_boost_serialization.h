@@ -170,13 +170,15 @@ namespace boost
     a & x.vout;
     a & x.extra;
     a & x.type;
-    if (x.type != cryptonote::transaction_type::MINER && x.type != cryptonote::transaction_type::PROTOCOL) {
-      a & x.return_address;
-      a & x.return_pubkey;
-      a & x.source_asset_type;
-      a & x.destination_asset_type;
+    if (x.type != cryptonote::transaction_type::PROTOCOL) {
       a & x.amount_burnt;
-      a & x.amount_slippage_limit;
+      if (x.type != cryptonote::transaction_type::MINER) {
+        a & x.return_address;
+        a & x.return_pubkey;
+        a & x.source_asset_type;
+        a & x.destination_asset_type;
+        a & x.amount_slippage_limit;
+      }
     }
   }
 

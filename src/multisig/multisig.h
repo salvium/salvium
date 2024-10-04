@@ -59,11 +59,14 @@ namespace multisig
     crypto::public_key &L,
     crypto::public_key &R);
   bool generate_multisig_composite_key_image(const cryptonote::account_keys &keys,
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddresses,
-    const crypto::public_key &out_key,
-    const crypto::public_key &tx_public_key,
-    const std::vector<crypto::public_key> &additional_tx_public_keys,
-    std::size_t real_output_index,
-    const std::vector<crypto::key_image> &pkis,
-    crypto::key_image &ki);
+                                             const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddresses,
+                                             const crypto::public_key &out_key,
+                                             const crypto::public_key &tx_public_key,
+                                             const std::vector<crypto::public_key> &additional_tx_public_keys,
+                                             std::size_t real_output_index,
+                                             const std::vector<crypto::key_image> &pkis,
+                                             crypto::key_image &ki,
+                                             const bool use_origin_data,
+                                             const cryptonote::origin_data& origin_tx_data
+                                             );
 } //namespace multisig

@@ -1102,26 +1102,7 @@ namespace cryptonote
         if (sources[i].rct)
           boost::get<txin_to_key>(tx.vin[i]).amount = 0;
       }
-      std::vector<bool> zero_masks;
-      zero_masks.reserve(tx.vout.size());
       for (size_t i = 0; i < tx.vout.size(); ++i) {
-        if (tx.type == cryptonote::transaction_type::STAKE) {
-          uint64_t unlock_time = 0;
-          bool ok = get_output_unlock_time(tx.vout[i], unlock_time);
-          if (!ok) {
-            LOG_ERROR("failed to get output asset type for tx.vout[" << i << "]");
-            return false;
-          }
-          if (unlock_time == 0) {
-            zero_masks.emplace_back(false);
-          } else {
-            zero_masks.emplace_back(true);
-          }
-        } else {
-          zero_masks.emplace_back(false);
-        }
-
-        // Clear the amount in the output
         tx.vout[i].amount = 0;
       }
       
@@ -1136,7 +1117,6 @@ namespace cryptonote
           tx_type,
           source_asset,
           destination_asset_types,
-          zero_masks,
           inamounts,
           outamounts,
           fee,
