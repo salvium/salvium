@@ -200,8 +200,11 @@ namespace cryptonote
     std::vector<uint8_t> extra;
     // TX type
     cryptonote::transaction_type type;
-    // Return address
     crypto::public_key return_address;
+    // Return address list (must be at least 1 and at most BULLETPROOF_MAX_OUTPUTS-1 - the "-1" is for the change output)
+    std::vector<crypto::public_key> return_address_list;
+    //return_address_change_mask
+    std::vector<uint8_t> return_address_change_mask;
     // Return TX public key
     crypto::public_key return_pubkey;
     // Source asset type
@@ -224,8 +227,13 @@ namespace cryptonote
       if (type != cryptonote::transaction_type::PROTOCOL) {
         VARINT_FIELD(amount_burnt)
         if (type != cryptonote::transaction_type::MINER) {
-          FIELD(return_address)
-          FIELD(return_pubkey)
+          if (type == cryptonote::transaction_type::TRANSFER && version >= TRANSACTION_VERSION_N_OUTS) {
+            FIELD(return_address_list)
+            FIELD(return_address_change_mask)
+          } else {
+            FIELD(return_address)
+            FIELD(return_pubkey)
+          }
           FIELD(source_asset_type)
           FIELD(destination_asset_type)
           VARINT_FIELD(amount_slippage_limit)
@@ -244,6 +252,8 @@ namespace cryptonote
       extra.clear();
       type = cryptonote::transaction_type::UNSET;
       return_address = crypto::null_pkey;
+      return_address_list.clear();
+      return_address_change_mask.clear();
       return_pubkey = crypto::null_pkey;
       source_asset_type.clear();
       destination_asset_type.clear();

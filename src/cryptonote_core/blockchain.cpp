@@ -967,7 +967,13 @@ start:
   }
 
   size_t target = get_difficulty_target();
-  difficulty_type diff = next_difficulty(timestamps, difficulties, target);
+  difficulty_type diff;
+  uint8_t version = get_current_hard_fork_version();
+  if (version == 1) {
+    diff = next_difficulty(timestamps, difficulties, target);
+  } else {
+    diff = next_difficulty_v2(timestamps, difficulties, target);
+  }
 
   CRITICAL_REGION_LOCAL1(m_difficulty_lock);
   m_difficulty_for_next_block_top_hash = top_hash;
@@ -1026,6 +1032,7 @@ size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_heig
 
   std::vector<uint64_t> timestamps;
   std::vector<difficulty_type> difficulties;
+  uint8_t version = get_current_hard_fork_version();
   timestamps.reserve(DIFFICULTY_BLOCKS_COUNT + 1);
   difficulties.reserve(DIFFICULTY_BLOCKS_COUNT + 1);
   if (start_height > 1)
@@ -1045,7 +1052,9 @@ size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_heig
   for (uint64_t height = start_height; height <= top_height; ++height)
   {
     size_t target = DIFFICULTY_TARGET_V2;
-    difficulty_type recalculated_diff = next_difficulty(timestamps, difficulties, target);
+    difficulty_type recalculated_diff = (version == 1)
+      ? next_difficulty(timestamps, difficulties, target)
+      : next_difficulty_v2(timestamps, difficulties, target);
 
     boost::multiprecision::uint256_t recalculated_cum_diff_256 = boost::multiprecision::uint256_t(recalculated_diff) + last_cum_diff;
     CHECK_AND_ASSERT_THROW_MES(recalculated_cum_diff_256 <= std::numeric_limits<difficulty_type>::max(), "Difficulty overflow!");
@@ -1299,6 +1308,7 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
   LOG_PRINT_L3("Blockchain::" << __func__);
   std::vector<uint64_t> timestamps;
   std::vector<difficulty_type> cumulative_difficulties;
+  uint8_t version = get_current_hard_fork_version();
 
   // if the alt chain isn't long enough to calculate the difficulty target
   // based on its blocks alone, need to get more blocks from the main chain
@@ -1354,7 +1364,11 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
   size_t target = DIFFICULTY_TARGET_V2;
 
   // calculate the difficulty target for the block and return it
-  return next_difficulty(timestamps, cumulative_difficulties, target);
+  if (version == 1) {
+    return next_difficulty(timestamps, cumulative_difficulties, target);
+  } else {
+    return next_difficulty_v2(timestamps, cumulative_difficulties, target);
+  }
 }
 //------------------------------------------------------------------
 // This function does a sanity check on basic things that all miner
@@ -1448,6 +1462,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
 
   switch (version) {
   case HF_VERSION_BULLETPROOF_PLUS:
+  case HF_VERSION_ENABLE_N_OUTS:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
@@ -3576,6 +3591,43 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
   return true;
 }
 //------------------------------------------------------------------
+bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verification_context &tvc) const
+{
+  LOG_PRINT_L3("Blockchain::" << __func__);
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+
+  const uint8_t hf_version = m_hardfork->get_current_version();
+
+  // Prior to v2, only allow TX v2
+  if (hf_version < HF_VERSION_ENABLE_N_OUTS) {
+
+    // Check for N-out TXs
+    if (tx.version >= TRANSACTION_VERSION_N_OUTS) {
+      MERROR_VER("N-out TXs are not permitted prior to v" + std::to_string(HF_VERSION_ENABLE_N_OUTS));
+      tvc.m_version_mismatch = true;
+      return false;
+    }
+
+    // Check for v1 TXs - genesis block protocol_tx exception required!
+    if (tx.version == 1 && epee::string_tools::pod_to_hex(cryptonote::get_transaction_hash(tx)) == "4f78ff511e860acd03138737a71505eb62eb78b620e180e58c8e13ed0e1e3e19") {
+      MERROR("v1 TXs are not permitted");
+      tvc.m_version_mismatch = true;
+      return false;
+    }
+  }
+
+  // After v2 allow N-out TXs for TRANSFER ONLY
+  if (hf_version >= HF_VERSION_ENABLE_N_OUTS) {
+    if (tx.version >= TRANSACTION_VERSION_N_OUTS && tx.type != cryptonote::transaction_type::TRANSFER) {
+      MERROR("N-out TXs are only permitted for TRANSFER TX type");
+      tvc.m_version_mismatch = true;
+      return false;
+    }
+  }
+  
+  return true;
+}
+//------------------------------------------------------------------
 bool Blockchain::have_tx_keyimges_as_spent(const transaction &tx) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
@@ -3590,7 +3642,7 @@ bool Blockchain::have_tx_keyimges_as_spent(const transaction &tx) const
 bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys, const uint8_t &hf_version)
 {
   PERF_TIMER(expand_transaction_2);
-  CHECK_AND_ASSERT_MES(tx.version == 2, false, "Transaction version is not 2");
+  CHECK_AND_ASSERT_MES(tx.version == 2 || tx.version == 3, false, "Transaction version is not 2/3");
 
   rct::rctSig &rv = tx.rct_signatures;
 
@@ -3779,7 +3831,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     }
 
     // min/max tx version based on HF, and we accept v1 txes if having a non mixable
-    const size_t max_tx_version = (hf_version < HF_VERSION_SLIPPAGE_YIELD) ? 2 : CURRENT_TRANSACTION_VERSION;
+    const size_t max_tx_version = (hf_version >= HF_VERSION_ENABLE_N_OUTS) ? TRANSACTION_VERSION_N_OUTS : TRANSACTION_VERSION_2_OUTS;
     if (tx.version > max_tx_version)
     {
       MERROR_VER("transaction version " << (unsigned)tx.version << " is higher than max accepted version " << max_tx_version);
@@ -6056,7 +6108,7 @@ void Blockchain::cancel()
 }
 
 #if defined(PER_BLOCK_CHECKPOINT)
-static const char expected_block_hashes_hash[] = "7f60b4980ea16b32e3f9fc1959d9d4116ba91f2b067bd70b3e21c44520096d14";
+static const char expected_block_hashes_hash[] = "b8639efef99951207b401131ed9f88e37c856a693d237fc6fad349b929aa1059";
 void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints)
 {
   if (get_checkpoints == nullptr || !m_fast_sync)

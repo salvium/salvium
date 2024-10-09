@@ -259,10 +259,10 @@ namespace cryptonote
       tvc.m_invalid_output = true;
       return false;
     }
-
+    
     // Check the TX type
-    if (tx.type <= cryptonote::transaction_type::UNSET || tx.type > cryptonote::transaction_type::MAX) {
-      LOG_PRINT_L1("Transaction with id= "<< id << " has invalid type " << (uint8_t)tx.type);
+    if (!m_blockchain.check_tx_type_and_version(tx, tvc)) {
+      LOG_PRINT_L1("Transaction with id= "<< id << " has invalid type " << (uint8_t)tx.type << " and/or version " << tx.version);
       tvc.m_verifivation_failed = true;
       return false;
     }

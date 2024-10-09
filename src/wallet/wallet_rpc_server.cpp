@@ -392,6 +392,7 @@ namespace tools
       td.address = d.address(m_wallet->nettype(), pd.m_payment_id);
     }
 
+    entry.asset_type = pd.m_tx.source_asset_type;
     entry.type = "out";
     entry.subaddr_index = { pd.m_subaddr_account, 0 };
     for (uint32_t i: pd.m_subaddr_indices)
@@ -424,6 +425,7 @@ namespace tools
     }
 
     entry.type = is_failed ? "failed" : "pending";
+    entry.asset_type = pd.m_tx.source_asset_type;
     entry.subaddr_index = { pd.m_subaddr_account, 0 };
     for (uint32_t i: pd.m_subaddr_indices)
       entry.subaddr_indices.push_back({pd.m_subaddr_account, i});

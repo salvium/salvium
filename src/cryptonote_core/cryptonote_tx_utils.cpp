@@ -46,6 +46,11 @@ using namespace epee;
 #include "ringct/rctSigs.h"
 #include "oracle/asset_types.h"
 
+extern "C"
+{
+#include "crypto/keccak.h"
+#include "crypto/crypto-ops.h"
+}
 using namespace crypto;
 
 namespace cryptonote
@@ -583,6 +588,7 @@ namespace cryptonote
       // Different forks take a different proportion of the block_reward for stakers
       switch (hard_fork_version) {
       case HF_VERSION_BULLETPROOF_PLUS:
+      case HF_VERSION_ENABLE_N_OUTS:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;
@@ -653,16 +659,17 @@ namespace cryptonote
     tx.set_null();
     amount_keys.clear();
 
-    if (hf_version >= HF_VERSION_SLIPPAGE_YIELD) {
-      tx.version = 3;
+    tx.type = (tx_type == cryptonote::transaction_type::RETURN) ? cryptonote::TRANSFER : tx_type;
+
+    // Configure the correct TX version for the current HF + TX type
+    if (hf_version >= HF_VERSION_ENABLE_N_OUTS && tx.type == cryptonote::transaction_type::TRANSFER) {
+      tx.version = TRANSACTION_VERSION_N_OUTS;
     } else {
       tx.version = 2;
     }
 
     tx.extra = extra;
     crypto::public_key txkey_pub;
-
-    tx.type = (tx_type == cryptonote::transaction_type::RETURN) ? cryptonote::TRANSFER : tx_type;
 
     tx.source_asset_type = source_asset;
     tx.destination_asset_type = dest_asset;
@@ -849,7 +856,7 @@ namespace cryptonote
     uint64_t summary_outs_money = 0;
     //fill outputs
     size_t output_index = 0;
-    size_t change_index = 0;
+    uint8_t change_index = 0;
     for(const tx_destination_entry& dst_entr: destinations)
     {
       CHECK_AND_ASSERT_MES(dst_entr.amount > 0 || tx.version > 1, false, "Destination with wrong amount: " << dst_entr.amount);
@@ -891,7 +898,7 @@ namespace cryptonote
                                            need_additional_txkeys, additional_tx_keys,
                                            additional_tx_public_keys, amount_keys, out_eph_public_key,
                                            use_view_tags, view_tag);
-
+      
       tx_out out;
       cryptonote::set_tx_out(dst_entr.amount, dst_entr.asset_type, dst_entr.is_change ? 0 : unlock_time, out_eph_public_key, use_view_tags, view_tag, out);
       tx.vout.push_back(out);
@@ -902,7 +909,51 @@ namespace cryptonote
 
     remove_field_from_tx_extra(tx.extra, typeid(tx_extra_additional_pub_keys));
 
-    if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE) {
+    if (hf_version >= HF_VERSION_ENABLE_N_OUTS && tx.type == cryptonote::transaction_type::TRANSFER) {
+      
+      // Get the output public key for the change output
+      crypto::public_key P_change = crypto::null_pkey;
+      CHECK_AND_ASSERT_MES(tx.vout.size() >= 2, false, "Internal error - too few outputs for TRANSFER tx");
+      CHECK_AND_ASSERT_MES(cryptonote::get_output_public_key(tx.vout[change_index], P_change), false, "Internal error - failed to get TX change output public key");
+      CHECK_AND_ASSERT_MES(P_change != crypto::null_pkey, false, "Internal error - not found TX change output for TRANSFER tx");
+
+      // Calculate the F points and change mask for every destination
+      for (size_t op_index=0; op_index<tx.vout.size(); ++op_index) {
+
+        // Calculate the y value for return_payment support
+        ec_scalar y;
+        struct {
+          char domain_separator[8];
+          rct::key amount_key;
+        } buf;
+        std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+        std::strncpy(buf.domain_separator, "RETURN", 7);
+        buf.amount_key = amount_keys[op_index];
+        crypto::hash_to_scalar(&buf, sizeof(buf), y);
+        
+        // Now generate the return address (and TX pubkey, although we will discard that)
+        crypto::public_key F = crypto::null_pkey;
+        crypto::public_key F_txpubkey = crypto::null_pkey;
+        CHECK_AND_ASSERT_MES(get_return_address(tx.version, tx.type, y, sender_account_keys, P_change, additional_tx_public_keys[op_index], F, F_txpubkey, hwdev), false, "Failed to get return_address");
+
+        // Push the F point into the TX vector of F points
+        tx.return_address_list.push_back(F);
+
+        // Calculate the encrypted_change_index data for this output
+        struct {
+          char domain_separator[8];
+          rct::key amount_key;
+        } eci_buf;
+        std::memset(eci_buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+        std::strncpy(eci_buf.domain_separator, "CHG_IDX", 8);
+        eci_buf.amount_key = amount_keys[op_index];
+        crypto::secret_key eci_out;
+        keccak((uint8_t *)&eci_buf, sizeof(eci_buf), (uint8_t*)&eci_out, sizeof(eci_out));
+        uint8_t eci_data = change_index ^ eci_out.data[0];
+        tx.return_address_change_mask.push_back(eci_data);
+      }
+
+    } else if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE) {
 
       // Get the output public key for the change output
       crypto::public_key P_change = crypto::null_pkey;
