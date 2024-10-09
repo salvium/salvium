@@ -150,6 +150,7 @@ namespace cryptonote
       FIELD(original)
       VARINT_FIELD(amount)
       FIELD(addr)
+      FIELD(asset_type)
       FIELD(is_subaddress)
       FIELD(is_integrated)
       FIELD(is_change)

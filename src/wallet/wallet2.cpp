@@ -11391,7 +11391,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   
   // Get P_change from the TX
   crypto::public_key P_change = crypto::null_pkey;
-  size_t change_index;
+  uint8_t change_index;
   uint32_t hf_version = get_current_hard_fork();
   if (hf_version >= HF_VERSION_ENABLE_N_OUTS && td_origin.m_tx.version >= TRANSACTION_VERSION_N_OUTS) {
 
@@ -11452,6 +11452,11 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
 
     return_address = td_origin.m_tx.return_address;
   }
+  
+  // Sanity check that we aren't attempting to return our own TX change output to ourselves
+  THROW_WALLET_EXCEPTION_IF(change_index == td_origin.m_internal_output_index, error::wallet_internal_error, tr("Attempting to return change to ourself"));
+
+  // Sanity check that we can obtain the change output from the origin TX
   THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(td_origin.m_tx.vout[change_index], P_change),
                             error::wallet_internal_error,
                             tr("Failed to identify change output"));
@@ -11461,10 +11466,6 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   rct::key key_F         = (rct::key&)(return_address);
   rct::key key_yF        = rct::scalarmultKey(key_F, key_y);
 
-  // Sanity check that we aren't attempting to return our own TX output to ourselves
-  rct::key key_yF_check   = rct::scalarmultKey(rct::sk2rct(m_account.get_keys().m_view_secret_key), rct::pk2rct(P_change));
-  THROW_WALLET_EXCEPTION_IF(key_yF_check == key_yF, error::wallet_internal_error, tr("Attempting to return a payment to ourself"));
-  
   // Build the subaddress to send the return to
   cryptonote::account_public_address address;
   address.m_spend_public_key = P_change;
