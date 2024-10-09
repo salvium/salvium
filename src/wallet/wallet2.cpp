@@ -11265,7 +11265,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
 
   // gather all dust and non-dust outputs of specified subaddress (if any) and below specified threshold (if any)
   bool fund_found = false;
-  for (size_t idx = 0; idx < m_transfers_indices[asset_type].size(); idx++)
+  //for (size_t idx = 0; idx < m_transfers_indices[asset_type].size(); idx++)
+  for (const auto& idx: m_transfers_indices[asset_type])
   {
     size_t i = m_transfers_indices[asset_type][idx];
     const transfer_details& td = m_transfers[i];
