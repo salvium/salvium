@@ -707,6 +707,7 @@ static bool try_reconstruct_range_proofs(const int bp_version,
 //----------------------------------------------------------------------------------------------------------------------
 static bool set_tx_return_address_information(const uint8_t hf_version,
                                               const cryptonote::account_keys& account_keys,
+                                              const bool reconstruction,
                                               size_t change_index,
                                               crypto::public_key& txkey_pub,
                                               cryptonote::transaction& unsigned_tx
@@ -1238,7 +1239,7 @@ bool tx_builder_ringct_t::init(
     crypto::public_key txkey_pub = crypto::null_pkey;
     
     // Calculate the return_address information needed
-    if (not set_tx_return_address_information(hf_version, account_keys, change_index, txkey_pub, unsigned_tx))
+    if (not set_tx_return_address_information(hf_version, account_keys, reconstruction, change_index, txkey_pub, unsigned_tx))
       return false;
   }
 
