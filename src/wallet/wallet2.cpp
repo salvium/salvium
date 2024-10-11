@@ -8290,6 +8290,7 @@ bool wallet2::sign_multisig_tx(multisig_tx_set &exported_txs, std::vector<crypto
         m_account.get_keys(),
         ptx.construction_data.extra,
         ptx.tx.type,
+        get_current_hard_fork(),
         ptx.construction_data.unlock_time,
         ptx.construction_data.subaddr_account,
         ptx.construction_data.subaddr_indices,
@@ -10094,6 +10095,7 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
   LOG_PRINT_L2("constructing tx");
   auto sources_copy = sources;
   multisig::signing::tx_builder_ringct_t multisig_tx_builder;
+  uint32_t hf_version = get_current_hard_fork();
   if (m_multisig) {
     // prepare the core part of a multisig tx (many tx attempts for different signer groups can be spun off this core piece)
     std::set<std::uint32_t> subaddr_minor_indices;
@@ -10106,6 +10108,7 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
       not multisig_tx_builder.init(m_account.get_keys(),
         extra,
         tx_type,
+        hf_version,
         unlock_time,
         subaddr_account,
         subaddr_minor_indices,
@@ -10125,7 +10128,6 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
     );
   }
   else {
-    uint32_t hf_version = get_current_hard_fork();
     // Get the circulating supply data
     std::vector<std::pair<std::string, std::string>> circ_amounts;
     THROW_WALLET_EXCEPTION_IF(!get_circulating_supply(circ_amounts), error::wallet_internal_error, "Failed to get circulating supply");
