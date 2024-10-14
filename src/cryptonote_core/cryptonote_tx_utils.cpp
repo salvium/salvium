@@ -577,10 +577,10 @@ namespace cryptonote
     uint64_t amount = block_reward;
     summary_amounts += amount;
 
-      bool use_view_tags = hard_fork_version >= HF_VERSION_VIEW_TAGS;
-      crypto::view_tag view_tag;
-      if (use_view_tags)
-        crypto::derive_view_tag(derivation, 0, view_tag);
+    bool use_view_tags = hard_fork_version >= HF_VERSION_VIEW_TAGS;
+    crypto::view_tag view_tag;
+    if (use_view_tags)
+      crypto::derive_view_tag(derivation, 0, view_tag);
 
     // Should we award some of the block reward to the stakers?
     if (height != 0) {

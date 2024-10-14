@@ -1248,8 +1248,6 @@ bool tx_builder_ringct_t::init(
       rct_config, reconstruction, unsigned_tx, CLSAG_contexts, cached_w))
     return false;
 
-  MCINFO("tx_builder_ringct_t::init()", "transaction_created: " << get_transaction_hash(unsigned_tx) << ENDL << obj_to_json_str(unsigned_tx) << ENDL);
-  
   initialized = true;
   return true;
 }
