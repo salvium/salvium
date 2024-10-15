@@ -2998,6 +2998,7 @@ namespace cryptonote
   //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::on_get_yield_info(const COMMAND_RPC_GET_YIELD_INFO::request& req, COMMAND_RPC_GET_YIELD_INFO::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
   {
+    CHECK_CORE_READY();
     PERF_TIMER(on_get_yield_info);
     uint64_t height = m_core.get_current_blockchain_height();
     std::map<uint64_t, yield_block_info> ybi_cache;
