@@ -253,7 +253,7 @@ namespace cryptonote {
     // N=45, 55, 70, 90, 120 for T=600, 240, 120, 90, and 60
 
     const int64_t T = static_cast<int64_t>(target_seconds);
-    size_t N = DIFFICULTY_WINDOW;
+    size_t N = DIFFICULTY_WINDOW_V2;
 
     if (timestamps.size() > N) {
       timestamps.resize(N + 1);
@@ -261,7 +261,7 @@ namespace cryptonote {
     }
     size_t n = timestamps.size();
     assert(n == cumulative_difficulties.size());
-    assert(n <= DIFFICULTY_WINDOW);
+    assert(n <= DIFFICULTY_WINDOW_V2);
     // If new coin, just "give away" first 5 blocks at low difficulty
     if ( n < 6 ) { return  1; }
     // If height "n" is from 6 to N, then reset N to n-1.
