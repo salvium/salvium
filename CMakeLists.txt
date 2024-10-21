@@ -1081,6 +1081,11 @@ set(BOOST_COMPONENTS system filesystem thread date_time chrono regex serializati
 if (WIN32)
   list(APPEND BOOST_COMPONENTS locale)
 endif()
+
+if (POLICY CMP0167)
+  cmake_policy(SET CMP0167 OLD)
+endif()
+
 find_package(Boost 1.58 QUIET REQUIRED COMPONENTS ${BOOST_COMPONENTS})
 add_definitions(-DBOOST_ASIO_ENABLE_SEQUENTIAL_STRAND_ALLOCATION)
 add_definitions(-DBOOST_NO_AUTO_PTR)
