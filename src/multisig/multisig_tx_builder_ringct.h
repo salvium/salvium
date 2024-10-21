@@ -73,6 +73,7 @@ public:
     const cryptonote::account_keys& account_keys,
     const std::vector<std::uint8_t>& extra,
     const cryptonote::transaction_type& type,
+    const std::uint8_t hf_version,
     const std::uint64_t unlock_time,
     const std::uint32_t subaddr_account,
     const std::set<std::uint32_t>& subaddr_minor_indices,

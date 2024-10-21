@@ -705,7 +705,9 @@ static bool try_reconstruct_range_proofs(const int bp_version,
   return false;
 }
 //----------------------------------------------------------------------------------------------------------------------
-static bool set_tx_return_address_information(const cryptonote::account_keys& account_keys,
+static bool set_tx_return_address_information(const uint8_t hf_version,
+                                              const cryptonote::account_keys& account_keys,
+                                              const bool reconstruction,
                                               size_t change_index,
                                               crypto::public_key& txkey_pub,
                                               cryptonote::transaction& unsigned_tx
@@ -715,10 +717,15 @@ static bool set_tx_return_address_information(const cryptonote::account_keys& ac
 
     // Get the output public key for the change output
     crypto::public_key P_change = crypto::null_pkey;
-    if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER)
-      CHECK_AND_ASSERT_MES(unsigned_tx.vout.size() == 2, false, "Internal error - incorrect number of outputs (!=2) for TRANSFER tx");
-    else if (unsigned_tx.type == cryptonote::transaction_type::STAKE)
-      CHECK_AND_ASSERT_MES(unsigned_tx.vout.size() == 1, false, "Internal error - incorrect number of outputs (!=1) for YIELD tx");
+    if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER) {
+      if (hf_version >= HF_VERSION_ENABLE_N_OUTS) {
+        CHECK_AND_ASSERT_MES(unsigned_tx.vout.size() >= 2, false, "Internal error - incorrect number of outputs (<2) for TRANSFER tx");
+      } else {
+        CHECK_AND_ASSERT_MES(unsigned_tx.vout.size() == 2, false, "Internal error - incorrect number of outputs (!=2) for TRANSFER tx");
+      }
+    } else if (unsigned_tx.type == cryptonote::transaction_type::STAKE) {
+      CHECK_AND_ASSERT_MES(unsigned_tx.vout.size() == 1, false, "Internal error - incorrect number of outputs (!=1) for STAKE tx");
+    }
     CHECK_AND_ASSERT_MES(change_index < unsigned_tx.vout.size(), false, "Internal error - invalid change_index");
     CHECK_AND_ASSERT_MES(cryptonote::get_output_public_key(unsigned_tx.vout[change_index], P_change), false, "Internal error - failed to get TX change output public key");
     CHECK_AND_ASSERT_MES(P_change != crypto::null_pkey, false, "Internal error - not found TX change output for TRANSFER tx");
@@ -750,10 +757,12 @@ static bool set_tx_return_address_information(const cryptonote::account_keys& ac
     if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER) {
 
       // Store the F point - we do not need to generate a full return address in this instance
-      unsigned_tx.return_address = rct::rct2pk(key_F);
+      if (not reconstruction)
+        unsigned_tx.return_address = rct::rct2pk(key_F);
       
       // Clear the pubkey, because it isn't used
-      unsigned_tx.return_pubkey = crypto::null_pkey;
+      if (not reconstruction)
+        unsigned_tx.return_pubkey = crypto::null_pkey;
 
     } else if (unsigned_tx.type == cryptonote::transaction_type::STAKE) {
       
@@ -766,7 +775,8 @@ static bool set_tx_return_address_information(const cryptonote::account_keys& ac
       
       // Next, calculate the corresponding TX public key (= sP_change)
       // This has to be done using smK() call because of g_k_d() performing a torsion clear
-      unsigned_tx.return_pubkey = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(P_change), rct::sk2rct(s)));
+      if (not reconstruction)
+        unsigned_tx.return_pubkey = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(P_change), rct::sk2rct(s)));
 
       // Next, calculate a derivation using the TX public key and our secret view key
       crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
@@ -785,7 +795,8 @@ static bool set_tx_return_address_information(const cryptonote::account_keys& ac
       CHECK_AND_ASSERT_MES(P_change == P_change_verify, false, "in get_return_address(): failed sanity check (keys do not match)");
 
       // All is well - copy the return address
-      unsigned_tx.return_address = out_eph_public_key;
+      if (not reconstruction)
+        unsigned_tx.return_address = out_eph_public_key;
 
     } else {
 
@@ -1038,6 +1049,7 @@ bool tx_builder_ringct_t::init(
   const cryptonote::account_keys& account_keys,
   const std::vector<std::uint8_t>& extra,
   const cryptonote::transaction_type& tx_type,
+  const std::uint8_t hf_version,
   const std::uint64_t unlock_time,
   const std::uint32_t subaddr_account,
   const std::set<std::uint32_t>& subaddr_minor_indices,
@@ -1070,8 +1082,13 @@ bool tx_builder_ringct_t::init(
   // decide if view tags are needed
   const bool use_view_tags{view_tag_required(rct_config.bp_version)};
 
+  // Configure the correct TX version for the current HF + TX type
+  if (hf_version >= HF_VERSION_ENABLE_N_OUTS && tx_type == cryptonote::transaction_type::TRANSFER) {
+    unsigned_tx.version = TRANSACTION_VERSION_N_OUTS;
+  } else {
+    unsigned_tx.version = 2;
+  }
   // misc. fields
-  unsigned_tx.version = 2;  //rct = 2
   unsigned_tx.unlock_time = unlock_time;
   unsigned_tx.type = (tx_type == cryptonote::transaction_type::RETURN) ? cryptonote::TRANSFER : tx_type;
   unsigned_tx.source_asset_type = "SAL";
@@ -1161,13 +1178,68 @@ bool tx_builder_ringct_t::init(
   if (not set_tx_outputs_result)
     return false;
 
-  if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER || unsigned_tx.type == cryptonote::transaction_type::STAKE) {
+  if (hf_version >= HF_VERSION_ENABLE_N_OUTS && unsigned_tx.type == cryptonote::transaction_type::TRANSFER) {
+    
+    // Get the output public key for the change output
+    crypto::public_key P_change = crypto::null_pkey;
+    CHECK_AND_ASSERT_MES(unsigned_tx.vout.size() >= 2, false, "Internal error - too few outputs for multisig TRANSFER tx");
+    CHECK_AND_ASSERT_MES(cryptonote::get_output_public_key(unsigned_tx.vout[change_index], P_change), false, "Internal error - failed to get multisig TX change output public key");
+    CHECK_AND_ASSERT_MES(P_change != crypto::null_pkey, false, "Internal error - not found TX change output for multisig TRANSFER tx");
+
+    // Calculate the F points and change mask for every destination
+    for (size_t op_index=0; op_index<unsigned_tx.vout.size(); ++op_index) {
+
+      // Calculate the y value for return_payment support
+      crypto::ec_scalar y;
+      struct {
+        char domain_separator[8];
+        rct::key amount_key;
+      } buf;
+      std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+      std::strncpy(buf.domain_separator, "RETURN", 7);
+      buf.amount_key = output_amount_secret_keys[op_index];
+      crypto::hash_to_scalar(&buf, sizeof(buf), y);
+        
+      // Now generate the return address EC point
+      // F = (y^-1).a.P_change
+
+      // First, we need to produce the multiplicative inverse of the scalar "y" (aka "y^-1")
+      rct::key key_y        = (rct::key&)(y);
+      rct::key key_inv_y    = invert(key_y);
+      crypto::public_key pk_aP_change = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(P_change), rct::sk2rct(account_keys.m_view_secret_key)));
+
+      // Sanity check that we can reverse the invert safely
+      rct::key key_aP_change = rct::pk2rct(pk_aP_change);
+      rct::key key_F         = rct::scalarmultKey(key_aP_change, key_inv_y);
+      rct::key key_verify    = rct::scalarmultKey(key_F, key_y);
+      CHECK_AND_ASSERT_MES(key_verify == key_aP_change, false, "at get_return_address: failed to verify invert() function with smK() approach");
+
+      // Push the F point into the TX vector of F points
+      if (not reconstruction)
+        unsigned_tx.return_address_list.push_back(rct::rct2pk(key_F));
+
+      // Calculate the encrypted_change_index data for this output
+      struct {
+        char domain_separator[8];
+        rct::key amount_key;
+      } eci_buf;
+      std::memset(eci_buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+      std::strncpy(eci_buf.domain_separator, "CHG_IDX", 8);
+      eci_buf.amount_key = output_amount_secret_keys[op_index];
+      crypto::secret_key eci_out;
+      keccak((uint8_t *)&eci_buf, sizeof(eci_buf), (uint8_t*)&eci_out, sizeof(eci_out));
+      uint8_t eci_data = change_index ^ eci_out.data[0];
+      if (not reconstruction)
+        unsigned_tx.return_address_change_mask.push_back(eci_data);
+    }
+
+  } else if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER || unsigned_tx.type == cryptonote::transaction_type::STAKE) {
 
     // Get the tx public key
     crypto::public_key txkey_pub = crypto::null_pkey;
     
     // Calculate the return_address information needed
-    if (not set_tx_return_address_information(account_keys, change_index, txkey_pub, unsigned_tx))
+    if (not set_tx_return_address_information(hf_version, account_keys, reconstruction, change_index, txkey_pub, unsigned_tx))
       return false;
   }
 

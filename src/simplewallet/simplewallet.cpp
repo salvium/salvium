@@ -7249,7 +7249,7 @@ bool simple_wallet::locked_transfer(const std::vector<std::string> &args_)
   // TODO: add locked versions
   if (args_.size() < 2)
   {
-    PRINT_USAGE(USAGE_TRANSFER);
+    PRINT_USAGE(USAGE_LOCKED_TRANSFER);
     return true;
   }
 
@@ -8043,10 +8043,17 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
       return true;
     }
 
-    // Verify we have a valid return_address and tx_pubkey
-    if (td.m_tx.return_address == crypto::null_pkey || td.m_tx.return_pubkey != crypto::null_pkey) {
-      fail_msg_writer() << tr("invalid return_address/return_pubkey for txid ") << args_[0];
-      return true;
+    if (td.m_tx.version >= HF_VERSION_ENABLE_N_OUTS) {
+      if (td.m_tx.return_address_list.empty() || td.m_tx.return_address_change_mask.empty()) {
+        fail_msg_writer() << tr("invalid return_address_list for txid ") << args_[0];
+        return true;
+      }
+    } else {
+      // Verify we have a valid return_address and tx_pubkey
+      if (td.m_tx.return_address == crypto::null_pkey || td.m_tx.return_pubkey != crypto::null_pkey) {
+        fail_msg_writer() << tr("invalid return_address/return_pubkey for txid ") << args_[0];
+        return true;
+      }
     }
 
     // Check that we have the key image information, and that it is usable

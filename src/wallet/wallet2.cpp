@@ -8290,6 +8290,7 @@ bool wallet2::sign_multisig_tx(multisig_tx_set &exported_txs, std::vector<crypto
         m_account.get_keys(),
         ptx.construction_data.extra,
         ptx.tx.type,
+        get_current_hard_fork(),
         ptx.construction_data.unlock_time,
         ptx.construction_data.subaddr_account,
         ptx.construction_data.subaddr_indices,
@@ -10094,6 +10095,7 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
   LOG_PRINT_L2("constructing tx");
   auto sources_copy = sources;
   multisig::signing::tx_builder_ringct_t multisig_tx_builder;
+  uint32_t hf_version = get_current_hard_fork();
   if (m_multisig) {
     // prepare the core part of a multisig tx (many tx attempts for different signer groups can be spun off this core piece)
     std::set<std::uint32_t> subaddr_minor_indices;
@@ -10106,6 +10108,7 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
       not multisig_tx_builder.init(m_account.get_keys(),
         extra,
         tx_type,
+        hf_version,
         unlock_time,
         subaddr_account,
         subaddr_minor_indices,
@@ -10125,7 +10128,6 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
     );
   }
   else {
-    uint32_t hf_version = get_current_hard_fork();
     // Get the circulating supply data
     std::vector<std::pair<std::string, std::string>> circ_amounts;
     THROW_WALLET_EXCEPTION_IF(!get_circulating_supply(circ_amounts), error::wallet_internal_error, "Failed to get circulating supply");
@@ -11265,8 +11267,10 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
 
   // gather all dust and non-dust outputs of specified subaddress (if any) and below specified threshold (if any)
   bool fund_found = false;
-  for (size_t i = 0; i < m_transfers.size(); ++i)
+  //for (size_t idx = 0; idx < m_transfers_indices[asset_type].size(); idx++)
+  for (const auto& i: m_transfers_indices[asset_type])
   {
+    //size_t i = m_transfers_indices[asset_type][idx];
     const transfer_details& td = m_transfers[i];
     if (m_ignore_fractional_outputs && td.amount() < fractional_threshold)
     {
@@ -11337,9 +11341,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_single(const crypt
 std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector<size_t> transfers_indices)
 {
   // Get the asset_type and associated information
-  THROW_WALLET_EXCEPTION_IF(transfers_indices.empty() || transfers_indices.size()>1, error::wallet_internal_error, "Incorrect number of transfers_indices on return_payment");
+  THROW_WALLET_EXCEPTION_IF(transfers_indices.empty() || transfers_indices.size()>1, error::wallet_internal_error, tr("Incorrect number of transfers_indices on return_payment"));
   size_t idx = transfers_indices[0];
-  THROW_WALLET_EXCEPTION_IF(idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate return_payment origin index in m_transfers");
+  THROW_WALLET_EXCEPTION_IF(idx >= get_num_transfer_details(), error::wallet_internal_error, tr("cannot locate return_payment origin index in m_transfers"));
   const transfer_details& td_origin = get_transfer_details(idx);
   const std::string asset_type = td_origin.m_tx.source_asset_type;
   bool is_subaddress = true;
@@ -11350,24 +11354,86 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   uint32_t priority = adjust_priority(0);
   std::vector<uint8_t> extra; // No need for a TX extra beyond that which will be calculated herein
 
+  // To return a payment, we need to know the y value to process the F value
+  // ...but the y value is calculated differently depending on the original TX
+  ec_scalar y;
+  crypto::public_key return_address = null_pkey;
+  
   // Get P_change from the TX
   crypto::public_key P_change = crypto::null_pkey;
-  size_t change_index = (td_origin.m_internal_output_index == 0) ? 1 : 0;
-  THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(td_origin.m_tx.vout[change_index], P_change), error::wallet_internal_error, "Failed to identify change output");
+  uint8_t change_index;
+  uint32_t hf_version = get_current_hard_fork();
+  if (hf_version >= HF_VERSION_ENABLE_N_OUTS && td_origin.m_tx.version >= TRANSACTION_VERSION_N_OUTS) {
 
+    // Calculate z_i (the shared secret between sender and ourselves for the original TX)
+    crypto::public_key txkey_pub = null_pkey; // R
+    const std::vector<crypto::public_key> in_additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(td_origin.m_tx);
+    if (in_additional_tx_pub_keys.size() != 0) {
+      THROW_WALLET_EXCEPTION_IF(in_additional_tx_pub_keys.size() != td_origin.m_tx.vout.size(),
+                                error::wallet_internal_error,
+                                tr("at create_transactions_return(): incorrect number of additional TX pubkeys in origin TX for return_payment"));
+      txkey_pub = in_additional_tx_pub_keys[td_origin.m_internal_output_index];
+    } else {
+      txkey_pub = get_tx_pub_key_from_extra(td_origin.m_tx);
+    }
+    crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+    THROW_WALLET_EXCEPTION_IF(!generate_key_derivation(txkey_pub, m_account.get_keys().m_view_secret_key, derivation),
+                              error::wallet_internal_error,
+                              tr("at create_transactions_return(): failed to generate_key_derivation"));
+    crypto::secret_key z_i;
+    derivation_to_scalar(derivation, td_origin.m_internal_output_index, z_i);
+    
+    // Calculate the y value for return_payment support
+    struct {
+      char domain_separator[8];
+      rct::key amount_key;
+    } buf;
+    std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+    std::strncpy(buf.domain_separator, "RETURN", 7);
+    buf.amount_key = rct::sk2rct(z_i);
+    crypto::hash_to_scalar(&buf, sizeof(buf), y);
+        
+    // The change_index needs decoding too
+    uint8_t eci_data = td_origin.m_tx.return_address_change_mask[td_origin.m_internal_output_index];
+
+    // Calculate the encrypted_change_index data for this output
+    std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+    std::strncpy(buf.domain_separator, "CHG_IDX", 8);
+    crypto::secret_key eci_out;
+    keccak((uint8_t *)&buf, sizeof(buf), (uint8_t*)&eci_out, sizeof(eci_out));
+    change_index = eci_data ^ eci_out.data[0];
+
+    return_address = td_origin.m_tx.return_address_list[td_origin.m_internal_output_index];
+    
+  } else {
+    
+    // Calculate y
+    struct {
+      char domain_separator[8];
+      crypto::public_key pubkey;
+    } buf;
+    std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+    std::strncpy(buf.domain_separator, "RETURN", 6);
+    buf.pubkey = P_change;
+    crypto::hash_to_scalar(&buf, sizeof(buf), y);
+
+    // Change index is the one we didn't receive
+    change_index = (td_origin.m_internal_output_index == 0) ? 1 : 0;
+
+    return_address = td_origin.m_tx.return_address;
+  }
+  
+  // Sanity check that we aren't attempting to return our own TX change output to ourselves
+  THROW_WALLET_EXCEPTION_IF(change_index == td_origin.m_internal_output_index, error::wallet_internal_error, tr("Attempting to return change to ourself"));
+
+  // Sanity check that we can obtain the change output from the origin TX
+  THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(td_origin.m_tx.vout[change_index], P_change),
+                            error::wallet_internal_error,
+                            tr("Failed to identify change output"));
+  
   // Calculate yF
-  ec_scalar y;
-  struct {
-    char domain_separator[8];
-    crypto::public_key pubkey;
-  } buf;
-  std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-  std::strncpy(buf.domain_separator, "RETURN", 6);
-  buf.pubkey = P_change;
-  crypto::hash_to_scalar(&buf, sizeof(buf), y);
-
   rct::key key_y         = (rct::key&)(y);
-  rct::key key_F         = (rct::key&)(td_origin.m_tx.return_address);
+  rct::key key_F         = (rct::key&)(return_address);
   rct::key key_yF        = rct::scalarmultKey(key_F, key_y);
 
   // Build the subaddress to send the return to
@@ -11514,7 +11580,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
       if (outputs > 1)
         tx.dsts.push_back(tx_destination_entry(1, address, is_subaddress));
 
-      THROW_WALLET_EXCEPTION_IF(needed_fee > available_for_fee, error::wallet_internal_error, "Transaction cannot pay for itself");
+      THROW_WALLET_EXCEPTION_IF(needed_fee > available_for_fee, error::wallet_internal_error, tr("Transaction cannot pay for itself"));
 
       do {
         LOG_PRINT_L2("We made a tx, adjusting fee and saving it, we need " << print_money(needed_fee) << " and we have " << print_money(test_ptx.fee));
@@ -11610,7 +11676,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
   }
   std::vector<cryptonote::tx_destination_entry> synthetic_dsts(1, cryptonote::tx_destination_entry("", a, address, is_subaddress, tx_type == cryptonote::transaction_type::RETURN));
   synthetic_dsts.back().asset_type = asset_type;
-  THROW_WALLET_EXCEPTION_IF(!sanity_check(ptx_vector, synthetic_dsts), error::wallet_internal_error, "Created transaction(s) failed sanity check");
+  THROW_WALLET_EXCEPTION_IF(!sanity_check(ptx_vector, synthetic_dsts), error::wallet_internal_error, tr("Created transaction(s) failed sanity check"));
 
   // if we made it this far, we're OK to actually send the transactions
   return ptx_vector;

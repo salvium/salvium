@@ -273,8 +273,13 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
   if (tx.type != cryptonote::transaction_type::PROTOCOL) {
     INSERT_INTO_JSON_OBJECT(dest, amount_burnt, tx.amount_burnt);
     if (tx.type != cryptonote::transaction_type::MINER) {
-      INSERT_INTO_JSON_OBJECT(dest, return_address, tx.return_address);
-      INSERT_INTO_JSON_OBJECT(dest, return_pubkey, tx.return_pubkey);
+      if (tx.type == cryptonote::transaction_type::TRANSFER && tx.version >= TRANSACTION_VERSION_N_OUTS) {
+        INSERT_INTO_JSON_OBJECT(dest, return_address_list, tx.return_address_list);
+        INSERT_INTO_JSON_OBJECT(dest, return_address_change_mask, tx.return_address_change_mask);
+      } else {
+        INSERT_INTO_JSON_OBJECT(dest, return_address, tx.return_address);
+        INSERT_INTO_JSON_OBJECT(dest, return_pubkey, tx.return_pubkey);
+      }
       INSERT_INTO_JSON_OBJECT(dest, source_asset_type, tx.source_asset_type);
       INSERT_INTO_JSON_OBJECT(dest, destination_asset_type, tx.destination_asset_type);
       INSERT_INTO_JSON_OBJECT(dest, amount_slippage_limit, tx.amount_slippage_limit);
@@ -308,8 +313,13 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
   if (tx.type != cryptonote::transaction_type::PROTOCOL) {
     GET_FROM_JSON_OBJECT(val, tx.amount_burnt, amount_burnt);
     if (tx.type != cryptonote::transaction_type::MINER) {
-      GET_FROM_JSON_OBJECT(val, tx.return_address, return_address);
-      GET_FROM_JSON_OBJECT(val, tx.return_pubkey, return_pubkey);
+      if (tx.type == cryptonote::transaction_type::TRANSFER && tx.version >= TRANSACTION_VERSION_N_OUTS) {
+        GET_FROM_JSON_OBJECT(val, tx.return_address_list, return_address_list);
+        GET_FROM_JSON_OBJECT(val, tx.return_address_change_mask, return_address_change_mask);
+      } else {
+        GET_FROM_JSON_OBJECT(val, tx.return_address, return_address);
+        GET_FROM_JSON_OBJECT(val, tx.return_pubkey, return_pubkey);
+      }
       GET_FROM_JSON_OBJECT(val, tx.source_asset_type, source_asset_type);
       GET_FROM_JSON_OBJECT(val, tx.destination_asset_type, destination_asset_type);
       GET_FROM_JSON_OBJECT(val, tx.amount_slippage_limit, amount_slippage_limit);
