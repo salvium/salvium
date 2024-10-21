@@ -1691,7 +1691,7 @@ bool simple_wallet::export_raw_multisig(const std::vector<std::string> &args)
     for (auto &ptx: txs.m_ptx)
     {
       const crypto::hash txid = cryptonote::get_transaction_hash(ptx.tx);
-      const std::string filename = std::string("raw_multisig_monero_tx_") + epee::string_tools::pod_to_hex(txid);
+      const std::string filename = std::string("raw_multisig_salvium_tx_") + epee::string_tools::pod_to_hex(txid);
       if (!filenames.empty())
         filenames += ", ";
       filenames += filename;
@@ -3432,7 +3432,7 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::sign_transfer, _1),
                            tr(USAGE_SIGN_TRANSFER),
                            tr("Sign a transaction from a file. If the parameter \"export_raw\" is specified, transaction raw hex data suitable for the daemon RPC /sendrawtransaction is exported.\n"
-                              "Use the parameter <filename> to specify the file to read from. If not specified, the default \"unsigned_monero_tx\" will be used."));
+                              "Use the parameter <filename> to specify the file to read from. If not specified, the default \"unsigned_salvium_tx\" will be used."));
   m_cmd_binder.set_handler("submit_transfer",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::submit_transfer, _1),
                            tr("Submit a signed transaction from a file."));
@@ -7141,7 +7141,7 @@ bool simple_wallet::transfer_main(
     }
     else if (m_wallet->multisig())
     {
-      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_monero_tx");
+      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_salvium_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
@@ -7149,7 +7149,7 @@ bool simple_wallet::transfer_main(
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_monero_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_salvium_tx";
       }
     }
     else if (m_wallet->get_account().get_device().has_tx_cold_sign())
@@ -7178,7 +7178,7 @@ bool simple_wallet::transfer_main(
     }
     else if (m_wallet->watch_only())
     {
-      bool r = m_wallet->save_tx(ptx_vector, "unsigned_monero_tx");
+      bool r = m_wallet->save_tx(ptx_vector, "unsigned_salvium_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
@@ -7186,7 +7186,7 @@ bool simple_wallet::transfer_main(
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_monero_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_salvium_tx";
       }
     }
     else
@@ -7344,26 +7344,26 @@ bool simple_wallet::sweep_unmixable(const std::vector<std::string> &args_)
     if (m_wallet->multisig())
     {
       CHECK_MULTISIG_ENABLED();
-      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_monero_tx");
+      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_salvium_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_monero_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_salvium_tx";
       }
     }
     else if (m_wallet->watch_only())
     {
-      bool r = m_wallet->save_tx(ptx_vector, "unsigned_monero_tx");
+      bool r = m_wallet->save_tx(ptx_vector, "unsigned_salvium_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_monero_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_salvium_tx";
       }
     }
     else
@@ -7652,14 +7652,14 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
     if (m_wallet->multisig())
     {
       CHECK_MULTISIG_ENABLED();
-      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_monero_tx");
+      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_salvium_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_monero_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_salvium_tx";
       }
     }
     else if (m_wallet->get_account().get_device().has_tx_cold_sign())
@@ -7689,14 +7689,14 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
     }
     else if (m_wallet->watch_only())
     {
-      bool r = m_wallet->save_tx(ptx_vector, "unsigned_monero_tx");
+      bool r = m_wallet->save_tx(ptx_vector, "unsigned_salvium_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_monero_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_salvium_tx";
       }
     }
     else
@@ -7887,14 +7887,14 @@ bool simple_wallet::sweep_single(const std::vector<std::string> &args_)
     if (m_wallet->multisig())
     {
       CHECK_MULTISIG_ENABLED();
-      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_monero_tx");
+      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_salvium_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_monero_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_salvium_tx";
       }
     }
     else if (m_wallet->get_account().get_device().has_tx_cold_sign())
@@ -7925,14 +7925,14 @@ bool simple_wallet::sweep_single(const std::vector<std::string> &args_)
     }
     else if (m_wallet->watch_only())
     {
-      bool r = m_wallet->save_tx(ptx_vector, "unsigned_monero_tx");
+      bool r = m_wallet->save_tx(ptx_vector, "unsigned_salvium_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_monero_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_salvium_tx";
       }
     }
     else
@@ -8110,14 +8110,14 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
     if (m_wallet->multisig())
     {
       CHECK_MULTISIG_ENABLED();
-      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_monero_tx");
+      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_salvium_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_monero_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_salvium_tx";
       }
     }
     else if (m_wallet->get_account().get_device().has_tx_cold_sign())
@@ -8152,14 +8152,14 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
     }
     else if (m_wallet->watch_only())
     {
-      bool r = m_wallet->save_tx(ptx_vector, "unsigned_monero_tx");
+      bool r = m_wallet->save_tx(ptx_vector, "unsigned_salvium_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_monero_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_salvium_tx";
       }
     }
     else
@@ -8306,6 +8306,12 @@ bool simple_wallet::stake(const std::vector<std::string> &args_)
     return true;
   }
 
+  if(m_wallet->multisig())
+  {
+     fail_msg_writer() << tr("This is a multisig wallet, staking is not currently supported");
+     return true;
+  }
+  
   std::vector<std::string> local_args;
   local_args.push_back(m_wallet->get_subaddress_as_str({m_current_subaddress_account,0}));
   local_args.insert(local_args.end(), args_.begin(), args_.end());
@@ -8394,86 +8400,43 @@ bool simple_wallet::supply_info(const std::vector<std::string> &args) {
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::yield_info(const std::vector<std::string> &args) {
 
-  // Get the total circulating supply of SALs
-  std::vector<std::pair<std::string, std::string>> supply_amounts;
-  if(!m_wallet->get_circulating_supply(supply_amounts)) {
-    fail_msg_writer() << "failed to get circulating supply. Make sure you are connected to a daemon.";
-    return false;
-  }
-  boost::multiprecision::uint128_t total_supply_128 = 0;
-  for (auto supply_asset: supply_amounts) {
-    if (supply_asset.first == "SAL") {
-      boost::multiprecision::uint128_t supply_128(supply_asset.second);
-      total_supply_128 = supply_128;
-      break;
-    }
-  }
+  // EXPERIMENTAL - change to get_yield_summary_info() method
+  uint64_t t_burnt, t_supply, t_locked, t_yield, yps, ybi_size;
+  std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> yield_payouts;
+  bool ok = m_wallet->get_yield_summary_info(t_burnt, t_supply, t_locked, t_yield, yps, ybi_size, yield_payouts);
 
-  // Get the yield data from the blockchain
-  std::vector<cryptonote::yield_block_info> ybi_data;
-  bool r = m_wallet->get_yield_info(ybi_data);
-  if (!r)
-    return false;
-
-  // Scan the entries we have received to gather the state (total yield over period captured)
-  uint64_t total_burnt = 0;
-  uint64_t total_yield = 0;
-  uint64_t yield_per_stake = 0;
-  for (size_t idx=1; idx<ybi_data.size(); ++idx) {
-    if (ybi_data[idx].locked_coins_tally == 0) {
-      total_burnt += ybi_data[idx].slippage_total_this_block;
-    } else {
-      total_yield += ybi_data[idx].slippage_total_this_block;
-    }
-  }
-
-  // Calculate the yield_per_staked_SAL value
-  if (ybi_data.back().locked_coins_tally > 0) {
-    boost::multiprecision::uint128_t yield_per_stake_128 = ybi_data.back().slippage_total_this_block;
-    yield_per_stake_128 *= COIN;
-    yield_per_stake_128 /= ybi_data.back().locked_coins_tally;
-    yield_per_stake = yield_per_stake_128.convert_to<uint64_t>();
-  }
+  // Get the chain height
+  const uint64_t blockchain_height = m_wallet->get_blockchain_current_height();
   
-  // Output the necessary information about yield stats
-  message_writer(console_color_default, false) << boost::format(tr("YIELD INFO:\n\tSupply coins burnt over last %s: %d\n\tTotal coins locked: %d\n\tYield accrued over last %s: %d\n\tYield per SAL staked: %d"))
-    % get_human_readable_timespan((ybi_data.size()-1) * DIFFICULTY_TARGET_V2)
-    % print_money(total_burnt)
-    % print_money(ybi_data.back().locked_coins_tally)
-    % get_human_readable_timespan((ybi_data.size()-1) * DIFFICULTY_TARGET_V2)
-    % print_money(total_yield)
-    % print_money(yield_per_stake);
-
-  // Now summarise our own YIELD TXs that are yet to mature
-  tools::wallet2::transfer_container transfers;
-  m_wallet->get_transfers(transfers);
-  if (transfers.empty())
-    return true;
-  
-  std::map<size_t, size_t> payouts;
   message_writer(console_color_default, false) << boost::format(tr("\nSTAKED FUNDS:"));
-  for (size_t idx = transfers.size()-1; idx>0; --idx) {
-    const tools::wallet2::transfer_details& td = transfers[idx];
-    //if (td.m_block_height < ybi_data[0].block_height) break;
-    if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
-      if (payouts.count(idx)) {
-	message_writer(console_color_green, true) << boost::format(tr("Height %d, txid %s, staked %s SAL, earned %s SAL"))
-	  % td.m_block_height
-	  % td.m_txid
-	  % print_money(td.m_tx.amount_burnt)
-	  % print_money(transfers[payouts[idx]].m_amount - td.m_tx.amount_burnt);
-      } else {
-	message_writer(console_color_green, false) << boost::format(tr("Height %d, txid %s, staked %s SAL"))
-	  % td.m_block_height
-	  % td.m_txid
-	  % print_money(td.m_tx.amount_burnt);
-      }
-    } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
-      // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
-      if (transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE)
-	payouts[td.m_td_origin_idx] = idx;
-    }
-  }
+  for (auto &p: yield_payouts) {
+    uint64_t height, burnt, yield;
+    std::string txid;
+    std::tie(height, txid, burnt, yield) = p;
+    if (blockchain_height > ybi_size + height)
+      message_writer(console_color_green, true) << boost::format(tr("Height %d, txid %s, staked %s SAL, earned %s SAL"))
+        % height
+        % txid
+        % print_money(burnt)
+        % print_money(yield);
+    else 
+      message_writer(console_color_green, false) << boost::format(tr("Height %d (matures %d), txid %s, staked %s SAL, %s SAL accrued so far"))
+        % height
+        % (height + 21601)
+        % txid
+        % print_money(burnt)
+        % print_money(yield);
+ }
+
+  // Output the necessary information about yield stats
+  message_writer(console_color_default, false) << boost::format(tr("\nYIELD INFO:\n\tSupply coins burnt over last %s: %d\n\tTotal coins locked: %d\n\tYield accrued over last %s: %d\n\tYield per SAL staked: %d"))
+    % get_human_readable_timespan((ybi_size-1) * DIFFICULTY_TARGET_V2)
+    % print_money(t_burnt)
+    % print_money(t_locked)
+    % get_human_readable_timespan((ybi_size-1) * DIFFICULTY_TARGET_V2)
+    % print_money(t_yield)
+    % print_money(yps);
+  
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -8722,7 +8685,7 @@ bool simple_wallet::sign_transfer(const std::vector<std::string> &args_)
   }
 
   bool export_raw = false;
-  std::string unsigned_filename = "unsigned_monero_tx";
+  std::string unsigned_filename = "unsigned_salvium_tx";
   if (args_.size() > 2 || (args_.size() == 2 && args_[0] != "export_raw"))
   {
     PRINT_USAGE(USAGE_SIGN_TRANSFER);
@@ -8746,7 +8709,7 @@ bool simple_wallet::sign_transfer(const std::vector<std::string> &args_)
   std::vector<tools::wallet2::pending_tx> ptx;
   try
   {
-    bool r = m_wallet->sign_tx(unsigned_filename, "signed_monero_tx", ptx, [&](const tools::wallet2::unsigned_tx_set &tx){ return accept_loaded_tx(tx); }, export_raw);
+    bool r = m_wallet->sign_tx(unsigned_filename, "signed_salvium_tx", ptx, [&](const tools::wallet2::unsigned_tx_set &tx){ return accept_loaded_tx(tx); }, export_raw);
     if (!r)
     {
       fail_msg_writer() << tr("Failed to sign transaction");
@@ -8766,7 +8729,7 @@ bool simple_wallet::sign_transfer(const std::vector<std::string> &args_)
       txids_as_text += (", ");
     txids_as_text += epee::string_tools::pod_to_hex(get_transaction_hash(t.tx));
   }
-  success_msg_writer(true) << tr("Transaction successfully signed to file ") << "signed_monero_tx" << ", txid " << txids_as_text;
+  success_msg_writer(true) << tr("Transaction successfully signed to file ") << "signed_salvium_tx" << ", txid " << txids_as_text;
   if (export_raw)
   {
     std::string rawfiles_as_text;
@@ -8774,7 +8737,7 @@ bool simple_wallet::sign_transfer(const std::vector<std::string> &args_)
     {
       if (i > 0)
         rawfiles_as_text += ", ";
-      rawfiles_as_text += "signed_monero_tx_raw" + (ptx.size() == 1 ? "" : ("_" + std::to_string(i)));
+      rawfiles_as_text += "signed_salvium_tx_raw" + (ptx.size() == 1 ? "" : ("_" + std::to_string(i)));
     }
     success_msg_writer(true) << tr("Transaction raw hex data exported to ") << rawfiles_as_text;
   }
@@ -8794,7 +8757,7 @@ bool simple_wallet::submit_transfer(const std::vector<std::string> &args_)
   try
   {
     std::vector<tools::wallet2::pending_tx> ptx_vector;
-    bool r = m_wallet->load_tx("signed_monero_tx", ptx_vector, [&](const tools::wallet2::signed_tx_set &tx){ return accept_loaded_tx(tx); });
+    bool r = m_wallet->load_tx("signed_salvium_tx", ptx_vector, [&](const tools::wallet2::signed_tx_set &tx){ return accept_loaded_tx(tx); });
     if (!r)
     {
       fail_msg_writer() << tr("Failed to load transaction from file");
@@ -11401,7 +11364,7 @@ void simple_wallet::commit_or_save(std::vector<tools::wallet2::pending_tx>& ptx_
       cryptonote::blobdata blob;
       tx_to_blob(ptx.tx, blob);
       const std::string blob_hex = epee::string_tools::buff_to_hex_nodelimer(blob);
-      const std::string filename = "raw_monero_tx" + (ptx_vector.size() == 1 ? "" : ("_" + std::to_string(i++)));
+      const std::string filename = "raw_salvium_tx" + (ptx_vector.size() == 1 ? "" : ("_" + std::to_string(i++)));
       if (m_wallet->save_to_file(filename, blob_hex, true))
         success_msg_writer(true) << tr("Transaction successfully saved to ") << filename << tr(", txid ") << txid;
       else

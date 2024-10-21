@@ -2411,6 +2411,28 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
     return false;
 
   ybi_data_size = ybi_data.size();
+
+  // Iterate over the transfers in our wallet
+  std::map<size_t, size_t> map_payouts;
+  std::map<std::string, std::pair<size_t, std::pair<uint64_t, uint64_t>>> payouts_active;
+  if (m_transfers.size() > 0) {
+    for (size_t idx = m_transfers.size()-1; idx>0; --idx) {
+      const tools::wallet2::transfer_details& td = m_transfers[idx];
+      //if (td.m_block_height < ybi_data[0].block_height) break;
+      if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
+        if (map_payouts.count(idx)) {
+          payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
+        } else {
+          //payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
+          payouts_active[epee::string_tools::pod_to_hex(td.m_txid)] = std::make_pair(td.m_block_height, std::make_pair(td.m_tx.amount_burnt, 0));
+        }
+      } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
+        // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
+        if (m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE)
+          map_payouts[td.m_td_origin_idx] = idx;
+      }
+    }
+  }
   
   // Scan the entries we have received to gather the state (total yield over period captured)
   total_burnt = 0;
@@ -2421,7 +2443,21 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
       total_burnt += ybi_data[idx].slippage_total_this_block;
     } else {
       total_yield += ybi_data[idx].slippage_total_this_block;
+
+      // EXPERIMENTAL - add up yield earned for active STAKE TXs
+      for (auto &payout: payouts_active) {
+        if (ybi_data[idx].block_height < payout.second.first) continue; 
+        boost::multiprecision::uint128_t amount_128 = ybi_data[idx].slippage_total_this_block;
+        amount_128 *= payout.second.second.first;
+        amount_128 /= ybi_data[idx].locked_coins_tally;
+        payout.second.second.second += amount_128.convert_to<uint64_t>();
+      }
     }
+  }
+
+  for (auto &payout: payouts_active) {
+    // Copy to the list of payouts proper
+    payouts.push_back(std::make_tuple(payout.second.first, payout.first, payout.second.second.first, payout.second.second.second));
   }
 
   // Get the total currently locked
@@ -2434,48 +2470,8 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
     yield_per_stake_128 /= ybi_data.back().locked_coins_tally;
     yield_per_stake = yield_per_stake_128.convert_to<uint64_t>();
   }
-
-  // Iterate over the transfers in our wallet
-  std::map<size_t, size_t> map_payouts;
-  for (size_t idx = m_transfers.size()-1; idx>0; --idx) {
-    const tools::wallet2::transfer_details& td = m_transfers[idx];
-    //if (td.m_block_height < ybi_data[0].block_height) break;
-    if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
-      if (map_payouts.count(idx)) {
-        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
-      } else {
-        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
-      }
-    } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
-      // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
-      if (m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE)
-        map_payouts[td.m_td_origin_idx] = idx;
-    }
-  }
   
   // Return success to caller
-  return true;
-}
-//----------------------------------------------------------------------------------------------------
-bool wallet2::get_yield_payouts(std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> &payouts) {
-
-  // Iterate over the transfers in our wallet
-  std::map<size_t, size_t> map_payouts;
-  for (size_t idx = m_transfers.size()-1; idx>0; --idx) {
-    const tools::wallet2::transfer_details& td = m_transfers[idx];
-    //if (td.m_block_height < ybi_data[0].block_height) break;
-    if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
-      if (map_payouts.count(idx)) {
-        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
-      } else {
-        payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
-      }
-    } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
-      // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
-      if (m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE)
-        map_payouts[td.m_td_origin_idx] = idx;
-    }
-  }
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -2714,9 +2710,9 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_asset_type(tx.vout[o], asset_type), error::wallet_internal_error, "failed to get output_asset_type");
             m_transfers.push_back(transfer_details{});
             if (m_transfers_indices.count(asset_type) == 0) {
-              m_transfers_indices[asset_type] = std::vector<size_t>{};
+              m_transfers_indices[asset_type] = std::set<size_t>{};
             }
-            m_transfers_indices[asset_type].push_back(m_transfers.size()-1);
+            m_transfers_indices[asset_type].insert(m_transfers.size()-1);
             transfer_details& td = m_transfers.back();
             td.m_block_height = height;
             td.m_internal_output_index = o;
@@ -6921,7 +6917,7 @@ uint64_t wallet2::balance(uint32_t index_major, const std::string& asset_type, b
   uint64_t amount = 0;
   for (const auto& i : balance_per_subaddress(index_major, asset_type, strict))
     amount += i.second;
-  if (asset_type == "SAL") {
+  if (index_major == 0 && asset_type == "SAL") {
     // Iterate over the locked coins, adding them to the _locked_ balance
     for (const auto& i : m_locked_coins)
       amount += i.second.m_amount;
@@ -8293,6 +8289,7 @@ bool wallet2::sign_multisig_tx(multisig_tx_set &exported_txs, std::vector<crypto
       not multisig_tx_builder.init(
         m_account.get_keys(),
         ptx.construction_data.extra,
+        ptx.tx.type,
         ptx.construction_data.unlock_time,
         ptx.construction_data.subaddr_account,
         ptx.construction_data.subaddr_indices,
@@ -10103,9 +10100,12 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
     for (size_t idx: selected_transfers) {
       subaddr_minor_indices.insert(m_transfers[idx].m_subaddr_index.minor);
     }
+    // Store the TX type
+    tx.type = tx_type;
     THROW_WALLET_EXCEPTION_IF(
       not multisig_tx_builder.init(m_account.get_keys(),
         extra,
+        tx_type,
         unlock_time,
         subaddr_account,
         subaddr_minor_indices,
@@ -10284,7 +10284,7 @@ std::vector<size_t> wallet2::pick_preferred_rct_inputs(uint64_t needed_money, ui
   }
   
   // try to find a rct input of enough size
-  for (size_t& i: m_transfers_indices[asset_type])
+  for (size_t i: m_transfers_indices[asset_type])
   {
     const transfer_details& td = m_transfers[i];
     if (!is_spent(td, false) && !td.m_frozen && td.is_rct() && td.amount() >= needed_money && is_transfer_unlocked(td) && td.m_subaddr_index.major == subaddr_account && subaddr_indices.count(td.m_subaddr_index.minor) == 1)
@@ -10304,25 +10304,28 @@ std::vector<size_t> wallet2::pick_preferred_rct_inputs(uint64_t needed_money, ui
   // this could be made better by picking one of the outputs to be a small one, since those
   // are less useful since often below the needed money, so if one can be used in a pair,
   // it gets rid of it for the future
-  for (size_t i = 0; i < m_transfers_indices[asset_type].size(); i++)
+  for (auto i=m_transfers_indices[asset_type].begin(); i!= m_transfers_indices[asset_type].end(); ++i)
   {
-    size_t idx = m_transfers_indices[asset_type][i];
-    const transfer_details& td = m_transfers[i];
+    size_t idx = *i;
+    const transfer_details& td = m_transfers[idx];
     if (!is_spent(td, false) && !td.m_frozen && !td.m_key_image_partial && td.is_rct() && is_transfer_unlocked(td) && td.m_subaddr_index.major == subaddr_account && subaddr_indices.count(td.m_subaddr_index.minor) == 1)
     {
       if (td.amount() > m_ignore_outputs_above || td.amount() < m_ignore_outputs_below)
       {
-        MDEBUG("Ignoring output " << i << " of amount " << print_money(td.amount()) << " which is outside prescribed range [" << print_money(m_ignore_outputs_below) << ", " << print_money(m_ignore_outputs_above) << "]");
+        MDEBUG("Ignoring output " << idx << " of amount " << print_money(td.amount()) << " which is outside prescribed range [" << print_money(m_ignore_outputs_below) << ", " << print_money(m_ignore_outputs_above) << "]");
         continue;
       }
-      LOG_PRINT_L2("Considering input " << i << ", " << print_money(td.amount()));
-      for (size_t j = i + 1; j < m_transfers_indices[asset_type].size(); ++j)
+      LOG_PRINT_L2("Considering input " << idx << ", " << print_money(td.amount()));
+      if (i == m_transfers_indices[asset_type].end()) continue;
+      auto j = i;
+      std::advance(j, 1);
+      for (; j!=m_transfers_indices[asset_type].end(); ++j)
       {
-        size_t idx2 = m_transfers_indices[asset_type][j];
+        size_t idx2 = *j;
         const transfer_details& td2 = m_transfers[idx2];
         if (td2.amount() > m_ignore_outputs_above || td2.amount() < m_ignore_outputs_below)
         {
-          MDEBUG("Ignoring output " << j << " of amount " << print_money(td2.amount()) << " which is outside prescribed range [" << print_money(m_ignore_outputs_below) << ", " << print_money(m_ignore_outputs_above) << "]");
+          MDEBUG("Ignoring output " << idx2 << " of amount " << print_money(td2.amount()) << " which is outside prescribed range [" << print_money(m_ignore_outputs_below) << ", " << print_money(m_ignore_outputs_above) << "]");
           continue;
         }
         if (!is_spent(td2, false) && !td2.m_frozen && !td2.m_key_image_partial && td2.is_rct() && td.amount() + td2.amount() >= needed_money && is_transfer_unlocked(td2) && td2.m_subaddr_index == td.m_subaddr_index)
@@ -10331,16 +10334,16 @@ std::vector<size_t> wallet2::pick_preferred_rct_inputs(uint64_t needed_money, ui
           // already found. If the same, don't update, and oldest suitable outputs
           // will be used in preference.
           float relatedness = get_output_relatedness(td, td2);
-          LOG_PRINT_L2("  with input " << j << ", " << print_money(td2.amount()) << ", relatedness " << relatedness);
+          LOG_PRINT_L2("  with input " << idx2 << ", " << print_money(td2.amount()) << ", relatedness " << relatedness);
           if (relatedness < current_output_relatdness)
           {
             // reset the current picks with those, and return them directly
             // if they're unrelated. If they are related, we'll end up returning
             // them if we find nothing better
             picks.clear();
-            picks.push_back(i);
-            picks.push_back(j);
-            LOG_PRINT_L0("we could use " << i << " and " << j);
+            picks.push_back(idx);
+            picks.push_back(idx2);
+            LOG_PRINT_L0("we could use " << idx << " and " << idx2);
             if (relatedness == 0.0f)
               return picks;
             current_output_relatdness = relatedness;
@@ -10657,7 +10660,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
   // Verify that we have outputs in our wallet for the correct asset_type
   THROW_WALLET_EXCEPTION_IF(!m_transfers_indices.count(source_asset), error::wallet_internal_error, "Cannot find outputs with correct asset_type to pay for TX");
   
-  for (size_t& i: m_transfers_indices[source_asset])
+  for (size_t i: m_transfers_indices[source_asset])
   {
     const transfer_details& td = m_transfers[i];
     if (m_ignore_fractional_outputs && td.amount() < fractional_threshold)
@@ -14402,7 +14405,21 @@ crypto::key_image wallet2::get_multisig_composite_key_image(size_t n) const
   for (const auto &info: td.m_multisig_info)
     for (const auto &pki: info.m_partial_key_images)
       pkis.push_back(pki);
-  bool r = multisig::generate_multisig_composite_key_image(get_account().get_keys(), m_subaddresses, td.get_public_key(), tx_key, additional_tx_keys, td.m_internal_output_index, pkis, ki);
+
+  // SRCG: work out if we have origin data to use
+  bool use_origin_data = false;
+  cryptonote::origin_data origin_tx_data;
+  if (td.m_td_origin_idx != (uint64_t)-1) {
+  
+    // Flag to indicate this is a TX that uses a return_address
+    const transfer_details& td_origin = get_transfer_details(td.m_td_origin_idx);
+    origin_tx_data.tx_pub_key = get_tx_pub_key_from_extra(td_origin.m_tx);
+    origin_tx_data.output_index = td_origin.m_internal_output_index;
+    origin_tx_data.tx_type = td_origin.m_tx.type;
+    use_origin_data = true;
+  }
+  
+  bool r = multisig::generate_multisig_composite_key_image(get_account().get_keys(), m_subaddresses, td.get_public_key(), tx_key, additional_tx_keys, td.m_internal_output_index, pkis, ki, use_origin_data, origin_tx_data);
   THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to generate key image");
   return ki;
 }
