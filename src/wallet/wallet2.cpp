@@ -11363,8 +11363,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   crypto::public_key P_change = crypto::null_pkey;
   uint8_t change_index;
   uint32_t hf_version = get_current_hard_fork();
-  if (hf_version >= HF_VERSION_ENABLE_N_OUTS && td_origin.m_tx.version >= TRANSACTION_VERSION_N_OUTS) {
-
+  if (td_origin.m_tx.version >= TRANSACTION_VERSION_N_OUTS) {
+    
     // Calculate z_i (the shared secret between sender and ourselves for the original TX)
     crypto::public_key txkey_pub = null_pkey; // R
     const std::vector<crypto::public_key> in_additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(td_origin.m_tx);
@@ -11392,21 +11392,43 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
     std::strncpy(buf.domain_separator, "RETURN", 7);
     buf.amount_key = rct::sk2rct(z_i);
     crypto::hash_to_scalar(&buf, sizeof(buf), y);
-        
+
     // The change_index needs decoding too
     uint8_t eci_data = td_origin.m_tx.return_address_change_mask[td_origin.m_internal_output_index];
-
+      
     // Calculate the encrypted_change_index data for this output
     std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
     std::strncpy(buf.domain_separator, "CHG_IDX", 8);
     crypto::secret_key eci_out;
     keccak((uint8_t *)&buf, sizeof(buf), (uint8_t*)&eci_out, sizeof(eci_out));
     change_index = eci_data ^ eci_out.data[0];
-
+    
     return_address = td_origin.m_tx.return_address_list[td_origin.m_internal_output_index];
     
-  } else {
+    // Sanity check that we aren't attempting to return our own TX change output to ourselves
+    THROW_WALLET_EXCEPTION_IF(change_index == td_origin.m_internal_output_index, error::wallet_internal_error, tr("Attempting to return change to ourself"));
+
+    // Sanity check that we can obtain the change output from the origin TX
+    THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(td_origin.m_tx.vout[change_index], P_change),
+                              error::wallet_internal_error,
+                              tr("Failed to identify change output"));
     
+  } else {
+
+    // Change index is the one we didn't receive
+    change_index = (td_origin.m_internal_output_index == 0) ? 1 : 0;
+
+    // Return address was provided
+    return_address = td_origin.m_tx.return_address;
+    
+    // Sanity check that we aren't attempting to return our own TX change output to ourselves
+    THROW_WALLET_EXCEPTION_IF(change_index == td_origin.m_internal_output_index, error::wallet_internal_error, tr("Attempting to return change to ourself"));
+    
+    // Sanity check that we can obtain the change output from the origin TX
+    THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(td_origin.m_tx.vout[change_index], P_change),
+                              error::wallet_internal_error,
+                              tr("Failed to identify change output"));
+  
     // Calculate y
     struct {
       char domain_separator[8];
@@ -11416,20 +11438,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
     std::strncpy(buf.domain_separator, "RETURN", 6);
     buf.pubkey = P_change;
     crypto::hash_to_scalar(&buf, sizeof(buf), y);
-
-    // Change index is the one we didn't receive
-    change_index = (td_origin.m_internal_output_index == 0) ? 1 : 0;
-
-    return_address = td_origin.m_tx.return_address;
   }
-  
-  // Sanity check that we aren't attempting to return our own TX change output to ourselves
-  THROW_WALLET_EXCEPTION_IF(change_index == td_origin.m_internal_output_index, error::wallet_internal_error, tr("Attempting to return change to ourself"));
-
-  // Sanity check that we can obtain the change output from the origin TX
-  THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(td_origin.m_tx.vout[change_index], P_change),
-                            error::wallet_internal_error,
-                            tr("Failed to identify change output"));
   
   // Calculate yF
   rct::key key_y         = (rct::key&)(y);
