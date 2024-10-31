@@ -6942,7 +6942,7 @@ bool simple_wallet::transfer_main(
   {
     // figure out what tx will be necessary
     std::vector<tools::wallet2::pending_tx> ptx_vector;
-    uint64_t bc_height, unlock_block = 0;
+    uint64_t unlock_block = 0;
     std::string err;
     switch (transfer_type)
     {
@@ -6959,12 +6959,6 @@ bool simple_wallet::transfer_main(
         ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::STAKE, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
       break;
       case TransferLocked:
-        bc_height = get_daemon_blockchain_height(err);
-        if (!err.empty())
-        {
-          fail_msg_writer() << tr("failed to get blockchain height: ") << err;
-          return false;
-        }
         unlock_block = locked_blocks;
         ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
       break;
@@ -8043,7 +8037,7 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
       return true;
     }
 
-    if (td.m_tx.version >= HF_VERSION_ENABLE_N_OUTS) {
+    if (td.m_tx.version >= TRANSACTION_VERSION_N_OUTS) {
       if (td.m_tx.return_address_list.empty() || td.m_tx.return_address_change_mask.empty()) {
         fail_msg_writer() << tr("invalid return_address_list for txid ") << args_[0];
         return true;
@@ -8380,7 +8374,7 @@ bool simple_wallet::supply_info(const std::vector<std::string> &args) {
   message_writer(console_color_default, false) << boost::format(tr("SUPPLY INFO"));
   
   // For each asset, print the circulating supply and value
-  boost::multiprecision::uint128_t total_supply = 0;
+  //boost::multiprecision::uint128_t total_supply = 0;
   for (auto supply_asset: supply_amounts) {
 
     // get supply
@@ -8410,7 +8404,10 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
   // EXPERIMENTAL - change to get_yield_summary_info() method
   uint64_t t_burnt, t_supply, t_locked, t_yield, yps, ybi_size;
   std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> yield_payouts;
-  bool ok = m_wallet->get_yield_summary_info(t_burnt, t_supply, t_locked, t_yield, yps, ybi_size, yield_payouts);
+  if (!m_wallet->get_yield_summary_info(t_burnt, t_supply, t_locked, t_yield, yps, ybi_size, yield_payouts)) {
+    fail_msg_writer() << "failed to get yield info. Make sure you are connected to a daemon.";
+    return false;
+  }
 
   // Get the chain height
   const uint64_t blockchain_height = m_wallet->get_blockchain_current_height();
