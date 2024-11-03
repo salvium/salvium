@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022, The Monero Project
+// Copyright (c) 2020-2024, The Monero Project
 
 //
 // All rights reserved.
@@ -74,6 +74,7 @@ namespace epee
   public:
     using char_type = std::uint8_t;
     using Ch = char_type;
+    using value_type = char_type;
 
     //! Increase internal buffer by at least `byte_stream_increase` bytes.
     byte_stream() noexcept
@@ -86,6 +87,7 @@ namespace epee
     ~byte_stream() noexcept = default;
     byte_stream& operator=(byte_stream&& rhs) noexcept;
 
+    std::uint8_t* data() noexcept { return buffer_.get(); }
     const std::uint8_t* data() const noexcept { return buffer_.get(); }
     std::uint8_t* tellp() const noexcept { return next_write_; }
     std::size_t available() const noexcept { return end_ - next_write_; }
