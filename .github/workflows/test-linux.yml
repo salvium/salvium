@@ -29,7 +29,7 @@ jobs:
           - fedora:40
           - almalinux:8
           - almalinux:9
-          - almalinux:10
+          - almalinux:10-kitten
           - archlinux:latest
           - manjarolinux/base:latest
           - opensuse/leap:latest
