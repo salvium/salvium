@@ -1,0 +1,57 @@
+name: Test Executable in Docker Matrix
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        docker_image: 
+          - debian:11
+          # - debian:12
+          # - ubuntu:18.04
+          # - ubuntu:20.04
+          # - ubuntu:22.04
+          # - ubuntu:24.04
+          # - alpine:3.17
+          # - alpine:3.18
+          # - alpine:3.19
+          # - alpine:3.20
+          # - centos:7
+          # - fedora:39
+          # - fedora:40
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v2
+
+      - name: Pull Docker image
+        run: docker pull ${{ matrix.docker_image }}
+
+      - name: Download executable
+        run: |
+          curl -L -o salvium.zip https://salvium.s3.eu-west-1.amazonaws.com/salvium-v0.6.3-x86_64-unknown-linux-gnu.zip
+          unzip salvium.zip
+          cd home/runner/work/salvium/salvium/build/x86_64-unknown-linux-gnu/release/bin
+          chmod +x salviumd
+          pwd 
+          echo ${{ github.workspace }}
+
+      - name: Run tests in Docker
+        run: |
+          pwd
+          docker run --rm \
+            -v "$(pwd)/home/runner/work/salvium/salvium/build/x86_64-unknown-linux-gnu/release/bin:/workspace" \
+            -w /workspace \
+            ${{ matrix.docker_image }} \
+            ls -l
