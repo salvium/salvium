@@ -726,6 +726,19 @@ namespace cryptonote
     bool check_tx_outputs(const transaction& tx, tx_verification_context &tvc) const;
 
     /**
+     * @brief check that a transaction's version & type conforms to current standards
+     *
+     * This function checks, for example at the time of this writing, that
+     * the TX version and type is supported by the current HF version on-chain.
+     *
+     * @param tx the transaction to check the version and type of
+     * @param tvc returned info about tx verification
+     *
+     * @return false if the TX version and/or type is unsupported, otherwise true
+     */
+    bool check_tx_type_and_version(const transaction& tx, tx_verification_context &tvc) const;
+    
+    /**
      * @brief gets the block weight limit based on recent blocks
      *
      * @return the limit

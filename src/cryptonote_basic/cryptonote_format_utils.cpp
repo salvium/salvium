@@ -1232,7 +1232,7 @@ namespace cryptonote
   {
     for (const auto &o: tx.vout)
     {
-      if (hf_version > HF_VERSION_VIEW_TAGS)
+      if (hf_version > HF_VERSION_REQUIRE_VIEW_TAGS)
       {
         // from v15, require outputs have view tags
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
@@ -1244,7 +1244,7 @@ namespace cryptonote
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key), false, "wrong variant type: "
           << o.target.type().name() << ", expected txout_to_key in transaction id=" << get_transaction_hash(tx));
       }
-      else  //(hf_version == HF_VERSION_VIEW_TAGS)
+      else  //(hf_version == HF_VERSION_VIEW_TAGS || hf_version == HF_VERSION_VIEW_TAGS+1)
       {
         // require outputs be of type txout_to_key OR txout_to_tagged_key
         // to allow grace period before requiring all to be txout_to_tagged_key
@@ -1724,7 +1724,7 @@ namespace cryptonote
     blobdata blob = t_serializable_object_to_blob(static_cast<block_header>(b));
     crypto::hash tree_root_hash = get_tx_tree_hash(b);
     blob.append(reinterpret_cast<const char*>(&tree_root_hash), sizeof(tree_root_hash));
-    blob.append(tools::get_varint_data(b.tx_hashes.size()+1));
+    blob.append(tools::get_varint_data(b.tx_hashes.size() + (b.major_version >= HF_VERSION_ENABLE_N_OUTS ? 2 : 1)));
     return blob;
   }
   //---------------------------------------------------------------
