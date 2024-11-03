@@ -54,4 +54,4 @@ jobs:
             -v "$(pwd)/home/runner/work/salvium/salvium/build/x86_64-unknown-linux-gnu/release/bin:/workspace" \
             -w /workspace \
             ${{ matrix.docker_image }} \
-            ls -l
+            ./salviumd --version
