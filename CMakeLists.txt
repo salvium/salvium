@@ -372,6 +372,7 @@ if(NOT MANUAL_SUBMODULES)
     check_submodule(external/trezor-common)
     check_submodule(external/randomx)
     check_submodule(external/supercop)
+    check_submodule(external/mx25519)
   endif()
 endif()
 
@@ -458,7 +459,7 @@ elseif(CMAKE_SYSTEM_NAME MATCHES ".*BSDI.*")
   set(BSDI TRUE)
 endif()
 
-include_directories(external/rapidjson/include external/easylogging++ src contrib/epee/include external external/supercop/include)
+include_directories(external/rapidjson/include external/easylogging++ src contrib/epee/include external external/supercop/include external/mx25519/include)
 
 if(APPLE)
   cmake_policy(SET CMP0042 NEW)

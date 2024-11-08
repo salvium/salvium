@@ -74,6 +74,9 @@ target_link_libraries(cncrypto
     ${SODIUM_LIBRARY}
   PRIVATE
     ${EXTRA_LIBRARIES})
+target_include_directories(cncrypto
+  PRIVATE
+    ${MX25519_INCLUDE})
 
 if (ARM)
   option(NO_OPTIMIZED_MULTIPLY_ON_ARM
