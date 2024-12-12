@@ -1034,13 +1034,27 @@ size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_heig
   LOG_PRINT_L3("Blockchain::" << __func__);
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
 
-  const uint64_t start_height = start_height_opt ? *start_height_opt : check_difficulty_checkpoints().second;
+  //uint64_t start_height = start_height_opt ? *start_height_opt : check_difficulty_checkpoints().second;
+  uint8_t version = get_current_hard_fork_version();
+  uint64_t start_height = 0;
+  if (start_height_opt) {
+    start_height = *start_height_opt;
+  } else {
+    bool found = false;
+    for (size_t i=0; i<num_mainnet_hard_forks; ++i) {
+      if (version == mainnet_hard_forks[i].version) {
+        start_height = mainnet_hard_forks[i].height;
+        found = true;
+        break;
+      }
+    }
+    start_height = std::max(start_height, check_difficulty_checkpoints().second);
+  }
   const uint64_t top_height = m_db->height() - 1;
   MGINFO("Recalculating difficulties from height " << start_height << " to height " << top_height);
 
   std::vector<uint64_t> timestamps;
   std::vector<difficulty_type> difficulties;
-  uint8_t version = get_current_hard_fork_version();
   size_t difficulty_blocks_count;
   if (version == 1) {
     difficulty_blocks_count = DIFFICULTY_BLOCKS_COUNT;
@@ -6128,7 +6142,7 @@ void Blockchain::cancel()
 }
 
 #if defined(PER_BLOCK_CHECKPOINT)
-static const char expected_block_hashes_hash[] = "3cb6d33c311e54f2b8439a3e4cc047f6b9b74db9fd92955f1db131a5dfce1edf";
+static const char expected_block_hashes_hash[] = "5065d5361119a526b7a45e9e5bdf1d5be86f80e9eb43b0398bf0e47489c81c6d";
 void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints)
 {
   if (get_checkpoints == nullptr || !m_fast_sync)
