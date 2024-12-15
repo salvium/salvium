@@ -1497,6 +1497,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   switch (version) {
   case HF_VERSION_BULLETPROOF_PLUS:
   case HF_VERSION_ENABLE_N_OUTS:
+  case HF_VERSION_FULL_PROOFS:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
@@ -3709,7 +3710,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
       }
     }
   }
-  else if (rv.type == rct::RCTTypeSimple || rv.type == rct::RCTTypeBulletproof || rv.type == rct::RCTTypeBulletproof2 || rv.type == rct::RCTTypeCLSAG || rv.type == rct::RCTTypeBulletproofPlus)
+  else if (rv.type == rct::RCTTypeSimple || rv.type == rct::RCTTypeBulletproof || rv.type == rct::RCTTypeBulletproof2 || rv.type == rct::RCTTypeCLSAG || rv.type == rct::RCTTypeBulletproofPlus || rv.type == rct::RCTTypeFullProofs)
   {
     CHECK_AND_ASSERT_MES(!pubkeys.empty() && !pubkeys[0].empty(), false, "empty pubkeys");
     rv.mixRing.resize(pubkeys.size());
@@ -3750,7 +3751,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
       }
     }
   }
-  else if (rv.type == rct::RCTTypeCLSAG || rv.type == rct::RCTTypeBulletproofPlus)
+  else if (rv.type == rct::RCTTypeCLSAG || rv.type == rct::RCTTypeBulletproofPlus || rv.type == rct::RCTTypeFullProofs)
   {
     if (!tx.pruned)
     {
@@ -3997,7 +3998,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
                        false, "Transaction spends at least one output which is too young");
 
   // Warn that new RCT types are present, and thus the cache is not being used effectively
-  static constexpr const std::uint8_t RCT_CACHE_TYPE = rct::RCTTypeBulletproofPlus;
+  static constexpr const std::uint8_t RCT_CACHE_TYPE = rct::RCTTypeFullProofs;
   if (tx.rct_signatures.type > RCT_CACHE_TYPE)
   {
     MWARNING("RCT cache is not caching new verification results. Please update RCT_CACHE_TYPE!");
@@ -4040,6 +4041,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     case rct::RCTTypeBulletproof2:
     case rct::RCTTypeCLSAG:
     case rct::RCTTypeBulletproofPlus:
+    case rct::RCTTypeFullProofs:
     {
       if (!ver_rct_non_semantics_simple_cached(tx, pubkeys, m_rct_ver_cache, RCT_CACHE_TYPE, hf_version))
       {

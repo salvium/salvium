@@ -88,6 +88,9 @@ namespace rct {
     zk_proof PRProof_Gen(const rct::key &difference);
     bool PRProof_Ver(const rct::key &C, const zk_proof &proof);
   
+    std::vector<zk_proof> SAProof_Gen(const keyV &pubkeys, const key &x_change, const size_t change_index);
+    bool SAProof_Ver(const std::vector<zk_proof> &proofs, const keyV &pubkeys, const size_t change_index);
+  
     //proveRange and verRange
     //proveRange gives C, and mask such that \sumCi = C
     //   c.f. https://eprint.iacr.org/2015/1098 section 5.1
@@ -145,7 +148,9 @@ namespace rct {
         xmr_amount txnFee,
         unsigned int mixin,
         const RCTConfig &rct_config,
-        hw::device &hwdev
+        hw::device &hwdev,
+        const key &x_change = rct::zero(),
+        const size_t change_index = 0
     );
     rctSig genRctSimple(
         const key & message,
@@ -162,7 +167,9 @@ namespace rct {
         const std::vector<unsigned int> & index,
         ctkeyV &outSk,
         const RCTConfig &rct_config,
-        hw::device &hwdev
+        hw::device &hwdev,
+        const key &x_change = rct::zero(),
+        const size_t change_index = 0
     );
     bool verRct(const rctSig & rv, bool semantics);
     static inline bool verRct(const rctSig & rv) { return verRct(rv, true) && verRct(rv, false); }

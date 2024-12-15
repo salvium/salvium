@@ -538,7 +538,7 @@ static rct::rctSig make_sample_rct_sig(int n_inputs, const uint64_t input_amount
         }
     }
 
-    const rct::RCTConfig rct_config { RangeProofBorromean, 0 };
+    const rct::RCTConfig rct_config { RangeProofBorromean, 0 };    
     return genRct(rct::zero(), sc, pc, destinations, amounts, amount_keys, 3, rct_config, hw::get_device("default"));
 }
 

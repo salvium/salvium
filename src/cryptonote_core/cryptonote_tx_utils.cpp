@@ -116,132 +116,6 @@ namespace cryptonote
     return inv;
   }
 
-  rct::proofV SAProof_Gen(const std::vector<tx_out> &vout, const size_t change_index, const crypto::secret_key &x_change) {
-
-    // Declare a return structure
-    rct::proofV proofV{};
-
-    // Sanity checks
-    CHECK_AND_ASSERT_THROW_MES(vout.size(), "SAProof_Gen() failed - no outputs provided");
-    CHECK_AND_ASSERT_THROW_MES(vout.size()>=change_index, "SAProof_Gen() failed - invalid change_index provided");
-    CHECK_AND_ASSERT_THROW_MES(x_change != rct::zero(), "SAProof_Gen() failed - invalid x_change key provided");
-    
-    // Create a buffer for the hashable data
-    size_t size = vout.size() * (32+32);
-    std::vector<uint8_t> buffer;
-    buffer.resize(size);
-    uint8_t *ptr = buffer.data();
-
-    // Iterate over the outputs
-    rct::keyV scalars;
-    rct::keyV commitments;
-    rct::keyV pubkeys;
-    for (size_t j=0; j<vout.size(); ++j) {
-
-      // Calculate a random y value and calculate a commitment for it
-      rct::key y = rct::skGen();
-      rct::key R = rct::scalarmultBase(y);
-
-      // Get the output pubkey from the output
-      crypto::public_key pubkey = crypto::null_pkey;
-      CHECK_AND_ASSERT_THROW_MES(!cryptonote::get_output_public_key(vout[j], pubkey), "in SAProof_Gen() : failed to get output public key");
-      
-      // Add all variables to our vectors
-      scalars.push_back(y);
-      commitments.push_back(R);
-      pubkeys.push_back(rct::pk2rct(pubkey));
-
-      // Copy the data into our challenge buffer
-      std::memcpy(ptr, R.bytes, sizeof(rct::key));
-      std::memcpy(ptr + (size >> 1), pubkey.data, sizeof(rct::key));
-      ptr += sizeof(rct::key);
-    }
-    CHECK_AND_ASSERT_THROW_MES(scalars.size() == vout.size(), "in SAProof_Gen() : incorrect number of scalars");
-    CHECK_AND_ASSERT_THROW_MES(commitments.size() == vout.size(), "in SAProof_Gen() : incorrect number of commitments");
-    CHECK_AND_ASSERT_THROW_MES(pubkeys.size() == vout.size(), "in SAProof_Gen() : incorrect number of pubkeys");
-
-    // Calculate the hash
-    rct::key hash;
-    rct::cn_fast_hash(hash, buffer.data(), buffer.size());
-    rct::key c = rct::scalarmultBase(hash);
-    
-    for (size_t j=0; j<vout.size(); ++j) {
-
-      // check to see if this is the change output
-      rct::key x_val;
-      if (j == change_index) {
-        x_val = rct::sk2rct(x_change);
-      } else {
-        x_val = rct::skGen();
-      }
-      rct::key z_x = rct::addKeys(scalars[j], rct::scalarmultKey(c, x_val));
-      rct::key z_y = scalars[j];
-      proofV.push_back({commitments[j], z_x, z_y});
-    }
-
-    // Return the proof to the caller
-    return proofV;
-  }
-
-
-  bool PRProof_Ver(const rct::proofV &proofs, const std::vector<tx_out> &vout, const size_t change_index) {
-    // Sanity checks
-    CHECK_AND_ASSERT_THROW_MES(proofs.size() == vout.size(), "PRProof_Ver() failed - proof count does not match output count");
-    CHECK_AND_ASSERT_THROW_MES(change_index < vout.size(), "PRProof_Ver() failed - invalid change index provided");
-
-    // Extract the proof for the change output - we don't care about the others because they're dummy proofs
-    const auto &proof = proofs[change_index];
-    const rct::key &R = proof.R; // Commitment
-    const rct::key &z_x = proof.z1; // z_x value
-    const rct::key &z_y = proof.z2; // z_y value
-
-    // Extract the public key of the change output
-    crypto::public_key pubkey = crypto::null_pkey;
-    CHECK_AND_ASSERT_THROW_MES(!cryptonote::get_output_public_key(vout[change_index], pubkey), "PRProof_Ver() failed - could not retrieve output public key");
-
-    // Convert the public key to rct format
-    rct::key P = rct::pk2rct(pubkey);
-
-    // Recompute the challenge hash
-    size_t size = vout.size() * (32 + 32);
-    std::vector<uint8_t> buffer(size);
-    uint8_t *ptr = buffer.data();
-
-    for (size_t j = 0; j < vout.size(); ++j) {
-        // Retrieve commitments and public keys for hashing
-        const rct::key &commitment = proofs[j].R;
-        crypto::public_key pubkey_temp;
-        CHECK_AND_ASSERT_THROW_MES(!cryptonote::get_output_public_key(vout[j], pubkey_temp), "PRProof_Ver() failed - could not retrieve public key");
-
-        // Copy data into the buffer
-        std::memcpy(ptr, commitment.bytes, sizeof(rct::key));
-        std::memcpy(ptr + (size >> 1), pubkey_temp.data, sizeof(rct::key));
-        ptr += sizeof(rct::key);
-    }
-
-    // Compute the challenge hash
-    rct::key hash;
-    rct::cn_fast_hash(hash, buffer.data(), buffer.size());
-    rct::key c = rct::scalarmultBase(hash);
-
-    // Verify the proof for the change output
-    // Recalculate the expected commitment using the formula: z_x * G = R + c * P
-    rct::key expected_commitment = rct::addKeys(R, rct::scalarmultKey(c, P));
-
-    // Verify z_x * G matches the expected commitment
-    if (!rct::equalKeys(rct::scalarmultBase(z_x), expected_commitment)) {
-        return false; // Verification failed
-    }
-
-    // Verify z_y * G matches the original commitment
-    if (!rct::equalKeys(rct::scalarmultBase(z_y), R)) {
-        return false; // Verification failed
-    }
-
-    // All checks passed
-    return true;
-  }
-  
   //---------------------------------------------------------------
   void classify_addresses(const std::vector<tx_destination_entry> &destinations, const boost::optional<cryptonote::account_public_address>& change_addr, size_t &num_stdaddresses, size_t &num_subaddresses, account_public_address &single_dest_subaddress)
   {
@@ -715,6 +589,7 @@ namespace cryptonote
       switch (hard_fork_version) {
       case HF_VERSION_BULLETPROOF_PLUS:
       case HF_VERSION_ENABLE_N_OUTS:
+      case HF_VERSION_FULL_PROOFS:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;
@@ -982,6 +857,7 @@ namespace cryptonote
     uint64_t summary_outs_money = 0;
     //fill outputs
     size_t output_index = 0;
+    crypto::secret_key x_change = crypto::null_skey;
     uint8_t change_index = 0;
     for(const tx_destination_entry& dst_entr: destinations)
     {
@@ -1037,9 +913,34 @@ namespace cryptonote
 
     if (hf_version >= HF_VERSION_ENABLE_N_OUTS && tx.type == cryptonote::transaction_type::TRANSFER) {
 
-      // Calculate the spend authority proof
-      crypto::secret_key x_change = crypto::null_skey;
-      tx.rct_signatures.sa_proof = SAProof_Gen(tx.vout, change_index, x_change);
+      if (hf_version >= HF_VERSION_FULL_PROOFS) {
+
+        // Get the secret spend key for the change element
+        crypto::secret_key spend_skey = crypto::null_skey;
+        if (sender_account_keys.m_multisig_keys.empty())
+        {
+          // if not multisig, use normal spend skey
+          spend_skey = sender_account_keys.m_spend_secret_key;
+        }
+        else
+        {
+          // if multisig, use sum of multisig privkeys (local account's share of aggregate spend key)
+          for (const auto &multisig_key : sender_account_keys.m_multisig_keys)
+          {
+            sc_add((unsigned char*)spend_skey.data,
+                   (const unsigned char*)multisig_key.data,
+                   (const unsigned char*)spend_skey.data);
+          }
+        }
+      
+        // Obtain a separate key_derivation for the P_change output
+        //    (using the TX public key and the sender's private view key)
+        crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+        CHECK_AND_ASSERT_MES(hwdev.generate_key_derivation(txkey_pub, sender_account_keys.m_view_secret_key, derivation), false, "Failed to generate key_derivation for P_change");
+        
+        // Calculate the secret spend key "x_change" for the P_change output
+        CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(derivation, change_index, spend_skey, x_change), false, "Failed to derive secret key for P_change");
+      }
       
       // Get the output public key for the change output
       crypto::public_key P_change = crypto::null_pkey;
@@ -1292,22 +1193,24 @@ namespace cryptonote
       rct::ctkeyV outSk;
       if (use_simple_rct)
         tx.rct_signatures = rct::genRctSimple(
-          rct::hash2rct(tx_prefix_hash),
-          inSk, 
-          destinations,
-          tx_type,
-          source_asset,
-          destination_asset_types,
-          inamounts,
-          outamounts,
-          fee,
-          mixRing,
-          amount_keys,
-          index,
-          outSk,
-          rct_config,
-          hwdev
-        );
+                                              rct::hash2rct(tx_prefix_hash),
+                                              inSk, 
+                                              destinations,
+                                              tx_type,
+                                              source_asset,
+                                              destination_asset_types,
+                                              inamounts,
+                                              outamounts,
+                                              fee,
+                                              mixRing,
+                                              amount_keys,
+                                              index,
+                                              outSk,
+                                              rct_config,
+                                              hwdev,
+                                              rct::sk2rct(x_change),
+                                              change_index
+                                              );
       else
         tx.rct_signatures = rct::genRct(rct::hash2rct(tx_prefix_hash), inSk, destinations, outamounts, mixRing, amount_keys, sources[0].real_output, outSk, rct_config, hwdev); // same index assumption
       memwipe(inSk.data(), inSk.size() * sizeof(rct::ctkey));
