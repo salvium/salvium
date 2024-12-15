@@ -1501,7 +1501,8 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
     }
-    CHECK_AND_ASSERT_MES((money_in_use - fee) / 5 == b.miner_tx.amount_burnt, false, "miner_transaction has incorrect amount_burnt amount");
+    if (already_generated_coins != 0)
+      CHECK_AND_ASSERT_MES(money_in_use / 5 == b.miner_tx.amount_burnt, false, "miner_transaction has incorrect amount_burnt amount");
     break;
   default:
     assert(false);
