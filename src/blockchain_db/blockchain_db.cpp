@@ -267,7 +267,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
                                 , const difficulty_type& cumulative_difficulty
                                 , const uint64_t& coins_generated
                                 , const std::vector<std::pair<transaction, blobdata>>& txs
-                                , const cryptonote::network_type& nettype
+                                , const cryptonote::network_type nettype
                                 , cryptonote::yield_block_info& ybi
                                 )
 {

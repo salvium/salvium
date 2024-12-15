@@ -881,6 +881,11 @@ uint8_t get_view_tag_fork()
   return HF_VERSION_VIEW_TAGS;
 }
 
+uint8_t get_full_proofs_fork()
+{
+  return HF_VERSION_FULL_PROOFS;
+}
+
 uint64_t calculate_fee(bool use_per_byte_fee, const cryptonote::transaction &tx, size_t blob_size, uint64_t base_fee, uint64_t fee_quantization_mask)
 {
   if (use_per_byte_fee)
@@ -10553,7 +10558,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
   const bool bulletproof = true;
   const bool bulletproof_plus = true;
   const bool clsag = true;
-  const rct::RCTConfig rct_config { rct::RangeProofPaddedBulletproof, 4 };
+  const bool use_fullproofs = use_fork_rules(get_full_proofs_fork(), 0);
+  const rct::RCTConfig rct_config { rct::RangeProofPaddedBulletproof, use_fullproofs ? 5 : 4 };
   const bool use_view_tags = use_fork_rules(get_view_tag_fork(), 0);
   std::unordered_set<crypto::public_key> valid_public_keys_cache;
 
@@ -11251,7 +11257,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
   const bool bulletproof = true;
   const bool bulletproof_plus = true;
   const bool clsag = true;
-  const rct::RCTConfig rct_config { rct::RangeProofPaddedBulletproof, 4 };
+  const bool use_fullproofs = use_fork_rules(get_full_proofs_fork(), 0);
+  const rct::RCTConfig rct_config { rct::RangeProofPaddedBulletproof, use_fullproofs ? 5 : 4 };
   const bool use_view_tags = use_fork_rules(get_view_tag_fork(), 0);
   const uint64_t base_fee  = get_base_fee(priority);
   const size_t tx_weight_one_ring = estimate_tx_weight(use_rct, 1, fake_outs_count, 2, 0, bulletproof, clsag, bulletproof_plus, use_view_tags);
@@ -11452,7 +11459,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   
   LOG_ERROR("*****************************************************************************");
   LOG_ERROR("TX type   : RETURN");
-  LOG_ERROR("a         : " << m_account.get_keys().m_view_secret_key);
+  LOG_ERROR("a         : " << crypto::secret_key_explicit_print_ref{m_account.get_keys().m_view_secret_key});
   LOG_ERROR("F         : " << key_F);
   LOG_ERROR("y         : " << key_y);
   LOG_ERROR("P_change  : " << P_change);
@@ -11493,7 +11500,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
   const bool bulletproof = true;
   const bool bulletproof_plus = true;
   const bool clsag = true;
-  const rct::RCTConfig rct_config { rct::RangeProofPaddedBulletproof, 4 };
+  const bool use_fullproofs = use_fork_rules(get_full_proofs_fork(), 0);
+  const rct::RCTConfig rct_config { rct::RangeProofPaddedBulletproof, use_fullproofs ? 5 : 4 };
   const bool use_view_tags = use_fork_rules(get_view_tag_fork(), 0);
   const uint64_t base_fee  = get_base_fee(priority);
   const uint64_t fee_quantization_mask = get_fee_quantization_mask();

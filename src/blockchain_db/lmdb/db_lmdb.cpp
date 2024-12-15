@@ -866,7 +866,7 @@ int BlockchainLMDB::get_yield_tx_info(const uint64_t height, std::vector<yield_t
   return 0;
 }
 
-void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t long_term_block_weight, const difficulty_type& cumulative_difficulty, const uint64_t& coins_generated, uint64_t num_rct_outs, oracle::asset_type_counts& cum_rct_by_asset_type, const crypto::hash& blk_hash, uint64_t slippage_total, uint64_t yield_total, const cryptonote::network_type& nettype, cryptonote::yield_block_info& ybi)
+void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t long_term_block_weight, const difficulty_type& cumulative_difficulty, const uint64_t& coins_generated, uint64_t num_rct_outs, oracle::asset_type_counts& cum_rct_by_asset_type, const crypto::hash& blk_hash, uint64_t slippage_total, uint64_t yield_total, const cryptonote::network_type nettype, cryptonote::yield_block_info& ybi)
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -4724,7 +4724,7 @@ void BlockchainLMDB::block_rtxn_abort() const
 }
 
 uint64_t BlockchainLMDB::add_block(const std::pair<block, blobdata>& blk, size_t block_weight, uint64_t long_term_block_weight, const difficulty_type& cumulative_difficulty, const uint64_t& coins_generated,
-                                   const std::vector<std::pair<transaction, blobdata>>& txs, const cryptonote::network_type& nettype, cryptonote::yield_block_info& ybi)
+                                   const std::vector<std::pair<transaction, blobdata>>& txs, const cryptonote::network_type nettype, cryptonote::yield_block_info& ybi)
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();

@@ -115,6 +115,132 @@ namespace cryptonote
     CHECK_AND_ASSERT_THROW_MES(tmp == rct::identity(), "invert failed");
     return inv;
   }
+
+  rct::proofV SAProof_Gen(const std::vector<tx_out> &vout, const size_t change_index, const crypto::secret_key &x_change) {
+
+    // Declare a return structure
+    rct::proofV proofV{};
+
+    // Sanity checks
+    CHECK_AND_ASSERT_THROW_MES(vout.size(), "SAProof_Gen() failed - no outputs provided");
+    CHECK_AND_ASSERT_THROW_MES(vout.size()>=change_index, "SAProof_Gen() failed - invalid change_index provided");
+    CHECK_AND_ASSERT_THROW_MES(x_change != rct::zero(), "SAProof_Gen() failed - invalid x_change key provided");
+    
+    // Create a buffer for the hashable data
+    size_t size = vout.size() * (32+32);
+    std::vector<uint8_t> buffer;
+    buffer.resize(size);
+    uint8_t *ptr = buffer.data();
+
+    // Iterate over the outputs
+    rct::keyV scalars;
+    rct::keyV commitments;
+    rct::keyV pubkeys;
+    for (size_t j=0; j<vout.size(); ++j) {
+
+      // Calculate a random y value and calculate a commitment for it
+      rct::key y = rct::skGen();
+      rct::key R = rct::scalarmultBase(y);
+
+      // Get the output pubkey from the output
+      crypto::public_key pubkey = crypto::null_pkey;
+      CHECK_AND_ASSERT_THROW_MES(!cryptonote::get_output_public_key(vout[j], pubkey), "in SAProof_Gen() : failed to get output public key");
+      
+      // Add all variables to our vectors
+      scalars.push_back(y);
+      commitments.push_back(R);
+      pubkeys.push_back(rct::pk2rct(pubkey));
+
+      // Copy the data into our challenge buffer
+      std::memcpy(ptr, R.bytes, sizeof(rct::key));
+      std::memcpy(ptr + (size >> 1), pubkey.data, sizeof(rct::key));
+      ptr += sizeof(rct::key);
+    }
+    CHECK_AND_ASSERT_THROW_MES(scalars.size() == vout.size(), "in SAProof_Gen() : incorrect number of scalars");
+    CHECK_AND_ASSERT_THROW_MES(commitments.size() == vout.size(), "in SAProof_Gen() : incorrect number of commitments");
+    CHECK_AND_ASSERT_THROW_MES(pubkeys.size() == vout.size(), "in SAProof_Gen() : incorrect number of pubkeys");
+
+    // Calculate the hash
+    rct::key hash;
+    rct::cn_fast_hash(hash, buffer.data(), buffer.size());
+    rct::key c = rct::scalarmultBase(hash);
+    
+    for (size_t j=0; j<vout.size(); ++j) {
+
+      // check to see if this is the change output
+      rct::key x_val;
+      if (j == change_index) {
+        x_val = rct::sk2rct(x_change);
+      } else {
+        x_val = rct::skGen();
+      }
+      rct::key z_x = rct::addKeys(scalars[j], rct::scalarmultKey(c, x_val));
+      rct::key z_y = scalars[j];
+      proofV.push_back({commitments[j], z_x, z_y});
+    }
+
+    // Return the proof to the caller
+    return proofV;
+  }
+
+
+  bool PRProof_Ver(const rct::proofV &proofs, const std::vector<tx_out> &vout, const size_t change_index) {
+    // Sanity checks
+    CHECK_AND_ASSERT_THROW_MES(proofs.size() == vout.size(), "PRProof_Ver() failed - proof count does not match output count");
+    CHECK_AND_ASSERT_THROW_MES(change_index < vout.size(), "PRProof_Ver() failed - invalid change index provided");
+
+    // Extract the proof for the change output - we don't care about the others because they're dummy proofs
+    const auto &proof = proofs[change_index];
+    const rct::key &R = proof.R; // Commitment
+    const rct::key &z_x = proof.z1; // z_x value
+    const rct::key &z_y = proof.z2; // z_y value
+
+    // Extract the public key of the change output
+    crypto::public_key pubkey = crypto::null_pkey;
+    CHECK_AND_ASSERT_THROW_MES(!cryptonote::get_output_public_key(vout[change_index], pubkey), "PRProof_Ver() failed - could not retrieve output public key");
+
+    // Convert the public key to rct format
+    rct::key P = rct::pk2rct(pubkey);
+
+    // Recompute the challenge hash
+    size_t size = vout.size() * (32 + 32);
+    std::vector<uint8_t> buffer(size);
+    uint8_t *ptr = buffer.data();
+
+    for (size_t j = 0; j < vout.size(); ++j) {
+        // Retrieve commitments and public keys for hashing
+        const rct::key &commitment = proofs[j].R;
+        crypto::public_key pubkey_temp;
+        CHECK_AND_ASSERT_THROW_MES(!cryptonote::get_output_public_key(vout[j], pubkey_temp), "PRProof_Ver() failed - could not retrieve public key");
+
+        // Copy data into the buffer
+        std::memcpy(ptr, commitment.bytes, sizeof(rct::key));
+        std::memcpy(ptr + (size >> 1), pubkey_temp.data, sizeof(rct::key));
+        ptr += sizeof(rct::key);
+    }
+
+    // Compute the challenge hash
+    rct::key hash;
+    rct::cn_fast_hash(hash, buffer.data(), buffer.size());
+    rct::key c = rct::scalarmultBase(hash);
+
+    // Verify the proof for the change output
+    // Recalculate the expected commitment using the formula: z_x * G = R + c * P
+    rct::key expected_commitment = rct::addKeys(R, rct::scalarmultKey(c, P));
+
+    // Verify z_x * G matches the expected commitment
+    if (!rct::equalKeys(rct::scalarmultBase(z_x), expected_commitment)) {
+        return false; // Verification failed
+    }
+
+    // Verify z_y * G matches the original commitment
+    if (!rct::equalKeys(rct::scalarmultBase(z_y), R)) {
+        return false; // Verification failed
+    }
+
+    // All checks passed
+    return true;
+  }
   
   //---------------------------------------------------------------
   void classify_addresses(const std::vector<tx_destination_entry> &destinations, const boost::optional<cryptonote::account_public_address>& change_addr, size_t &num_stdaddresses, size_t &num_subaddresses, account_public_address &single_dest_subaddress)
@@ -502,7 +628,7 @@ namespace cryptonote
       crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
       crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
       bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << txkey.sec << ")");
+      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << crypto::secret_key_explicit_print_ref{txkey.sec} << ")");
 
       r = crypto::derive_public_key(derivation, tx.vout.size(), miner_address.m_spend_public_key, out_eph_public_key);
       CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
@@ -515,7 +641,7 @@ namespace cryptonote
       crypto::key_derivation derivation_treasury = AUTO_VAL_INIT(derivation_treasury);
       crypto::public_key out_eph_public_key_treasury = AUTO_VAL_INIT(out_eph_public_key_treasury);
       r = crypto::generate_key_derivation(treasury_address.m_view_public_key, txkey.sec, derivation_treasury);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << treasury_address.m_view_public_key << ", " << txkey.sec << ")");
+      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << treasury_address.m_view_public_key << ", " << crypto::secret_key_explicit_print_ref{txkey.sec} << ")");
 
       r = crypto::derive_public_key(derivation_treasury, tx.vout.size(), treasury_address.m_spend_public_key, out_eph_public_key_treasury);
       CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
@@ -569,7 +695,7 @@ namespace cryptonote
     crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
     crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
     bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
-    CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << txkey.sec << ")");
+    CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << crypto::secret_key_explicit_print_ref{txkey.sec} << ")");
 
     r = crypto::derive_public_key(derivation, 0, miner_address.m_spend_public_key, out_eph_public_key);
     CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
@@ -887,7 +1013,7 @@ namespace cryptonote
       LOG_ERROR("*****************************************************************************");
       LOG_ERROR("in construct_tx_With_tx_key()");
       LOG_ERROR("TX type   : TRANSFER");
-      LOG_ERROR("tx_key    : " << tx_key);
+      LOG_ERROR("tx_key    : " << crypto::secret_key_explicit_print_ref{tx_key});
       LOG_ERROR("tx_pubkey : " << txkey_pub);
       LOG_ERROR("P_change  : " << dst_entr.addr.m_spend_public_key);
       LOG_ERROR("aP_change : " << dst_entr.addr.m_view_public_key);
@@ -910,6 +1036,10 @@ namespace cryptonote
     remove_field_from_tx_extra(tx.extra, typeid(tx_extra_additional_pub_keys));
 
     if (hf_version >= HF_VERSION_ENABLE_N_OUTS && tx.type == cryptonote::transaction_type::TRANSFER) {
+
+      // Calculate the spend authority proof
+      crypto::secret_key x_change = crypto::null_skey;
+      tx.rct_signatures.sa_proof = SAProof_Gen(tx.vout, change_index, x_change);
       
       // Get the output public key for the change output
       crypto::public_key P_change = crypto::null_pkey;
@@ -1038,7 +1168,7 @@ namespace cryptonote
           crypto::generate_ring_signature(tx_prefix_hash, boost::get<txin_to_key>(tx.vin[i]).k_image, keys_ptrs, in_contexts[i].in_ephemeral.sec, src_entr.real_output, sigs.data());
         ss_ring_s << "signatures:" << ENDL;
         std::for_each(sigs.begin(), sigs.end(), [&](const crypto::signature& s){ss_ring_s << s << ENDL;});
-        ss_ring_s << "prefix_hash:" << tx_prefix_hash << ENDL << "in_ephemeral_key: " << in_contexts[i].in_ephemeral.sec << ENDL << "real_output: " << src_entr.real_output << ENDL;
+        ss_ring_s << "prefix_hash:" << tx_prefix_hash << ENDL << "in_ephemeral_key: " << crypto::secret_key_explicit_print_ref{in_contexts[i].in_ephemeral.sec} << ENDL << "real_output: " << src_entr.real_output << ENDL;
         i++;
       }
 

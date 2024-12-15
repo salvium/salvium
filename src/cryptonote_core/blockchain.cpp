@@ -1501,6 +1501,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
     }
+    CHECK_AND_ASSERT_MES((money_in_use - fee) / 5 == b.miner_tx.amount_burnt, false, "miner_transaction has incorrect amount_burnt amount");
     break;
   default:
     assert(false);
@@ -3615,6 +3616,14 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
     }
   }
 
+  if (hf_version >= HF_VERSION_FULL_PROOFS) {
+    if (tx.rct_signatures.type != rct::RCTTypeFullProofs) {
+      MERROR_VER("FullProofs required after v" + std::to_string(HF_VERSION_FULL_PROOFS));
+      tvc.m_invalid_output = true;
+      return false;
+    }
+  }
+  
   // from v15, require view tags and asset types on outputs
   if (!check_output_types(tx, hf_version))
   {

@@ -433,6 +433,7 @@ TEST(cryptonote_protocol_handler, race_condition)
     const block_t &block,
     const stat::chain &stat
   ){
+    cryptonote::yield_block_info ybi;
     core.get_blockchain_storage().get_db().batch_start({}, {});
     core.get_blockchain_storage().get_db().add_block(
       {block, cryptonote::block_to_blob(block)},
@@ -442,7 +443,9 @@ TEST(cryptonote_protocol_handler, race_condition)
       ),
       stat.diff,
       stat.reward,
-      {}
+      {},
+      cryptonote::FAKECHAIN,
+      ybi
     );
     core.get_blockchain_storage().get_db().batch_stop();
   };

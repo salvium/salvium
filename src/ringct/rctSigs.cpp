@@ -521,7 +521,73 @@ namespace rct {
         sc_sub(c.bytes, c_old.bytes, rv.cc.bytes);
         return sc_isnonzero(c.bytes) == 0;  
     }
+
+
+  // Optimized function to hash a vector of keys into a scalar
+  rct::key my_hash_to_scalar(std::vector<rct::key>& keys) {
     
+    // Create a fixed-size buffer large enough to hold all keys and a domain separator
+    size_t total_size = keys.size() * sizeof(rct::key) + sizeof("ZKP") - 1;
+    std::vector<uint8_t> data(total_size);
+
+    // Copy the keys into the buffer
+    size_t offset = 0;
+    for (const auto& key : keys) {
+        std::memcpy(data.data() + offset, key.bytes, sizeof(rct::key));
+        offset += sizeof(rct::key);
+    }
+
+    // Add the domain separator "ZKP" at the end of the buffer
+    const char* domain_separator = "ZKP";
+    std::memcpy(data.data() + offset, domain_separator, sizeof("ZKP") - 1);
+
+    // Hash the concatenated data into a fixed-size hash
+    rct::key hash_output;
+    keccak((const uint8_t *)data.data(), total_size, hash_output.bytes, sizeof(rct::key));
+    sc_reduce32(hash_output.bytes); // Reduce to valid scalar
+
+    return hash_output;
+  }
+  
+    zk_proof PRProof_Gen(const rct::key &difference) {
+        zk_proof proof;
+
+        // Generate a random scalar for blinding
+        rct::key r = rct::skGen();
+        
+        // Compute R = r * G
+        proof.R = rct::scalarmultBase(r);
+        
+        // Compute the commitment to the difference
+        rct::key comm_diff;
+        genC(comm_diff, difference, 0);
+        
+        // Calculate challenge c = H_p(R)
+        std::vector<rct::key> keys{proof.R, comm_diff};
+        rct::key c = rct::hash_to_scalar(keys);
+        sc_reduce32(c.bytes);
+        
+        // Calculate response z = r + c * difference
+        sc_muladd(proof.z1.bytes, difference.bytes, c.bytes, r.bytes);
+        proof.z2 = rct::zero();
+        
+        return proof;
+    }
+
+    bool PRProof_Ver(const rct::key &C, const zk_proof &proof) {
+        // Compute challenge c = H_p(R)
+        std::vector<rct::key> keys{proof.R, C};
+        rct::key c = rct::hash_to_scalar(keys);
+        
+        // Recalculate R' = z * G - c * C (where C is the commitment rv.p_r)
+        rct::key zG = rct::scalarmultBase(proof.z1);
+        rct::key cC = rct::scalarmultKey(C, c);
+        rct::key R_prime;
+        rct::subKeys(R_prime, zG, cC);
+
+        // Verify R' ?= R
+        return rct::equalKeys(R_prime, proof.R);
+    }  
 
 
     //proveRange and verRange
@@ -639,7 +705,7 @@ namespace rct {
           kv.push_back(p.t);
         }
       }
-      else if (rv.type == RCTTypeBulletproofPlus)
+      else if (rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs)
       {
         kv.reserve((6*2+6) * rv.p.bulletproofs_plus.size());
         for (const auto &p: rv.p.bulletproofs_plus)
@@ -1074,7 +1140,7 @@ namespace rct {
             //mask amount and mask
             rv.ecdhInfo[i].mask = copy(outSk[i].mask);
             rv.ecdhInfo[i].amount = d2h(amounts[i]);
-            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus);
+            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs);
         }
 
         //set txn fee
@@ -1140,6 +1206,9 @@ namespace rct {
             case 0:
             case 4:
               rv.type = RCTTypeBulletproofPlus;
+              break;
+            case 5:
+              rv.type = RCTTypeFullProofs;
               break;
             default:
               ASSERT_MES_AND_THROW("Unsupported BP version: " << rct_config.bp_version);
@@ -1257,7 +1326,7 @@ namespace rct {
             //mask amount and mask
             rv.ecdhInfo[i].mask = copy(outSk[i].mask);
             rv.ecdhInfo[i].amount = d2h(outamounts[i]);
-            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus);
+            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs);
         }
             
         //set txn fee
@@ -1282,7 +1351,8 @@ namespace rct {
         sc_sub(difference.bytes, sumpouts.bytes, sumout.bytes);
         genC(rv.p_r, difference, 0);
         DP(rv.p_r);
-
+        if (rv.type == RCTTypeFullProofs)
+          rv.pr_proof = PRProof_Gen(difference);
         key full_message = get_pre_mlsag_hash(rv,hwdev);
 
         for (i = 0 ; i < inamounts.size(); i++)
@@ -1416,8 +1486,10 @@ namespace rct {
         std::vector<const BulletproofPlus*> bpp_proofs;
         size_t max_non_bp_proofs = 0, offset = 0;
 
-        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus,
+        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs,
                              false, "verRctSemanticsSimple called on non simple rctSig");
+        if (rv.type == RCTTypeFullProofs)
+          CHECK_AND_ASSERT_MES(PRProof_Ver(rv.p_r, rv.pr_proof), false, "Invalid p_r commitment to difference");
         const bool bulletproof = is_rct_bulletproof(rv.type);
         const bool bulletproof_plus = is_rct_bulletproof_plus(rv.type);
         if (bulletproof || bulletproof_plus)
@@ -1540,7 +1612,7 @@ namespace rct {
       {
         PERF_TIMER(verRctNonSemanticsSimple);
 
-        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus,
+        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs,
             false, "verRctNonSemanticsSimple called on non simple rctSig");
         const bool bulletproof = is_rct_bulletproof(rv.type);
         const bool bulletproof_plus = is_rct_bulletproof_plus(rv.type);
@@ -1612,7 +1684,7 @@ namespace rct {
 
         //mask amount and mask
         ecdhTuple ecdh_info = rv.ecdhInfo[i];
-        hwdev.ecdhDecode(ecdh_info, sk, rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus);
+        hwdev.ecdhDecode(ecdh_info, sk, rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs);
         mask = ecdh_info.mask;
         key amount = ecdh_info.amount;
         key C = rv.outPk[i].mask;
@@ -1636,14 +1708,14 @@ namespace rct {
     }
 
     xmr_amount decodeRctSimple(const rctSig & rv, const key & sk, unsigned int i, key &mask, hw::device &hwdev) {
-        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus,
+        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs,
             false, "decodeRct called on non simple rctSig");
         CHECK_AND_ASSERT_THROW_MES(i < rv.ecdhInfo.size(), "Bad index");
         CHECK_AND_ASSERT_THROW_MES(rv.outPk.size() == rv.ecdhInfo.size(), "Mismatched sizes of rv.outPk and rv.ecdhInfo");
 
         //mask amount and mask
         ecdhTuple ecdh_info = rv.ecdhInfo[i];
-        hwdev.ecdhDecode(ecdh_info, sk, rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus);
+        hwdev.ecdhDecode(ecdh_info, sk, rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs);
         mask = ecdh_info.mask;
         key amount = ecdh_info.amount;
         key C = rv.outPk[i].mask;

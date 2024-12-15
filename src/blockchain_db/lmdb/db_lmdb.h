@@ -341,7 +341,7 @@ public:
                             , const difficulty_type& cumulative_difficulty
                             , const uint64_t& coins_generated
                             , const std::vector<std::pair<transaction, blobdata>>& txs
-                            , const cryptonote::network_type& nettype
+                            , const cryptonote::network_type nettype
                             , cryptonote::yield_block_info& ybi
                             );
 
@@ -400,7 +400,7 @@ private:
                           const crypto::hash& blk_hash,
                           uint64_t slippage_total,
                           uint64_t yield_total,
-                          const cryptonote::network_type& nettype,
+                          const cryptonote::network_type nettype,
                           cryptonote::yield_block_info& ybi
                           );
 

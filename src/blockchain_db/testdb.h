@@ -76,7 +76,7 @@ public:
   virtual uint64_t get_block_height(const crypto::hash& h) const override { return 0; }
   virtual cryptonote::block_header get_block_header(const crypto::hash& h) const override { return cryptonote::block_header(); }
   virtual uint64_t get_block_timestamp(const uint64_t& height) const override { return 0; }
-  virtual std::vector<uint64_t> get_block_cumulative_rct_outputs(const std::vector<uint64_t> &heights) const override { return {}; }
+  virtual std::pair<std::vector<uint64_t>, uint64_t> get_block_cumulative_rct_outputs(const std::vector<uint64_t> &heights, const std::string asset_type) const override { return {}; }
   virtual uint64_t get_top_block_timestamp() const override { return 0; }
   virtual size_t get_block_weight(const uint64_t& height) const override { return 128; }
   virtual std::vector<uint64_t> get_block_weights(uint64_t start_height, size_t count) const override { return {}; }
@@ -92,6 +92,7 @@ public:
   virtual crypto::hash top_block_hash(uint64_t *block_height = NULL) const override { if (block_height) *block_height = 0; return crypto::hash(); }
   virtual cryptonote::block get_top_block() const override { return cryptonote::block(); }
   virtual uint64_t height() const override { return 1; }
+  virtual std::map<std::string, uint64_t> get_circulating_supply() const override { return std::map<std::string, uint64_t>{}; }
   virtual bool tx_exists(const crypto::hash& h) const override { return false; }
   virtual bool tx_exists(const crypto::hash& h, uint64_t& tx_index) const override { return false; }
   virtual uint64_t get_tx_unlock_time(const crypto::hash& h) const override { return 0; }
@@ -101,20 +102,23 @@ public:
   virtual std::vector<cryptonote::transaction> get_tx_list(const std::vector<crypto::hash>& hlist) const override { return std::vector<cryptonote::transaction>(); }
   virtual uint64_t get_tx_block_height(const crypto::hash& h) const override { return 0; }
   virtual uint64_t get_num_outputs(const uint64_t& amount) const override { return 1; }
+  virtual uint64_t get_num_outputs_of_asset_type(const std::string asset_type) const override { return 1; }
   virtual uint64_t get_indexing_base() const override { return 0; }
   virtual cryptonote::output_data_t get_output_key(const uint64_t& amount, const uint64_t& index, bool include_commitmemt) const override { return cryptonote::output_data_t(); }
   virtual cryptonote::tx_out_index get_output_tx_and_index_from_global(const uint64_t& index) const override { return cryptonote::tx_out_index(); }
   virtual cryptonote::tx_out_index get_output_tx_and_index(const uint64_t& amount, const uint64_t& index) const override { return cryptonote::tx_out_index(); }
   virtual void get_output_tx_and_index(const uint64_t& amount, const std::vector<uint64_t> &offsets, std::vector<cryptonote::tx_out_index> &indices) const override {}
   virtual void get_output_key(const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &offsets, std::vector<cryptonote::output_data_t> &outputs, bool allow_partial = false) const override {}
+  virtual void get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const override {}
+  virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const override { return 1; }
   virtual bool can_thread_bulk_indices() const override { return false; }
-  virtual std::vector<std::vector<uint64_t>> get_tx_amount_output_indices(const uint64_t tx_index, size_t n_txes) const override { return std::vector<std::vector<uint64_t>>(); }
+  virtual std::vector<std::vector<std::pair<uint64_t, uint64_t>>> get_tx_amount_output_indices(const uint64_t tx_index, size_t n_txes) const override { return std::vector<std::vector<std::pair<uint64_t, uint64_t>>>(); }
   virtual bool has_key_image(const crypto::key_image& img) const override { return false; }
   virtual void remove_block() override { }
-  virtual uint64_t add_transaction_data(const crypto::hash& blk_hash, const std::pair<cryptonote::transaction, cryptonote::blobdata_ref>& tx, const crypto::hash& tx_hash, const crypto::hash& tx_prunable_hash) override {return 0;}
-  virtual void remove_transaction_data(const crypto::hash& tx_hash, const cryptonote::transaction& tx) override {}
-  virtual uint64_t add_output(const crypto::hash& tx_hash, const cryptonote::tx_out& tx_output, const uint64_t& local_index, const uint64_t unlock_time, const rct::key *commitment) override {return 0;}
-  virtual void add_tx_amount_output_indices(const uint64_t tx_index, const std::vector<uint64_t>& amount_output_indices) override {}
+  virtual uint64_t add_transaction_data(const crypto::hash& blk_hash, const std::pair<cryptonote::transaction, cryptonote::blobdata_ref>& tx, const crypto::hash& tx_hash, const crypto::hash& tx_prunable_hash, const bool miner_tx) override {return 0;}
+  virtual void remove_transaction_data(const crypto::hash& tx_hash, const cryptonote::transaction& tx, const bool miner_tx) override {}
+  virtual std::pair<uint64_t, uint64_t> add_output(const crypto::hash& tx_hash, const cryptonote::tx_out& tx_output, const uint64_t& local_index, const uint64_t unlock_time, const rct::key *commitment) override {return std::make_pair(0,0);}
+  virtual void add_tx_amount_output_indices(const uint64_t tx_index, const std::vector<std::pair<uint64_t, uint64_t>>& amount_output_indices) override {}
   virtual void add_spent_key(const crypto::key_image& k_image) override {}
   virtual void remove_spent_key(const crypto::key_image& k_image) override {}
 
@@ -135,17 +139,26 @@ public:
   virtual bool get_txpool_tx_meta(const crypto::hash& txid, cryptonote::txpool_tx_meta_t &meta) const override { return false; }
   virtual bool get_txpool_tx_blob(const crypto::hash& txid, cryptonote::blobdata &bd, relay_category tx_category) const override { return false; }
   virtual uint64_t get_database_size() const override { return 0; }
+
+  virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi) const override { return 0; }
+  virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) const override { return 0; }
+
   virtual cryptonote::blobdata get_txpool_tx_blob(const crypto::hash& txid, relay_category tx_category) const override { return ""; }
   virtual bool for_all_txpool_txes(std::function<bool(const crypto::hash&, const cryptonote::txpool_tx_meta_t&, const cryptonote::blobdata_ref*)>, bool include_blob = false, relay_category category = relay_category::broadcasted) const override { return false; }
 
-  virtual void add_block( const cryptonote::block& blk
-                        , size_t block_weight
-                        , uint64_t long_term_block_weight
-                        , const cryptonote::difficulty_type& cumulative_difficulty
-                        , const uint64_t& coins_generated
-                        , uint64_t num_rct_outs
-                        , const crypto::hash& blk_hash
-                        ) override { }
+  virtual void add_block( const block& blk,
+                          size_t block_weight,
+                          uint64_t long_term_block_weight,
+                          const difficulty_type& cumulative_difficulty,
+                          const uint64_t& coins_generated,
+                          uint64_t num_rct_outs,
+                          oracle::asset_type_counts& cum_rct_by_asset_type,
+                          const crypto::hash& blk_hash,
+                          uint64_t slippage_total,
+                          uint64_t yield_total,
+                          const cryptonote::network_type nettype,
+                          cryptonote::yield_block_info& ybi
+                          ) override { }
   virtual cryptonote::block get_block_from_height(const uint64_t& height) const override { return cryptonote::block(); }
   virtual void set_hard_fork_version(uint64_t height, uint8_t version) override {}
   virtual uint8_t get_hard_fork_version(uint64_t height) const override { return 0; }

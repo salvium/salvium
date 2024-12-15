@@ -47,6 +47,9 @@ const hardfork_t testnet_hard_forks[] = {
 
   // version 2 starts from block 250
   { 2, 250, 0, 1445355000 },
+
+  // version 3 starts from block 500
+  { 3, 500, 0, 1729518000 },
 };
 const size_t num_testnet_hard_forks = sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]);
 const uint64_t testnet_hard_fork_version_1_till = ((uint64_t)-1);

@@ -822,7 +822,8 @@ static bool set_tx_rct_signatures(
 )
 {
   if (rct_config.bp_version != 3 &&
-      rct_config.bp_version != 4)
+      rct_config.bp_version != 4 &&
+      rct_config.bp_version != 5)
     return false;
   if (rct_config.range_proof_type != rct::RangeProofPaddedBulletproof)
     return false;
@@ -838,6 +839,8 @@ static bool set_tx_rct_signatures(
     rv.type = rct::RCTTypeCLSAG;
   else if (rct_config.bp_version == 4)
     rv.type = rct::RCTTypeBulletproofPlus;
+  else if (rct_config.bp_version == 5)
+    rv.type = rct::RCTTypeFullProofs;
   else
     return false;
   rv.txnFee = fee;
@@ -915,10 +918,16 @@ static bool set_tx_rct_signatures(
     }
     sc_sub(difference.bytes, sumpouts.bytes, sumouts.bytes);
     rct::genC(rv.p_r, difference, 0);
+    if (rv.type == rct::RCTTypeFullProofs) {
+      rv.pr_proof = PRProof_Gen(difference);
+      //rv.sa_proof = SAProof_Gen();
+    }
   }
   // check balance if reconstructing the tx
   else {
     rv.p.pseudoOuts = unsigned_tx.rct_signatures.p.pseudoOuts;
+    rv.pr_proof = unsigned_tx.rct_signatures.pr_proof; // should verify this during reconstruction
+    rv.sa_proof = unsigned_tx.rct_signatures.sa_proof; // should verify this during reconstruction
     rv.p_r = unsigned_tx.rct_signatures.p_r;
     if (num_sources != rv.p.pseudoOuts.size())
       return false;
