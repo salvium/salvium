@@ -81,15 +81,19 @@ namespace
   public:
     TestDB() { m_open = true; }
 
-    virtual void add_block( const cryptonote::block& blk
-        , size_t block_weight
-        , uint64_t long_term_block_weight
-        , const cryptonote::difficulty_type& cumulative_difficulty
-        , const uint64_t& coins_generated
-        , uint64_t num_rct_outs
-                        , oracle::asset_type_counts& cum_rct_by_asset_type
-        , const crypto::hash& blk_hash
-    ) override
+    virtual void add_block( const block& blk,
+                            size_t block_weight,
+                            uint64_t long_term_block_weight,
+                            const difficulty_type& cumulative_difficulty,
+                            const uint64_t& coins_generated,
+                            uint64_t num_rct_outs,
+                            oracle::asset_type_counts& cum_rct_by_asset_type,
+                            const crypto::hash& blk_hash,
+                            uint64_t slippage_total,
+                            uint64_t yield_total,
+                            const cryptonote::network_type nettype,
+                            cryptonote::yield_block_info& ybi
+                            ) override
     {
       blocks.push_back({blk, blk_hash});
     }
@@ -144,9 +148,8 @@ namespace
 
 }
 
-static std::unique_ptr<cryptonote::Blockchain> init_blockchain(const std::vector<test_event_entry> & events, cryptonote::network_type nettype)
+static std::unique_ptr<cryptonote::BlockchainAndPool> init_blockchain(const std::vector<test_event_entry> & events, cryptonote::network_type nettype)
 {
-  std::unique_ptr<cryptonote::Blockchain> bc;
   v_hardforks_t hardforks;
   cryptonote::test_options test_options_tmp{nullptr, 0};
   const cryptonote::test_options * test_options = &test_options_tmp;
@@ -160,10 +163,8 @@ static std::unique_ptr<cryptonote::Blockchain> init_blockchain(const std::vector
   test_options_tmp.hard_forks = hardforks.data();
   test_options = &test_options_tmp;
 
-  cryptonote::tx_memory_pool txpool(*bc);
-  bc.reset(new cryptonote::Blockchain(txpool));
+  std::unique_ptr<cryptonote::BlockchainAndPool> bap(new BlockchainAndPool());
 
-  cryptonote::Blockchain *blockchain = bc.get();
   auto bdb = new TestDB();
 
   BOOST_FOREACH(const test_event_entry &ev, events)
@@ -176,12 +177,13 @@ static std::unique_ptr<cryptonote::Blockchain> init_blockchain(const std::vector
     const block *blk = &boost::get<block>(ev);
     auto blk_hash = get_block_hash(*blk);
     oracle::asset_type_counts num_rct_outs_by_asset_type;
-    bdb->add_block(*blk, 1, 1, 1, 0, 0, num_rct_outs_by_asset_type, blk_hash);
+    cryptonote::yield_block_info ybi;
+    bdb->add_block(*blk, 1, 1, 1, 0, 0, num_rct_outs_by_asset_type, blk_hash, 0, 0, cryptonote::FAKECHAIN, ybi);
   }
 
-  bool r = blockchain->init(bdb, nettype, true, test_options, 2, nullptr);
+  bool r = bap->blockchain.init(bdb, nettype, true, test_options, 2, nullptr);
   CHECK_AND_ASSERT_THROW_MES(r, "could not init blockchain from events");
-  return bc;
+  return bap;
 }
 
 void test_generator::get_block_chain(std::vector<block_info>& blockchain, const crypto::hash& head, size_t n) const
@@ -395,7 +397,7 @@ bool test_generator::construct_block_manually_tx(cryptonote::block& blk, const c
 void test_generator::fill_nonce(cryptonote::block& blk, const difficulty_type& diffic, uint64_t height)
 {
   const cryptonote::Blockchain *blockchain = nullptr;
-  std::unique_ptr<cryptonote::Blockchain> bc;
+  std::unique_ptr<cryptonote::BlockchainAndPool> bap;
 
   if (blk.major_version >= RX_BLOCK_VERSION && diffic > 1)
   {
@@ -405,8 +407,8 @@ void test_generator::fill_nonce(cryptonote::block& blk, const difficulty_type& d
     }
     else
     {
-      bc = init_blockchain(*m_events, m_nettype);
-      blockchain = bc.get();
+      bap = init_blockchain(*m_events, m_nettype);
+      blockchain = &bap->blockchain;
     }
   }
 
@@ -489,7 +491,8 @@ bool init_spent_output_indices(map_output_idx_t& outs, map_output_t& outs_mine, 
             crypto::public_key out_key = boost::get<txout_to_key>(oi.out).key;
             std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
             subaddresses[from.get_keys().m_account_address.m_spend_public_key] = {0,0};
-            generate_key_image_helper(from.get_keys(), subaddresses, out_key, get_tx_pub_key_from_extra(*oi.p_tx), get_additional_tx_pub_keys_from_extra(*oi.p_tx), oi.out_no, in_ephemeral, img, hw::get_device(("default")));
+            cryptonote::origin_data od{3, crypto::null_pkey, 0};
+            generate_key_image_helper(from.get_keys(), subaddresses, out_key, get_tx_pub_key_from_extra(*oi.p_tx), get_additional_tx_pub_keys_from_extra(*oi.p_tx), oi.out_no, in_ephemeral, img, hw::get_device(("default")), false, od);
 
             // lookup for this key image in the events vector
             BOOST_FOREACH(auto& tx_pair, mtx) {

@@ -63,7 +63,8 @@ namespace
         std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
         subaddresses[sender_account_keys.m_account_address.m_spend_public_key] = {0,0};
         auto& out_key = reinterpret_cast<const crypto::public_key&>(src_entr.outputs[src_entr.real_output].second.dest);
-        generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, in_ephemeral, img, hw::get_device(("default")));
+        const cryptonote::origin_data od{3, crypto::null_pkey, src_entr.real_output};
+        generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, in_ephemeral, img, hw::get_device(("default")), false, od);
 
         // put key image into tx input
         txin_to_key input_to_key;

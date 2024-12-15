@@ -218,8 +218,9 @@
 #define HF_VERSION_2021_SCALING                 2
 #define HF_VERSION_ENABLE_N_OUTS                2
 
-#define HF_VERSION_REQUIRE_VIEW_TAGS            3
+#define HF_VERSION_FULL_PROOFS                  3
 
+#define HF_VERSION_REQUIRE_VIEW_TAGS            255
 #define HF_VERSION_ENABLE_CONVERT               255
 #define HF_VERSION_ENABLE_ORACLE                255
 #define HF_VERSION_SLIPPAGE_YIELD               255

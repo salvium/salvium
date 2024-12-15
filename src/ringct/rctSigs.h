@@ -85,6 +85,9 @@ namespace rct {
     clsag proveRctCLSAGSimple(const key &, const ctkeyV &, const ctkey &, const key &, const key &, unsigned int, hw::device &);
     bool verRctCLSAGSimple(const key &, const clsag &, const ctkeyV &, const key &);
 
+    zk_proof PRProof_Gen(const rct::key &difference);
+    bool PRProof_Ver(const rct::key &C, const zk_proof &proof);
+  
     //proveRange and verRange
     //proveRange gives C, and mask such that \sumCi = C
     //   c.f. https://eprint.iacr.org/2015/1098 section 5.1

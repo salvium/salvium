@@ -345,10 +345,10 @@ TEST(ringct, range_proofs)
         ASSERT_TRUE(ok);
 
         cryptonote::transaction_type tx_type = cryptonote::transaction_type::TRANSFER;
-        std::string in_asset_type = "FULM";
+        std::string in_asset_type = "SAL";
         std::vector<std::string> destination_asset_types;
         for (size_t i = 0; i < destinations.size(); ++i)
-          destination_asset_types.push_back("FULM");
+          destination_asset_types.push_back("SAL");
 
         //compute rct data with mixin 3
         rctSig s = genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, amounts, amount_keys, 0, 3, rct_config, hw::get_device("default"));
@@ -416,10 +416,10 @@ TEST(ringct, range_proofs_with_fee)
         const rct::RCTConfig rct_config { RangeProofBorromean, 0 };
 
         cryptonote::transaction_type tx_type = cryptonote::transaction_type::TRANSFER;
-        std::string in_asset_type = "FULM";
+        std::string in_asset_type = "SAL";
         std::vector<std::string> destination_asset_types;
         for (size_t i = 0; i < destinations.size(); ++i)
-          destination_asset_types.push_back("FULM");
+          destination_asset_types.push_back("SAL");
 
         //compute rct data with mixin 3
         rctSig s = genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, amounts, amount_keys, 1, 3, rct_config, hw::get_device("default"));
@@ -499,10 +499,10 @@ TEST(ringct, simple)
 
         const rct::RCTConfig rct_config { RangeProofBorromean, 0 };
         cryptonote::transaction_type tx_type = cryptonote::transaction_type::TRANSFER;
-        std::string in_asset_type = "FULM";
+        std::string in_asset_type = "SAL";
         std::vector<std::string> destination_asset_types;
         for (size_t i = 0; i < destinations.size(); ++i)
-          destination_asset_types.push_back("FULM");
+          destination_asset_types.push_back("SAL");
 
         rctSig s = genRctSimple(message, sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, amount_keys, txnfee, 2, rct_config, hw::get_device("default"));
 
@@ -567,10 +567,10 @@ static rct::rctSig make_sample_simple_rct_sig(int n_inputs, const uint64_t input
 
     const rct::RCTConfig rct_config { RangeProofBorromean, 0 };
     cryptonote::transaction_type tx_type = cryptonote::transaction_type::TRANSFER;
-    std::string in_asset_type = "FULM";
+    std::string in_asset_type = "SAL";
     std::vector<std::string> destination_asset_types;
     for (size_t i = 0; i < destinations.size(); ++i)
-      destination_asset_types.push_back("FULM");
+      destination_asset_types.push_back("SAL");
 
     return genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, amount_keys, fee, 3, rct_config, hw::get_device("default"));
 }
@@ -1290,4 +1290,40 @@ TEST(ringct, aggregated)
     sp[n] = &s[n];
     ASSERT_TRUE(verRctSemanticsSimple(s[n]));
   }
+}
+
+TEST(ringct, pr_proof)
+{
+  // Create a random commitment with 0 amount
+  int success = 0, failure = 0;
+  for (size_t i=0; i<1000; i++) {
+    key Sk = skGen();
+    sc_reduce32(Sk.bytes);
+    key C;
+    genC(C, Sk, i%100 ? 0 : i%99);
+    zk_proof proof = PRProof_Gen(Sk);
+    if (PRProof_Ver(C, proof))
+      success++;
+    else
+      failure++;
+  }
+  ASSERT_EQ(failure, 9);
+}
+
+TEST(ringct, sa_proof)
+{
+  // Create a random commitment with 0 amount
+  int success = 0, failure = 0;
+  for (size_t i=0; i<1000; i++) {
+    key Sk = skGen();
+    sc_reduce32(Sk.bytes);
+    key C;
+    genC(C, Sk, i%100 ? 0 : i%99);
+    zk_proof proof = PRProof_Gen(Sk);
+    if (PRProof_Ver(C, proof))
+      success++;
+    else
+      failure++;
+  }
+  ASSERT_EQ(failure, 9);
 }

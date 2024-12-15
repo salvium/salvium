@@ -42,19 +42,12 @@ TEST(pricing_record, verify_serialization)
   oracle::pricing_record pr;
   oracle::pricing_record pr1;
   pr.pr_version = 1;
+  pr.height = 1234;
+  pr.supply = {100000,0};
   pr.timestamp = 1632401454;
-  pr.spot = COIN<<1;
-  pr.moving_average = (COIN * 3) >> 2;
-  memset(pr.signature, 0, 64);
+  pr.assets = {};
+  pr.signature = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
-  /*
-  oracle::pricing_record_entry foo;
-  foo.first = "FULM";
-  foo.second.first = 2;
-  foo.second.second = 3;
-  pr.assets.push_back(foo);
-  */
-  
   std::string blob;
   ASSERT_TRUE(serialization::dump_binary(pr, blob));
   ASSERT_TRUE(serialization::parse_binary(blob, pr1));

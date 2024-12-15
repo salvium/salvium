@@ -350,7 +350,7 @@ bool gen_block_miner_tx_has_2_in::generate(std::vector<test_event_entry>& events
   destinations.push_back(de);
 
   transaction tmp_tx;
-  if (!construct_tx(miner_account.get_keys(), sources, destinations, 1/*hf_version*/, "FULM", "FULM", cryptonote::transaction_type::TRANSFER, boost::none, std::vector<uint8_t>(), tmp_tx, 0))
+  if (!construct_tx(miner_account.get_keys(), sources, destinations, 1/*hf_version*/, "SAL", cryptonote::transaction_type::TRANSFER, boost::none, std::vector<uint8_t>(), tmp_tx, 0))
     return false;
 
   MAKE_MINER_TX_MANUALLY(miner_tx, blk_0);
@@ -393,7 +393,7 @@ bool gen_block_miner_tx_with_txin_to_key::generate(std::vector<test_event_entry>
   destinations.push_back(de);
 
   transaction tmp_tx;
-  if (!construct_tx(miner_account.get_keys(), sources, destinations, 1/*hf_version*/, "FULM", "FULM", cryptonote::transaction_type::TRANSFER, boost::none, std::vector<uint8_t>(), tmp_tx, 0))
+  if (!construct_tx(miner_account.get_keys(), sources, destinations, 1/*hf_version*/, "SAL", cryptonote::transaction_type::TRANSFER, boost::none, std::vector<uint8_t>(), tmp_tx, 0))
     return false;
 
   MAKE_MINER_TX_MANUALLY(miner_tx, blk_1);
@@ -687,7 +687,7 @@ bool gen_block_miner_tx_out_has_no_view_tag_before_hf_view_tags::generate(std::v
   cryptonote::get_output_public_key(miner_tx.vout[0], output_public_key);
 
   // explicitly call the setter to ensure it does not set a view tag on the miner tx output
-  cryptonote::set_tx_out(miner_tx.vout[0].amount, "FULM", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, output_public_key, use_view_tags, view_tag, miner_tx.vout[0]);
+  cryptonote::set_tx_out(miner_tx.vout[0].amount, "SAL", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, output_public_key, use_view_tags, view_tag, miner_tx.vout[0]);
   CHECK_AND_ASSERT_MES(!cryptonote::get_output_view_tag(miner_tx.vout[0]), false, "output should still not have a view tag");
 
   block blk_1;
@@ -713,7 +713,7 @@ bool gen_block_miner_tx_out_has_no_view_tag_from_hf_view_tags::generate(std::vec
   cryptonote::get_output_public_key(miner_tx.vout[0], output_public_key);
 
   // remove the view tag that is currently set on the miner tx output at this point
-  cryptonote::set_tx_out(miner_tx.vout[0].amount, "FULM", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, output_public_key, use_view_tags, view_tag, miner_tx.vout[0]);
+  cryptonote::set_tx_out(miner_tx.vout[0].amount, "SAL", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, output_public_key, use_view_tags, view_tag, miner_tx.vout[0]);
   CHECK_AND_ASSERT_MES(!cryptonote::get_output_view_tag(miner_tx.vout[0]), false, "output should not have a view tag");
 
   block blk_1;
@@ -745,7 +745,7 @@ bool gen_block_miner_tx_out_has_view_tag_before_hf_view_tags::generate(std::vect
   crypto::derive_view_tag(derivation, 0, view_tag);
 
   // set the view tag on the miner tx output
-  cryptonote::set_tx_out(miner_tx.vout[0].amount, "FULM", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, output_public_key, use_view_tags, view_tag, miner_tx.vout[0]);
+  cryptonote::set_tx_out(miner_tx.vout[0].amount, "SAL", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, output_public_key, use_view_tags, view_tag, miner_tx.vout[0]);
   boost::optional<crypto::view_tag> actual_vt = cryptonote::get_output_view_tag(miner_tx.vout[0]);
   CHECK_AND_ASSERT_MES(actual_vt && *actual_vt == view_tag, false, "unexpected output view tag");
 
@@ -781,7 +781,7 @@ bool gen_block_miner_tx_out_has_view_tag_from_hf_view_tags::generate(std::vector
   CHECK_AND_ASSERT_MES(actual_vt && *actual_vt == view_tag, false, "unexpected output view tag");
 
   // set the view tag on the miner tx output
-  cryptonote::set_tx_out(miner_tx.vout[0].amount, "FULM", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, output_public_key, use_view_tags, view_tag, miner_tx.vout[0]);
+  cryptonote::set_tx_out(miner_tx.vout[0].amount, "SAL", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, output_public_key, use_view_tags, view_tag, miner_tx.vout[0]);
   boost::optional<crypto::view_tag> actual_vt_after_setting = cryptonote::get_output_view_tag(miner_tx.vout[0]);
   CHECK_AND_ASSERT_MES(actual_vt_after_setting && *actual_vt_after_setting == view_tag, false, "unexpected output view tag after setting");
 
