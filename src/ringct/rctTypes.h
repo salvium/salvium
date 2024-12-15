@@ -101,7 +101,6 @@ namespace rct {
           FIELD(z2)
         END_SERIALIZE()
     };
-    typedef std::vector<zk_proof> proofV;
 
     //containers For CT operations
     //if it's  representing a private ctkey then "dest" contains the secret key of the address
@@ -341,10 +340,10 @@ namespace rct {
         xmr_amount txnFee; // contains b
         key p_r;
         zk_proof pr_proof; // p_r 
-        proofV sa_proof;
+        std::vector<zk_proof> sa_proofs; // spend authority proofs
 
         rctSigBase() :
-          type(RCTTypeNull), message{}, mixRing{}, pseudoOuts{}, ecdhInfo{}, outPk{}, txnFee(0), p_r{}, pr_proof{}, sa_proof{}
+          type(RCTTypeNull), message{}, mixRing{}, pseudoOuts{}, ecdhInfo{}, outPk{}, txnFee(0), p_r{}, pr_proof{}, sa_proofs{}
         {}
 
         template<bool W, template <bool> class Archive>
@@ -422,7 +421,22 @@ namespace rct {
           if (type == RCTTypeFullProofs)
           {
             FIELD(pr_proof)
-            FIELD(sa_proof)
+            /*
+            uint32_t nsap = sa_proofs.size();
+            VARINT_FIELD(nsap)
+            ar.tag("sa_proofs");
+            ar.begin_array();
+            if (nsap > outputs)
+              return false;
+            PREPARE_CUSTOM_VECTOR_SERIALIZATION(nsap, sa_proofs);
+            for (size_t i = 0; i < nsap; ++i)
+            {
+              FIELDS(sa_proofs[i])
+              if (nsap - i > 1)
+                ar.delimit_array();
+            }
+            ar.end_array();
+            */
           }
           return ar.good();
         }
@@ -438,7 +452,7 @@ namespace rct {
           FIELD(p_r)
           if (type == RCTTypeFullProofs) {
             FIELD(pr_proof)
-            FIELD(sa_proof)
+              //FIELD(sa_proofs)
           }
         END_SERIALIZE()
     };
@@ -820,6 +834,7 @@ VARIANT_TAG(debug_archive, rct::multisig_kLRki, "rct::multisig_kLRki");
 VARIANT_TAG(debug_archive, rct::multisig_out, "rct::multisig_out");
 VARIANT_TAG(debug_archive, rct::clsag, "rct::clsag");
 VARIANT_TAG(debug_archive, rct::BulletproofPlus, "rct::bulletproof_plus");
+VARIANT_TAG(debug_archive, rct::zk_proof, "rct::zk_proof");
 
 VARIANT_TAG(binary_archive, rct::key, 0x90);
 VARIANT_TAG(binary_archive, rct::key64, 0x91);
@@ -838,6 +853,7 @@ VARIANT_TAG(binary_archive, rct::multisig_kLRki, 0x9d);
 VARIANT_TAG(binary_archive, rct::multisig_out, 0x9e);
 VARIANT_TAG(binary_archive, rct::clsag, 0x9f);
 VARIANT_TAG(binary_archive, rct::BulletproofPlus, 0xa0);
+VARIANT_TAG(binary_archive, rct::zk_proof, 0xa1);
 
 VARIANT_TAG(json_archive, rct::key, "rct_key");
 VARIANT_TAG(json_archive, rct::key64, "rct_key64");
@@ -856,5 +872,6 @@ VARIANT_TAG(json_archive, rct::multisig_kLRki, "rct_multisig_kLR");
 VARIANT_TAG(json_archive, rct::multisig_out, "rct_multisig_out");
 VARIANT_TAG(json_archive, rct::clsag, "rct_clsag");
 VARIANT_TAG(json_archive, rct::BulletproofPlus, "rct_bulletproof_plus");
+VARIANT_TAG(json_archive, rct::zk_proof, "rct_zk_proof");
 
 #endif  /* RCTTYPES_H */

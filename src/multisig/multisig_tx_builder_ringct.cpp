@@ -920,14 +920,13 @@ static bool set_tx_rct_signatures(
     rct::genC(rv.p_r, difference, 0);
     if (rv.type == rct::RCTTypeFullProofs) {
       rv.pr_proof = PRProof_Gen(difference);
-      //rv.sa_proof = SAProof_Gen();
     }
   }
   // check balance if reconstructing the tx
   else {
     rv.p.pseudoOuts = unsigned_tx.rct_signatures.p.pseudoOuts;
     rv.pr_proof = unsigned_tx.rct_signatures.pr_proof; // should verify this during reconstruction
-    rv.sa_proof = unsigned_tx.rct_signatures.sa_proof; // should verify this during reconstruction
+    //rv.sa_proofs = unsigned_tx.rct_signatures.sa_proofs; // should verify this during reconstruction
     rv.p_r = unsigned_tx.rct_signatures.p_r;
     if (num_sources != rv.p.pseudoOuts.size())
       return false;

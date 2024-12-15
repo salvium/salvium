@@ -1173,6 +1173,10 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::rctSig& 
     INSERT_INTO_JSON_OBJECT(dest, commitments, transform(sig.outPk, just_mask));
     INSERT_INTO_JSON_OBJECT(dest, fee, sig.txnFee);
     INSERT_INTO_JSON_OBJECT(dest, p_r, sig.p_r);
+    if (sig.type == rct::RCTTypeFullProofs) {
+      INSERT_INTO_JSON_OBJECT(dest, pr_proof, sig.pr_proof);
+      INSERT_INTO_JSON_OBJECT(dest, sa_proofs, sig.sa_proofs);
+    }
   }
 
   // prunable
@@ -1210,6 +1214,10 @@ void fromJsonValue(const rapidjson::Value& val, rct::rctSig& sig)
     GET_FROM_JSON_OBJECT(val, sig.outPk, commitments);
     GET_FROM_JSON_OBJECT(val, sig.txnFee, fee);
     GET_FROM_JSON_OBJECT(val, sig.p_r, p_r);
+    if (sig.type == rct::RCTTypeFullProofs) {
+      GET_FROM_JSON_OBJECT(val, sig.pr_proof, pr_proof);
+      GET_FROM_JSON_OBJECT(val, sig.sa_proofs, sa_proofs);
+    }
   }
 
   // prunable
@@ -1463,6 +1471,29 @@ void fromJsonValue(const rapidjson::Value& val, rct::clsag& sig)
   GET_FROM_JSON_OBJECT(val, sig.s, s);
   GET_FROM_JSON_OBJECT(val, sig.c1, c1);
   GET_FROM_JSON_OBJECT(val, sig.D, D);
+}
+
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::zk_proof& proof)
+{
+  dest.StartObject();
+
+  INSERT_INTO_JSON_OBJECT(dest, R, proof.R);
+  INSERT_INTO_JSON_OBJECT(dest, z1, proof.z1);
+  INSERT_INTO_JSON_OBJECT(dest, z2, proof.z2);
+
+  dest.EndObject();
+}
+
+void fromJsonValue(const rapidjson::Value& val, rct::zk_proof& proof)
+{
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("zk_proof (rct::zk_proof)");
+  }
+
+  GET_FROM_JSON_OBJECT(val, proof.R, R);
+  GET_FROM_JSON_OBJECT(val, proof.z1, z1);
+  GET_FROM_JSON_OBJECT(val, proof.z2, z2);
 }
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::rpc::DaemonInfo& info)
