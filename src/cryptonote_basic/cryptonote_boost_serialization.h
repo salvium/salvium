@@ -423,7 +423,7 @@ namespace boost
     a & x.p_r;
     if (x.type == rct::RCTTypeFullProofs) {
       a & x.pr_proof;
-      //a & x.sa_proofs;
+      a & x.sa_proofs;
     }
   }
 
@@ -462,7 +462,7 @@ namespace boost
     a & x.p_r;
     if (x.type == rct::RCTTypeFullProofs) {
       a & x.pr_proof;
-      //a & x.sa_proofs;
+      a & x.sa_proofs;
     }
     //--------------
     a & x.p.rangeSigs;

@@ -88,8 +88,8 @@ namespace rct {
     zk_proof PRProof_Gen(const rct::key &difference);
     bool PRProof_Ver(const rct::key &C, const zk_proof &proof);
   
-    std::vector<zk_proof> SAProof_Gen(const keyV &pubkeys, const key &x_change, const size_t change_index);
-    bool SAProof_Ver(const std::vector<zk_proof> &proofs, const keyV &pubkeys, const size_t change_index);
+    std::vector<zk_proof> SAProof_Gen(const keyV &pubkeys, const key &x_change, const size_t change_index, const key &key_yF);
+    bool SAProof_Ver(const std::vector<zk_proof> &proofs, const keyV &pubkeys, const size_t change_index, const key &key_yF);
   
     //proveRange and verRange
     //proveRange gives C, and mask such that \sumCi = C
@@ -150,7 +150,8 @@ namespace rct {
         const RCTConfig &rct_config,
         hw::device &hwdev,
         const key &x_change = rct::zero(),
-        const size_t change_index = 0
+        const size_t change_index = 0,
+        const key &key_yF = rct::zero()
     );
     rctSig genRctSimple(
         const key & message,
@@ -169,7 +170,8 @@ namespace rct {
         const RCTConfig &rct_config,
         hw::device &hwdev,
         const key &x_change = rct::zero(),
-        const size_t change_index = 0
+        const size_t change_index = 0,
+        const key &key_yF = rct::zero()
     );
     bool verRct(const rctSig & rv, bool semantics);
     static inline bool verRct(const rctSig & rv) { return verRct(rv, true) && verRct(rv, false); }
