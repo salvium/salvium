@@ -3671,6 +3671,15 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
       return false;
     }
   }
+
+  // Make sure CONVERT TXs are disabled until we are ready - belt and braces!
+  if (hf_version < HF_VERSION_ENABLE_CONVERT) {
+    if (tx.type == cryptonote::transaction_type::CONVERT) {
+      MERROR("CONVERT TXs are not permitted prior to v" + std::to_string(HF_VERSION_ENABLE_CONVERT));
+      tvc.m_version_mismatch = true;
+      return false;
+    }
+  }
   
   return true;
 }
