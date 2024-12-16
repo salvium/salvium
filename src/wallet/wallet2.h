@@ -1191,6 +1191,8 @@ private:
 
     std::vector<cryptonote::public_node> get_public_nodes(bool white_only = true);
 
+    bool verify_spend_authority_proof(const cryptonote::transaction &tx, const size_t i, const tx_scan_info_t &tx_scan_info);
+    
     template <class t_archive>
     inline void serialize(t_archive &a, const unsigned int ver)
     {

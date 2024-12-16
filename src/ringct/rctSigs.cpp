@@ -522,33 +522,6 @@ namespace rct {
         return sc_isnonzero(c.bytes) == 0;  
     }
 
-
-  // Optimized function to hash a vector of keys into a scalar
-  rct::key my_hash_to_scalar(std::vector<rct::key>& keys) {
-    
-    // Create a fixed-size buffer large enough to hold all keys and a domain separator
-    size_t total_size = keys.size() * sizeof(rct::key) + sizeof("ZKP") - 1;
-    std::vector<uint8_t> data(total_size);
-
-    // Copy the keys into the buffer
-    size_t offset = 0;
-    for (const auto& key : keys) {
-        std::memcpy(data.data() + offset, key.bytes, sizeof(rct::key));
-        offset += sizeof(rct::key);
-    }
-
-    // Add the domain separator "ZKP" at the end of the buffer
-    const char* domain_separator = "ZKP";
-    std::memcpy(data.data() + offset, domain_separator, sizeof("ZKP") - 1);
-
-    // Hash the concatenated data into a fixed-size hash
-    rct::key hash_output;
-    keccak((const uint8_t *)data.data(), total_size, hash_output.bytes, sizeof(rct::key));
-    sc_reduce32(hash_output.bytes); // Reduce to valid scalar
-
-    return hash_output;
-  }
-  
     zk_proof PRProof_Gen(const rct::key &difference) {
         zk_proof proof;
 
@@ -565,7 +538,6 @@ namespace rct {
         // Calculate challenge c = H_p(R)
         std::vector<rct::key> keys{proof.R, comm_diff};
         rct::key c = rct::hash_to_scalar(keys);
-        sc_reduce32(c.bytes);
         
         // Calculate response z = r + c * difference
         sc_muladd(proof.z1.bytes, difference.bytes, c.bytes, r.bytes);
@@ -1100,27 +1072,22 @@ namespace rct {
 
   zk_proof SAProof_Gen(const key &P, const key &x_change, const key &key_yF) {
 
-    // Declare a return structure
-    zk_proof proof{};
-    proof.z2 = rct::zero();
-
-    // Sanity checks
+    // Sanity checks for inputs
     CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::zero()), "SAProof_Gen() failed - invalid public key provided");
     CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(x_change, rct::zero()), "SAProof_Gen() failed - invalid x_change key provided");
     CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(key_yF, rct::zero()), "SAProof_Gen() failed - invalid shared secret key provided");
     
+    // Declare a return structure
+    zk_proof proof{};
+    proof.z2 = rct::zero();
+
     // Calculate a random r value and calculate a commitment R for it
     rct::key r = rct::skGen();
     proof.R = rct::scalarmultBase(r);
 
-    // Calculate the challenge hash from the commitments plus the pubkeys
-    keyV challenge_keys;
-    challenge_keys.reserve(3);
-    challenge_keys.push_back(proof.R);
-    challenge_keys.push_back(P);
-    challenge_keys.push_back(key_yF);
+    // Calculate the challenge hash from the commitment plus the pubkey plus the shared secret
+    keyV challenge_keys{proof.R, P, key_yF};
     rct::key c = rct::hash_to_scalar(challenge_keys);
-    sc_reduce32(c.bytes);
 
     rct::key z_x;
     sc_muladd(z_x.bytes, x_change.bytes, c.bytes, r.bytes);
@@ -1132,18 +1099,13 @@ namespace rct {
 
   bool SAProof_Ver(const zk_proof &proof, const key &P, const key &key_yF) {
     
-    // Sanity checks
-    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::zero()), "SAProof_Gen() failed - invalid public key provided");
-    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(key_yF, rct::zero()), "SAProof_Gen() failed - invalid shared secret key provided");
+    // Sanity checks for inputs
+    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::zero()), "SAProof_Ver() failed - invalid public key provided");
+    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(key_yF, rct::zero()), "SAProof_Ver() failed - invalid shared secret key provided");
 
     // Recompute the challenge hash
-    keyV challenge_keys;
-    challenge_keys.reserve(3);
-    challenge_keys.push_back(proof.R);
-    challenge_keys.push_back(P);
-    challenge_keys.push_back(key_yF);
+    keyV challenge_keys{proof.R, P, key_yF};
     rct::key c = rct::hash_to_scalar(challenge_keys);
-    sc_reduce32(c.bytes);
 
     // Recalculate the expected commitment using the formula: z_x * G = R + c * P
     rct::key expected_commitment = rct::addKeys(proof.R, rct::scalarmultKey(P, c));

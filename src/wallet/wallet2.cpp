@@ -2242,7 +2242,7 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
   */
   // Populate the unlock_time
   THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_unlock_time(tx.vout[i], tx_scan_info.unlock_time), error::wallet_internal_error, "failed to get output unlock_time");
-  
+
   outs.push_back(i);
   THROW_WALLET_EXCEPTION_IF(tx_money_got_in_outs[tx_scan_info.received->index][tx_scan_info.asset_type] >= std::numeric_limits<uint64_t>::max() - tx_scan_info.money_transfered,
       error::wallet_internal_error, "Overflow in received amounts");
@@ -2477,6 +2477,77 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
     yield_per_stake = yield_per_stake_128.convert_to<uint64_t>();
   }
   
+  // Return success to caller
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool wallet2::verify_spend_authority_proof(const cryptonote::transaction &tx, const size_t i, const tx_scan_info_t &tx_scan_info)
+{
+  // Sanity checks
+  if (tx.type != cryptonote::transaction_type::TRANSFER) return true;
+  if (tx.version < TRANSACTION_VERSION_N_OUTS) return true;
+  if (tx.rct_signatures.type != rct::RCTTypeFullProofs) return true;
+
+  // To verify the spend authority proof, we need to know the y value to process the F value
+  ec_scalar y;
+  
+  // Get P_change from the TX
+  crypto::public_key P_change = crypto::null_pkey;
+    
+  // Calculate z_i (the shared secret between sender and ourselves for the original TX)
+  crypto::public_key txkey_pub = null_pkey; // R
+  const std::vector<crypto::public_key> in_additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(tx);
+  if (in_additional_tx_pub_keys.size() != 0) {
+    THROW_WALLET_EXCEPTION_IF(in_additional_tx_pub_keys.size() != tx.vout.size(),
+                              error::wallet_internal_error,
+                              tr("at verify_spend_authority_proof(): incorrect number of additional TX pubkeys in TX"));
+    txkey_pub = in_additional_tx_pub_keys[i];
+  } else {
+    txkey_pub = get_tx_pub_key_from_extra(tx);
+  }
+  crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+  THROW_WALLET_EXCEPTION_IF(!generate_key_derivation(txkey_pub, m_account.get_keys().m_view_secret_key, derivation),
+                            error::wallet_internal_error,
+                            tr("at verify_spend_authority_proof(): failed to generate_key_derivation"));
+  crypto::secret_key z_i;
+  derivation_to_scalar(derivation, i, z_i);
+    
+  // Calculate the y value for return_payment support
+  struct {
+    char domain_separator[8];
+    rct::key amount_key;
+  } buf;
+  std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+  std::strncpy(buf.domain_separator, "RETURN", 7);
+  buf.amount_key = rct::sk2rct(z_i);
+  crypto::hash_to_scalar(&buf, sizeof(buf), y);
+
+  // The change_index needs decoding too
+  uint8_t eci_data = tx.return_address_change_mask[i];
+      
+  // Calculate the encrypted_change_index data for this output
+  std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+  std::strncpy(buf.domain_separator, "CHG_IDX", 8);
+  crypto::secret_key eci_out;
+  keccak((uint8_t *)&buf, sizeof(buf), (uint8_t*)&eci_out, sizeof(eci_out));
+  uint8_t change_index = eci_data ^ eci_out.data[0];
+  THROW_WALLET_EXCEPTION_IF(change_index >= tx.vout.size(), error::wallet_internal_error, tr("at verify_spend_authority_proof(): invalid change_index calculated"));
+
+  // Now we know the index, we can get P_change
+  THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[change_index], P_change), error::wallet_internal_error, tr("at verify_spend_authority_proof(): failed to get P_change"));
+  rct::key key_P_change = rct::pk2rct(P_change);
+
+  // Calculate the shared secret yF
+  rct::key key_y         = (rct::key&)(y);
+  rct::key key_F         = (rct::key&)(tx.return_address_list[i]);
+  rct::key key_yF        = rct::scalarmultKey(key_F, key_y);
+  rct::key hs_yF         = rct::hash_to_scalar(key_yF);
+
+  // Now we can verify the proof itself
+  if (!rct::SAProof_Ver(tx.rct_signatures.sa_proof, key_P_change, hs_yF)) {
+    return false;
+  }
+
   // Return success to caller
   return true;
 }
@@ -2784,6 +2855,15 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
               if (m_multisig_rescan_info && m_multisig_rescan_info->front().size() >= m_transfers.size())
                 update_multisig_rescan_info(*m_multisig_rescan_k, *m_multisig_rescan_info, m_transfers.size() - 1);
             }
+
+            // Verify the spend authority proof
+            if (!verify_spend_authority_proof(tx, o, tx_scan_info[o])) {
+              // Freeze the output
+              LOG_ERROR("Spend authority proof for TX: " << txid << " failed verification. The output has been frozen.");
+              LOG_ERROR("Please review the transaction and verify that the sender is someone you trust before thawing this payment.");
+              td.m_frozen = true;
+            }
+            
             LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
             if (!ignore_callbacks && 0 != m_callback)
               m_callback->on_money_received(height, txid, tx, td.m_amount, td.asset_type, 0, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time, td.m_td_origin_idx);
@@ -2900,6 +2980,14 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             }
             THROW_WALLET_EXCEPTION_IF(td.get_public_key() != tx_scan_info[o].in_ephemeral.pub, error::wallet_internal_error, "Inconsistent public keys");
             THROW_WALLET_EXCEPTION_IF(td.m_spent, error::wallet_internal_error, "Inconsistent spent status");
+            
+            // Verify the spend authority proof
+            if (!verify_spend_authority_proof(tx, o, tx_scan_info[o])) {
+              // Freeze the output
+              LOG_ERROR("Spend authority proof for TX: " << txid << " failed verification. The output has been frozen.");
+              LOG_ERROR("Please review the transaction and verify that the sender is someone you trust before thawing this payment.");
+              td.m_frozen = true;
+            }
             
             LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
             if (!ignore_callbacks && 0 != m_callback)
