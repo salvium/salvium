@@ -1098,90 +1098,58 @@ namespace rct {
         return index;
     }
 
-  std::vector<zk_proof> SAProof_Gen(const keyV &pubkeys, const key &x_change, const size_t change_index, const key &key_yF) {
+  zk_proof SAProof_Gen(const key &P, const key &x_change, const key &key_yF) {
 
     // Declare a return structure
-    std::vector<zk_proof> proofs{};
+    zk_proof proof{};
+    proof.z2 = rct::zero();
 
     // Sanity checks
-    CHECK_AND_ASSERT_THROW_MES(pubkeys.size(), "SAProof_Gen() failed - no output pubkeys provided");
-    CHECK_AND_ASSERT_THROW_MES(pubkeys.size() > change_index, "SAProof_Gen() failed - invalid change_index provided");
+    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::zero()), "SAProof_Gen() failed - invalid public key provided");
     CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(x_change, rct::zero()), "SAProof_Gen() failed - invalid x_change key provided");
+    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(key_yF, rct::zero()), "SAProof_Gen() failed - invalid shared secret key provided");
     
-    // Iterate over the outputs
-    rct::keyV scalars;
-    rct::keyV commitments;
-    for (size_t j=0; j<pubkeys.size(); ++j) {
-
-      // Calculate a random y value and calculate a commitment for it
-      rct::key y = rct::skGen();
-      rct::key R = rct::scalarmultBase(y);
-
-      // Add all variables to our vectors
-      scalars.push_back(y);
-      commitments.push_back(R);
-    }
-    CHECK_AND_ASSERT_THROW_MES(scalars.size() == pubkeys.size(), "in SAProof_Gen() : incorrect number of scalars");
-    CHECK_AND_ASSERT_THROW_MES(commitments.size() == pubkeys.size(), "in SAProof_Gen() : incorrect number of commitments");
+    // Calculate a random r value and calculate a commitment R for it
+    rct::key r = rct::skGen();
+    proof.R = rct::scalarmultBase(r);
 
     // Calculate the challenge hash from the commitments plus the pubkeys
     keyV challenge_keys;
-    challenge_keys.reserve(pubkeys.size() * 2 + 1);
-    challenge_keys.insert(challenge_keys.end(), commitments.begin(), commitments.end());
-    challenge_keys.insert(challenge_keys.end(), pubkeys.begin(), pubkeys.end());
+    challenge_keys.reserve(3);
+    challenge_keys.push_back(proof.R);
+    challenge_keys.push_back(P);
     challenge_keys.push_back(key_yF);
     rct::key c = rct::hash_to_scalar(challenge_keys);
     sc_reduce32(c.bytes);
 
-    for (size_t j=0; j<pubkeys.size(); ++j) {
-
-      // check to see if this is the change output
-      rct::key x_val;
-      if (j == change_index) {
-        x_val = x_change;
-      } else {
-        x_val = rct::skGen();
-      }
-      rct::key z_x;
-      sc_muladd(z_x.bytes, x_val.bytes, c.bytes, scalars[j].bytes);
-      //rct::key z_x = rct::addKeys(scalars[j], rct::scalarmultKey(c, x_val));
-      //rct::key z_y = scalars[j];
-      proofs.push_back({commitments[j], z_x, rct::zero()});
-    }
+    rct::key z_x;
+    sc_muladd(z_x.bytes, x_change.bytes, c.bytes, r.bytes);
+    proof.z1 = z_x;
 
     // Return the proof to the caller
-    return proofs;
+    return proof;
   }
 
-
-  bool SAProof_Ver(const std::vector<zk_proof> &proofs, const keyV &pubkeys, const size_t change_index, const key &key_yF) {
+  bool SAProof_Ver(const zk_proof &proof, const key &P, const key &key_yF) {
+    
     // Sanity checks
-    CHECK_AND_ASSERT_THROW_MES(proofs.size() == pubkeys.size(), "PRProof_Ver() failed - proof count does not match output count");
-    CHECK_AND_ASSERT_THROW_MES(change_index < pubkeys.size(), "PRProof_Ver() failed - invalid change index provided");
+    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::zero()), "SAProof_Gen() failed - invalid public key provided");
+    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(key_yF, rct::zero()), "SAProof_Gen() failed - invalid shared secret key provided");
 
     // Recompute the challenge hash
     keyV challenge_keys;
-    challenge_keys.reserve(pubkeys.size() * 2 + 1);
-    for (const auto &proof_entr: proofs) {
-      challenge_keys.push_back(proof_entr.R);
-    }
-    challenge_keys.insert(challenge_keys.end(), pubkeys.begin(), pubkeys.end());
+    challenge_keys.reserve(3);
+    challenge_keys.push_back(proof.R);
+    challenge_keys.push_back(P);
     challenge_keys.push_back(key_yF);
     rct::key c = rct::hash_to_scalar(challenge_keys);
     sc_reduce32(c.bytes);
 
-    // Extract the proof for the change output - we don't care about the others because they're dummy proofs
-    const auto &proof = proofs[change_index];
-    const rct::key &R = proof.R; // Commitment
-    const rct::key &z_x = proof.z1; // z_x value
-    const rct::key P  = pubkeys[change_index];
-    
-    // Verify the proof for the change output
     // Recalculate the expected commitment using the formula: z_x * G = R + c * P
-    rct::key expected_commitment = rct::addKeys(R, rct::scalarmultKey(P, c));
+    rct::key expected_commitment = rct::addKeys(proof.R, rct::scalarmultKey(P, c));
 
     // Verify z_x * G matches the expected commitment
-    if (!rct::equalKeys(rct::scalarmultBase(z_x), expected_commitment)) {
+    if (!rct::equalKeys(rct::scalarmultBase(proof.z1), expected_commitment)) {
         return false; // Verification failed
     }
 
@@ -1446,16 +1414,19 @@ namespace rct {
         sc_sub(difference.bytes, sumpouts.bytes, sumout.bytes);
         genC(rv.p_r, difference, 0);
         DP(rv.p_r);
-        if (rv.type == RCTTypeFullProofs)
+        if (rv.type == RCTTypeFullProofs) {
           rv.pr_proof = PRProof_Gen(difference);
+#ifdef DBG
+          CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.p_r, rv.pr_proof), "PRProof_Ver() failed on recently created proof");
+#endif
+        }
 
         // Check if spend authority proof is needed (only for TRANSFER TXs)
-        rv.sa_proofs.clear();
         if (tx_type == cryptonote::transaction_type::TRANSFER && rv.type == rct::RCTTypeFullProofs) {
-          rv.sa_proofs = SAProof_Gen(destinations, x_change, change_index, key_yF);
-          //#ifdef DBG
-          CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.sa_proofs, destinations, change_index, key_yF), "SAProof_Ver() failed on recently created proof");
-          //#endif
+          rv.sa_proof = SAProof_Gen(destinations[change_index], x_change, key_yF);
+#ifdef DBG
+          CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.sa_proof, destinations[change_index], key_yF), "SAProof_Ver() failed on recently created proof");
+#endif
         }
         
         key full_message = get_pre_mlsag_hash(rv,hwdev);
