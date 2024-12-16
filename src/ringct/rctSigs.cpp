@@ -1098,7 +1098,7 @@ namespace rct {
         return index;
     }
 
-  std::vector<zk_proof> SAProof_Gen(const keyV &pubkeys, const key &x_change, const size_t change_index) {
+  std::vector<zk_proof> SAProof_Gen(const keyV &pubkeys, const key &x_change, const size_t change_index, const key &key_yF) {
 
     // Declare a return structure
     std::vector<zk_proof> proofs{};
@@ -1126,9 +1126,10 @@ namespace rct {
 
     // Calculate the challenge hash from the commitments plus the pubkeys
     keyV challenge_keys;
-    challenge_keys.reserve(pubkeys.size() * 2);
+    challenge_keys.reserve(pubkeys.size() * 2 + 1);
     challenge_keys.insert(challenge_keys.end(), commitments.begin(), commitments.end());
     challenge_keys.insert(challenge_keys.end(), pubkeys.begin(), pubkeys.end());
+    challenge_keys.push_back(key_yF);
     rct::key c = rct::hash_to_scalar(challenge_keys);
     sc_reduce32(c.bytes);
 
@@ -1144,8 +1145,8 @@ namespace rct {
       rct::key z_x;
       sc_muladd(z_x.bytes, x_val.bytes, c.bytes, scalars[j].bytes);
       //rct::key z_x = rct::addKeys(scalars[j], rct::scalarmultKey(c, x_val));
-      rct::key z_y = scalars[j];
-      proofs.push_back({commitments[j], z_x, z_y});
+      //rct::key z_y = scalars[j];
+      proofs.push_back({commitments[j], z_x, rct::zero()});
     }
 
     // Return the proof to the caller
@@ -1153,18 +1154,19 @@ namespace rct {
   }
 
 
-  bool SAProof_Ver(const std::vector<zk_proof> &proofs, const keyV &pubkeys, const size_t change_index) {
+  bool SAProof_Ver(const std::vector<zk_proof> &proofs, const keyV &pubkeys, const size_t change_index, const key &key_yF) {
     // Sanity checks
     CHECK_AND_ASSERT_THROW_MES(proofs.size() == pubkeys.size(), "PRProof_Ver() failed - proof count does not match output count");
     CHECK_AND_ASSERT_THROW_MES(change_index < pubkeys.size(), "PRProof_Ver() failed - invalid change index provided");
 
     // Recompute the challenge hash
     keyV challenge_keys;
-    challenge_keys.reserve(pubkeys.size() * 2);
+    challenge_keys.reserve(pubkeys.size() * 2 + 1);
     for (const auto &proof_entr: proofs) {
       challenge_keys.push_back(proof_entr.R);
     }
     challenge_keys.insert(challenge_keys.end(), pubkeys.begin(), pubkeys.end());
+    challenge_keys.push_back(key_yF);
     rct::key c = rct::hash_to_scalar(challenge_keys);
     sc_reduce32(c.bytes);
 
@@ -1172,20 +1174,14 @@ namespace rct {
     const auto &proof = proofs[change_index];
     const rct::key &R = proof.R; // Commitment
     const rct::key &z_x = proof.z1; // z_x value
-    const rct::key &z_y = proof.z2; // z_y value
     const rct::key P  = pubkeys[change_index];
     
     // Verify the proof for the change output
     // Recalculate the expected commitment using the formula: z_x * G = R + c * P
-    rct::key expected_commitment = rct::addKeys(R, rct::scalarmultKey(c, P));
+    rct::key expected_commitment = rct::addKeys(R, rct::scalarmultKey(P, c));
 
     // Verify z_x * G matches the expected commitment
     if (!rct::equalKeys(rct::scalarmultBase(z_x), expected_commitment)) {
-        return false; // Verification failed
-    }
-
-    // Verify z_y * G matches the original commitment
-    if (!rct::equalKeys(rct::scalarmultBase(z_y), R)) {
         return false; // Verification failed
     }
 
@@ -1281,7 +1277,8 @@ namespace rct {
                         const RCTConfig &rct_config,
                         hw::device &hwdev,
                         const key &x_change,
-                        const size_t change_index
+                        const size_t change_index,
+                        const key &key_yF
                         )
     {
         const bool bulletproof_or_plus = rct_config.range_proof_type > RangeProofBorromean;
@@ -1451,6 +1448,16 @@ namespace rct {
         DP(rv.p_r);
         if (rv.type == RCTTypeFullProofs)
           rv.pr_proof = PRProof_Gen(difference);
+
+        // Check if spend authority proof is needed (only for TRANSFER TXs)
+        rv.sa_proofs.clear();
+        if (tx_type == cryptonote::transaction_type::TRANSFER && rv.type == rct::RCTTypeFullProofs) {
+          rv.sa_proofs = SAProof_Gen(destinations, x_change, change_index, key_yF);
+          //#ifdef DBG
+          CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.sa_proofs, destinations, change_index, key_yF), "SAProof_Ver() failed on recently created proof");
+          //#endif
+        }
+        
         key full_message = get_pre_mlsag_hash(rv,hwdev);
 
         for (i = 0 ; i < inamounts.size(); i++)
@@ -1468,16 +1475,6 @@ namespace rct {
             }
         }
 
-        // Check if spend authority proof is needed (only for TRANSFER TXs)
-        /*
-        if (tx_type == cryptonote::transaction_type::TRANSFER && rv.type == rct::RCTTypeFullProofs) {
-          rv.sa_proofs = SAProof_Gen(destinations, x_change, change_index);
-#ifdef DBG
-          CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.sa_proofs, destinations, change_index), "SAProof_Ver() failed on recently created proof");
-#endif
-        }
-        */
-        
         return rv;
     }
 
@@ -1497,7 +1494,8 @@ namespace rct {
                         const RCTConfig &rct_config,
                         hw::device &hwdev,
                         const key &x_change,
-                        const size_t change_index
+                        const size_t change_index,
+                        const key &key_yF
     ) {
         std::vector<unsigned int> index;
         index.resize(inPk.size());
@@ -1508,7 +1506,7 @@ namespace rct {
           mixRing[i].resize(mixin+1);
           index[i] = populateFromBlockchainSimple(mixRing[i], inPk[i], mixin);
         }
-        return genRctSimple(message, inSk, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, txnFee, mixRing, amount_keys, index, outSk, rct_config, hwdev, x_change, change_index);
+        return genRctSimple(message, inSk, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, txnFee, mixRing, amount_keys, index, outSk, rct_config, hwdev, x_change, change_index, key_yF);
     }
 
     //RingCT protocol

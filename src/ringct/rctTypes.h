@@ -421,6 +421,7 @@ namespace rct {
           if (type == RCTTypeFullProofs)
           {
             FIELD(pr_proof)
+            FIELD(sa_proofs)
             /*
             uint32_t nsap = sa_proofs.size();
             VARINT_FIELD(nsap)
@@ -452,7 +453,7 @@ namespace rct {
           FIELD(p_r)
           if (type == RCTTypeFullProofs) {
             FIELD(pr_proof)
-              //FIELD(sa_proofs)
+            FIELD(sa_proofs)
           }
         END_SERIALIZE()
     };

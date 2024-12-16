@@ -858,6 +858,7 @@ namespace cryptonote
     //fill outputs
     size_t output_index = 0;
     crypto::secret_key x_change = crypto::null_skey;
+    rct::key key_yF;
     uint8_t change_index = 0;
     for(const tx_destination_entry& dst_entr: destinations)
     {
@@ -969,6 +970,12 @@ namespace cryptonote
 
         // Push the F point into the TX vector of F points
         tx.return_address_list.push_back(F);
+
+        // Calculate the shared secret yF
+        if (hf_version >= HF_VERSION_FULL_PROOFS) {
+          rct::key key_aP = rct::scalarmultKey(rct::pk2rct(P_change), rct::sk2rct(sender_account_keys.m_view_secret_key));
+          key_yF = rct::hash_to_scalar(key_aP);
+        }
 
         // Calculate the encrypted_change_index data for this output
         struct {
@@ -1209,7 +1216,8 @@ namespace cryptonote
                                               rct_config,
                                               hwdev,
                                               rct::sk2rct(x_change),
-                                              change_index
+                                              change_index,
+                                              key_yF
                                               );
       else
         tx.rct_signatures = rct::genRct(rct::hash2rct(tx_prefix_hash), inSk, destinations, outamounts, mixRing, amount_keys, sources[0].real_output, outSk, rct_config, hwdev); // same index assumption

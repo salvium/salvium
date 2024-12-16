@@ -3619,10 +3619,12 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
   }
 
   if (hf_version >= HF_VERSION_FULL_PROOFS) {
-    if (tx.rct_signatures.type != rct::RCTTypeFullProofs) {
-      MERROR_VER("FullProofs required after v" + std::to_string(HF_VERSION_FULL_PROOFS));
-      tvc.m_invalid_output = true;
-      return false;
+    if (tx.type == cryptonote::transaction_type::TRANSFER) {
+      if (tx.rct_signatures.type != rct::RCTTypeFullProofs) {
+        MERROR_VER("FullProofs required for TRANSFER TXs after v" + std::to_string(HF_VERSION_FULL_PROOFS));
+        tvc.m_invalid_output = true;
+        return false;
+      }
     }
   }
   
