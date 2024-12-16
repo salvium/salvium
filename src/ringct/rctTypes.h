@@ -340,10 +340,10 @@ namespace rct {
         xmr_amount txnFee; // contains b
         key p_r;
         zk_proof pr_proof; // p_r 
-        std::vector<zk_proof> sa_proofs; // spend authority proofs
+        zk_proof sa_proof; // spend authority proof
 
         rctSigBase() :
-          type(RCTTypeNull), message{}, mixRing{}, pseudoOuts{}, ecdhInfo{}, outPk{}, txnFee(0), p_r{}, pr_proof{}, sa_proofs{}
+          type(RCTTypeNull), message{}, mixRing{}, pseudoOuts{}, ecdhInfo{}, outPk{}, txnFee(0), p_r{}, pr_proof{}, sa_proof{}
         {}
 
         template<bool W, template <bool> class Archive>
@@ -421,23 +421,7 @@ namespace rct {
           if (type == RCTTypeFullProofs)
           {
             FIELD(pr_proof)
-            FIELD(sa_proofs)
-            /*
-            uint32_t nsap = sa_proofs.size();
-            VARINT_FIELD(nsap)
-            ar.tag("sa_proofs");
-            ar.begin_array();
-            if (nsap > outputs)
-              return false;
-            PREPARE_CUSTOM_VECTOR_SERIALIZATION(nsap, sa_proofs);
-            for (size_t i = 0; i < nsap; ++i)
-            {
-              FIELDS(sa_proofs[i])
-              if (nsap - i > 1)
-                ar.delimit_array();
-            }
-            ar.end_array();
-            */
+            FIELD(sa_proof)
           }
           return ar.good();
         }
@@ -453,7 +437,7 @@ namespace rct {
           FIELD(p_r)
           if (type == RCTTypeFullProofs) {
             FIELD(pr_proof)
-            FIELD(sa_proofs)
+            FIELD(sa_proof)
           }
         END_SERIALIZE()
     };
