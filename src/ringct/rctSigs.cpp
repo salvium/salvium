@@ -1383,6 +1383,7 @@ namespace rct {
 #endif
         }
 
+        /*
         // Check if spend authority proof is needed (only for TRANSFER TXs)
         if (tx_type == cryptonote::transaction_type::TRANSFER && rv.type == rct::RCTTypeFullProofs) {
           rv.sa_proof = SAProof_Gen(destinations[change_index], x_change, key_yF);
@@ -1390,6 +1391,7 @@ namespace rct {
           CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.sa_proof, destinations[change_index], key_yF), "SAProof_Ver() failed on recently created proof");
 #endif
         }
+        */
         
         key full_message = get_pre_mlsag_hash(rv,hwdev);
 
