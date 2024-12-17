@@ -2856,6 +2856,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
                 update_multisig_rescan_info(*m_multisig_rescan_k, *m_multisig_rescan_info, m_transfers.size() - 1);
             }
 
+            /*
             // Verify the spend authority proof
             if (!verify_spend_authority_proof(tx, o, tx_scan_info[o])) {
               // Freeze the output
@@ -2863,6 +2864,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
               LOG_ERROR("Please review the transaction and verify that the sender is someone you trust before thawing this payment.");
               td.m_frozen = true;
             }
+            */
             
             LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
             if (!ignore_callbacks && 0 != m_callback)
@@ -2980,7 +2982,8 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             }
             THROW_WALLET_EXCEPTION_IF(td.get_public_key() != tx_scan_info[o].in_ephemeral.pub, error::wallet_internal_error, "Inconsistent public keys");
             THROW_WALLET_EXCEPTION_IF(td.m_spent, error::wallet_internal_error, "Inconsistent spent status");
-            
+
+            /*
             // Verify the spend authority proof
             if (!verify_spend_authority_proof(tx, o, tx_scan_info[o])) {
               // Freeze the output
@@ -2988,6 +2991,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
               LOG_ERROR("Please review the transaction and verify that the sender is someone you trust before thawing this payment.");
               td.m_frozen = true;
             }
+            */
             
             LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
             if (!ignore_callbacks && 0 != m_callback)
