@@ -220,6 +220,8 @@
 
 #define HF_VERSION_FULL_PROOFS                  3
 
+#define HF_VERSION_ENFORCE_FULL_PROOFS          4
+
 #define HF_VERSION_REQUIRE_VIEW_TAGS            255
 #define HF_VERSION_ENABLE_CONVERT               255
 #define HF_VERSION_ENABLE_ORACLE                255
