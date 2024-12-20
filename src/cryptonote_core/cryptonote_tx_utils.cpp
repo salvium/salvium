@@ -590,6 +590,7 @@ namespace cryptonote
       case HF_VERSION_BULLETPROOF_PLUS:
       case HF_VERSION_ENABLE_N_OUTS:
       case HF_VERSION_FULL_PROOFS:
+      case HF_VERSION_ENFORCE_FULL_PROOFS:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;

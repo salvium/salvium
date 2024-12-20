@@ -1498,6 +1498,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_BULLETPROOF_PLUS:
   case HF_VERSION_ENABLE_N_OUTS:
   case HF_VERSION_FULL_PROOFS:
+  case HF_VERSION_ENFORCE_FULL_PROOFS:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
@@ -3492,9 +3493,9 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
       }
     }
   }
-
+  */
   // from v4, forbid invalid pubkeys
-  if (hf_version >= 4) {
+  if (hf_version >= 1) {
     for (const auto &o: tx.vout) {
       crypto::public_key output_public_key;
       if (!get_output_public_key(o, output_public_key)) {
@@ -3507,7 +3508,7 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
       }
     }
   }
-
+  /*
   // from v8, allow bulletproofs
   if (hf_version < 8) {
     if (tx.version >= 2) {
@@ -3606,10 +3607,9 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
       }
     }
   }
-  */
   
-  // from v16, forbid bulletproofs
-  if (hf_version > HF_VERSION_BULLETPROOF_PLUS) {
+  // from v1, forbid bulletproofs
+  if (hf_version >= HF_VERSION_BULLETPROOF_PLUS) {
     if (tx.version >= 2) {
       const bool bulletproof = rct::is_rct_bulletproof(tx.rct_signatures.type);
       if (bulletproof)
@@ -3620,11 +3620,19 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
       }
     }
   }
+  */
 
-  if (hf_version >= HF_VERSION_FULL_PROOFS) {
-    if (tx.type == cryptonote::transaction_type::TRANSFER) {
+  // from v4, only allow bulletproofs plus _with_ full proofs on RCT transactions
+  if (hf_version >= HF_VERSION_ENFORCE_FULL_PROOFS) {
+    if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT) {
       if (tx.rct_signatures.type != rct::RCTTypeFullProofs) {
-        MERROR_VER("FullProofs required for TRANSFER TXs after v" + std::to_string(HF_VERSION_FULL_PROOFS));
+        MERROR_VER("FullProofs required after v" + std::to_string(HF_VERSION_FULL_PROOFS));
+        tvc.m_invalid_output = true;
+        return false;
+      }
+    } else {
+      if (tx.rct_signatures.type != rct::RCTTypeNull) {
+        MERROR_VER("NULL RCT required for coinbase TXs after v" + std::to_string(HF_VERSION_FULL_PROOFS));
         tvc.m_invalid_output = true;
         return false;
       }
@@ -4043,6 +4051,17 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     // obviously, the original and simple rct APIs use a mixRing that's indexes
     // in opposite orders, because it'd be too simple otherwise...
     const rct::rctSig &rv = tx.rct_signatures;
+    
+    // Check that after full proofs are enabled, the RCT version is set to enforce full proofs
+    if (hf_version >= HF_VERSION_ENFORCE_FULL_PROOFS)
+    {
+      if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeFullProofs)
+      {
+        MERROR_VER("Unsupported rct type (full proofs are required): " << rv.type);
+        return false;
+      }
+    }
+    
     switch (rv.type)
     {
     case rct::RCTTypeNull: {
@@ -4132,22 +4151,6 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     default:
       MERROR_VER("Unsupported rct type: " << rv.type);
       return false;
-    }
-
-    // for bulletproofs, check they're only multi-output after v8
-    if (rct::is_rct_bulletproof(rv.type))
-    {
-      if (hf_version < 8)
-      {
-        for (const rct::Bulletproof &proof: rv.p.bulletproofs)
-        {
-          if (proof.V.size() > 1)
-          {
-            MERROR_VER("Multi output bulletproofs are invalid before v8");
-            return false;
-          }
-        }
-      }
     }
   }
   return true;
