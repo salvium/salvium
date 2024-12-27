@@ -1614,7 +1614,7 @@ namespace cryptonote
   //---------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------
   //TODO: investigate whether boolean return is appropriate
-  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version, oracle::pricing_record& pr, std::map<std::string, uint64_t>& circ_supply, std::vector<txpool_tx_meta_t>& protocol_metadata)
+  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version)
   {
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
@@ -1744,14 +1744,6 @@ namespace cryptonote
         continue;
       }
 
-      // Check what the TX type is - only CONVERT needs a cash_value
-      if (meta.source_asset_id == meta.destination_asset_id) {
-        // TRANSFER
-      } else {
-        // BURN OR CONVERT (both require inclusion in the protocol_tx calculation for circ_supply purposes)
-        protocol_metadata.push_back(meta);
-      }
-      
       bl.tx_hashes.push_back(sorted_it->second);
       total_weight += meta.weight;
       fee += meta.fee;
