@@ -1450,6 +1450,13 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, 
 bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
+  if (height == 0) {
+    // Genesis block exception
+    CHECK_AND_ASSERT_MES(b.protocol_tx.version == 1, false, "Invalid genesis protocol transaction version");
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 0, false, "genesis protocol transaction in the block has inputs");
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "genesis protocol transaction in the block has outputs");
+    return true;
+  }
   CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 1, false, "coinbase protocol transaction in the block has no inputs");
   CHECK_AND_ASSERT_MES(b.protocol_tx.vin[0].type() == typeid(txin_gen), false, "coinbase protocol transaction in the block has the wrong type");
   CHECK_AND_ASSERT_MES(b.protocol_tx.version > 1, false, "Invalid coinbase protocol transaction version");
@@ -1530,6 +1537,14 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
 
+  if (height == 0) {
+    // Genesis block exception
+    CHECK_AND_ASSERT_MES(b.protocol_tx.version == 1, false, "Invalid genesis protocol transaction version");
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 0, false, "genesis protocol transaction in the block has inputs");
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "genesis protocol transaction in the block has outputs");
+    return true;
+  }
+  
   // if nothing is created by this TX - check no money is included
   size_t vout_size = b.protocol_tx.vout.size();
   CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 1, false, "coinbase protocol transaction in the block has no inputs");
@@ -1557,7 +1572,11 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
     return false;
   }
 
+  // Check we have the correct number of entries
+  CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == yield_payouts.size(), false, "Invalid number of outputs in protocol_tx - aborting");
+  
   // go through each vout and validate
+  std::set<crypto::public_key> used_keys;
   for (auto& o : b.protocol_tx.vout) {
     // gather the output data
     uint64_t out_amount;
@@ -1581,6 +1600,15 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
       return false;
     }
 
+    // Check if key has already been seen
+    if (used_keys.count(out_key) != 0) {
+      LOG_ERROR("Block at height: " << height << " - Duplicated output key " << out_key << " for protocol TX - aborting");
+      return false;
+    }
+    
+    // Add key to list of already-seen
+    used_keys.insert(out_key);
+    
     // check if there is entry in the yield payouts for this output
     auto found = std::find_if(yield_payouts.begin(), yield_payouts.end(), [&](const std::pair<yield_tx_info, uint64_t>& p) {
       return p.first.return_address == out_key;
