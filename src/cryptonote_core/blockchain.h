@@ -1529,12 +1529,11 @@ namespace cryptonote
      *
      * @param b the block containing the miner transaction to be validated
      * @param height the blockchain's weight
-     * @param txs a vector containing all the TXs and their blobs, needed to obtain tx_types, asset_types and burnt amounts
      * @param version hard fork version for that transaction
      *
      * @return false if anything is found wrong with the protocol transaction, otherwise true
      */
-    bool validate_protocol_transaction(const block& b, uint64_t height, std::vector<std::pair<transaction, blobdata>>& txs, uint8_t hf_version);
+    bool validate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version);
 
     /**
      * @brief reverts the blockchain to its previous state following a failed switch

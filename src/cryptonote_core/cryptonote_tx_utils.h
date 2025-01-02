@@ -67,7 +67,7 @@ namespace cryptonote
   };
 
   //---------------------------------------------------------------
-  bool construct_protocol_tx(const size_t height, uint64_t& protocol_fee, transaction& tx, std::vector<protocol_data_entry>& protocol_data, std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const account_public_address &miner_address, const account_public_address &treasury_address, const uint8_t hf_version);
+  bool construct_protocol_tx(const size_t height, transaction& tx, std::vector<protocol_data_entry>& protocol_data, const uint8_t hf_version);
   //---------------------------------------------------------------
   bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, const blobdata& extra_nonce = blobdata(), size_t max_outs = 999, uint8_t hard_fork_version = 1);
 
