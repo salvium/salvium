@@ -243,6 +243,7 @@ skip:
     }
     
     // Get the miner_tx assets
+    std::set<crypto::public_key> used_keys;
     for (const auto& miner_tx_vout : blk.miner_tx.vout) {
       std::string asset_type;
       if (!cryptonote::get_output_asset_type(miner_tx_vout, asset_type)) {
@@ -251,9 +252,19 @@ skip:
         throw std::runtime_error("Aborting: invalid output asset type from miner_tx");
       }
       miner_tx_assets.insert(asset_type);
+      if (miner_tx_vout.amount > 13500000000) {
+        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.miner_tx.hash << "" << delimiter << "invalid miner TX amount detected" << delimiter << "amount:" << miner_tx_vout.amount << std::endl;
+      }
+      crypto::public_key key;
+      cryptonote::get_output_public_key(miner_tx_vout, key);
+      if (used_keys.count(key)) {
+        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.miner_tx.hash << "" << delimiter << "invalid miner TX - duplicate output detected" << delimiter << "pubkey:" << key << std::endl;
+      }
+      used_keys.insert(key);
     }
 
     // Get the protocol_tx assets
+    used_keys.clear();
     for (const auto& protocol_tx_vout : blk.protocol_tx.vout) {
       std::string asset_type;
       if (!cryptonote::get_output_asset_type(protocol_tx_vout, asset_type)) {
@@ -262,6 +273,15 @@ skip:
         throw std::runtime_error("Aborting: invalid output asset type from protocol_tx");
       }
       protocol_tx_assets.insert(asset_type);
+      if (protocol_tx_vout.amount > 25000000000000) {
+        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.protocol_tx.hash << "" << delimiter << "large protocol TX amount detected from height " << (h-21601) << delimiter << "amount:" << protocol_tx_vout.amount << std::endl;
+      }
+      crypto::public_key key;
+      cryptonote::get_output_public_key(protocol_tx_vout, key);
+      if (used_keys.count(key)) {
+        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.protocol_tx.hash << "" << delimiter << "invalid protocol TX - duplicate output detected" << delimiter << "pubkey:" << key << std::endl;
+      }
+      used_keys.insert(key);
     }
 
     for (const auto& tx_id : blk.tx_hashes)
@@ -285,8 +305,35 @@ skip:
         currsz += bd.size();
       currtxs++;
 
-      if (tx.version != 2) {
+      if (tx.type != cryptonote::transaction_type::TRANSFER && tx.type != cryptonote::transaction_type::BURN && tx.type != cryptonote::transaction_type::STAKE) {
+        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "invalid TX type detected" << delimiter << "type:" << (uint8_t)tx.type << std::endl;
+      }
+      
+      if ((tx.version != 2 && h < 89800) || (tx.version != 3 && h >= 89800 && tx.type == cryptonote::transaction_type::TRANSFER)) {
         std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "invalid TX version detected" << delimiter << "version:" << tx.version << std::endl;
+      }
+
+      if (tx.type == cryptonote::transaction_type::STAKE && tx.amount_burnt > 25000000000000llu) {
+        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "large STAKE TX detected" << delimiter << "amount:" << (tx.amount_burnt / 100000000) << std::endl;
+      }
+      
+      if (tx.source_asset_type != "SAL") {
+        throw std::runtime_error("Aborting: invalid source asset type found in tx");
+      } else if (tx.destination_asset_type != "SAL") {
+        if (tx.destination_asset_type == "BURN") {
+          std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "BURN TX detected" << delimiter << "amount:" << tx.amount_burnt << std::endl;
+        } else {
+          throw std::runtime_error("Aborting: invalid destination asset type found in tx");
+        }
+      }
+
+      for (const auto& tx_vout : tx.vout) {
+        std::string asset_type;
+        if (!cryptonote::get_output_asset_type(tx_vout, asset_type)) {
+          throw std::runtime_error("Aborting: failed to get output asset type from tx");
+        } else if (asset_type != "SAL") {
+          throw std::runtime_error("Aborting: invalid output asset type from tx");
+        }
       }
       
       /*
