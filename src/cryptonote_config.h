@@ -222,6 +222,8 @@
 
 #define HF_VERSION_ENFORCE_FULL_PROOFS          4
 
+#define HF_VERSION_SHUTDOWN_USER_TXS            6
+
 #define HF_VERSION_REQUIRE_VIEW_TAGS            255
 #define HF_VERSION_ENABLE_CONVERT               255
 #define HF_VERSION_ENABLE_ORACLE                255

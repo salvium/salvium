@@ -3656,6 +3656,15 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
 
   const uint8_t hf_version = m_hardfork->get_current_version();
 
+  // Reject ALL TXs except miner + protocol for v5
+  if (hf_version == HF_VERSION_SHUTDOWN_USER_TXS) {
+    if (tx.type != cryptonote::transaction_type::MINER && tx.type != cryptonote::transaction_type::PROTOCOL) {
+      MERROR_VER("User TXs are not permitted for v" + std::to_string(HF_VERSION_SHUTDOWN_USER_TXS));
+      tvc.m_version_mismatch = true;
+      return false;
+    }
+  }
+  
   // Prior to v2, only allow TX v2
   if (hf_version < HF_VERSION_ENABLE_N_OUTS) {
 
@@ -4774,6 +4783,17 @@ leave:
   }
 
   TIME_MEASURE_FINISH(t2);
+  TIME_MEASURE_START(t2point5);
+
+  // make sure that block is allowed TXs (prevented during pre-audit period)
+  if (hf_version == HF_VERSION_SHUTDOWN_USER_TXS && bl.tx_hashes.size())
+  {
+    MERROR_VER("Block with id: " << id << std::endl << "contains " << bl.tx_hashes.size() << " illicit user transactions");
+    bvc.m_verifivation_failed = true;
+    goto leave;
+  }
+
+  TIME_MEASURE_FINISH(t2point5);
   //check proof of work
   TIME_MEASURE_START(target_calculating_time);
 
