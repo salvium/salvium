@@ -167,6 +167,15 @@ namespace cryptonote
       return false;
     }
 
+    // Reject ALL TXs except miner + protocol for v5
+    if (version == HF_VERSION_SHUTDOWN_USER_TXS) {
+      if (tx.type != cryptonote::transaction_type::MINER && tx.type != cryptonote::transaction_type::PROTOCOL) {
+        LOG_PRINT_L1("User TXs are not permitted for v" + std::to_string(HF_VERSION_SHUTDOWN_USER_TXS));
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+    }
+    
     if(!check_inputs_types_supported(tx))
     {
       tvc.m_verifivation_failed = true;

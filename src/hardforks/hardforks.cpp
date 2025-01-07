@@ -61,7 +61,7 @@ const hardfork_t testnet_hard_forks[] = {
   { 3, 500, 0, 1729518000 },
 
   // version 4 starts from block 600
-  { 4, 600, 0, 173626500 },
+  { 4, 600, 0, 1736265000 },
 
   // version 5 starts from block 700
   { 5, 700, 0, 1736265945 },

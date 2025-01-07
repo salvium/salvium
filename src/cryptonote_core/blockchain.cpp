@@ -1499,6 +1499,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_ENABLE_N_OUTS:
   case HF_VERSION_FULL_PROOFS:
   case HF_VERSION_ENFORCE_FULL_PROOFS:
+  case HF_VERSION_SHUTDOWN_USER_TXS:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
@@ -3656,15 +3657,6 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
 
   const uint8_t hf_version = m_hardfork->get_current_version();
 
-  // Reject ALL TXs except miner + protocol for v5
-  if (hf_version == HF_VERSION_SHUTDOWN_USER_TXS) {
-    if (tx.type != cryptonote::transaction_type::MINER && tx.type != cryptonote::transaction_type::PROTOCOL) {
-      MERROR_VER("User TXs are not permitted for v" + std::to_string(HF_VERSION_SHUTDOWN_USER_TXS));
-      tvc.m_version_mismatch = true;
-      return false;
-    }
-  }
-  
   // Prior to v2, only allow TX v2
   if (hf_version < HF_VERSION_ENABLE_N_OUTS) {
 
