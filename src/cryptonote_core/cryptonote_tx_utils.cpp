@@ -1276,7 +1276,10 @@ namespace cryptonote
   {
     hw::device &hwdev = sender_account_keys.get_device();
     hwdev.open_tx(tx_key);
-    try {
+    auto auto_close_tx = epee::misc_utils::create_scope_leave_handler([&hwdev](){
+      hwdev.close_tx();
+    });
+    {
       // figure out if we need to make additional tx pubkeys
       size_t num_stdaddresses = 0;
       size_t num_subaddresses = 0;
@@ -1296,9 +1299,6 @@ namespace cryptonote
       bool r = construct_tx_with_tx_key(sender_account_keys, subaddresses, sources, destinations, hf_version, source_asset, dest_asset, tx_type, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, rct, rct_config, shuffle_outs, use_view_tags);
       hwdev.close_tx();
       return r;
-    } catch(...) {
-      hwdev.close_tx();
-      throw;
     }
   }
   //---------------------------------------------------------------
