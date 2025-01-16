@@ -39,9 +39,11 @@
 
 namespace cryptonote
 {
+  /*
   bool get_conversion_rate(const oracle::pricing_record& pr, const std::string& from_asset, const std::string& to_asset, uint64_t& rate);
   bool get_converted_amount(const uint64_t& conversion_rate, const uint64_t& source_amount, uint64_t& dest_amount);
   bool calculate_conversion(const std::string& source_asset, const std::string& dest_asset, const uint64_t amount_burnt, const uint64_t amount_slippage_limit, uint64_t& amount_minted, uint64_t& amount_slippage, const std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version);
+  */
   //---------------------------------------------------------------
   /**
    * Construct the protocol_tx

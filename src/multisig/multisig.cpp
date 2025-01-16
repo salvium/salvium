@@ -92,7 +92,8 @@ namespace multisig
                                              const std::vector<crypto::key_image> &pkis,
                                              crypto::key_image &ki,
                                              const bool use_origin_data,
-                                             const cryptonote::origin_data& origin_tx_data)
+                                             const cryptonote::origin_data& origin_tx_data,
+                                             rct::salvium_input_data_t& sid)
   {
     // create a multisig partial key image
     // KI_partial = ([view key component] + [subaddress component] + [multisig privkeys]) * Hp(output one-time address)
@@ -100,7 +101,7 @@ namespace multisig
     // - later, we add in the components held by other participants
     cryptonote::keypair in_ephemeral;
 
-    if (!cryptonote::generate_key_image_helper(keys, subaddresses, out_key, tx_public_key, additional_tx_public_keys, real_output_index, in_ephemeral, ki, keys.get_device(), use_origin_data, origin_tx_data))
+    if (!cryptonote::generate_key_image_helper(keys, subaddresses, out_key, tx_public_key, additional_tx_public_keys, real_output_index, in_ephemeral, ki, keys.get_device(), use_origin_data, origin_tx_data, sid))
       return false;
     std::unordered_set<crypto::key_image> used;
 
