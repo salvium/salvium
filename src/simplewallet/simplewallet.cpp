@@ -3422,11 +3422,11 @@ simple_wallet::simple_wallet()
   m_cmd_binder.set_handler("price_info",
                            boost::bind(&simple_wallet::price_info, this, _1),
                            tr(USAGE_PRICE_INFO),
-                           tr("Displays the current exchange rate information for SAL <--> VSD conversions"));
+                           tr("Displays the current exchange rate information for SAL <--> SAL1 conversions"));
   m_cmd_binder.set_handler("supply_info",
                            boost::bind(&simple_wallet::supply_info, this, _1),
                            tr(USAGE_SUPPLY_INFO),
-                           tr("Displays the current circulating supply information for SAL and VSD currencies"));
+                           tr("Displays the current circulating supply information for SAL and SAL1 currencies"));
   m_cmd_binder.set_handler("yield_info",
                            boost::bind(&simple_wallet::yield_info, this, _1),
                            tr(USAGE_YIELD_INFO),
@@ -7301,7 +7301,7 @@ bool simple_wallet::locked_transfer(const std::vector<std::string> &args_)
   std::string source_asset = "SAL";
   std::string strLastArg = local_args.back();
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
-  if (strLastArg == "SAL" or strLastArg == "VSD") {
+  if (strLastArg == "SAL" or strLastArg == "SAL1") {
     source_asset = strLastArg;
     local_args.pop_back();  
   }
@@ -8245,7 +8245,7 @@ bool simple_wallet::burn(const std::vector<std::string> &args_)
   std::string asset_type;
   std::string strLastArg = local_args.back();
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
-  if (strLastArg not_eq "SAL" and strLastArg not_eq "VSD") {
+  if (strLastArg not_eq "SAL" and strLastArg not_eq "SAL1") {
      PRINT_USAGE(USAGE_BURN);
      return true;
   }
@@ -8309,7 +8309,7 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
   // Get the destination asset type
   std::string source_asset, dest_asset;
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
-  if (strLastArg not_eq "SAL" and strLastArg not_eq "VSD") {
+  if (strLastArg not_eq "SAL" and strLastArg not_eq "SAL1") {
     fail_msg_writer() << tr("invalid destination asset_type");
     PRINT_USAGE(USAGE_CONVERT);
     return true;
@@ -8319,7 +8319,7 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
   // Get the source asset type
   strLastArg = local_args.back();
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
-  if (strLastArg not_eq "SAL" and strLastArg not_eq "VSD") {
+  if (strLastArg not_eq "SAL" and strLastArg not_eq "SAL1") {
     fail_msg_writer() << tr("invalid source asset_type");
     PRINT_USAGE(USAGE_CONVERT);
     return true;
