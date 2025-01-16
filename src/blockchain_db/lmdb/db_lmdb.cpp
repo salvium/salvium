@@ -929,9 +929,12 @@ int BlockchainLMDB::get_yield_tx_info(const uint64_t height, std::vector<yield_t
     if (ret)
       throw0(DB_ERROR(lmdb_error("Failed to enumerate yield TX info: ", ret).c_str()));
 
-    // Push result back into the container
+    // Get the data
     yield_tx_info *p = (yield_tx_info*)v.mv_data;
+    // Push result back into the container
     yti_container.emplace_back(*p);
+    // Update the height retrospectively (because the DB stores the count of elements there to handle duplicates, because it's rubbish)
+    yti_container.back().block_height = height;
   }
 
   TXN_POSTFIX_RDONLY();
@@ -1507,6 +1510,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
   CURSOR(tx_outputs)
   CURSOR(circ_supply_tally)
   CURSOR(yield_txs)
+  CURSOR(audit_txs)
 
   MDB_val_set(val_h, tx_hash);
 
@@ -1633,7 +1637,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
       throw1(DB_ERROR(lmdb_error("Failed to add removal of tx outputs to db transaction: ", result).c_str()));
   }
 
-  // SRCG: The following code is designed to clean up the STAKE transactions, but it is very poorly written
+  // SRCG: The following code is designed to clean up AUDIT+STAKE transactions, but it is very poorly written
   // Since transactions are ALWAYS supposed to be created in order, it stands that they should ALWAYS be
   // removed in REVERSE ORDER. Yet the following loop starts from the beginning - this is the worst possible
   // implementation in performance terms, since it will ALWAYS take the longest possible time to remove the

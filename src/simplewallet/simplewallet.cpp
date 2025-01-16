@@ -5838,18 +5838,22 @@ void simple_wallet::on_money_received(uint64_t height, const crypto::hash &txid,
       message_writer(console_color_red) << "\r" << "*** CONVERT ***";
     } else if (td_origin.m_tx.type == cryptonote::transaction_type::STAKE) {
       message_writer(console_color_magenta, false) << "\r" <<
-	tr("Height ") << height << ", " <<
-	tr("txid ") << txid << ", " <<
-	tr("stake returned ") << print_money(td_origin.m_tx.amount_burnt) << " " << td_origin.asset_type << " from height " << td_origin.m_block_height << ", " <<
-	tr("idx ") << subaddr_index;
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("stake returned ") << print_money(td_origin.m_tx.amount_burnt) << " " << td_origin.asset_type << " from height " << td_origin.m_block_height << ", " <<
+        tr("idx ") << subaddr_index;
 
       message_writer(console_color_magenta, false) << "\r" <<
-	tr("Height ") << height << ", " <<
-	tr("txid ") << txid << ", " <<
-	tr("yield earned ") << print_money(amount - td_origin.m_tx.amount_burnt) << " " << asset_type <<  ", " <<
-	tr("idx ") << subaddr_index;
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("yield earned ") << print_money(amount - td_origin.m_tx.amount_burnt) << " " << asset_type <<  ", " <<
+        tr("idx ") << subaddr_index;
     } else if (td_origin.m_tx.type == cryptonote::transaction_type::AUDIT) {
-      message_writer(console_color_red) << "\r" << "*** AUDIT ***";
+      message_writer(console_color_red) << "\r" << 
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("audit returned ") << print_money(td_origin.m_tx.amount_burnt) << " " << asset_type << " from height " << td_origin.m_block_height << ", " <<
+        tr("idx ") << subaddr_index;
     } else {
     }
     
@@ -5857,24 +5861,24 @@ void simple_wallet::on_money_received(uint64_t height, const crypto::hash &txid,
     
     if (tx.type == cryptonote::transaction_type::BURN) {
       message_writer(console_color_yellow, false) << "\r" <<
-	tr("Height ") << height << ", " <<
-	tr("txid ") << txid << ", " <<
-	tr("burnt ") << print_money(tx.amount_burnt) << " " << asset_type;
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("burnt ") << print_money(tx.amount_burnt) << " " << asset_type;
     } else if (tx.type == cryptonote::transaction_type::CONVERT) {
       message_writer(console_color_blue, false) << "\r" <<
-	tr("Height ") << height << ", " <<
-	tr("txid ") << txid << ", " <<
-	tr("converting ") << print_money(tx.amount_burnt) << " " << asset_type;
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("converting ") << print_money(tx.amount_burnt) << " " << asset_type;
     } else if (tx.type == cryptonote::transaction_type::STAKE) {
       message_writer(console_color_cyan, false) << "\r" <<
-	tr("Height ") << height << ", " <<
-	tr("txid ") << txid << ", " <<
-	tr("staked ") << print_money(tx.amount_burnt) << " " << asset_type;
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("staked ") << print_money(tx.amount_burnt) << " " << asset_type;
     } else if (tx.type == cryptonote::transaction_type::AUDIT) {
       message_writer(console_color_yellow, false) << "\r" <<
-	tr("Height ") << height << ", " <<
-	tr("txid ") << txid << ", " <<
-	tr("audited ") << print_money(tx.amount_burnt) << " " << asset_type;
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("audited ") << print_money(tx.amount_burnt) << " " << asset_type;
     }
     
     message_writer(asset_type == "SAL" ? console_color_green : console_color_blue, false) << "\r" <<
@@ -6738,9 +6742,11 @@ bool simple_wallet::transfer_main(
   if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
     if (transfer_type == Audit) {
       audit = true;
+/*
     } else if (source_asset != "SAL1") {
       fail_msg_writer() << tr("Only SAL1 may be spent now");
       return false;
+*/
     }
   }
   
@@ -8396,13 +8402,7 @@ bool simple_wallet::stake(const std::vector<std::string> &args_)
   local_args.insert(local_args.end(), args_.begin(), args_.end());
 
   if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
-    // Check to see if the user has a balance of SAL
-    uint64_t sal_balance = m_wallet->unlocked_balance_all(true, "SAL");
-    if (sal_balance > 0) {
-      transfer_main(Stake, "SAL", "SAL", local_args, false);
-    } else {
-      transfer_main(Stake, "SAL1", "SAL1", local_args, false);
-    }
+    transfer_main(Stake, "SAL1", "SAL1", local_args, false);
   } else {
     transfer_main(Stake, "SAL", "SAL", local_args, false);
   }

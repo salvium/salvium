@@ -155,9 +155,9 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   // outputs list.  that is to say that absolute offset #2 is absolute offset
   // #1 plus relative offset #2.
   // TODO: Investigate if this is necessary / why this is done.
-  std::vector<uint64_t> absolute_offsets = relative_output_offsets_to_absolute(tx_in_to_key.key_offsets);
-  //std::vector<uint64_t> absolute_offsets;
-  //m_db->get_output_id_from_asset_type_output_index(tx_in_to_key.asset_type, asset_offsets, absolute_offsets);
+  std::vector<uint64_t> asset_offsets = relative_output_offsets_to_absolute(tx_in_to_key.key_offsets);
+  std::vector<uint64_t> absolute_offsets;
+  m_db->get_output_id_from_asset_type_output_index(tx_in_to_key.asset_type, asset_offsets, absolute_offsets);
   std::vector<output_data_t> outputs;
 
   bool found = false;
@@ -1655,14 +1655,16 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
 
       // Found a YIELD entry
       CHECK_AND_ASSERT_MES(out_amount == found_yield->second, false, "Incorrect value for protocol TX YIELD amount");
-      if (get_hard_fork_version(found_yield->first.block_height) >= HF_VERSION_SALVIUM_ONE_PROOFS) 
+      uint8_t hf_yield = m_hardfork->get_ideal_version(found_yield->first.block_height);
+      if (hf_yield >= HF_VERSION_SALVIUM_ONE_PROOFS) 
         expected_output_asset_type = "SAL1";
       
     } else if (found_yield == yield_payouts.end()) {
 
       // Found an AUDIT entry
       CHECK_AND_ASSERT_MES(out_amount == found_audit->second, false, "Incorrect value for protocol TX AUDIT amount");
-      if (get_hard_fork_version(found_audit->first.block_height) >= HF_VERSION_SALVIUM_ONE_PROOFS) 
+      uint8_t hf_audit = m_hardfork->get_ideal_version(found_audit->first.block_height);
+      if (hf_audit >= HF_VERSION_SALVIUM_ONE_PROOFS) 
         expected_output_asset_type = "SAL1";
       
     } else {
@@ -5966,7 +5968,13 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
       {
         const txin_to_key &in_to_key = boost::get < txin_to_key > (txin);
         // no need to check for duplicate here.
-        auto absolute_offsets = relative_output_offsets_to_absolute(in_to_key.key_offsets);
+        // HERE BE DRAGONS!!!
+        // SRCG: ring tweak to indexed per asset_type - DO NOT COMMIT UNTIL IT IS ALL WORKING
+        //auto absolute_offsets = relative_output_offsets_to_absolute(in_to_key.key_offsets);
+        std::vector<uint64_t> asset_offsets = relative_output_offsets_to_absolute(in_to_key.key_offsets);
+        std::vector<uint64_t> absolute_offsets;
+        m_db->get_output_id_from_asset_type_output_index(in_to_key.asset_type, asset_offsets, absolute_offsets);
+        // LAND AHOY!!!
         for (const auto & offset : absolute_offsets)
           offset_map[in_to_key.amount].push_back(offset);
 
