@@ -7263,7 +7263,11 @@ bool simple_wallet::transfer(const std::vector<std::string> &args_)
   }
   
   // Get the source asset type
-  std::string source_asset = "SAL1";
+  std::string source_asset = "SAL";
+  if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+    // Default to "SAL1" post-HF
+    source_asset = "SAL1";
+  }
   std::string strLastArg = local_args.back();
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
   if (strLastArg == "SAL" or strLastArg == "SAL1") {
