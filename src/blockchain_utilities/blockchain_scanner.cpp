@@ -215,10 +215,12 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
 
   struct wallet_summary {
     uint64_t total_amount;
-    std::vector<crypto::hash> txs;
+    std::vector<std::pair<uint64_t, crypto::hash>> txs;
     bool seen_closing_tx;
     crypto::public_key viewkey;
   };
+
+  const std::map<uint8_t, std::pair<std::string, std::string>> audit_hard_forks = get_config(net_type).AUDIT_HARD_FORKS;
   
   // Create a map of wallet addresses and total amounts in them
   std::map<crypto::public_key, wallet_summary> wallet_details;
@@ -254,11 +256,13 @@ skip:
     std::map<size_t, std::vector<std::string>> used_tx_versions;
     used_assets.insert("SAL");
 
+    uint8_t hf_version = blk.major_version;
+    
     // Check TX versions
     if (blk.miner_tx.version != 2) {
       std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.miner_tx.hash << "" << delimiter << "invalid miner TX version detected" << delimiter << "version:" << blk.miner_tx.version << std::endl;
     }
-    if (blk.protocol_tx.version != 2) {
+    if (blk.protocol_tx.version != 2 && h>0) {
       std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.protocol_tx.hash << "" << delimiter << "invalid protocol TX version detected" << delimiter << "version:" << blk.protocol_tx.version << std::endl;
     }
     
@@ -272,7 +276,7 @@ skip:
         throw std::runtime_error("Aborting: invalid output asset type from miner_tx");
       }
       miner_tx_assets.insert(asset_type);
-      if (miner_tx_vout.amount > 13500000000) {
+      if (miner_tx_vout.amount > 13500000000 && h>0) {
         std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.miner_tx.hash << "" << delimiter << "invalid miner TX amount detected" << delimiter << "amount:" << miner_tx_vout.amount << std::endl;
       }
       crypto::public_key key;
@@ -329,7 +333,7 @@ skip:
         std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "invalid TX type detected" << delimiter << "type:" << (uint8_t)tx.type << std::endl;
       }
       
-      if ((tx.version != 2 && h < 89800) || (tx.version != 3 && h >= 89800 && tx.type == cryptonote::transaction_type::TRANSFER)) {
+      if ((tx.version != 2 && hf_version < HF_VERSION_ENABLE_N_OUTS) || (tx.version != 3 && hf_version < HF_VERSION_ENABLE_N_OUTS && tx.type == cryptonote::transaction_type::TRANSFER)) {
         std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "invalid TX version detected" << delimiter << "version:" << tx.version << std::endl;
       }
     
@@ -369,19 +373,29 @@ skip:
       if (!opt_audit) continue;
 
       // Audit checks
-      if (h < 0 || h > 99999999) continue;  // Set these limits to match the audit process!!!
+      if (audit_hard_forks.find(hf_version) == audit_hard_forks.end()) continue;
       
       // Pre-check - only attempt to verify legitimate AUDIT TXs
-      if (tx.type != cryptonote::transaction_type::STAKE) continue;
-      if (tx.rct_signatures.type != rct::RCTTypeSalviumOne) continue;
-      if (tx.rct_signatures.salvium_data.salvium_data_type != rct::SalviumAudit) continue;
+      if (tx.type != cryptonote::transaction_type::AUDIT) continue;
+      if (tx.rct_signatures.type != rct::RCTTypeSalviumOne) {
+        std::cerr << "Aborting: Invalid RCT type " << tx.rct_signatures.type << " detected in AUDIT tx:" << tx_id << std::endl;
+        throw std::runtime_error("Aborting: Invalid RCT type detected in AUDIT tx");
+      }
+      if (tx.rct_signatures.salvium_data.salvium_data_type != rct::SalviumAudit) {
+        std::cerr << "Aborting: Invalid 'salvium_data_type' " << tx.rct_signatures.salvium_data.salvium_data_type << " detected in AUDIT tx:" << tx_id << std::endl;
+        throw std::runtime_error("Aborting: Invalid 'salvium_data_type' detected in AUDIT tx");
+      }
 
       // WE ARE AUDITING - RETRIEVE ANY WALLET SUMMARY FOR THIS WALLET
       wallet_summary &ws = wallet_details[tx.rct_signatures.salvium_data.spend_pubkey];
-      if (!ws.total_amount) {
+      if (ws.txs.size()) {
+        if (ws.txs.back().first < (h-1)) {
+          std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "REVIEW: interval detected between audit TXs" << delimiter << "amount:" << (tx.amount_burnt / 100000000) << std::endl;
+        }
+      } else {
         ws.viewkey = tx.rct_signatures.salvium_data.view_pubkey;
       }
-      ws.txs.push_back(tx_id);
+      ws.txs.push_back({h, tx_id});
 
       // Increment the total amount for this wallet that has been audited
       if (ws.total_amount + tx.amount_burnt < ws.total_amount) {
