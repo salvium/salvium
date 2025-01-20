@@ -1269,8 +1269,8 @@ namespace cryptonote
         if (tx.type == cryptonote::transaction_type::AUDIT) {
           // The CHANGE for an AUDIT TX must be SAL (and 0 value, and unspendable, and to the origin wallet, and ...)
           CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
-        } else if (tx.type == cryptonote::transaction_type::PROTOCOL || tx.type == cryptonote::transaction_type::BURN) {
-          // PROTOCOL TXs are responsible for paying out SAL and SAL1 during the AUDIT; BURN must be able to destroy all asset types and create matching CHANGE asset type
+        } else if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+          // PROTOCOL TXs are responsible for paying out SAL and SAL1 during the AUDIT
           CHECK_AND_ASSERT_MES(asset_type == "SAL1" || asset_type == "SAL", false, "wrong output asset type:" << asset_type);
         } else {
           // All other TX types must only spend + create SAL1 (MINER, TRANSFER)
