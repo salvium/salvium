@@ -297,6 +297,9 @@ monero_add_executable(blockchain_scanner
 
 target_link_libraries(blockchain_scanner
   PRIVATE
+    wallet
+    crypto
+    cncrypto
     cryptonote_core
     blockchain_db
     version

@@ -29,6 +29,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include "common/command_line.h"
+#include "common/i18n.h"
+#include "common/password.h"
 #include "common/varint.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
 #include "cryptonote_core/tx_pool.h"
@@ -38,6 +40,7 @@
 #include "blockchain_db/blockchain_db.h"
 #include "oracle/pricing_record.h"
 #include "version.h"
+#include "wallet/wallet2.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "bcutil"
@@ -49,7 +52,19 @@ namespace po = boost::program_options;
 using namespace epee;
 using namespace cryptonote;
 
+namespace scanner
+{
+  const char* tr(const char* str)
+  {
+    return i18n_translate(str, "tools::scanner");
+  }
+}
+
 static bool stop_requested = false;
+
+static const std::vector<std::string> suspect_output_pubkeys = {
+"1234567890123456789012345678901234567890123456789012345678901234"
+};
 
 int main(int argc, char* argv[])
 {
@@ -73,6 +88,7 @@ int main(int argc, char* argv[])
   const command_line::arg_descriptor<std::string> arg_delimiter  = {"delimiter", "\"<string>\"", DELIM};
   const command_line::arg_descriptor<std::string> arg_stake_mode  = {"stake", "\"<string>\"", DEF_STAKE_MODE};
   const command_line::arg_descriptor<bool> arg_audit  = {"audit", "Scan for audit issues", false};
+  const command_line::arg_descriptor<bool> arg_decode_pvk  = {"decodepvk", "Attempt to decode private view key data", false};
   const command_line::arg_descriptor<bool> arg_check_asset_types  = {"check-asset-types", "Scan for asset-type issues", false};
 
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_data_dir);
@@ -84,6 +100,7 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_cmd_sett, arg_delimiter);
   command_line::add_arg(desc_cmd_sett, arg_stake_mode);
   command_line::add_arg(desc_cmd_sett, arg_audit);
+  command_line::add_arg(desc_cmd_sett, arg_decode_pvk);
   command_line::add_arg(desc_cmd_sett, arg_check_asset_types);
   command_line::add_arg(desc_cmd_only, command_line::arg_help);
 
@@ -125,6 +142,7 @@ int main(int argc, char* argv[])
   std::string delimiter = command_line::get_arg(vm, arg_delimiter);
   std::string stake_mode = command_line::get_arg(vm, arg_stake_mode);
   bool opt_audit = command_line::get_arg(vm, arg_audit);
+  bool opt_decode_pvk = command_line::get_arg(vm, arg_decode_pvk);
   bool opt_check_asset_types = command_line::get_arg(vm, arg_check_asset_types);
 
   // If we wanted to use the memory pool, we would set up a fake_core.
@@ -159,6 +177,26 @@ int main(int argc, char* argv[])
   LOG_PRINT_L0("Loading blockchain from folder " << folder << " ...");
   const std::string filename = folder.string();
 
+  crypto::secret_key SK = crypto::null_skey;
+  if (opt_decode_pvk) {
+    epee::wipeable_string private_key_passphrase;
+    auto pwd_container = tools::password_container::prompt(true, "Enter passphrase for decoding private keys");
+    if (!pwd_container) {
+      std::cerr << scanner::tr("Failed to read passphrase") << std::endl;
+      return 1;
+    }
+    private_key_passphrase = pwd_container->password();
+    crypto::hash_to_scalar(private_key_passphrase.data(), private_key_passphrase.size(), SK);
+    crypto::public_key PK;
+    crypto::secret_key_to_public_key(SK, PK);
+    std::string PK_str = epee::string_tools::pod_to_hex(PK);
+    const std::string expected_PK_str = "5e860406bf9221dba6409faa6eb8fecd6f34acc4935634e76b64b90bf2b6d6a6";
+    if (PK_str != expected_PK_str) {
+      std::cerr << scanner::tr("Invalid passphrase - PK produced was ") << PK_str << std::endl;
+      return 1;
+    }
+  }
+  
   try
   {
     db->open(filename, DBF_RDONLY);
@@ -168,7 +206,7 @@ int main(int argc, char* argv[])
     LOG_PRINT_L0("Error opening database: " << e.what());
     return 1;
   }
-  r = core_storage->blockchain.init(db, opt_testnet ? cryptonote::TESTNET : opt_stagenet ? cryptonote::STAGENET : cryptonote::MAINNET);
+  r = core_storage->blockchain.init(db, net_type);
 
   CHECK_AND_ASSERT_MES(r, 1, "Failed to initialize source blockchain storage");
   LOG_PRINT_L0("Source blockchain storage initialized OK");
@@ -215,12 +253,15 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
 
   struct wallet_summary {
     uint64_t total_amount;
-    std::vector<std::pair<uint64_t, crypto::hash>> txs;
+    std::vector<std::pair<uint64_t, std::pair<crypto::hash, std::string>>> txs;
     bool seen_closing_tx;
-    crypto::public_key viewkey;
+    std::string enc_view_privkey_str;
+    bool flagged;
+    std::string reason;
   };
 
   const std::map<uint8_t, std::pair<std::string, std::string>> audit_hard_forks = get_config(net_type).AUDIT_HARD_FORKS;
+  const uint64_t audit_lock_period = get_config(net_type).AUDIT_LOCK_PERIOD;
   
   // Create a map of wallet addresses and total amounts in them
   std::map<crypto::public_key, wallet_summary> wallet_details;
@@ -272,8 +313,10 @@ skip:
       std::string asset_type;
       if (!cryptonote::get_output_asset_type(miner_tx_vout, asset_type)) {
         throw std::runtime_error("Aborting: failed to get output asset type from miner_tx");
-      } else if (asset_type != "SAL") {
-        throw std::runtime_error("Aborting: invalid output asset type from miner_tx");
+      } else if (blk.major_version >= HF_VERSION_SALVIUM_ONE_PROOFS && asset_type != "SAL1") {
+        throw std::runtime_error("Aborting: invalid output asset type from miner_tx: " + asset_type);
+      } else if (blk.major_version < HF_VERSION_SALVIUM_ONE_PROOFS && asset_type != "SAL") {
+        throw std::runtime_error("Aborting: invalid output asset type from miner_tx: " + asset_type + ", HF:" + std::to_string(blk.major_version));
       }
       miner_tx_assets.insert(asset_type);
       if (miner_tx_vout.amount > 13500000000 && h>0) {
@@ -293,12 +336,14 @@ skip:
       std::string asset_type;
       if (!cryptonote::get_output_asset_type(protocol_tx_vout, asset_type)) {
         throw std::runtime_error("Aborting: failed to get output asset type from protocol_tx");
-      } else if (asset_type != "SAL") {
-        throw std::runtime_error("Aborting: invalid output asset type from protocol_tx");
+      } else if (blk.major_version >= HF_VERSION_SALVIUM_ONE_PROOFS && asset_type != "SAL1") {
+        throw std::runtime_error("Aborting: invalid output asset type from protocol_tx: " + asset_type);
+      } else if (blk.major_version < HF_VERSION_SALVIUM_ONE_PROOFS && asset_type != "SAL") {
+        throw std::runtime_error("Aborting: invalid output asset type from protocol_tx: " + asset_type + ", HF:" + std::to_string(blk.major_version));
       }
       protocol_tx_assets.insert(asset_type);
       if (protocol_tx_vout.amount > 25000000000000) {
-        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.protocol_tx.hash << "" << delimiter << "large protocol TX amount detected from height " << (h-21601) << delimiter << "amount:" << protocol_tx_vout.amount << std::endl;
+        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.protocol_tx.hash << "" << delimiter << "large protocol TX amount detected from height " << (h-audit_lock_period) << delimiter << "amount:" << protocol_tx_vout.amount << std::endl;
       }
       crypto::public_key key;
       cryptonote::get_output_public_key(protocol_tx_vout, key);
@@ -329,7 +374,10 @@ skip:
         currsz += bd.size();
       currtxs++;
 
-      if (tx.type != cryptonote::transaction_type::TRANSFER && tx.type != cryptonote::transaction_type::BURN && tx.type != cryptonote::transaction_type::STAKE) {
+      if (tx.type != cryptonote::transaction_type::TRANSFER &&
+          tx.type != cryptonote::transaction_type::BURN &&
+          tx.type != cryptonote::transaction_type::STAKE &&
+          tx.type != cryptonote::transaction_type::AUDIT) {
         std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "invalid TX type detected" << delimiter << "type:" << (uint8_t)tx.type << std::endl;
       }
       
@@ -372,11 +420,13 @@ skip:
       // Are we auditing?
       if (!opt_audit) continue;
 
-      // Audit checks
+      // Audit commencing - check hard fork version for _this_block_
       if (audit_hard_forks.find(hf_version) == audit_hard_forks.end()) continue;
       
       // Pre-check - only attempt to verify legitimate AUDIT TXs
       if (tx.type != cryptonote::transaction_type::AUDIT) continue;
+      
+      // Make sure the RCT data is correct
       if (tx.rct_signatures.type != rct::RCTTypeSalviumOne) {
         std::cerr << "Aborting: Invalid RCT type " << tx.rct_signatures.type << " detected in AUDIT tx:" << tx_id << std::endl;
         throw std::runtime_error("Aborting: Invalid RCT type detected in AUDIT tx");
@@ -393,44 +443,133 @@ skip:
           std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "REVIEW: interval detected between audit TXs" << delimiter << "amount:" << (tx.amount_burnt / 100000000) << std::endl;
         }
       } else {
-        ws.viewkey = tx.rct_signatures.salvium_data.view_pubkey;
+        ws.enc_view_privkey_str = tx.rct_signatures.salvium_data.enc_view_privkey_str;
+        ws.flagged = false;
+        ws.seen_closing_tx = false;
       }
-      ws.txs.push_back({h, tx_id});
+      ws.txs.push_back({h, {tx_id, ""}});
 
       // Increment the total amount for this wallet that has been audited
       if (ws.total_amount + tx.amount_burnt < ws.total_amount) {
-        std::cerr << "Aborting: overflow in total_amount for Ks:" << tx.rct_signatures.salvium_data.spend_pubkey << std::endl;
-        throw std::runtime_error("Aborting: overflow in total_amount for Ks");
+        std::cerr << "overflow in total_amount for Ks:" << tx.rct_signatures.salvium_data.spend_pubkey << std::endl;
+        //throw std::runtime_error("Aborting: overflow in total_amount for Ks");
+        ws.txs.back().second.second = "wallet overflow";
+        ws.flagged = true;
       }
       ws.total_amount += tx.amount_burnt;
       
       // Check - asset_type of SAL on all inputs
       if (tx.source_asset_type != "SAL") {
         // TX must spend SALs in audit
-        throw std::runtime_error("Aborting: invalid source asset type found in tx");
+        std::cerr << "invalid source asset_type for Ks:" << tx.rct_signatures.salvium_data.spend_pubkey << std::endl;
+        //throw std::runtime_error("Aborting: invalid source asset type found in tx");
+        ws.txs.back().second.second = "invalid source asset_type '" + tx.source_asset_type + "'";
+        ws.flagged = true;
       }
       
       // Check - amount in STAKE TX
       if (tx.amount_burnt >= 25000000000000llu) {
         std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "BLACKLIST: large AUDIT TX detected" << delimiter << "amount:" << (tx.amount_burnt / 100000000) << std::endl;
+        ws.txs.back().second.second = "large AUDIT TX detected - amount:" + std::to_string(tx.amount_burnt/100000000) + std::string(" SAL");
+        ws.flagged = true;
       } else if (tx.amount_burnt >= 10000000000000llu) {
         std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "REVIEW: large AUDIT TX detected" << delimiter << "amount:" << (tx.amount_burnt / 100000000) <<
  std::endl;
+        ws.txs.back().second.second = "large AUDIT TX detected - amount:" + std::to_string(tx.amount_burnt/100000000) + std::string(" SAL");
+        ws.flagged = true;
       }
 
       // Check - total amount for this wallet
       if (ws.total_amount >= 25000000000000llu) {
         std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "BLACKLIST: large BALANCE detected" << delimiter << "amount:" << (ws.total_amount / 100000000) << std::endl;
+        ws.txs.back().second.second = "large wallet balance detected - amount:" + std::to_string(ws.total_amount/100000000) + std::string(" SAL");
+        ws.flagged = true;
       } else if (ws.total_amount >= 10000000000000llu) {
         std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "REVIEW: large BALANCE TX detected" << delimiter << "amount:" << (ws.total_amount / 100000000) << std::endl;
+        ws.txs.back().second.second = "large wallet balance detected - amount:" + std::to_string(ws.total_amount/100000000) + std::string(" SAL");
+        ws.flagged = true;
       }
-      
+
+      // Validate the Salvium audit data
+      //CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.outPk[0].mask, rv.salvium_data.cz_proof), "PRProof_Ver() failed on change proof");
+      //CHECK_AND_ASSERT_THROW_MES(pseudoOuts.size() == rv.salvium_data.input_verification_data.size(), "incorrect number of input verification datasets");
+      //CHECK_AND_ASSERT_THROW_MES(rv.salvium_data.spend_pubkey != crypto::null_pkey, "Invalid spend pubkey provided in audit data");
+      //CHECK_AND_ASSERT_THROW_MES(rv.salvium_data.enc_view_privkey_str != "", "Invalid encrypted viewkey provided in audit data");
+      for (size_t i=0; i < tx.rct_signatures.salvium_data.input_verification_data.size(); ++i) {
+         
+        // Recalculate the value of Ks from the Ko value
+        crypto::public_key ephemeral_pub = crypto::null_pkey;
+        CHECK_AND_ASSERT_THROW_MES(crypto::derive_public_key(tx.rct_signatures.salvium_data.input_verification_data[i].aR,
+                                                             tx.rct_signatures.salvium_data.input_verification_data[i].i,
+                                                             tx.rct_signatures.salvium_data.spend_pubkey, ephemeral_pub),
+                                   "Failed to derive ephemeral public key from audit data");
+        // Now check this isn't in the list of suspect_output_pubkeys
+        std::string ephemeral_pub_str = epee::string_tools::pod_to_hex(ephemeral_pub);
+        for (size_t n=0; n<suspect_output_pubkeys.size(); ++n) {
+          if (ephemeral_pub_str == suspect_output_pubkeys[n]) {
+            ws.txs.back().second.second = "SUSPECT OUTPUT PUBKEY DETECTED : '" + ephemeral_pub_str + "'";
+            ws.flagged = true;
+            break;
+          }
+        }
+      }
     }
     
     currblks++;
 
     if (stop_requested)
       break;
+  }
+
+  // Iterate over all the flagged wallets
+  for (const auto &wallet_entry: wallet_details) {
+    // Was the wallet flagged?
+    if (!wallet_entry.second.flagged) continue;
+
+    // Decrypt the wallet private viewkey
+    crypto::secret_key wallet_private_view_key;
+    bool ok = cryptonote::decrypt_pvk(wallet_entry.second.enc_view_privkey_str, SK, wallet_private_view_key);
+    if (!ok) {
+      // report error
+      throw std::runtime_error("Well shit");
+    }
+    
+    // Why was it flagged?
+    for (const auto &tx: wallet_entry.second.txs) {
+      // Check for a reason on this TX
+      if (tx.second.second != "") {
+      }
+    }
+
+    // Create a new "view only" wallet file
+    try {
+      // Derive the public view key from the private view key
+      crypto::public_key wallet_public_view_key;
+      bool ok = crypto::secret_key_to_public_key(wallet_private_view_key, wallet_public_view_key);
+
+      // Construct the Monero address with the public keys
+      cryptonote::account_public_address address;
+      address.m_view_public_key = wallet_public_view_key;
+      address.m_spend_public_key = wallet_entry.first;
+
+      std::string daemon_address = (opt_testnet) ? "http://127.0.0.1:29081" : (opt_stagenet) ? "http://127.0.0.1:39081" : "http://127.0.0.1:19081";
+      std::string wallet_password = "1234";
+      std::string wallet_path = epee::string_tools::pod_to_hex(wallet_entry.first) + "_wallet";
+      
+      // Initialize the view-only wallet
+      tools::wallet2 w{net_type};
+      w.set_daemon(daemon_address);
+      w.set_refresh_from_block_height(0); // Set scanning from the genesis block
+
+      // Generate the wallet file
+      w.generate(wallet_path, wallet_password, address, wallet_private_view_key, true);
+
+      // Save the wallet file
+      w.store();
+      std::cout << "View-only wallet created successfully at: " << wallet_path << std::endl;
+    } catch (const std::exception &e) {
+      std::cerr << "Error creating view-only wallet: " << e.what() << std::endl;
+    }
   }
 
   return 0;

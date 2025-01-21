@@ -376,7 +376,7 @@ namespace boost
       a & x.cz_proof;
       a & x.input_verification_data;
       a & x.spend_pubkey;
-      a & x.view_pubkey;
+      a & x.enc_view_privkey_str;
     }
   }
 

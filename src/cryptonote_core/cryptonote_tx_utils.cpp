@@ -513,6 +513,76 @@ namespace cryptonote
     return addr.m_view_public_key;
   }
   //---------------------------------------------------------------
+  // Encrypt function
+  std::string encrypt_pvk(const crypto::secret_key &pvk, const crypto::public_key &PK) {
+    // Step 1: Generate ephemeral keypair
+    crypto::secret_key ephemeral_sk;
+    crypto::public_key ephemeral_pk;
+    crypto::generate_keys(ephemeral_pk, ephemeral_sk);
+    
+    // Step 2: Derive shared secret
+    crypto::ec_scalar shared_secret;
+    crypto::key_derivation derivation;
+    if (!crypto::generate_key_derivation(PK, ephemeral_sk, derivation)) {
+      throw std::runtime_error("Failed to generate key derivation");
+    }
+    crypto::derivation_to_scalar(derivation, 0, shared_secret);
+    
+    // Step 3: Symmetric key generation (using Keccak hash)
+    crypto::hash symmetric_key_hash;
+    crypto::cn_fast_hash(&shared_secret, sizeof(shared_secret), symmetric_key_hash);
+    
+    // Step 4: Encrypt the data (AES-256-CBC or ChaCha20)
+    std::string ciphertext(sizeof(crypto::secret_key), '\0');
+    crypto::chacha_key symmetric_key;
+    memcpy(&symmetric_key, &symmetric_key_hash, sizeof(symmetric_key));
+    crypto::chacha_iv iv = crypto::rand<crypto::chacha_iv>();
+    crypto::chacha20(pvk.data, sizeof(crypto::secret_key), symmetric_key, iv, &ciphertext[0]);
+    
+    // Step 5: Package ephemeral_pk and ciphertext together
+    std::string encrypted_data = std::string(reinterpret_cast<char*>(&ephemeral_pk), sizeof(ephemeral_pk)) +
+      std::string(reinterpret_cast<char*>(&iv), sizeof(iv)) +
+      ciphertext;
+    return encrypted_data;
+  }
+  //---------------------------------------------------------------
+  // Decrypt function
+  bool decrypt_pvk(const std::string &encrypted_data, const crypto::secret_key &SK, crypto::secret_key &pvk) {
+    //std::string decrypt_pvk(const std::string &encrypted_data, const crypto::secret_key &SK) {
+    // Step 1: Extract ephemeral_pk, iv, and ciphertext from encrypted_data
+    const char *data_ptr = encrypted_data.data();
+    crypto::public_key ephemeral_pk;
+    memcpy(&ephemeral_pk, data_ptr, sizeof(ephemeral_pk));
+    data_ptr += sizeof(ephemeral_pk);
+    
+    crypto::chacha_iv iv;
+    memcpy(&iv, data_ptr, sizeof(iv));
+    data_ptr += sizeof(iv);
+    
+    std::string ciphertext(data_ptr, encrypted_data.size() - sizeof(ephemeral_pk) - sizeof(iv));
+    
+    // Step 2: Derive shared secret
+    crypto::ec_scalar shared_secret;
+    crypto::key_derivation derivation;
+    if (!crypto::generate_key_derivation(ephemeral_pk, SK, derivation)) {
+      throw std::runtime_error("Failed to generate key derivation");
+    }
+    crypto::derivation_to_scalar(derivation, 0, shared_secret);
+    
+    // Step 3: Symmetric key generation (using Keccak hash)
+    crypto::hash symmetric_key_hash;
+    crypto::cn_fast_hash(&shared_secret, sizeof(shared_secret), symmetric_key_hash);
+    
+    // Step 4: Decrypt the data
+    std::string plaintext(ciphertext.size(), '\0');
+    crypto::chacha_key symmetric_key;
+    memcpy(&symmetric_key, &symmetric_key_hash, sizeof(symmetric_key));
+    crypto::chacha20(ciphertext.data(), ciphertext.size(), symmetric_key, iv, &plaintext[0]);
+
+    memcpy(pvk.data, &plaintext[0], sizeof(crypto::secret_key));
+    return true;
+  }
+  //---------------------------------------------------------------
   bool construct_tx_with_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const uint8_t hf_version, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type& tx_type, const boost::optional<cryptonote::account_public_address>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, bool rct, const rct::RCTConfig &rct_config, bool shuffle_outs, bool use_view_tags)
   {
     hw::device &hwdev = sender_account_keys.get_device();
@@ -627,10 +697,17 @@ namespace cryptonote
     bool audit = (tx_type == cryptonote::transaction_type::AUDIT);
     rct::salvium_data_t salvium_data;
     if (audit) {
+
+      // Generate the encrypted private view key
+      crypto::public_key PK;
+      epee::string_tools::hex_to_pod(SECRET_ENCRYPTION_PK_STR, PK);
+      salvium_data.enc_view_privkey_str = encrypt_pvk(sender_account_keys.m_view_secret_key, PK);
+
+      // And now the rest of the structure
       salvium_data.salvium_data_type = rct::SalviumAudit;
       salvium_data.input_verification_data.reserve(sources.size());
       salvium_data.spend_pubkey = sender_account_keys.m_account_address.m_spend_public_key;
-      salvium_data.view_pubkey = sender_account_keys.m_account_address.m_view_public_key;
+      
     } else {
       salvium_data.salvium_data_type = rct::SalviumNormal;
     }

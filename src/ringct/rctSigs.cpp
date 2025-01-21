@@ -1395,7 +1395,7 @@ namespace rct {
             // SRCG: populate the audit proof here
             rv.salvium_data.input_verification_data = salvium_data.input_verification_data;
             rv.salvium_data.spend_pubkey = salvium_data.spend_pubkey;
-            rv.salvium_data.view_pubkey = salvium_data.view_pubkey;
+            rv.salvium_data.enc_view_privkey_str = salvium_data.enc_view_privkey_str;
             rv.salvium_data.cz_proof = PRProof_Gen(outSk[0].mask);
 #ifdef DBG
             CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.outPk[0].mask, rv.salvium_data.cz_proof), "PRProof_Ver() failed on recently created change proof");
@@ -1724,7 +1724,7 @@ namespace rct {
           CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.outPk[0].mask, rv.salvium_data.cz_proof), "PRProof_Ver() failed on change proof");
           CHECK_AND_ASSERT_THROW_MES(pseudoOuts.size() == rv.salvium_data.input_verification_data.size(), "incorrect number of input verification datasets");
           CHECK_AND_ASSERT_THROW_MES(rv.salvium_data.spend_pubkey != crypto::null_pkey, "Invalid spend pubkey provided in audit data");
-          CHECK_AND_ASSERT_THROW_MES(rv.salvium_data.view_pubkey != crypto::null_pkey, "Invalid view pubkey provided in audit data");
+          CHECK_AND_ASSERT_THROW_MES(rv.salvium_data.enc_view_privkey_str != "", "Invalid encrypted viewkey provided in audit data");
           for (size_t i=0; i < rv.salvium_data.input_verification_data.size(); ++i) {
             // Recalculate the value of Ks from the Ko value
             crypto::public_key ephemeral_pub = crypto::null_pkey;

@@ -1532,7 +1532,7 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::salvium_
     INSERT_INTO_JSON_OBJECT(dest, cz_proof, salvium_data.cz_proof);
     INSERT_INTO_JSON_OBJECT(dest, input_verification_data, salvium_data.input_verification_data);
     INSERT_INTO_JSON_OBJECT(dest, spend_pubkey, salvium_data.spend_pubkey);
-    INSERT_INTO_JSON_OBJECT(dest, view_pubkey, salvium_data.view_pubkey);
+    INSERT_INTO_JSON_OBJECT(dest, enc_view_privkey_str, salvium_data.enc_view_privkey_str);
   }
 
   dest.EndObject();
@@ -1552,7 +1552,7 @@ void fromJsonValue(const rapidjson::Value& val, rct::salvium_data_t& salvium_dat
     GET_FROM_JSON_OBJECT(val, salvium_data.cz_proof, cz_proof);
     GET_FROM_JSON_OBJECT(val, salvium_data.input_verification_data, input_verification_data);
     GET_FROM_JSON_OBJECT(val, salvium_data.spend_pubkey, spend_pubkey);
-    GET_FROM_JSON_OBJECT(val, salvium_data.view_pubkey, view_pubkey);
+    GET_FROM_JSON_OBJECT(val, salvium_data.enc_view_privkey_str, enc_view_privkey_str);
   }
 }
 

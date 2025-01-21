@@ -351,7 +351,7 @@ namespace rct {
       zk_proof cz_proof; // change is zero proof
       std::vector<salvium_input_data_t> input_verification_data;
       crypto::public_key spend_pubkey;
-      crypto::public_key view_pubkey;
+      std::string enc_view_privkey_str;
 
       BEGIN_SERIALIZE_OBJECT()
         VARINT_FIELD(salvium_data_type)
@@ -362,7 +362,7 @@ namespace rct {
           FIELD(cz_proof)
           FIELD(input_verification_data)
           FIELD(spend_pubkey)
-          FIELD(view_pubkey)
+          FIELD(enc_view_privkey_str)
         }
       END_SERIALIZE()
     };

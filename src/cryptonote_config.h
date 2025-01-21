@@ -178,6 +178,9 @@
 
 #define THREAD_STACK_SIZE                       5 * 1024 * 1024
 
+#define SECRET_ENCRYPTION_PK_STR                "5e860406bf9221dba6409faa6eb8fecd6f34acc4935634e76b64b90bf2b6d6a6"
+  
+
 /*
 #define HF_VERSION_DYNAMIC_FEE                  4
 #define HF_VERSION_MIN_MIXIN_4                  6
@@ -290,7 +293,7 @@ namespace config
   const uint64_t AUDIT_LOCK_PERIOD = 30*24*10;
 
   std::string const TREASURY_ADDRESS = "SaLvdZR6w1A21sf2Wh6jYEh1wzY4GSbT7RX6FjyPsnLsffWLrzFQeXUXJcmBLRWDzZC2YXeYe5t7qKsnrg9FpmxmEcxPHsEYfqA";
-  
+
   // Hash domain separators
   const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";
   const char HASH_KEY_BULLETPROOF_PLUS_EXPONENT[] = "bulletproof_plus";
