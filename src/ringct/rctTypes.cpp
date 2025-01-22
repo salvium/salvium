@@ -198,6 +198,7 @@ namespace rct {
             case RCTTypeCLSAG:
             case RCTTypeBulletproofPlus:
             case RCTTypeFullProofs:
+            case RCTTypeSalviumOne:
                 return true;
             default:
                 return false;
@@ -223,6 +224,7 @@ namespace rct {
         {
             case RCTTypeBulletproofPlus:
             case RCTTypeFullProofs:
+            case RCTTypeSalviumOne:
                 return true;
             default:
                 return false;
@@ -248,6 +250,7 @@ namespace rct {
             case RCTTypeCLSAG:
             case RCTTypeBulletproofPlus:
             case RCTTypeFullProofs:
+            case RCTTypeSalviumOne:
                 return true;
             default:
                 return false;

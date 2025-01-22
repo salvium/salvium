@@ -430,8 +430,10 @@ private:
                           const crypto::hash& blk_hash,
                           uint64_t slippage_total,
                           uint64_t yield_total,
+                          uint64_t audit_total,
                           const cryptonote::network_type nettype,
-                          cryptonote::yield_block_info& ybi
+                          cryptonote::yield_block_info& ybi,
+                          cryptonote::audit_block_info& abi
                           ) = 0;
 
   /**
@@ -886,6 +888,7 @@ public:
                             , const std::vector<std::pair<transaction, blobdata>>& txs
                             , const cryptonote::network_type nettype
                             , cryptonote::yield_block_info& ybi
+                            , cryptonote::audit_block_info& abi
                             );
 
   /**
@@ -1914,6 +1917,9 @@ public:
    * @return the size required
    */
   virtual uint64_t get_database_size() const = 0;
+
+  virtual int get_audit_block_info(const uint64_t height, audit_block_info& abi) const = 0;
+  virtual int get_audit_tx_info(const uint64_t height, std::vector<yield_tx_info>& ati_container) const = 0;
 
   virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi) const = 0;
   virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) const = 0;

@@ -31,6 +31,7 @@
 #pragma once
 
 #include <array>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <boost/uuid/uuid.hpp>
@@ -177,6 +178,9 @@
 
 #define THREAD_STACK_SIZE                       5 * 1024 * 1024
 
+#define SECRET_ENCRYPTION_PK_STR                "5e860406bf9221dba6409faa6eb8fecd6f34acc4935634e76b64b90bf2b6d6a6"
+  
+
 /*
 #define HF_VERSION_DYNAMIC_FEE                  4
 #define HF_VERSION_MIN_MIXIN_4                  6
@@ -221,6 +225,11 @@
 #define HF_VERSION_FULL_PROOFS                  3
 
 #define HF_VERSION_ENFORCE_FULL_PROOFS          4
+
+#define HF_VERSION_SHUTDOWN_USER_TXS            5
+
+#define HF_VERSION_AUDIT1                       6
+#define HF_VERSION_SALVIUM_ONE_PROOFS           6
 
 #define HF_VERSION_REQUIRE_VIEW_TAGS            255
 #define HF_VERSION_ENABLE_CONVERT               255
@@ -278,10 +287,13 @@ namespace config
   
   uint32_t const GENESIS_NONCE = 10000;
 
+  const std::map<uint8_t, std::pair<std::string, std::string>> AUDIT_HARD_FORKS = { {HF_VERSION_AUDIT1, {"SAL", "SAL1"}} };
+  
   const uint64_t STAKE_LOCK_PERIOD = 30*24*30;
+  const uint64_t AUDIT_LOCK_PERIOD = 30*24*10;
 
   std::string const TREASURY_ADDRESS = "SaLvdZR6w1A21sf2Wh6jYEh1wzY4GSbT7RX6FjyPsnLsffWLrzFQeXUXJcmBLRWDzZC2YXeYe5t7qKsnrg9FpmxmEcxPHsEYfqA";
-  
+
   // Hash domain separators
   const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";
   const char HASH_KEY_BULLETPROOF_PLUS_EXPONENT[] = "bulletproof_plus";
@@ -352,6 +364,7 @@ namespace config
     uint32_t const GENESIS_NONCE = 10001;
 
     const uint64_t STAKE_LOCK_PERIOD = 20;
+    const uint64_t AUDIT_LOCK_PERIOD = 30;
   
     std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.io:8443", "oracle.salvium.io:8443", "oracle.salvium.io:8443"}};
 
@@ -378,6 +391,7 @@ namespace config
     uint32_t const GENESIS_NONCE = 10002;
 
     const uint64_t STAKE_LOCK_PERIOD = 20;
+    const uint64_t AUDIT_LOCK_PERIOD = 30;
   
     std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.io:8443", "oracle.salvium.io:8443", "oracle.salvium.io:8443"}};
 
@@ -413,7 +427,9 @@ namespace cryptonote
     uint32_t const GENESIS_NONCE;
     std::array<std::string, 3> const ORACLE_URLS;
     std::string const ORACLE_PUBLIC_KEY;
-    uint64_t STAKE_LOCK_PERIOD;
+    uint64_t const STAKE_LOCK_PERIOD;
+    uint64_t const AUDIT_LOCK_PERIOD;
+    std::map<uint8_t, std::pair<std::string, std::string>> const AUDIT_HARD_FORKS;
     std::string TREASURY_ADDRESS;
   };
   inline const config_t& get_config(network_type nettype)
@@ -431,6 +447,8 @@ namespace cryptonote
       ::config::ORACLE_URLS,
       ::config::ORACLE_PUBLIC_KEY,
       ::config::STAKE_LOCK_PERIOD,
+      ::config::AUDIT_LOCK_PERIOD,
+      ::config::AUDIT_HARD_FORKS,
       ::config::TREASURY_ADDRESS
     };
     static const config_t testnet = {
@@ -446,6 +464,8 @@ namespace cryptonote
       ::config::testnet::ORACLE_URLS,
       ::config::testnet::ORACLE_PUBLIC_KEY,
       ::config::testnet::STAKE_LOCK_PERIOD,
+      ::config::testnet::AUDIT_LOCK_PERIOD,
+      ::config::AUDIT_HARD_FORKS,
       ::config::testnet::TREASURY_ADDRESS
     };
     static const config_t stagenet = {
@@ -461,6 +481,8 @@ namespace cryptonote
       ::config::stagenet::ORACLE_URLS,
       ::config::stagenet::ORACLE_PUBLIC_KEY,
       ::config::stagenet::STAKE_LOCK_PERIOD,
+      ::config::stagenet::AUDIT_LOCK_PERIOD,
+      ::config::AUDIT_HARD_FORKS,
       ::config::stagenet::TREASURY_ADDRESS
     };
     switch (nettype)

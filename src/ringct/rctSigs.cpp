@@ -677,7 +677,7 @@ namespace rct {
           kv.push_back(p.t);
         }
       }
-      else if (rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs)
+      else if (rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne)
       {
         kv.reserve((6*2+6) * rv.p.bulletproofs_plus.size());
         for (const auto &p: rv.p.bulletproofs_plus)
@@ -1161,7 +1161,7 @@ namespace rct {
             //mask amount and mask
             rv.ecdhInfo[i].mask = copy(outSk[i].mask);
             rv.ecdhInfo[i].amount = d2h(amounts[i]);
-            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs);
+            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne);
         }
 
         //set txn fee
@@ -1206,6 +1206,7 @@ namespace rct {
                         ctkeyV &outSk,
                         const RCTConfig &rct_config,
                         hw::device &hwdev,
+                        const rct::salvium_data_t &salvium_data,
                         const key &x_change,
                         const size_t change_index,
                         const key &key_yF
@@ -1234,6 +1235,9 @@ namespace rct {
               break;
             case 5:
               rv.type = RCTTypeFullProofs;
+              break;
+            case 6:
+              rv.type = RCTTypeSalviumOne;
               break;
             default:
               ASSERT_MES_AND_THROW("Unsupported BP version: " << rct_config.bp_version);
@@ -1289,6 +1293,7 @@ namespace rct {
                       rv.p.bulletproofs_plus.push_back(proveRangeBulletproofPlus(C, masks, outamounts, keys, hwdev));
                     else
                       rv.p.bulletproofs.push_back(proveRangeBulletproof(C, masks, outamounts, keys, hwdev));
+
                     #ifdef DBG
                     if (plus)
                       CHECK_AND_ASSERT_THROW_MES(verBulletproofPlus(rv.p.bulletproofs_plus.back()), "verBulletproofPlus failed on newly created proof");
@@ -1351,7 +1356,7 @@ namespace rct {
             //mask amount and mask
             rv.ecdhInfo[i].mask = copy(outSk[i].mask);
             rv.ecdhInfo[i].amount = d2h(outamounts[i]);
-            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs);
+            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne);
         }
             
         //set txn fee
@@ -1367,28 +1372,43 @@ namespace rct {
             rv.p.MGs.resize(inamounts.size());
         key sumpouts = zero(); //sum pseudoOut masks
         keyV a(inamounts.size());
+        bool audit = (tx_type == cryptonote::transaction_type::AUDIT && rv.type == RCTTypeSalviumOne && salvium_data.salvium_data_type == rct::SalviumAudit);
         for (i = 0 ; i < inamounts.size(); i++) {
+          if (audit)
+            a[i] = rct::zero();
+          else
             skGen(a[i]);
-            sc_add(sumpouts.bytes, a[i].bytes, sumpouts.bytes);
-            genC(pseudoOuts[i], a[i], inamounts[i]);
+          sc_add(sumpouts.bytes, a[i].bytes, sumpouts.bytes);
+          genC(pseudoOuts[i], a[i], inamounts[i]);
         }
         key difference;
         sc_sub(difference.bytes, sumpouts.bytes, sumout.bytes);
         genC(rv.p_r, difference, 0);
         DP(rv.p_r);
-        if (rv.type == RCTTypeFullProofs) {
-          rv.pr_proof = PRProof_Gen(difference);
+        if (rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne) {
+          rv.salvium_data.pr_proof = PRProof_Gen(difference);
 #ifdef DBG
-          CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.p_r, rv.pr_proof), "PRProof_Ver() failed on recently created proof");
+          CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.p_r, rv.salvium_data.pr_proof), "PRProof_Ver() failed on recently created proof");
 #endif
+          rv.salvium_data.salvium_data_type = salvium_data.salvium_data_type;
+          if (audit) {
+            // SRCG: populate the audit proof here
+            rv.salvium_data.input_verification_data = salvium_data.input_verification_data;
+            rv.salvium_data.spend_pubkey = salvium_data.spend_pubkey;
+            rv.salvium_data.enc_view_privkey_str = salvium_data.enc_view_privkey_str;
+            rv.salvium_data.cz_proof = PRProof_Gen(outSk[0].mask);
+#ifdef DBG
+            CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.outPk[0].mask, rv.salvium_data.cz_proof), "PRProof_Ver() failed on recently created change proof");
+#endif
+          }
         }
-
+        
         /*
         // Check if spend authority proof is needed (only for TRANSFER TXs)
-        if (tx_type == cryptonote::transaction_type::TRANSFER && rv.type == rct::RCTTypeFullProofs) {
-          rv.sa_proof = SAProof_Gen(destinations[change_index], x_change, key_yF);
+        if (tx_type == cryptonote::transaction_type::TRANSFER && rv.type == rct::RCTTypeSalviumOne) {
+          rv.salvium_data.sa_proof = SAProof_Gen(destinations[change_index], x_change, key_yF);
 #ifdef DBG
-          CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.sa_proof, destinations[change_index], key_yF), "SAProof_Ver() failed on recently created proof");
+          CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.salvium_data.sa_proof, destinations[change_index], key_yF), "SAProof_Ver() failed on recently created proof");
 #endif
         }
         */
@@ -1428,6 +1448,7 @@ namespace rct {
                         unsigned int mixin,
                         const RCTConfig &rct_config,
                         hw::device &hwdev,
+                        const rct::salvium_data_t &salvium_data,
                         const key &x_change,
                         const size_t change_index,
                         const key &key_yF
@@ -1441,7 +1462,7 @@ namespace rct {
           mixRing[i].resize(mixin+1);
           index[i] = populateFromBlockchainSimple(mixRing[i], inPk[i], mixin);
         }
-        return genRctSimple(message, inSk, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, txnFee, mixRing, amount_keys, index, outSk, rct_config, hwdev, x_change, change_index, key_yF);
+        return genRctSimple(message, inSk, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, txnFee, mixRing, amount_keys, index, outSk, rct_config, hwdev, salvium_data, x_change, change_index, key_yF);
     }
 
     //RingCT protocol
@@ -1530,10 +1551,11 @@ namespace rct {
         std::vector<const BulletproofPlus*> bpp_proofs;
         size_t max_non_bp_proofs = 0, offset = 0;
 
-        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs,
+        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne,
                              false, "verRctSemanticsSimple called on non simple rctSig");
-        if (rv.type == RCTTypeFullProofs)
-          CHECK_AND_ASSERT_MES(PRProof_Ver(rv.p_r, rv.pr_proof), false, "Invalid p_r commitment to difference");
+        if (rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne)
+          CHECK_AND_ASSERT_MES(PRProof_Ver(rv.p_r, rv.salvium_data.pr_proof), false, "Invalid p_r commitment to difference");
+          
         const bool bulletproof = is_rct_bulletproof(rv.type);
         const bool bulletproof_plus = is_rct_bulletproof_plus(rv.type);
         if (bulletproof || bulletproof_plus)
@@ -1656,7 +1678,7 @@ namespace rct {
       {
         PERF_TIMER(verRctNonSemanticsSimple);
 
-        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs,
+        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne,
             false, "verRctNonSemanticsSimple called on non simple rctSig");
         const bool bulletproof = is_rct_bulletproof(rv.type);
         const bool bulletproof_plus = is_rct_bulletproof_plus(rv.type);
@@ -1696,6 +1718,32 @@ namespace rct {
           }
         }
 
+        bool audit = (rv.type == RCTTypeSalviumOne && rv.salvium_data.salvium_data_type == rct::SalviumAudit);
+        if (audit) {
+          // Validate the Salvium audit data
+          CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.outPk[0].mask, rv.salvium_data.cz_proof), "PRProof_Ver() failed on change proof");
+          CHECK_AND_ASSERT_THROW_MES(pseudoOuts.size() == rv.salvium_data.input_verification_data.size(), "incorrect number of input verification datasets");
+          CHECK_AND_ASSERT_THROW_MES(rv.salvium_data.spend_pubkey != crypto::null_pkey, "Invalid spend pubkey provided in audit data");
+          CHECK_AND_ASSERT_THROW_MES(rv.salvium_data.enc_view_privkey_str != "", "Invalid encrypted viewkey provided in audit data");
+          for (size_t i=0; i < rv.salvium_data.input_verification_data.size(); ++i) {
+            // Recalculate the value of Ks from the Ko value
+            crypto::public_key ephemeral_pub = crypto::null_pkey;
+            CHECK_AND_ASSERT_THROW_MES(crypto::derive_public_key(rv.salvium_data.input_verification_data[i].aR, rv.salvium_data.input_verification_data[i].i, rv.salvium_data.spend_pubkey, ephemeral_pub),
+                                       "Failed to derive ephemeral public key from audit data");
+            // Now find this in the list of mixring entries
+            bool found = false;
+            for (size_t n=0; n<rv.mixRing[i].size(); ++n) {
+              if (ephemeral_pub == rct::rct2pk(rv.mixRing[i][n].dest)) {
+                found = true;
+              }
+            }
+            CHECK_AND_ASSERT_THROW_MES(found, "Failed to match ephemeral public key provided in audit data");
+
+            // Verify the individual input commitment
+            CHECK_AND_ASSERT_THROW_MES(equalKeys(scalarmultH(d2h(rv.salvium_data.input_verification_data[i].amount)), pseudoOuts[i]), "Invalid pseudoOuts entry");
+          }
+        }
+        
         return true;
       }
       // we can get deep throws from ge_frombytes_vartime if input isn't valid
@@ -1728,7 +1776,7 @@ namespace rct {
 
         //mask amount and mask
         ecdhTuple ecdh_info = rv.ecdhInfo[i];
-        hwdev.ecdhDecode(ecdh_info, sk, rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs);
+        hwdev.ecdhDecode(ecdh_info, sk, rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne);
         mask = ecdh_info.mask;
         key amount = ecdh_info.amount;
         key C = rv.outPk[i].mask;
@@ -1752,14 +1800,14 @@ namespace rct {
     }
 
     xmr_amount decodeRctSimple(const rctSig & rv, const key & sk, unsigned int i, key &mask, hw::device &hwdev) {
-        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs,
+        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne,
             false, "decodeRct called on non simple rctSig");
         CHECK_AND_ASSERT_THROW_MES(i < rv.ecdhInfo.size(), "Bad index");
         CHECK_AND_ASSERT_THROW_MES(rv.outPk.size() == rv.ecdhInfo.size(), "Mismatched sizes of rv.outPk and rv.ecdhInfo");
 
         //mask amount and mask
         ecdhTuple ecdh_info = rv.ecdhInfo[i];
-        hwdev.ecdhDecode(ecdh_info, sk, rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs);
+        hwdev.ecdhDecode(ecdh_info, sk, rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne);
         mask = ecdh_info.mask;
         key amount = ecdh_info.amount;
         key C = rv.outPk[i].mask;

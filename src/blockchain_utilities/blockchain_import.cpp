@@ -488,8 +488,9 @@ int import_from_file(cryptonote::core& core, const std::string& import_file_path
           try
           {
             cryptonote::yield_block_info ybi; // This just gets discarded because we aren't looking to maintain a cache of YBI data in the import utility
+            cryptonote::audit_block_info abi; // This just gets discarded because we aren't looking to maintain a cache of ABI data in the import utility
             uint64_t long_term_block_weight = core.get_blockchain_storage().get_next_long_term_block_weight(block_weight);
-            core.get_blockchain_storage().get_db().add_block(std::make_pair(b, block_to_blob(b)), block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, txs, opt_testnet ? cryptonote::TESTNET : opt_stagenet ? cryptonote::STAGENET : cryptonote::MAINNET, ybi);
+            core.get_blockchain_storage().get_db().add_block(std::make_pair(b, block_to_blob(b)), block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, txs, opt_testnet ? cryptonote::TESTNET : opt_stagenet ? cryptonote::STAGENET : cryptonote::MAINNET, ybi, abi);
           }
           catch (const std::exception& e)
           {

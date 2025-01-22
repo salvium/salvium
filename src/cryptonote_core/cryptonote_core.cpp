@@ -924,7 +924,15 @@ namespace cryptonote
         continue;
       const rct::rctSig &rv = tx_info[n].tx->rct_signatures;
       const uint8_t hf_version = m_blockchain_storage.get_current_hard_fork_version();
-      if (hf_version >= HF_VERSION_ENFORCE_FULL_PROOFS) {
+      if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+        if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeSalviumOne) {
+          MERROR_VER("Invalid RCT type provided");
+          set_semantics_failed(tx_info[n].tx_hash);
+          tx_info[n].tvc.m_verifivation_failed = true;
+          tx_info[n].result = false;
+          return false;
+        }
+      } else if (hf_version >= HF_VERSION_ENFORCE_FULL_PROOFS) {
         if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeFullProofs) {
           MERROR_VER("Invalid RCT type provided");
           set_semantics_failed(tx_info[n].tx_hash);
@@ -946,6 +954,7 @@ namespace cryptonote
                                           tx_info[n].tx->type == cryptonote::transaction_type::BURN ? tx_info[n].tx->amount_burnt :
                                           tx_info[n].tx->type == cryptonote::transaction_type::CONVERT ? tx_info[n].tx->amount_burnt :
                                           tx_info[n].tx->type == cryptonote::transaction_type::STAKE ? tx_info[n].tx->amount_burnt :
+                                          tx_info[n].tx->type == cryptonote::transaction_type::AUDIT ? tx_info[n].tx->amount_burnt :
                                           0
                                           ))
           {
@@ -981,6 +990,7 @@ namespace cryptonote
           break;
         case rct::RCTTypeBulletproofPlus:
         case rct::RCTTypeFullProofs:
+        case rct::RCTTypeSalviumOne:
           if (!is_canonical_bulletproof_plus_layout(rv.p.bulletproofs_plus))
           {
             MERROR_VER("Bulletproof_plus does not have canonical form");
@@ -1007,12 +1017,13 @@ namespace cryptonote
       {
         if (!tx_info[n].result)
           continue;
-        if (tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof2 && tx_info[n].tx->rct_signatures.type != rct::RCTTypeCLSAG && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproofPlus && tx_info[n].tx->rct_signatures.type != rct::RCTTypeFullProofs)
+        if (tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof2 && tx_info[n].tx->rct_signatures.type != rct::RCTTypeCLSAG && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproofPlus && tx_info[n].tx->rct_signatures.type != rct::RCTTypeFullProofs && tx_info[n].tx->rct_signatures.type != rct::RCTTypeSalviumOne)
           continue;
         if (!rct::verRctSemanticsSimple(tx_info[n].tx->rct_signatures,
                                         tx_info[n].tx->type == cryptonote::transaction_type::BURN ? tx_info[n].tx->amount_burnt :
                                         tx_info[n].tx->type == cryptonote::transaction_type::CONVERT ? tx_info[n].tx->amount_burnt :
                                         tx_info[n].tx->type == cryptonote::transaction_type::STAKE ? tx_info[n].tx->amount_burnt :
+                                        tx_info[n].tx->type == cryptonote::transaction_type::AUDIT ? tx_info[n].tx->amount_burnt :
                                         0
                                         ))
         {

@@ -43,6 +43,12 @@ const hardfork_t mainnet_hard_forks[] = {
 
   // version 4 starts from block 121100, which is on or around the 20th of December, 2024. Fork time finalised on 2024-12-19. No fork voting occurs for the v4 fork.
   { 4, 121800, 0, 1734607000 },
+  
+  // version 5 starts from block 136100, which is on or around the 9th of January, 2025. Fork time finalised on 2025-01-08. No fork voting occurs for the v5 fork.
+  { 5, 136100, 0, 1736265945 },
+  
+  // version 6 starts from block 146146, which is on or around the 23rd of January, 2025. Fork time finalised on 2025-01-17. No fork voting occurs for the v6 fork.
+  //{ 6, 146146, 0, 1736592100 },
 };
 const size_t num_mainnet_hard_forks = sizeof(mainnet_hard_forks) / sizeof(mainnet_hard_forks[0]);
 const uint64_t mainnet_hard_fork_version_1_till = ((uint64_t)-1);
@@ -56,6 +62,15 @@ const hardfork_t testnet_hard_forks[] = {
 
   // version 3 starts from block 500
   { 3, 500, 0, 1729518000 },
+
+  // version 4 starts from block 600
+  { 4, 600, 0, 1734607000 },
+
+  // version 5 starts from block 700
+  { 5, 700, 0, 1734607005 },
+
+  // version 5 starts from block 800
+  { 6, 800, 0, 1734608000 },
 };
 const size_t num_testnet_hard_forks = sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]);
 const uint64_t testnet_hard_fork_version_1_till = ((uint64_t)-1);

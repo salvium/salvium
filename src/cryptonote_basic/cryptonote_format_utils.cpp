@@ -290,7 +290,7 @@ namespace cryptonote
     return is_v1_tx(blobdata_ref{tx_blob.data(), tx_blob.size()});
   }
   //---------------------------------------------------------------
-  bool generate_key_image_helper(const account_keys& ack, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::public_key& tx_public_key, const std::vector<crypto::public_key>& additional_tx_public_keys, size_t real_output_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const bool use_origin_data, const origin_data& od)
+  bool generate_key_image_helper(const account_keys& ack, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::public_key& tx_public_key, const std::vector<crypto::public_key>& additional_tx_public_keys, size_t real_output_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const bool use_origin_data, const origin_data& od, rct::salvium_input_data_t& sid)
   {
     crypto::key_derivation recv_derivation = AUTO_VAL_INIT(recv_derivation);
     bool r = hwdev.generate_key_derivation(tx_public_key, ack.m_view_secret_key, recv_derivation);
@@ -318,6 +318,8 @@ namespace cryptonote
     boost::optional<subaddress_receive_info> subaddr_recv_info = is_out_to_acc_precomp(subaddresses, out_key, recv_derivation, additional_recv_derivations, real_output_index,hwdev);
     CHECK_AND_ASSERT_MES(subaddr_recv_info, false, "key image helper: given output pubkey doesn't seem to belong to this address");
 
+    sid.aR = subaddr_recv_info->derivation;
+    sid.i  = real_output_index;
     return generate_key_image_helper_precomp(ack, out_key, subaddr_recv_info->derivation, real_output_index, subaddr_recv_info->index, in_ephemeral, ki, hwdev, use_origin_data, od);
   }
   //---------------------------------------------------------------
@@ -400,7 +402,7 @@ namespace cryptonote
           // SRCG: This is a confusing one - for some reason I was using the line below, and it _seemed_ to work...
           // ... but I think it was luck! the "od.output_index" would only work for the TD_ORIGIN data, of course...
           //hwdev.derive_subaddress_public_key(out_key, recv_derivation, od.output_index, P_change);
-          if (od.tx_type == cryptonote::transaction_type::CONVERT || od.tx_type == cryptonote::transaction_type::STAKE) {
+          if (od.tx_type == cryptonote::transaction_type::CONVERT || od.tx_type == cryptonote::transaction_type::STAKE || od.tx_type == cryptonote::transaction_type::AUDIT) {
             hwdev.derive_subaddress_public_key(out_key, recv_derivation, 0, P_change);
           } else {
             hwdev.derive_subaddress_public_key(out_key, recv_derivation, real_output_index, P_change);
@@ -421,7 +423,7 @@ namespace cryptonote
           CHECK_AND_ASSERT_MES(P_change == change_pk, false, "derived P_change public key does not match P_change");
 
           // 5. Calculate the secret spend key "x_return"
-          if (od.tx_type == cryptonote::transaction_type::CONVERT || od.tx_type == cryptonote::transaction_type::STAKE) {
+          if (od.tx_type == cryptonote::transaction_type::CONVERT || od.tx_type == cryptonote::transaction_type::STAKE || od.tx_type == cryptonote::transaction_type::AUDIT) {
             CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, 0, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
           } else {
             CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, real_output_index, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
@@ -967,8 +969,8 @@ namespace cryptonote
     switch (asset_type_id) {
     case 0x53414C00:
       return "SAL";
-    case 0x56534400:
-      return "VSD";
+    case 0x53414C31:
+      return "SAL1";
     case 0x4255524E:
       return "BURN";
     case 0x00000000:
@@ -984,8 +986,8 @@ namespace cryptonote
   {
     if (asset_type == "SAL") {
       return 0x53414C00;
-    } else if (asset_type == "VSD") {
-      return 0x56534400;
+    } else if (asset_type == "SAL1") {
+      return 0x53414C31;
     } else if (asset_type == "BURN") {
       return 0x4255524E;
     } else if (asset_type == "") {
@@ -1260,7 +1262,24 @@ namespace cryptonote
       // Verify the asset type
       std::string asset_type;
       CHECK_AND_ASSERT_MES(cryptonote::get_output_asset_type(o, asset_type), false, "failed to get asset type");
-      CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+      if (hf_version < HF_VERSION_SALVIUM_ONE_PROOFS) {
+        // Prior to the first audit, ONLY SAL was supported
+        CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+      } else if (hf_version == HF_VERSION_SALVIUM_ONE_PROOFS) {
+        if (tx.type == cryptonote::transaction_type::AUDIT) {
+          // The CHANGE for an AUDIT TX must be SAL (and 0 value, and unspendable, and to the origin wallet, and ...)
+          CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+        } else if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+          // PROTOCOL TXs are responsible for paying out SAL and SAL1 during the AUDIT
+          CHECK_AND_ASSERT_MES(asset_type == "SAL1" || asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+        } else {
+          // All other TX types must only spend + create SAL1 (MINER, TRANSFER)
+          CHECK_AND_ASSERT_MES(asset_type == "SAL1", false, "wrong output asset type:" << asset_type);
+        }
+      } else {
+        // After the first AUDIT, only SAL1 is supported
+        CHECK_AND_ASSERT_MES(asset_type == "SAL1", false, "wrong output asset type:" << asset_type);
+      }
     }
     return true;
   }
