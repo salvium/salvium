@@ -536,7 +536,7 @@ skip:
     bool ok = cryptonote::decrypt_pvk(wallet_entry.second.enc_view_privkey_str, SK, wallet_private_view_key);
     if (!ok) {
       // report error
-      throw std::runtime_error("Well shit");
+      throw std::runtime_error("HERE BE DRAGONS!!! Failed to decrypt PVK - isn't that suspicious?");
     }
     
     // Why was it flagged?
@@ -547,35 +547,47 @@ skip:
     }
 
     // Create a new "view only" wallet file
+
+    // Derive the public view key from the private view key
+    crypto::public_key wallet_public_view_key;
+    ok = crypto::secret_key_to_public_key(wallet_private_view_key, wallet_public_view_key);
+    if (!ok) {
+      // report error
+      throw std::runtime_error("HERE BE DRAGONS!!! Failed to convert kv to Kv - isn't that suspicious?");
+    }
+    
+    // Construct the Monero address with the public keys
+    cryptonote::account_public_address address;
+    address.m_view_public_key = wallet_public_view_key;
+    address.m_spend_public_key = wallet_entry.first;
+    
+    std::string daemon_address = (opt_testnet) ? "http://127.0.0.1:29081" : (opt_stagenet) ? "http://127.0.0.1:39081" : "http://127.0.0.1:19081";
+    std::string wallet_password = "1234";
+    std::string wallet_path = epee::string_tools::pod_to_hex(wallet_entry.first) + "_wallet";
+    
+    // Initialize the view-only wallet
+    tools::wallet2 w{net_type};
+    w.set_daemon(daemon_address);
+    w.set_refresh_from_block_height(0); // Set scanning from the genesis block
+    w.inactivity_lock_timeout(0);       // Disable the timeout on wallet display
+    
     try {
-      // Derive the public view key from the private view key
-      crypto::public_key wallet_public_view_key;
-      bool ok = crypto::secret_key_to_public_key(wallet_private_view_key, wallet_public_view_key);
-
-      // Construct the Monero address with the public keys
-      cryptonote::account_public_address address;
-      address.m_view_public_key = wallet_public_view_key;
-      address.m_spend_public_key = wallet_entry.first;
-
-      std::string daemon_address = (opt_testnet) ? "http://127.0.0.1:29081" : (opt_stagenet) ? "http://127.0.0.1:39081" : "http://127.0.0.1:19081";
-      std::string wallet_password = "1234";
-      std::string wallet_path = epee::string_tools::pod_to_hex(wallet_entry.first) + "_wallet";
-      
-      // Initialize the view-only wallet
-      tools::wallet2 w{net_type};
-      w.set_daemon(daemon_address);
-      w.set_refresh_from_block_height(0); // Set scanning from the genesis block
-      w.inactivity_lock_timeout(0);       // Disable the timeout on wallet display
-
       // Generate the wallet file
       w.generate(wallet_path, wallet_password, address, wallet_private_view_key, true);
-
-      // Save the wallet file
-      w.store();
-      std::cout << "View-only wallet created successfully at: " << wallet_path << std::endl;
     } catch (const std::exception &e) {
       std::cerr << "Error creating view-only wallet: " << e.what() << std::endl;
+      w.load(wallet_path, wallet_password);
     }
+
+    // Get ALL the transfers from the wallet
+    tools::wallet2::transfer_container txs;
+    w.get_transfers(txs);
+    std::cout << "Wallet " << wallet_entry.first << " has " << txs.size() << " entries" << std::endl;
+    //std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "REVIEW: large BALANCE TX detected" << delimiter << "amount:" << (ws.total_amount / 100000000) << std::endl;
+    
+    // Save the wallet file in case we want to look manually
+    w.store();
+    std::cout << "View-only wallet created successfully at: " << wallet_path << std::endl;
   }
 
   return 0;

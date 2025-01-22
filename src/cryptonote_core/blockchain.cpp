@@ -5970,10 +5970,10 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
         // no need to check for duplicate here.
         // HERE BE DRAGONS!!!
         // SRCG: ring tweak to indexed per asset_type - DO NOT COMMIT UNTIL IT IS ALL WORKING
-        //auto absolute_offsets = relative_output_offsets_to_absolute(in_to_key.key_offsets);
-        std::vector<uint64_t> asset_offsets = relative_output_offsets_to_absolute(in_to_key.key_offsets);
-        std::vector<uint64_t> absolute_offsets;
-        m_db->get_output_id_from_asset_type_output_index(in_to_key.asset_type, asset_offsets, absolute_offsets);
+        auto absolute_offsets = relative_output_offsets_to_absolute(in_to_key.key_offsets);
+        //std::vector<uint64_t> asset_offsets = relative_output_offsets_to_absolute(in_to_key.key_offsets);
+        //std::vector<uint64_t> absolute_offsets;
+        //m_db->get_output_id_from_asset_type_output_index(in_to_key.asset_type, asset_offsets, absolute_offsets);
         // LAND AHOY!!!
         for (const auto & offset : absolute_offsets)
           offset_map[in_to_key.amount].push_back(offset);
