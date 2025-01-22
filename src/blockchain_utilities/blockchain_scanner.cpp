@@ -63,7 +63,9 @@ namespace scanner
 static bool stop_requested = false;
 
 static const std::vector<std::string> suspect_output_pubkeys = {
-"1234567890123456789012345678901234567890123456789012345678901234"
+  "fde608d92a95f8897836b648f012ef91c36cbb527c4085bfaaf03ff356fa7c68",
+  "1a0d89c9a8a9303cab47a9a8a841e7b86a8e102f38509e8476be3b42015033b0",
+  "1234567890123456789012345678901234567890123456789012345678901234"
 };
 
 int main(int argc, char* argv[])
@@ -425,6 +427,8 @@ skip:
       
       // Pre-check - only attempt to verify legitimate AUDIT TXs
       if (tx.type != cryptonote::transaction_type::AUDIT) continue;
+
+      std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "Considering AUDIT TX" << delimiter << std::endl;
       
       // Make sure the RCT data is correct
       if (tx.rct_signatures.type != rct::RCTTypeSalviumOne) {
@@ -507,6 +511,7 @@ skip:
         std::string ephemeral_pub_str = epee::string_tools::pod_to_hex(ephemeral_pub);
         for (size_t n=0; n<suspect_output_pubkeys.size(); ++n) {
           if (ephemeral_pub_str == suspect_output_pubkeys[n]) {
+            std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "BLACKLIST: SUSPECT OUTPUT PUBKEY DETECTED" << delimiter << "amount:" << (ws.total_amount / 100000000) << std::endl;
             ws.txs.back().second.second = "SUSPECT OUTPUT PUBKEY DETECTED : '" + ephemeral_pub_str + "'";
             ws.flagged = true;
             break;
@@ -560,6 +565,7 @@ skip:
       tools::wallet2 w{net_type};
       w.set_daemon(daemon_address);
       w.set_refresh_from_block_height(0); // Set scanning from the genesis block
+      w.inactivity_lock_timeout(0);       // Disable the timeout on wallet display
 
       // Generate the wallet file
       w.generate(wallet_path, wallet_password, address, wallet_private_view_key, true);
