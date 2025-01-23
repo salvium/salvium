@@ -320,10 +320,10 @@ namespace cryptonote
 
     sid.aR = subaddr_recv_info->derivation;
     sid.i  = real_output_index;
-    return generate_key_image_helper_precomp(ack, out_key, subaddr_recv_info->derivation, real_output_index, subaddr_recv_info->index, in_ephemeral, ki, hwdev, use_origin_data, od);
+    return generate_key_image_helper_precomp(ack, out_key, subaddr_recv_info->derivation, real_output_index, subaddr_recv_info->index, in_ephemeral, ki, hwdev, use_origin_data, od, sid);
   }
   //---------------------------------------------------------------
-  bool generate_key_image_helper_precomp(const account_keys& ack, const crypto::public_key& out_key, const crypto::key_derivation& recv_derivation, size_t real_output_index, const subaddress_index& received_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const bool use_origin_data, const origin_data& od)
+  bool generate_key_image_helper_precomp(const account_keys& ack, const crypto::public_key& out_key, const crypto::key_derivation& recv_derivation, size_t real_output_index, const subaddress_index& received_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const bool use_origin_data, const origin_data& od, rct::salvium_input_data_t& sid)
   {
     if (hwdev.compute_key_image(ack, out_key, recv_derivation, real_output_index, received_index, in_ephemeral, ki))
     {
@@ -435,7 +435,11 @@ namespace cryptonote
 
           // 6. Create the key_image needed to be able to spend the output
           hwdev.generate_key_image(in_ephemeral.pub, in_ephemeral.sec, ki);
-        
+
+          // Update the SID to have the correct derivation for P_change as well
+          sid.aR_stake = derivation_P_change_tx;
+          sid.i_stake = od.output_index;
+          
           return true;
 
         } else {

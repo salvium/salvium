@@ -1,5 +1,5 @@
 // Copyright (c) 2016, Monero Research Labs
-// Portions Copyright (c) 2023-2024, Salvium (author: SRCG)
+// Portions Copyright (c) 2023-2025, Salvium (author: SRCG)
 //
 // Author: Shen Noether <shen.noether@gmx.com>
 // 
@@ -1726,15 +1726,25 @@ namespace rct {
           CHECK_AND_ASSERT_THROW_MES(rv.salvium_data.spend_pubkey != crypto::null_pkey, "Invalid spend pubkey provided in audit data");
           CHECK_AND_ASSERT_THROW_MES(rv.salvium_data.enc_view_privkey_str != "", "Invalid encrypted viewkey provided in audit data");
           for (size_t i=0; i < rv.salvium_data.input_verification_data.size(); ++i) {
+
+            // Check for STAKE origin
+            crypto::public_key Ks = rv.salvium_data.spend_pubkey;
+            if (rv.salvium_data.input_verification_data[i].origin_tx_type == cryptonote::transaction_type::STAKE) {
+              // Verify the origin data provided
+              CHECK_AND_ASSERT_THROW_MES(crypto::derive_public_key(rv.salvium_data.input_verification_data[i].aR_stake, rv.salvium_data.input_verification_data[i].i_stake, rv.salvium_data.spend_pubkey, Ks),
+                                         "Failed to derive ephemeral public key from audit data");
+            }
+            
             // Recalculate the value of Ks from the Ko value
             crypto::public_key ephemeral_pub = crypto::null_pkey;
-            CHECK_AND_ASSERT_THROW_MES(crypto::derive_public_key(rv.salvium_data.input_verification_data[i].aR, rv.salvium_data.input_verification_data[i].i, rv.salvium_data.spend_pubkey, ephemeral_pub),
+            CHECK_AND_ASSERT_THROW_MES(crypto::derive_public_key(rv.salvium_data.input_verification_data[i].aR, rv.salvium_data.input_verification_data[i].i, Ks, ephemeral_pub),
                                        "Failed to derive ephemeral public key from audit data");
             // Now find this in the list of mixring entries
             bool found = false;
             for (size_t n=0; n<rv.mixRing[i].size(); ++n) {
               if (ephemeral_pub == rct::rct2pk(rv.mixRing[i][n].dest)) {
                 found = true;
+                break;
               }
             }
             CHECK_AND_ASSERT_THROW_MES(found, "Failed to match ephemeral public key provided in audit data");

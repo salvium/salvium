@@ -55,6 +55,7 @@ extern "C" {
 #include "serialization/binary_archive.h"
 #include "serialization/json_archive.h"
 
+#include "cryptonote_protocol/enums.h"
 
 //Define this flag when debugging to get additional info on the console
 #ifdef DBG
@@ -336,11 +337,19 @@ namespace rct {
       crypto::key_derivation aR;
       xmr_amount amount;
       size_t i;
+      uint8_t origin_tx_type;
+      crypto::key_derivation aR_stake;
+      size_t i_stake;
       
       BEGIN_SERIALIZE_OBJECT()
         FIELD(aR)
         VARINT_FIELD(amount)
         VARINT_FIELD(i)
+        VARINT_FIELD(origin_tx_type)
+        if (origin_tx_type == cryptonote::transaction_type::STAKE) {
+          FIELD(aR_stake)
+          FIELD(i_stake)
+        }
       END_SERIALIZE()
     };
     struct salvium_data_t {

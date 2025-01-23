@@ -731,6 +731,7 @@ namespace cryptonote
       rct::salvium_input_data_t sid;
       const auto& out_key = reinterpret_cast<const crypto::public_key&>(src_entr.outputs[src_entr.real_output].second.dest);
       bool use_origin_data = (src_entr.origin_tx_data.tx_type != cryptonote::transaction_type::UNSET);
+      sid.origin_tx_type = src_entr.origin_tx_data.tx_type;
       if(!generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, in_ephemeral,img, hwdev, use_origin_data, src_entr.origin_tx_data, sid))
       {
         LOG_ERROR("Key image generation failed!");

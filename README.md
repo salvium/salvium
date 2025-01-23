@@ -1,6 +1,6 @@
-# Salvium Zero v0.9.0-rc3
+# Salvium Zero v0.9.0-rc4
 
-Copyright (c) 2023-2024, Salvium
+Copyright (c) 2023-2025, Salvium
 Portions Copyright (c) 2014-2023, The Monero Project
 Portions Copyright (c) 2012-2013 The Cryptonote developers.
 

@@ -2204,6 +2204,7 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
   // Flag to indicate this is a TX that uses a return_address
   bool use_od = false;
   cryptonote::origin_data od = AUTO_VAL_INIT(od);
+  rct::salvium_input_data_t sid;
   auto search = m_salvium_txs.find(pk_change);
   if (search != m_salvium_txs.end()) {
     size_t idx = search->second;
@@ -2224,7 +2225,7 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
   }
   else
   {
-    bool r = cryptonote::generate_key_image_helper_precomp(m_account.get_keys(), output_public_key, tx_scan_info.received->derivation, i, tx_scan_info.received->index, tx_scan_info.in_ephemeral, tx_scan_info.ki, m_account.get_device(), use_od, od);
+    bool r = cryptonote::generate_key_image_helper_precomp(m_account.get_keys(), output_public_key, tx_scan_info.received->derivation, i, tx_scan_info.received->index, tx_scan_info.in_ephemeral, tx_scan_info.ki, m_account.get_device(), use_od, od, sid);
     THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to generate key image");
     THROW_WALLET_EXCEPTION_IF(tx_scan_info.in_ephemeral.pub != output_public_key,
         error::wallet_internal_error, "key_image generated ephemeral public key not matched with output_key");
