@@ -543,13 +543,20 @@ namespace cryptonote
     std::string encrypted_data = std::string(reinterpret_cast<char*>(&ephemeral_pk), sizeof(ephemeral_pk)) +
       std::string(reinterpret_cast<char*>(&iv), sizeof(iv)) +
       ciphertext;
-    return encrypted_data;
+    return epee::string_tools::buff_to_hex_nodelimer(encrypted_data);
   }
   //---------------------------------------------------------------
   // Decrypt function
-  bool decrypt_pvk(const std::string &encrypted_data, const crypto::secret_key &SK, crypto::secret_key &pvk) {
+  bool decrypt_pvk(const std::string &encrypted_data_hex, const crypto::secret_key &SK, crypto::secret_key &pvk) {
     //std::string decrypt_pvk(const std::string &encrypted_data, const crypto::secret_key &SK) {
     // Step 1: Extract ephemeral_pk, iv, and ciphertext from encrypted_data
+    std::string encrypted_data;
+    for (size_t i = 0; i < encrypted_data_hex.length(); i += 2) {
+      std::istringstream iss(encrypted_data_hex.substr(i, 2));
+      int byte;
+      iss >> std::hex >> byte;
+      encrypted_data += static_cast<char>(byte);
+    }
     const char *data_ptr = encrypted_data.data();
     crypto::public_key ephemeral_pk;
     memcpy(&ephemeral_pk, data_ptr, sizeof(ephemeral_pk));
