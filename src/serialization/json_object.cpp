@@ -1508,7 +1508,7 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::salvium_
   INSERT_INTO_JSON_OBJECT(dest, i, salvium_input_data.i);
   INSERT_INTO_JSON_OBJECT(dest, amount, salvium_input_data.amount);
   INSERT_INTO_JSON_OBJECT(dest, origin_tx_type, salvium_input_data.origin_tx_type);
-  if (salvium_input_data.origin_tx_type == cryptonote::transaction_type::STAKE) {
+  if (salvium_input_data.origin_tx_type != cryptonote::transaction_type::UNSET) {
     INSERT_INTO_JSON_OBJECT(dest, aR_stake, salvium_input_data.aR_stake);
     INSERT_INTO_JSON_OBJECT(dest, i_stake, salvium_input_data.i_stake);
   }
@@ -1526,7 +1526,7 @@ void fromJsonValue(const rapidjson::Value& val, rct::salvium_input_data_t& salvi
   GET_FROM_JSON_OBJECT(val, salvium_input_data.i, i);
   GET_FROM_JSON_OBJECT(val, salvium_input_data.amount, amount);
   GET_FROM_JSON_OBJECT(val, salvium_input_data.origin_tx_type, origin_tx_type);
-  if (salvium_input_data.origin_tx_type == cryptonote::transaction_type::STAKE) {
+  if (salvium_input_data.origin_tx_type != cryptonote::transaction_type::UNSET) {
     GET_FROM_JSON_OBJECT(val, salvium_input_data.aR_stake, aR_stake);
     GET_FROM_JSON_OBJECT(val, salvium_input_data.i_stake, i_stake);
   }

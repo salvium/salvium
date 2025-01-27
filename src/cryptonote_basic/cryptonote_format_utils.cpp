@@ -318,6 +318,13 @@ namespace cryptonote
     boost::optional<subaddress_receive_info> subaddr_recv_info = is_out_to_acc_precomp(subaddresses, out_key, recv_derivation, additional_recv_derivations, real_output_index,hwdev);
     CHECK_AND_ASSERT_MES(subaddr_recv_info, false, "key image helper: given output pubkey doesn't seem to belong to this address");
 
+    if (use_origin_data) {
+      // Try something a little special to find the subaddress index
+      crypto::key_derivation recv_derivation_od = AUTO_VAL_INIT(recv_derivation_od);
+      r = hwdev.generate_key_derivation(od.tx_pub_key, ack.m_view_secret_key, recv_derivation_od);
+      boost::optional<subaddress_receive_info> subaddr_recv_info_od = is_out_to_acc_precomp(subaddresses, out_key, recv_derivation_od, additional_recv_derivations, od.output_index,hwdev);
+    }
+    
     sid.aR = subaddr_recv_info->derivation;
     sid.i  = real_output_index;
     return generate_key_image_helper_precomp(ack, out_key, subaddr_recv_info->derivation, real_output_index, subaddr_recv_info->index, in_ephemeral, ki, hwdev, use_origin_data, od, sid);
@@ -417,6 +424,13 @@ namespace cryptonote
           crypto::secret_key sk_spend = crypto::null_skey;
           CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(derivation_P_change_tx, od.output_index, spend_skey, sk_spend), false, "Failed to derive secret key for P_change");
 
+          // 3.5 Handle subaddresses
+          if (!received_index.is_zero()) {
+            crypto::secret_key scalar_step3;
+            hwdev.sc_secret_add(scalar_step3, sk_spend, subaddr_sk);
+            sk_spend = scalar_step3;
+          }
+          
           // 4. Derive the public key from the secret key for verification purposes
           crypto::public_key change_pk;
           CHECK_AND_ASSERT_MES(hwdev.secret_key_to_public_key(sk_spend, change_pk), false, "Failed to derive public key for P_change");
