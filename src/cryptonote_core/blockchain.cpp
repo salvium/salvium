@@ -161,6 +161,7 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   std::vector<output_data_t> outputs;
 
   bool found = false;
+  /*
   auto it = m_scan_table.find(tx_prefix_hash);
   if (it != m_scan_table.end())
   {
@@ -171,6 +172,7 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
       found = true;
     }
   }
+  */
 
   if (!found)
   {

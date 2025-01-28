@@ -2215,6 +2215,11 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
     od.tx_pub_key = get_tx_pub_key_from_extra(td_origin.m_tx);
     od.output_index = td_origin.m_internal_output_index;
     od.tx_type = td_origin.m_tx.type;
+
+    // HERE BE DRAGONS!!!
+    // SRCG: this is necessary to be able to receive protocol_tx outputs to the correct wallet subaddress
+    tx_scan_info.received->index = td_origin.m_subaddr_index;
+    // LAND AHOY!!!
   }
   
   if (m_multisig)
@@ -2894,7 +2899,8 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             crypto::public_key P_change = crypto::null_pkey;
             THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[0], P_change), error::wallet_internal_error, "Failed to get change output public key");
             //m_subaddresses[P_change] = {0x50524F54,0x4F434F4C};  /* {PROT,OCOL} - seemed like a good idea at the time, but harder to implement! */
-            m_subaddresses[P_change] = {0,0};
+            m_subaddresses[P_change] = tx_scan_info[o].received->index;//{0,0};
+            //m_subaddresses[P_change] = {0,0};
             m_salvium_txs.insert({P_change, m_transfers.size()-1});
             
             if (tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::AUDIT) {
@@ -10124,9 +10130,13 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
   THROW_WALLET_EXCEPTION_IF(found_money < needed_money, error::not_enough_unlocked_money, found_money, needed_money - fee, fee);
 
   uint32_t subaddr_account = m_transfers[*selected_transfers.begin()].m_subaddr_index.major;
-  for (auto i = ++selected_transfers.begin(); i != selected_transfers.end(); ++i)
+  uint32_t subaddr_index   = m_transfers[*selected_transfers.begin()].m_subaddr_index.minor;
+  for (auto i = ++selected_transfers.begin(); i != selected_transfers.end(); ++i) {
     THROW_WALLET_EXCEPTION_IF(subaddr_account != m_transfers[*i].m_subaddr_index.major, error::wallet_internal_error, "the tx uses funds from multiple accounts");
-
+    if (tx_type == cryptonote::transaction_type::AUDIT) {
+      THROW_WALLET_EXCEPTION_IF(subaddr_index != m_transfers[*i].m_subaddr_index.minor, error::wallet_internal_error, "the AUDIT tx uses funds from multiple subaddresses");
+    }
+  }
   if (outs.empty())
     get_outs(outs, selected_transfers, fake_outputs_count, all_rct, valid_public_keys_cache); // may throw
 
@@ -10213,11 +10223,20 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
   cryptonote::tx_destination_entry change_dts = AUTO_VAL_INIT(change_dts);
   change_dts.amount = found_money - needed_money;
   change_dts.asset_type = source_asset;
-  change_dts.addr = get_subaddress({subaddr_account, 0});
-  change_dts.is_subaddress = subaddr_account != 0;
+  change_dts.addr = get_subaddress({subaddr_account, subaddr_index});
+  change_dts.is_subaddress = subaddr_account != 0 || subaddr_index != 0;
   change_dts.is_change = true;
   splitted_dsts.push_back(change_dts);
 
+  account_keys a_keys = m_account.get_keys();
+  // HERE BE DRAGONS!!!
+  // SRCG: add support for auditing of subaddresses
+  if (tx_type == cryptonote::transaction_type::AUDIT && (subaddr_account != 0 || subaddr_index != 0)) {
+    // Overwrite the public spend key and view key
+    a_keys.m_account_address = get_subaddress({subaddr_account, subaddr_index});
+  }
+  // LAND AHOY!!!
+  
   crypto::secret_key tx_key;
   std::vector<crypto::secret_key> additional_tx_keys;
   crypto::secret_key multisig_tx_key_entropy;
@@ -10261,7 +10280,7 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
     std::vector<std::pair<std::string, std::string>> circ_amounts;
     THROW_WALLET_EXCEPTION_IF(!get_circulating_supply(circ_amounts), error::wallet_internal_error, "Failed to get circulating supply");
     // make a normal tx
-    bool r = cryptonote::construct_tx_and_get_tx_key(m_account.get_keys(), m_subaddresses, sources, splitted_dsts, hf_version, source_asset, dest_asset, tx_type, change_dts.addr, extra, tx, unlock_time, tx_key, additional_tx_keys, true, rct_config, use_view_tags);
+    bool r = cryptonote::construct_tx_and_get_tx_key(a_keys/*m_account.get_keys()*/, m_subaddresses, sources, splitted_dsts, hf_version, source_asset, dest_asset, tx_type, change_dts.addr, extra, tx, unlock_time, tx_key, additional_tx_keys, true, rct_config, use_view_tags);
     LOG_PRINT_L2("constructed tx, r="<<r);
     THROW_WALLET_EXCEPTION_IF(!r, error::tx_not_constructed, sources, dsts, unlock_time, m_nettype);
   }
@@ -11716,7 +11735,11 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
       // SRCG: should the subaddress be forced to TRUE for _RETURN_ TXs and FALSE for all others?!?!?
       // add N - 1 outputs for correct initial fee estimation
       for (size_t i = 0; i < ((outputs > 1) ? outputs - 1 : outputs); ++i) {
-        tx.dsts.push_back(tx_destination_entry(1, address, tx_type == cryptonote::transaction_type::RETURN, tx_type == cryptonote::transaction_type::RETURN));
+        if (tx_type == cryptonote::transaction_type::AUDIT) {
+          tx.dsts.push_back(tx_destination_entry(1, address, tx_type == cryptonote::transaction_type::RETURN, tx_type == cryptonote::transaction_type::RETURN));
+        } else {
+          tx.dsts.push_back(tx_destination_entry(1, address, tx_type == cryptonote::transaction_type::RETURN, tx_type == cryptonote::transaction_type::RETURN));
+        }
         tx.dsts.back().asset_type = asset_type;
       }
       

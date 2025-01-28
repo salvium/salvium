@@ -1729,7 +1729,7 @@ namespace rct {
 
             // Check for STAKE origin
             crypto::public_key Ks = rv.salvium_data.spend_pubkey;
-            if (rv.salvium_data.input_verification_data[i].origin_tx_type == cryptonote::transaction_type::STAKE) {
+            if (rv.salvium_data.input_verification_data[i].origin_tx_type != cryptonote::transaction_type::UNSET) {
               // Verify the origin data provided
               CHECK_AND_ASSERT_THROW_MES(crypto::derive_public_key(rv.salvium_data.input_verification_data[i].aR_stake, rv.salvium_data.input_verification_data[i].i_stake, rv.salvium_data.spend_pubkey, Ks),
                                          "Failed to derive ephemeral public key from audit data");

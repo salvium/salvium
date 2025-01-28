@@ -346,7 +346,7 @@ namespace rct {
         VARINT_FIELD(amount)
         VARINT_FIELD(i)
         VARINT_FIELD(origin_tx_type)
-        if (origin_tx_type == cryptonote::transaction_type::STAKE) {
+        if (origin_tx_type != cryptonote::transaction_type::UNSET) {
           FIELD(aR_stake)
           FIELD(i_stake)
         }
