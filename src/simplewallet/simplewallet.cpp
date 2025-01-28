@@ -6742,11 +6742,6 @@ bool simple_wallet::transfer_main(
   if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
     if (transfer_type == Audit) {
       audit = true;
-/*
-    } else if (source_asset != "SAL1") {
-      fail_msg_writer() << tr("Only SAL1 may be spent now");
-      return false;
-*/
     }
   }
   
@@ -6758,7 +6753,9 @@ bool simple_wallet::transfer_main(
     if (!parse_subaddress_indices(local_args[0], subaddr_indices))
       return false;
     local_args.erase(local_args.begin());
-  }
+    if (transfer_type == Audit)
+      while (subaddr_indices.size() > 1)
+        subaddr_indices.erase(std::prev(subaddr_indices.end()));  }
 
   uint32_t priority = m_wallet->get_default_priority();
   if (local_args.size() > 0 && parse_priority(local_args[0], priority))
@@ -6796,7 +6793,7 @@ bool simple_wallet::transfer_main(
     return false;
   }
 
-  const size_t min_args = (transfer_type == TransferLocked) ? 2 : 1;
+  const size_t min_args = (transfer_type == Audit) ? 0 : (transfer_type == TransferLocked) ? 2 : 1;
   if(local_args.size() < min_args)
   {
      fail_msg_writer() << tr("wrong number of arguments");
@@ -8350,7 +8347,7 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
 bool simple_wallet::audit(const std::vector<std::string> &args_)
 {
   // TODO: add locked versions
-  if (args_.size() != 0)
+  if (args_.size() != 1)
   {
     PRINT_USAGE(USAGE_AUDIT);
     return true;
@@ -8362,24 +8359,15 @@ bool simple_wallet::audit(const std::vector<std::string> &args_)
      return true;
   }
   
-  std::vector<std::string> local_args;
-  local_args.push_back(m_wallet->get_subaddress_as_str({m_current_subaddress_account,0}));
-  //local_args.insert(local_args.end(), args_.begin(), args_.end());
+  std::vector<std::string> local_args = args_;
   const std::map<uint8_t, std::pair<std::string, std::string>> audit_hard_forks = get_config(m_wallet->nettype()).AUDIT_HARD_FORKS;
   const uint8_t hf_version = m_wallet->get_current_hard_fork();
   if (audit_hard_forks.find(hf_version) != audit_hard_forks.end()) {
 
     // Get the asset types
     const std::pair<std::string, std::string> audit_asset_types = audit_hard_forks.at(hf_version);
+    transfer_main(Audit, audit_asset_types.first, audit_asset_types.first, local_args, false);
     
-    // Check to see if the user has a balance of the coins being audited
-    uint64_t unlocked_balance = m_wallet->unlocked_balance_all(true, audit_asset_types.first);
-    if (unlocked_balance > 0) {
-      local_args.push_back(print_money(unlocked_balance));
-      transfer_main(Audit, audit_asset_types.first, audit_asset_types.first, local_args, false);
-    } else {
-     fail_msg_writer() << tr("No coins currently available to audit. Only unlocked coins can be audited.");
-    }
   } else {
     fail_msg_writer() << tr("Audit command is not available at this time.");
   }
