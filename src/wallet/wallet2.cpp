@@ -2899,7 +2899,8 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             crypto::public_key P_change = crypto::null_pkey;
             THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[0], P_change), error::wallet_internal_error, "Failed to get change output public key");
             //m_subaddresses[P_change] = {0x50524F54,0x4F434F4C};  /* {PROT,OCOL} - seemed like a good idea at the time, but harder to implement! */
-            m_subaddresses[P_change] = {0,0};
+            m_subaddresses[P_change] = tx_scan_info[o].received->index;//{0,0};
+            //m_subaddresses[P_change] = {0,0};
             m_salvium_txs.insert({P_change, m_transfers.size()-1});
             
             if (tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::AUDIT) {

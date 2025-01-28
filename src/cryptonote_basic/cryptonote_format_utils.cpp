@@ -315,15 +315,19 @@ namespace cryptonote
       }
     }
 
+    // HERE BE DRAGONS!!!
+    // SRCG: This FAILS under certain circumstances to find the correct subaddress for STAKE returns, and this BREAKS AUDITING
     boost::optional<subaddress_receive_info> subaddr_recv_info = is_out_to_acc_precomp(subaddresses, out_key, recv_derivation, additional_recv_derivations, real_output_index,hwdev);
     CHECK_AND_ASSERT_MES(subaddr_recv_info, false, "key image helper: given output pubkey doesn't seem to belong to this address");
-
+    /*
     if (use_origin_data) {
       // Try something a little special to find the subaddress index
       crypto::key_derivation recv_derivation_od = AUTO_VAL_INIT(recv_derivation_od);
       r = hwdev.generate_key_derivation(od.tx_pub_key, ack.m_view_secret_key, recv_derivation_od);
       boost::optional<subaddress_receive_info> subaddr_recv_info_od = is_out_to_acc_precomp(subaddresses, out_key, recv_derivation_od, additional_recv_derivations, od.output_index,hwdev);
     }
+    */
+    // LAND AHOY!!!
     
     sid.aR = subaddr_recv_info->derivation;
     sid.i  = real_output_index;
