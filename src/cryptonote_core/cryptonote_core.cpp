@@ -923,6 +923,16 @@ namespace cryptonote
       if (tx_info[n].tx->version < 2)
         continue;
       const rct::rctSig &rv = tx_info[n].tx->rct_signatures;
+      const uint8_t hf_version = m_blockchain_storage.get_current_hard_fork_version();
+      if (hf_version >= HF_VERSION_ENFORCE_FULL_PROOFS) {
+        if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeFullProofs) {
+          MERROR_VER("Invalid RCT type provided");
+          set_semantics_failed(tx_info[n].tx_hash);
+          tx_info[n].tvc.m_verifivation_failed = true;
+          tx_info[n].result = false;
+          return false;
+        }
+      }            
       switch (rv.type) {
         case rct::RCTTypeNull:
           // coinbase should not come here, so we reject for all other types

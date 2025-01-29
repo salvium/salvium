@@ -167,6 +167,15 @@ namespace cryptonote
       return false;
     }
 
+    // Reject ALL TXs except miner + protocol for v5
+    if (version == HF_VERSION_SHUTDOWN_USER_TXS) {
+      if (tx.type != cryptonote::transaction_type::MINER && tx.type != cryptonote::transaction_type::PROTOCOL) {
+        LOG_PRINT_L1("User TXs are not permitted for v" + std::to_string(HF_VERSION_SHUTDOWN_USER_TXS));
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+    }
+    
     if(!check_inputs_types_supported(tx))
     {
       tvc.m_verifivation_failed = true;
@@ -1653,6 +1662,14 @@ namespace cryptonote
         continue;
       }
 
+      // HERE BE DRAGONS!!!
+      // SRCG: skip all user TXs for HF 5 - when the node restarts, it'll discard them fully in `tx_memory_pool::validate()`
+      if (version == HF_VERSION_SHUTDOWN_USER_TXS) {
+        LOG_PRINT_L2("  User TXs forbidden by consensus for HF 5 - skipping");
+        continue;
+      }
+      // LAND AHOY!!!
+      
       LOG_PRINT_L2("Considering " << sorted_it->second << ", weight " << meta.weight << ", current block weight " << total_weight << "/" << max_total_weight << ", current coinbase " << print_money(best_coinbase) << ", relay method " << (unsigned)meta.get_relay_method());
 
       if (!meta.matches(relay_category::legacy) && !(m_mine_stem_txes && meta.get_relay_method() == relay_method::stem))
