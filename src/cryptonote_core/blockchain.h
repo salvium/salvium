@@ -1161,12 +1161,28 @@ namespace cryptonote
     uint64_t get_adjusted_time(uint64_t height) const;
 
     /**
+     * calculate the audit payouts
+     *
+     * @return TRUE if the payouts were calculated successfully, FALSE otherwise
+     */
+    bool calculate_audit_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& audit_payouts);
+
+    /**
      * calculate the yield payouts
      *
      * @return TRUE if the payouts were calculated successfully, FALSE otherwise
      */
     bool calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& yield_payouts);
 
+    /**
+     * @brief get the ABI entry for a particular height from the cache
+     *
+     * Retrieve the ABI entry for the specified height from the local cache.
+     *
+     * @return TRUE if the entry was located and returned, FALSE otherwise
+     */
+    bool get_abi_entry(const uint64_t height, cryptonote::audit_block_info& ybi);
+    
     /**
      * @brief get the complete YBI cache
      *
@@ -1529,12 +1545,11 @@ namespace cryptonote
      *
      * @param b the block containing the miner transaction to be validated
      * @param height the blockchain's weight
-     * @param txs a vector containing all the TXs and their blobs, needed to obtain tx_types, asset_types and burnt amounts
      * @param version hard fork version for that transaction
      *
      * @return false if anything is found wrong with the protocol transaction, otherwise true
      */
-    bool validate_protocol_transaction(const block& b, uint64_t height, std::vector<std::pair<transaction, blobdata>>& txs, uint8_t hf_version);
+    bool validate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version);
 
     /**
      * @brief reverts the blockchain to its previous state following a failed switch

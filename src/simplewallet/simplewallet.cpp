@@ -163,7 +163,8 @@ enum TransferType {
   Convert,
   Burn,
   Stake,
-  Return
+  Return,
+  Audit
 };
 
 static std::string get_human_readable_timespan(std::chrono::seconds seconds);
@@ -213,6 +214,7 @@ namespace
   const char* USAGE_BURN("burn <amount> <asset_type>");
   const char* USAGE_CONVERT("convert <source_amount> <source_asset> <dest_asset> [<slippage_limit>]");
   const char* USAGE_STAKE("stake <amount>");
+  const char* USAGE_AUDIT("audit [index=N]");
   const char* USAGE_PRICE_INFO("price_info");
   const char* USAGE_SUPPLY_INFO("supply_info");
   const char* USAGE_YIELD_INFO("yield_info");
@@ -3219,6 +3221,7 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
     message_writer() << tr("\"burn <amount> <asset_type>\" - destroy coins forever.");
     message_writer() << tr("\"convert <amount> <source_asset> <dest_asset> [<slippage_limit>]\" - convert between coin types.");
     message_writer() << tr("\"stake <amount>\" - stake SAL for 30 days to earn yield.");
+    message_writer() << tr("\"audit\" - audit your wallet main address (or subaddress if specified).");
     message_writer() << tr("\"price_info\" - Display current pricing information for supported assets.");
     message_writer() << tr("\"supply_info\" - Display circulating supply information.");
     message_writer() << tr("\"yield_info\" - Display current stats on Salvium staking / yield.");
@@ -3412,14 +3415,18 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::stake, this, _1),
                            tr(USAGE_STAKE),
                            tr("Locks <amount> of SAL as stake in order to earn yield"));
+  m_cmd_binder.set_handler("audit",
+                           boost::bind(&simple_wallet::audit, this, _1),
+                           tr(USAGE_AUDIT),
+                           tr("Sends your wallet balance for a single address (or subaddress) to audit (only available during AUDIT hard forks)"));
   m_cmd_binder.set_handler("price_info",
                            boost::bind(&simple_wallet::price_info, this, _1),
                            tr(USAGE_PRICE_INFO),
-                           tr("Displays the current exchange rate information for SAL <--> VSD conversions"));
+                           tr("Displays the current exchange rate information for SAL <--> SAL1 conversions"));
   m_cmd_binder.set_handler("supply_info",
                            boost::bind(&simple_wallet::supply_info, this, _1),
                            tr(USAGE_SUPPLY_INFO),
-                           tr("Displays the current circulating supply information for SAL and VSD currencies"));
+                           tr("Displays the current circulating supply information for SAL and SAL1 currencies"));
   m_cmd_binder.set_handler("yield_info",
                            boost::bind(&simple_wallet::yield_info, this, _1),
                            tr(USAGE_YIELD_INFO),
@@ -5831,16 +5838,22 @@ void simple_wallet::on_money_received(uint64_t height, const crypto::hash &txid,
       message_writer(console_color_red) << "\r" << "*** CONVERT ***";
     } else if (td_origin.m_tx.type == cryptonote::transaction_type::STAKE) {
       message_writer(console_color_magenta, false) << "\r" <<
-	tr("Height ") << height << ", " <<
-	tr("txid ") << txid << ", " <<
-	tr("stake returned ") << print_money(td_origin.m_tx.amount_burnt) << " " << td_origin.asset_type << " from height " << td_origin.m_block_height << ", " <<
-	tr("idx ") << subaddr_index;
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("stake returned ") << print_money(td_origin.m_tx.amount_burnt) << " " << td_origin.asset_type << " from height " << td_origin.m_block_height << ", " <<
+        tr("idx ") << subaddr_index;
 
       message_writer(console_color_magenta, false) << "\r" <<
-	tr("Height ") << height << ", " <<
-	tr("txid ") << txid << ", " <<
-	tr("yield earned ") << print_money(amount - td_origin.m_tx.amount_burnt) << " " << asset_type <<  ", " <<
-	tr("idx ") << subaddr_index;
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("yield earned ") << print_money(amount - td_origin.m_tx.amount_burnt) << " " << asset_type <<  ", " <<
+        tr("idx ") << subaddr_index;
+    } else if (td_origin.m_tx.type == cryptonote::transaction_type::AUDIT) {
+      message_writer(console_color_red) << "\r" << 
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("audit returned ") << print_money(td_origin.m_tx.amount_burnt) << " " << asset_type << " from height " << td_origin.m_block_height << ", " <<
+        tr("idx ") << subaddr_index;
     } else {
     }
     
@@ -5848,19 +5861,28 @@ void simple_wallet::on_money_received(uint64_t height, const crypto::hash &txid,
     
     if (tx.type == cryptonote::transaction_type::BURN) {
       message_writer(console_color_yellow, false) << "\r" <<
-	tr("Height ") << height << ", " <<
-	tr("txid ") << txid << ", " <<
-	tr("burnt ") << print_money(tx.amount_burnt) << " " << asset_type;
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("burnt ") << print_money(tx.amount_burnt) << " " << asset_type <<  ", " <<
+        tr("idx ") << subaddr_index;
     } else if (tx.type == cryptonote::transaction_type::CONVERT) {
       message_writer(console_color_blue, false) << "\r" <<
-	tr("Height ") << height << ", " <<
-	tr("txid ") << txid << ", " <<
-	tr("converting ") << print_money(tx.amount_burnt) << " " << asset_type;
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("converting ") << print_money(tx.amount_burnt) << " " << asset_type <<  ", " <<
+        tr("idx ") << subaddr_index;
     } else if (tx.type == cryptonote::transaction_type::STAKE) {
       message_writer(console_color_cyan, false) << "\r" <<
-	tr("Height ") << height << ", " <<
-	tr("txid ") << txid << ", " <<
-	tr("staked ") << print_money(tx.amount_burnt) << " " << asset_type;
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("staked ") << print_money(tx.amount_burnt) << " " << asset_type <<  ", " <<
+        tr("idx ") << subaddr_index;
+    } else if (tx.type == cryptonote::transaction_type::AUDIT) {
+      message_writer(console_color_yellow, false) << "\r" <<
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("audited ") << print_money(tx.amount_burnt) << " " << asset_type <<  ", " <<
+        tr("idx ") << subaddr_index;
     }
     
     message_writer(asset_type == "SAL" ? console_color_green : console_color_blue, false) << "\r" <<
@@ -6719,7 +6741,14 @@ bool simple_wallet::transfer_main(
 //  "transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> <amount> [<payment_id>]"
   if (!try_connect_to_daemon())
     return false;
-
+  /*
+  bool audit = false;
+  if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+    if (transfer_type == Audit) {
+      audit = true;
+    }
+  }
+  */
   std::vector<std::string> local_args = args_;
 
   std::set<uint32_t> subaddr_indices;
@@ -6728,7 +6757,9 @@ bool simple_wallet::transfer_main(
     if (!parse_subaddress_indices(local_args[0], subaddr_indices))
       return false;
     local_args.erase(local_args.begin());
-  }
+    if (transfer_type == Audit)
+      while (subaddr_indices.size() > 1)
+        subaddr_indices.erase(std::prev(subaddr_indices.end()));  }
 
   uint32_t priority = m_wallet->get_default_priority();
   if (local_args.size() > 0 && parse_priority(local_args[0], priority))
@@ -6766,7 +6797,7 @@ bool simple_wallet::transfer_main(
     return false;
   }
 
-  const size_t min_args = (transfer_type == TransferLocked) ? 2 : 1;
+  const size_t min_args = (transfer_type == Audit) ? 0 : (transfer_type == TransferLocked) ? 2 : 1;
   if(local_args.size() < min_args)
   {
      fail_msg_writer() << tr("wrong number of arguments");
@@ -6949,25 +6980,29 @@ bool simple_wallet::transfer_main(
       case Burn:
         unlock_block = 0;
         ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::BURN, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
-      break;
+        break;
       case Convert:
         unlock_block = CONVERT_LOCK_PERIOD;
         ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::CONVERT, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
-      break;
+        break;
+      case Audit:
+        unlock_block = get_config(m_wallet->nettype()).AUDIT_LOCK_PERIOD;
+        ptx_vector = m_wallet->create_transactions_all(0, cryptonote::transaction_type::AUDIT, source_asset, m_wallet->get_subaddress({m_current_subaddress_account, 0}), false, 1, fake_outs_count, unlock_block, priority, extra, m_current_subaddress_account, subaddr_indices);
+        break;
       case Stake:
         unlock_block = get_config(m_wallet->nettype()).STAKE_LOCK_PERIOD;
-        ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::STAKE, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
-      break;
+        ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::STAKE, fake_outs_count, unlock_block, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
+        break;
       case TransferLocked:
         unlock_block = locked_blocks;
         ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
-      break;
+        break;
       default:
         LOG_ERROR("Unknown transfer method, using default");
         /* FALLTHRU */
       case Transfer:
         ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
-      break;
+        break;
     }
 
     if (ptx_vector.empty())
@@ -7069,6 +7104,8 @@ bool simple_wallet::transfer_main(
           prompt << boost::format(tr("Converting %s %s to %s.  ")) % print_money(total_sent) % source_asset % dest_asset;
         } else if (transfer_type == Stake) {
           prompt << boost::format(tr("Staking %s %s for yield accrual.  ")) % print_money(total_sent) % source_asset;
+        } else if (transfer_type == Audit) {
+          prompt << boost::format(tr("Auditing %s %s.  ")) % print_money(total_sent) % source_asset;
         } else {
           prompt << boost::format(tr("Sending %s %s.  ")) % print_money(total_sent) % source_asset;
         }
@@ -7227,9 +7264,13 @@ bool simple_wallet::transfer(const std::vector<std::string> &args_)
   
   // Get the source asset type
   std::string source_asset = "SAL";
+  if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+    // Default to "SAL1" post-HF
+    source_asset = "SAL1";
+  }
   std::string strLastArg = local_args.back();
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
-  if (strLastArg == "SAL" or strLastArg == "VSD") {
+  if (strLastArg == "SAL" or strLastArg == "SAL1") {
     source_asset = strLastArg;
     local_args.pop_back();  
   }
@@ -7264,7 +7305,7 @@ bool simple_wallet::locked_transfer(const std::vector<std::string> &args_)
   std::string source_asset = "SAL";
   std::string strLastArg = local_args.back();
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
-  if (strLastArg == "SAL" or strLastArg == "VSD") {
+  if (strLastArg == "SAL" or strLastArg == "SAL1") {
     source_asset = strLastArg;
     local_args.pop_back();  
   }
@@ -7394,7 +7435,7 @@ bool simple_wallet::sweep_unmixable(const std::vector<std::string> &args_)
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, const std::vector<std::string> &args_)
 {
-  std::string asset_type = (args_.size() > 1) ? args_.back() : "SAL";
+  std::string asset_type = (args_.size() > 1) ? args_.back() : (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) ? "SAL1" : "SAL";
   auto print_usage = [this, account, below]()
   {
     if (below)
@@ -8056,6 +8097,14 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
       return true;
     }
 
+    // Verify that the correct asset type is being returned
+    if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+      if (td.asset_type != "SAL1") {
+        fail_msg_writer() << tr("Only SAL1 may be returned for txid ") << args_[0];
+        return true;
+      }
+    }
+    
     // We found the one we were looking for - take a copy of the key_image, etc.
     transfers_indices.push_back(idx);
     break;
@@ -8200,7 +8249,7 @@ bool simple_wallet::burn(const std::vector<std::string> &args_)
   std::string asset_type;
   std::string strLastArg = local_args.back();
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
-  if (strLastArg not_eq "SAL" and strLastArg not_eq "VSD") {
+  if (strLastArg not_eq "SAL" and strLastArg not_eq "SAL1") {
      PRINT_USAGE(USAGE_BURN);
      return true;
   }
@@ -8264,7 +8313,7 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
   // Get the destination asset type
   std::string source_asset, dest_asset;
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
-  if (strLastArg not_eq "SAL" and strLastArg not_eq "VSD") {
+  if (strLastArg not_eq "SAL" and strLastArg not_eq "SAL1") {
     fail_msg_writer() << tr("invalid destination asset_type");
     PRINT_USAGE(USAGE_CONVERT);
     return true;
@@ -8274,7 +8323,7 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
   // Get the source asset type
   strLastArg = local_args.back();
   std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
-  if (strLastArg not_eq "SAL" and strLastArg not_eq "VSD") {
+  if (strLastArg not_eq "SAL" and strLastArg not_eq "SAL1") {
     fail_msg_writer() << tr("invalid source asset_type");
     PRINT_USAGE(USAGE_CONVERT);
     return true;
@@ -8298,6 +8347,38 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
   return true;  
 }
 //----------------------------------------------------------------------------------------------------
+bool simple_wallet::audit(const std::vector<std::string> &args_)
+{
+  // TODO: add locked versions
+  std::vector<std::string> local_args = args_;
+  if (args_.size() == 0)
+  {
+    local_args.push_back("index=0");
+  } else if (args_.size() > 1) {
+    PRINT_USAGE(USAGE_AUDIT);
+    return true;
+  }
+
+  if(m_wallet->multisig())
+  {
+     fail_msg_writer() << tr("This is a multisig wallet, staking is not currently supported");
+     return true;
+  }
+  
+  const std::map<uint8_t, std::pair<std::string, std::string>> audit_hard_forks = get_config(m_wallet->nettype()).AUDIT_HARD_FORKS;
+  const uint8_t hf_version = m_wallet->get_current_hard_fork();
+  if (audit_hard_forks.find(hf_version) != audit_hard_forks.end()) {
+
+    // Get the asset types
+    const std::pair<std::string, std::string> audit_asset_types = audit_hard_forks.at(hf_version);
+    transfer_main(Audit, audit_asset_types.first, audit_asset_types.first, local_args, false);
+    
+  } else {
+    fail_msg_writer() << tr("Audit command is not available at this time.");
+  }
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
 bool simple_wallet::stake(const std::vector<std::string> &args_)
 {
   // TODO: add locked versions
@@ -8316,9 +8397,13 @@ bool simple_wallet::stake(const std::vector<std::string> &args_)
   std::vector<std::string> local_args;
   local_args.push_back(m_wallet->get_subaddress_as_str({m_current_subaddress_account,0}));
   local_args.insert(local_args.end(), args_.begin(), args_.end());
-  
-  transfer_main(Stake, "SAL", "SAL", local_args, false);
-  return true;  
+
+  if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+    transfer_main(Stake, "SAL1", "SAL1", local_args, false);
+  } else {
+    transfer_main(Stake, "SAL", "SAL", local_args, false);
+  }
+  return true;
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::price_info(const std::vector<std::string> &args) {
@@ -8411,6 +8496,7 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
 
   // Get the chain height
   const uint64_t blockchain_height = m_wallet->get_blockchain_current_height();
+  uint64_t stake_lock_period = get_config(m_wallet->nettype()).STAKE_LOCK_PERIOD;
   
   message_writer(console_color_default, false) << boost::format(tr("\nSTAKED FUNDS:"));
   for (auto &p: yield_payouts) {
@@ -8426,7 +8512,7 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
     else 
       message_writer(console_color_green, false) << boost::format(tr("Height %d (matures %d), txid %s, staked %s SAL, %s SAL accrued so far"))
         % height
-        % (height + 21601)
+        % (height + stake_lock_period)
         % txid
         % print_money(burnt)
         % print_money(yield);

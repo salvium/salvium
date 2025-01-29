@@ -57,8 +57,10 @@ public:
                         , const crypto::hash& blk_hash
                         , uint64_t slippage_total
                         , uint64_t yield_total
+                        , uint64_t audit_total
                         , const cryptonote::network_type nettype
                         , cryptonote::yield_block_info& ybi
+                        , cryptonote::audit_block_info& abi
                         ) override {
     blocks.push_back(blk);
   }
@@ -103,6 +105,7 @@ TEST(major, Only)
   TestDB db;
   HardFork hf(db, 1, 0, 0, 0, 1, 0); // no voting
   oracle::asset_type_counts num_rct_outs_by_asset_type;
+  cryptonote::audit_block_info abi;
   cryptonote::yield_block_info ybi;
 
   //                      v  h  t
@@ -114,20 +117,20 @@ TEST(major, Only)
   ASSERT_FALSE(hf.add(mkblock(0, 2), 0));
   ASSERT_FALSE(hf.add(mkblock(2, 2), 0));
   ASSERT_TRUE(hf.add(mkblock(1, 2), 0));
-  db.add_block(mkblock(1, 1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+  db.add_block(mkblock(1, 1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
 
   // block height 1, only version 1 is accepted
   ASSERT_FALSE(hf.add(mkblock(0, 2), 1));
   ASSERT_FALSE(hf.add(mkblock(2, 2), 1));
   ASSERT_TRUE(hf.add(mkblock(1, 2), 1));
-  db.add_block(mkblock(1, 1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+  db.add_block(mkblock(1, 1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
 
   // block height 2, only version 2 is accepted
   ASSERT_FALSE(hf.add(mkblock(0, 2), 2));
   ASSERT_FALSE(hf.add(mkblock(1, 2), 2));
   ASSERT_FALSE(hf.add(mkblock(3, 2), 2));
   ASSERT_TRUE(hf.add(mkblock(2, 2), 2));
-  db.add_block(mkblock(2, 1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+  db.add_block(mkblock(2, 1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
 }
 
 TEST(empty_hardforks, Success)
@@ -135,6 +138,7 @@ TEST(empty_hardforks, Success)
   TestDB db;
   HardFork hf(db);
   oracle::asset_type_counts num_rct_outs_by_asset_type;
+  cryptonote::audit_block_info abi;
   cryptonote::yield_block_info ybi;
 
   ASSERT_TRUE(hf.add_fork(1, 0, 0));
@@ -143,7 +147,7 @@ TEST(empty_hardforks, Success)
   ASSERT_TRUE(hf.get_state(time(NULL) + 3600*24*400) == HardFork::Ready);
 
   for (uint64_t h = 0; h <= 10; ++h) {
-    db.add_block(mkblock(hf, h, 1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+    db.add_block(mkblock(hf, h, 1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
     ASSERT_TRUE(hf.add(db.get_block_from_height(h), h));
   }
   ASSERT_EQ(hf.get(0), 1);
@@ -170,6 +174,7 @@ TEST(check_for_height, Success)
   TestDB db;
   HardFork hf(db, 1, 0, 0, 0, 1, 0); // no voting
   oracle::asset_type_counts num_rct_outs_by_asset_type;
+  cryptonote::audit_block_info abi;
   cryptonote::yield_block_info ybi;
 
   ASSERT_TRUE(hf.add_fork(1, 0, 0));
@@ -179,14 +184,14 @@ TEST(check_for_height, Success)
   for (uint64_t h = 0; h <= 4; ++h) {
     ASSERT_TRUE(hf.check_for_height(mkblock(1, 1), h));
     ASSERT_FALSE(hf.check_for_height(mkblock(2, 2), h));  // block version is too high
-    db.add_block(mkblock(hf, h, 1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+    db.add_block(mkblock(hf, h, 1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
     ASSERT_TRUE(hf.add(db.get_block_from_height(h), h));
   }
 
   for (uint64_t h = 5; h <= 10; ++h) {
     ASSERT_FALSE(hf.check_for_height(mkblock(1, 1), h));  // block version is too low
     ASSERT_TRUE(hf.check_for_height(mkblock(2, 2), h));
-    db.add_block(mkblock(hf, h, 2), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+    db.add_block(mkblock(hf, h, 2), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
     ASSERT_TRUE(hf.add(db.get_block_from_height(h), h));
   }
 }
@@ -196,6 +201,7 @@ TEST(get, next_version)
   TestDB db;
   HardFork hf(db);
   oracle::asset_type_counts num_rct_outs_by_asset_type;
+  cryptonote::audit_block_info abi;
   cryptonote::yield_block_info ybi;
 
   ASSERT_TRUE(hf.add_fork(1, 0, 0));
@@ -205,19 +211,19 @@ TEST(get, next_version)
 
   for (uint64_t h = 0; h <= 4; ++h) {
     ASSERT_EQ(2, hf.get_next_version());
-    db.add_block(mkblock(hf, h, 1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+    db.add_block(mkblock(hf, h, 1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
     ASSERT_TRUE(hf.add(db.get_block_from_height(h), h));
   }
 
   for (uint64_t h = 5; h <= 9; ++h) {
     ASSERT_EQ(4, hf.get_next_version());
-    db.add_block(mkblock(hf, h, 2), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+    db.add_block(mkblock(hf, h, 2), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
     ASSERT_TRUE(hf.add(db.get_block_from_height(h), h));
   }
 
   for (uint64_t h = 10; h <= 15; ++h) {
     ASSERT_EQ(4, hf.get_next_version());
-    db.add_block(mkblock(hf, h, 4), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+    db.add_block(mkblock(hf, h, 4), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
     ASSERT_TRUE(hf.add(db.get_block_from_height(h), h));
   }
 }
@@ -251,6 +257,7 @@ TEST(steps_asap, Success)
   TestDB db;
   HardFork hf(db, 1,0,1,1,1);
   oracle::asset_type_counts num_rct_outs_by_asset_type;
+  cryptonote::audit_block_info abi;
   cryptonote::yield_block_info ybi;
 
   //                 v  h  t
@@ -261,7 +268,7 @@ TEST(steps_asap, Success)
   hf.init();
 
   for (uint64_t h = 0; h < 10; ++h) {
-    db.add_block(mkblock(hf, h, 9), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+    db.add_block(mkblock(hf, h, 9), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
     ASSERT_TRUE(hf.add(db.get_block_from_height(h), h));
   }
 
@@ -282,6 +289,7 @@ TEST(steps_1, Success)
   TestDB db;
   HardFork hf(db, 1,0,1,1,1);
   oracle::asset_type_counts num_rct_outs_by_asset_type;
+  cryptonote::audit_block_info abi;
   cryptonote::yield_block_info ybi;
 
   ASSERT_TRUE(hf.add_fork(1, 0, 0));
@@ -290,7 +298,7 @@ TEST(steps_1, Success)
   hf.init();
 
   for (uint64_t h = 0 ; h < 10; ++h) {
-    db.add_block(mkblock(hf, h, h+1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+    db.add_block(mkblock(hf, h, h+1), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
     ASSERT_TRUE(hf.add(db.get_block_from_height(h), h));
   }
 
@@ -305,6 +313,7 @@ TEST(reorganize, Same)
     TestDB db;
     HardFork hf(db, 1, 0, 1, 1, history, 100);
     oracle::asset_type_counts num_rct_outs_by_asset_type;
+    cryptonote::audit_block_info abi;
     cryptonote::yield_block_info ybi;
   
     //                 v  h  t
@@ -317,7 +326,7 @@ TEST(reorganize, Same)
     //                                 index  0  1  2  3  4  5  6  7  8  9
     static const uint8_t block_versions[] = { 1, 1, 4, 4, 7, 7, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9 };
     for (uint64_t h = 0; h < 20; ++h) {
-      db.add_block(mkblock(hf, h, block_versions[h]), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+      db.add_block(mkblock(hf, h, block_versions[h]), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
       ASSERT_TRUE(hf.add(db.get_block_from_height(h), h));
     }
 
@@ -336,6 +345,7 @@ TEST(reorganize, Changed)
   TestDB db;
   HardFork hf(db, 1, 0, 1, 1, 4, 100);
   oracle::asset_type_counts num_rct_outs_by_asset_type;
+  cryptonote::audit_block_info abi;
   cryptonote::yield_block_info ybi;
 
   //                 v  h  t
@@ -350,7 +360,7 @@ TEST(reorganize, Changed)
   static const uint8_t block_versions[] =    { 1, 1, 4, 4, 7, 7, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9 };
   static const uint8_t expected_versions[] = { 1, 1, 1, 1, 1, 1, 4, 4, 7, 7, 9, 9, 9, 9, 9, 9 };
   for (uint64_t h = 0; h < 16; ++h) {
-    db.add_block(mkblock(hf, h, block_versions[h]), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+    db.add_block(mkblock(hf, h, block_versions[h]), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
     ASSERT_TRUE (hf.add(db.get_block_from_height(h), h));
   }
 
@@ -370,7 +380,7 @@ TEST(reorganize, Changed)
   ASSERT_EQ(db.height(), 3);
   hf.reorganize_from_block_height(2);
   for (uint64_t h = 3; h < 16; ++h) {
-    db.add_block(mkblock(hf, h, block_versions_new[h]), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+    db.add_block(mkblock(hf, h, block_versions_new[h]), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
     bool ret = hf.add(db.get_block_from_height(h), h);
     ASSERT_EQ (ret, h < 15);
   }
@@ -384,6 +394,7 @@ TEST(reorganize, Changed)
 TEST(voting, threshold)
 {
   oracle::asset_type_counts num_rct_outs_by_asset_type;
+  cryptonote::audit_block_info abi;
   cryptonote::yield_block_info ybi;
   for (int threshold = 87; threshold <= 88; ++threshold) {
     TestDB db;
@@ -396,7 +407,7 @@ TEST(voting, threshold)
 
     for (uint64_t h = 0; h <= 8; ++h) {
       uint8_t v = 1 + !!(h % 8);
-      db.add_block(mkblock(hf, h, v), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+      db.add_block(mkblock(hf, h, v), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
       bool ret = hf.add(db.get_block_from_height(h), h);
       if (h >= 8 && threshold == 87) {
         // for threshold 87, we reach the treshold at height 7, so from height 8, hard fork to version 2, but 8 tries to add 1
@@ -415,6 +426,7 @@ TEST(voting, threshold)
 TEST(voting, different_thresholds)
 {
   oracle::asset_type_counts num_rct_outs_by_asset_type;
+  cryptonote::audit_block_info abi;
   cryptonote::yield_block_info ybi;
   for (int threshold = 87; threshold <= 88; ++threshold) {
     TestDB db;
@@ -432,7 +444,7 @@ TEST(voting, different_thresholds)
     static const uint8_t expected_versions[] = { 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4 };
 
     for (uint64_t h = 0; h < sizeof(block_versions) / sizeof(block_versions[0]); ++h) {
-      db.add_block(mkblock(hf, h, block_versions[h]), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+      db.add_block(mkblock(hf, h, block_versions[h]), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
       bool ret = hf.add(db.get_block_from_height(h), h);
       ASSERT_EQ(ret, true);
     }
@@ -447,6 +459,7 @@ TEST(voting, info)
   TestDB db;
   HardFork hf(db, 1, 0, 1, 1, 4, 50); // window size 4, default threshold 50%
   oracle::asset_type_counts num_rct_outs_by_asset_type;
+  cryptonote::audit_block_info abi;
   cryptonote::yield_block_info ybi;
 
   //                      v  h  ts
@@ -487,7 +500,7 @@ TEST(voting, info)
     ASSERT_EQ(expected_thresholds[h], threshold);
     ASSERT_EQ(4, voting);
 
-    db.add_block(mkblock(hf, h, block_versions[h]), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi);
+    db.add_block(mkblock(hf, h, block_versions[h]), 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
     ASSERT_TRUE(hf.add(db.get_block_from_height(h), h));
   }
 }
@@ -551,8 +564,9 @@ TEST(reorganize, changed)
   do { \
     cryptonote::block b = mkblock(hf, h, v); \
     oracle::asset_type_counts num_rct_outs_by_asset_type; \
+    cryptonote::audit_block_info abi; \
     cryptonote::yield_block_info ybi; \
-    db.add_block(b, 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, cryptonote::FAKECHAIN, ybi); \
+    db.add_block(b, 0, 0, 0, 0, 0, num_rct_outs_by_asset_type, crypto::hash(), 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi); \
     ASSERT_##a(hf.add(b, h)); \
   } while(0)
 #define ADD_TRUE(v, h) ADD(v, h, TRUE)

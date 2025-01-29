@@ -91,8 +91,10 @@ namespace
                             const crypto::hash& blk_hash,
                             uint64_t slippage_total,
                             uint64_t yield_total,
+                            uint64_t audit_total,
                             const cryptonote::network_type nettype,
-                            cryptonote::yield_block_info& ybi
+                            cryptonote::yield_block_info& ybi,
+                            cryptonote::audit_block_info& abi
                             ) override
     {
       blocks.push_back({blk, blk_hash});
@@ -178,7 +180,8 @@ static std::unique_ptr<cryptonote::BlockchainAndPool> init_blockchain(const std:
     auto blk_hash = get_block_hash(*blk);
     oracle::asset_type_counts num_rct_outs_by_asset_type;
     cryptonote::yield_block_info ybi;
-    bdb->add_block(*blk, 1, 1, 1, 0, 0, num_rct_outs_by_asset_type, blk_hash, 0, 0, cryptonote::FAKECHAIN, ybi);
+    cryptonote::audit_block_info abi;
+    bdb->add_block(*blk, 1, 1, 1, 0, 0, num_rct_outs_by_asset_type, blk_hash, 0, 0, 0, cryptonote::FAKECHAIN, ybi, abi);
   }
 
   bool r = bap->blockchain.init(bdb, nettype, true, test_options, 2, nullptr);
@@ -492,7 +495,8 @@ bool init_spent_output_indices(map_output_idx_t& outs, map_output_t& outs_mine, 
             std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
             subaddresses[from.get_keys().m_account_address.m_spend_public_key] = {0,0};
             cryptonote::origin_data od{3, crypto::null_pkey, 0};
-            generate_key_image_helper(from.get_keys(), subaddresses, out_key, get_tx_pub_key_from_extra(*oi.p_tx), get_additional_tx_pub_keys_from_extra(*oi.p_tx), oi.out_no, in_ephemeral, img, hw::get_device(("default")), false, od);
+            rct::salvium_input_data_t sid;
+            generate_key_image_helper(from.get_keys(), subaddresses, out_key, get_tx_pub_key_from_extra(*oi.p_tx), get_additional_tx_pub_keys_from_extra(*oi.p_tx), oi.out_no, in_ephemeral, img, hw::get_device(("default")), false, od, sid);
 
             // lookup for this key image in the events vector
             BOOST_FOREACH(auto& tx_pair, mtx) {

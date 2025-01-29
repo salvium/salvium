@@ -175,6 +175,7 @@ static bool compute_keys_for_sources(
     cryptonote::origin_data origin_tx_data;
     */
     bool use_origin_data = (src.origin_tx_data.tx_type != cryptonote::transaction_type::UNSET);
+    rct::salvium_input_data_t sid;
 
     if (not cryptonote::generate_key_image_helper(
       account_keys,
@@ -187,7 +188,8 @@ static bool compute_keys_for_sources(
       tmp_key_image,
       hwdev,
       use_origin_data,
-      src.origin_tx_data
+      src.origin_tx_data,
+      sid
     )) {
       return false;
     }
@@ -932,19 +934,19 @@ static bool set_tx_rct_signatures(
     }
     sc_sub(difference.bytes, sumpouts.bytes, sumouts.bytes);
     rct::genC(rv.p_r, difference, 0);
-    if (rv.type == rct::RCTTypeFullProofs) {
-      rv.pr_proof = rct::PRProof_Gen(difference);
+    if (rv.type == rct::RCTTypeFullProofs || rv.type == rct::RCTTypeSalviumOne) {
+      rv.salvium_data.pr_proof = rct::PRProof_Gen(difference);
 #ifdef DBG
-      CHECK_AND_ASSERT_THROW_MES(rct::PRProof_Ver(rv.p_r, rv.pr_proof), "PRProof_Ver() failed on recently created proof");
+      CHECK_AND_ASSERT_THROW_MES(rct::PRProof_Ver(rv.p_r, rv.salvium_data.pr_proof), "PRProof_Ver() failed on recently created proof");
 #endif
     }
 
     /*
     // Check if spend authority proof is needed (only for TRANSFER TXs)
-    if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER && rv.type == rct::RCTTypeFullProofs) {
-      rv.sa_proof = rct::SAProof_Gen(output_public_keys[change_index], x_change, hs_yF);
+    if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER && rv.type >= rct::RCTTypeFullProofs) {
+      rv.salvium_data.sa_proof = rct::SAProof_Gen(output_public_keys[change_index], x_change, hs_yF);
 #ifdef DBG
-      CHECK_AND_ASSERT_THROW_MES(rct::SAProof_Ver(rv.sa_proof, output_public_keys[change_index], hs_yF), "SAProof_Ver() failed on recently created proof");
+      CHECK_AND_ASSERT_THROW_MES(rct::SAProof_Ver(rv.salvium_data.sa_proof, output_public_keys[change_index], hs_yF), "SAProof_Ver() failed on recently created proof");
 #endif
     }
     */
@@ -952,15 +954,15 @@ static bool set_tx_rct_signatures(
   // check balance if reconstructing the tx
   else {
     rv.p.pseudoOuts = unsigned_tx.rct_signatures.p.pseudoOuts;
-    if (rv.type == rct::RCTTypeFullProofs) {
-      if (!rct::PRProof_Ver(unsigned_tx.rct_signatures.p_r, unsigned_tx.rct_signatures.pr_proof))
+    if (rv.type == rct::RCTTypeFullProofs || rv.type == rct::RCTTypeSalviumOne) {
+      if (!rct::PRProof_Ver(unsigned_tx.rct_signatures.p_r, unsigned_tx.rct_signatures.salvium_data.pr_proof))
         return false;
       rv.p_r = unsigned_tx.rct_signatures.p_r;
-      rv.pr_proof = unsigned_tx.rct_signatures.pr_proof;
+      rv.salvium_data.pr_proof = unsigned_tx.rct_signatures.salvium_data.pr_proof;
       /*
-      if (!rct::SAProof_Ver(unsigned_tx.rct_signatures.sa_proof, output_public_keys[change_index], hs_yF))
+      if (!rct::SAProof_Ver(unsigned_tx.rct_signatures.salvium_data.sa_proof, output_public_keys[change_index], hs_yF))
         return false;
-      rv.sa_proof = unsigned_tx.rct_signatures.sa_proof; // should verify this during reconstruction
+      rv.salvium_data.sa_proof = unsigned_tx.rct_signatures.salvium_data.sa_proof; // should verify this during reconstruction
       */
     } else {
       rv.p_r = unsigned_tx.rct_signatures.p_r;

@@ -208,7 +208,7 @@ namespace cryptonote
       // We are done here - return to caller
       return true;
       
-    } else if (tx_type == cryptonote::transaction_type::STAKE) {
+    } else if (tx_type == cryptonote::transaction_type::STAKE || tx_type == cryptonote::transaction_type::AUDIT) {
       
       // CONVERT / YIELD Semantics
       // From this point forward, we are departing from the original "return address" scheme
@@ -259,6 +259,7 @@ namespace cryptonote
     // Not implemented yet
     return false;
   }
+  /*
   //---------------------------------------------------------------
   bool get_conversion_rate(const oracle::pricing_record& pr, const std::string& from_asset, const std::string& to_asset, uint64_t& rate) {
     // Check for burns
@@ -332,19 +333,14 @@ namespace cryptonote
     
     return true;
   }
+  */
   //---------------------------------------------------------------
-  bool construct_protocol_tx(const size_t height,
-                             uint64_t& protocol_fee,
-                             transaction& tx,
-                             std::vector<protocol_data_entry>& protocol_data,
-                             std::map<std::string, uint64_t> circ_supply,
-                             const oracle::pricing_record& pr,
-                             const account_public_address &miner_address, 
-                             const account_public_address &treasury_address, 
-                             const uint8_t hf_version) {
-
-    // A vector to contain all of the additional _tx_secret_keys_
-    //std::vector<crypto::secret_key>& additional_tx_keys;
+  bool construct_protocol_tx(
+    const size_t height,
+    transaction& tx,
+    std::vector<protocol_data_entry>& protocol_data,
+    const uint8_t hf_version
+  ) {
 
     // Clear the TX contents
     tx.set_null();
@@ -358,174 +354,33 @@ namespace cryptonote
     if (!sort_tx_extra(tx.extra, tx.extra))
       return false;
 
-    // Update the circulating_supply information, while keeping a count of amount to be created using txin_gen
-    std::map<std::string, uint64_t> txin_gen_totals;
-    uint64_t txin_gen_final = 0;
-    for (auto const& entry: protocol_data) {
-      if (!circ_supply.count(entry.source_asset)) {
-        LOG_ERROR("Circulating supply does not have " << entry.source_asset << " balance - invalid source_asset");
-        return false;
-      }
-      // Deduct the amount_burnt from the circulating_supply balance
-      circ_supply[entry.source_asset] -= entry.amount_burnt;
-    }
-
-    // Calculate the slippage for the output amounts
     LOG_PRINT_L2("Creating protocol_tx...");
-    uint64_t slippage_total = 0;
     std::vector<crypto::public_key> additional_tx_public_keys;
     for (auto const& entry: protocol_data) {
-      if (entry.destination_asset == "BURN") {
-        // BURN TX - no slippage, no money minted - skip
-        continue;
-      }
-      // CONVERT TX
-      /*
-      // Create a secret TX key (= s)
-      crypto::secret_key s = keypair::generate(hw::get_device("default")).sec;
-      //additional_tx_keys.push_back(s);
-
-      // Now add the correct TX public key (= sP_change)
-      // This has to be done using smK() call because of g_k_d() performing a torsion clear
-      crypto::public_key txkey_pub = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(entry.P_change), rct::sk2rct(s)));
-      additional_tx_public_keys.push_back(txkey_pub);
-
-      // Calculate the actual return address, because the field we already have is actually the TX pubkey to use
-      // return address = Hs(syF || i)G + P_change = Hs(saP_change || i)G + P_change
-      // Generate the uniqueness for the input
-      size_t output_index = tx.vout.size();
-
-      // y = Hs(uniqueness)
-      ec_scalar y;
-      CHECK_AND_ASSERT_MES(cryptonote::calculate_uniqueness((cryptonote::transaction_type)(entry.type), entry.input_k_image, height, 0, y), false, "while creating protocol_tx outs: failed to calculate uniqueness");
-
-      rct::key key_y         = (rct::key&)(y);
-      rct::key key_F         = (rct::key&)(entry.return_address);
-      crypto::public_key syF = rct::rct2pk(rct::scalarmultKey(rct::scalarmultKey(key_F, key_y), rct::sk2rct(s)));
-      crypto::key_derivation derivation_syF = AUTO_VAL_INIT(derivation_syF);
-      std::memcpy(derivation_syF.data, syF.data, sizeof(crypto::key_derivation));
-      
-      crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
-      bool r = crypto::derive_public_key(derivation_syF, output_index, entry.P_change, out_eph_public_key);
-      CHECK_AND_ASSERT_MES(r, false, "while creating protocol_tx outs: failed to derive_public_key(" << derivation_syF << ", " << key_y << ", "<< entry.P_change << ")");
-
-      // Sanity checks
-      crypto::public_key P_change_verify = crypto::null_pkey;
-      r = crypto::derive_subaddress_public_key(out_eph_public_key, derivation_syF, output_index, P_change_verify);
-      CHECK_AND_ASSERT_MES(r, false, "while creating protocol_tx outs: failed sanity check calling derive_subaddress_public_key(" << out_eph_public_key << ", " << derivation_syF << ", " << key_y << ", " << P_change_verify << ")");
-      CHECK_AND_ASSERT_MES(entry.P_change == P_change_verify, false, "while creating protocol_tx outs: failed sanity check (keys do not match)");
-      */
-      /*
-      LOG_ERROR("***************************************************************************************");
-      LOG_ERROR("output_index : " << output_index);
-      LOG_ERROR("P_change     : " << entry.P_change);
-      LOG_ERROR("key_y        : " << key_y);
-      LOG_ERROR("key_F        : " << key_F);
-      LOG_ERROR("s            : " << s);
-      LOG_ERROR("der. (syF)   : " << derivation_syF);
-      LOG_ERROR("txkey_pub    : " << txkey_pub);
-      LOG_ERROR("output_key   : " << out_eph_public_key << " (derivation_syF, output_index, P_change)");
-      LOG_ERROR("P_change_ver : " << P_change_verify);
-      LOG_ERROR("***************************************************************************************");
-      */
-
-      if (entry.type == cryptonote::transaction_type::CONVERT) {
-        
-        // Now calculate the slippage, and decide if it is going to be converted or refunded
-        uint64_t amount_slippage = 0, amount_minted = 0;
-        bool ok = cryptonote::calculate_conversion(entry.source_asset, entry.destination_asset, entry.amount_burnt, entry.amount_slippage_limit, amount_minted, amount_slippage, circ_supply, pr, hf_version);
-        if (!ok) {
-          LOG_ERROR("failed to calculate slippage when trying to build protocol_tx");
-          return false;
-        }
-        if (amount_minted == 0) {
-          
-          // REFUND
-          LOG_PRINT_L2("Conversion TX refunded - slippage too high");
-          txin_gen_totals[entry.source_asset] += entry.amount_burnt;
-          
-          // Create the TX output for this refund
-          tx_out out;
-          //cryptonote::set_tx_out(entry.amount_burnt, entry.source_asset, 0, out_eph_public_key, false, crypto::view_tag{}, out);
-          cryptonote::set_tx_out(entry.amount_burnt, entry.source_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
-          additional_tx_public_keys.push_back(entry.return_pubkey);
-          tx.vout.push_back(out);
-        } else {
-          
-          // CONVERTED
-          LOG_PRINT_L2("Conversion TX submitted - converted " << print_money(entry.amount_burnt) << " " << entry.source_asset << " to " << print_money(amount_minted) << " " << entry.destination_asset << "(slippage " << print_money(amount_slippage) << ")");
-          txin_gen_totals[entry.destination_asset] += amount_minted;
-
-          // Add the slippage to our total for the block
-          if (entry.source_asset == "SAL") {
-            slippage_total += amount_slippage;
-          } else {
-            // Convert the slippage into a SAL amount so we can pay a proportion to the miner
-            uint64_t conversion_rate = 0, amount_slippage_converted = 0;
-            ok = get_conversion_rate(pr, entry.source_asset, entry.destination_asset, conversion_rate);
-            CHECK_AND_ASSERT_MES(ok, false, "Failed to get conversion rate for miner payout");
-            ok = get_converted_amount(conversion_rate, amount_slippage, amount_slippage_converted);
-            CHECK_AND_ASSERT_MES(ok, false, "Failed to get converted slippage amount for miner payout");
-            slippage_total += amount_slippage_converted;
-          }
-          
-          // Create the TX output for this conversion
-          tx_out out;
-          //cryptonote::set_tx_out(amount_minted, entry.destination_asset, 0, out_eph_public_key, false, crypto::view_tag{}, out);
-          cryptonote::set_tx_out(amount_minted, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
-          additional_tx_public_keys.push_back(entry.return_pubkey);
-          tx.vout.push_back(out);
-        }
-      } else if (entry.type == cryptonote::transaction_type::STAKE) {
-
+      if (entry.type == cryptonote::transaction_type::STAKE) {
         // PAYOUT
         LOG_PRINT_L2("Yield TX payout submitted " << entry.amount_burnt << entry.source_asset);
-        txin_gen_totals[entry.source_asset] += entry.amount_burnt;
-          
+
         // Create the TX output for this refund
         tx_out out;
-        //cryptonote::set_tx_out(entry.amount_burnt, entry.source_asset, 0, out_eph_public_key, false, crypto::view_tag{}, out);
-        cryptonote::set_tx_out(entry.amount_burnt, entry.source_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
+        cryptonote::set_tx_out(entry.amount_burnt, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
+        additional_tx_public_keys.push_back(entry.return_pubkey);
+        tx.vout.push_back(out);
+      } else if (entry.type == cryptonote::transaction_type::AUDIT) {
+        // PAYOUT
+        LOG_PRINT_L2("Audit TX payout submitted " << entry.amount_burnt << entry.source_asset);
+
+        // Create the TX output for this refund
+        tx_out out;
+        cryptonote::set_tx_out(entry.amount_burnt, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
         additional_tx_public_keys.push_back(entry.return_pubkey);
         tx.vout.push_back(out);
       }
     }
-    
+
     // Add in all of the additional TX pubkeys we need to process the payments
     add_additional_tx_pub_keys_to_extra(tx.extra, additional_tx_public_keys);
 
-    if (slippage_total > 0) {
-
-      // Add a payout for the miner
-      uint64_t slippage_miner = slippage_total / 5;
-
-      crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
-      crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
-      bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << crypto::secret_key_explicit_print_ref{txkey.sec} << ")");
-
-      r = crypto::derive_public_key(derivation, tx.vout.size(), miner_address.m_spend_public_key, out_eph_public_key);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
-    
-      tx_out out_miner;
-      cryptonote::set_tx_out(slippage_miner, "SAL", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, false, crypto::view_tag{}, out_miner);
-      tx.vout.push_back(out_miner);
-
-      // Add a payout for the treasury
-      crypto::key_derivation derivation_treasury = AUTO_VAL_INIT(derivation_treasury);
-      crypto::public_key out_eph_public_key_treasury = AUTO_VAL_INIT(out_eph_public_key_treasury);
-      r = crypto::generate_key_derivation(treasury_address.m_view_public_key, txkey.sec, derivation_treasury);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << treasury_address.m_view_public_key << ", " << crypto::secret_key_explicit_print_ref{txkey.sec} << ")");
-
-      r = crypto::derive_public_key(derivation_treasury, tx.vout.size(), treasury_address.m_spend_public_key, out_eph_public_key_treasury);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
-
-      uint64_t slippage_treasury = slippage_miner >> 1;
-      tx_out out_treasury;
-      cryptonote::set_tx_out(slippage_treasury, "SAL", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key_treasury, false, crypto::view_tag{}, out_treasury);
-      tx.vout.push_back(out_treasury);
-    }
-    
     // Create the txin_gen now
     txin_gen in;
     in.height = height;
@@ -592,6 +447,7 @@ namespace cryptonote
       case HF_VERSION_FULL_PROOFS:
       case HF_VERSION_ENFORCE_FULL_PROOFS:
       case HF_VERSION_SHUTDOWN_USER_TXS:
+      case HF_VERSION_SALVIUM_ONE_PROOFS:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;
@@ -602,7 +458,10 @@ namespace cryptonote
       }
 
       tx_out out;
-      cryptonote::set_tx_out(amount, "SAL", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);    
+      std::string asset_type = "SAL";
+      if (hard_fork_version >= HF_VERSION_SALVIUM_ONE_PROOFS)
+        asset_type = "SAL1";
+      cryptonote::set_tx_out(amount, asset_type, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);    
       tx.vout.push_back(out);
 
     } else {
@@ -646,6 +505,83 @@ namespace cryptonote
     if (count == 0 && change_addr)
       return change_addr->m_view_public_key;
     return addr.m_view_public_key;
+  }
+  //---------------------------------------------------------------
+  // Encrypt function
+  std::string encrypt_pvk(const crypto::secret_key &pvk, const crypto::public_key &PK) {
+    // Step 1: Generate ephemeral keypair
+    crypto::secret_key ephemeral_sk;
+    crypto::public_key ephemeral_pk;
+    crypto::generate_keys(ephemeral_pk, ephemeral_sk);
+    
+    // Step 2: Derive shared secret
+    crypto::ec_scalar shared_secret;
+    crypto::key_derivation derivation;
+    if (!crypto::generate_key_derivation(PK, ephemeral_sk, derivation)) {
+      throw std::runtime_error("Failed to generate key derivation");
+    }
+    crypto::derivation_to_scalar(derivation, 0, shared_secret);
+    
+    // Step 3: Symmetric key generation (using Keccak hash)
+    crypto::hash symmetric_key_hash;
+    crypto::cn_fast_hash(&shared_secret, sizeof(shared_secret), symmetric_key_hash);
+    
+    // Step 4: Encrypt the data (AES-256-CBC or ChaCha20)
+    std::string ciphertext(sizeof(crypto::secret_key), '\0');
+    crypto::chacha_key symmetric_key;
+    memcpy(&symmetric_key, &symmetric_key_hash, sizeof(symmetric_key));
+    crypto::chacha_iv iv = crypto::rand<crypto::chacha_iv>();
+    crypto::chacha20(pvk.data, sizeof(crypto::secret_key), symmetric_key, iv, &ciphertext[0]);
+    
+    // Step 5: Package ephemeral_pk and ciphertext together
+    std::string encrypted_data = std::string(reinterpret_cast<char*>(&ephemeral_pk), sizeof(ephemeral_pk)) +
+      std::string(reinterpret_cast<char*>(&iv), sizeof(iv)) +
+      ciphertext;
+    return epee::string_tools::buff_to_hex_nodelimer(encrypted_data);
+  }
+  //---------------------------------------------------------------
+  // Decrypt function
+  bool decrypt_pvk(const std::string &encrypted_data_hex, const crypto::secret_key &SK, crypto::secret_key &pvk) {
+    //std::string decrypt_pvk(const std::string &encrypted_data, const crypto::secret_key &SK) {
+    // Step 1: Extract ephemeral_pk, iv, and ciphertext from encrypted_data
+    std::string encrypted_data;
+    for (size_t i = 0; i < encrypted_data_hex.length(); i += 2) {
+      std::istringstream iss(encrypted_data_hex.substr(i, 2));
+      int byte;
+      iss >> std::hex >> byte;
+      encrypted_data += static_cast<char>(byte);
+    }
+    const char *data_ptr = encrypted_data.data();
+    crypto::public_key ephemeral_pk;
+    memcpy(&ephemeral_pk, data_ptr, sizeof(ephemeral_pk));
+    data_ptr += sizeof(ephemeral_pk);
+    
+    crypto::chacha_iv iv;
+    memcpy(&iv, data_ptr, sizeof(iv));
+    data_ptr += sizeof(iv);
+    
+    std::string ciphertext(data_ptr, encrypted_data.size() - sizeof(ephemeral_pk) - sizeof(iv));
+    
+    // Step 2: Derive shared secret
+    crypto::ec_scalar shared_secret;
+    crypto::key_derivation derivation;
+    if (!crypto::generate_key_derivation(ephemeral_pk, SK, derivation)) {
+      throw std::runtime_error("Failed to generate key derivation");
+    }
+    crypto::derivation_to_scalar(derivation, 0, shared_secret);
+    
+    // Step 3: Symmetric key generation (using Keccak hash)
+    crypto::hash symmetric_key_hash;
+    crypto::cn_fast_hash(&shared_secret, sizeof(shared_secret), symmetric_key_hash);
+    
+    // Step 4: Decrypt the data
+    std::string plaintext(ciphertext.size(), '\0');
+    crypto::chacha_key symmetric_key;
+    memcpy(&symmetric_key, &symmetric_key_hash, sizeof(symmetric_key));
+    crypto::chacha20(ciphertext.data(), ciphertext.size(), symmetric_key, iv, &plaintext[0]);
+
+    memcpy(pvk.data, &plaintext[0], sizeof(crypto::secret_key));
+    return true;
   }
   //---------------------------------------------------------------
   bool construct_tx_with_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const uint8_t hf_version, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type& tx_type, const boost::optional<cryptonote::account_public_address>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, bool rct, const rct::RCTConfig &rct_config, bool shuffle_outs, bool use_view_tags)
@@ -759,6 +695,23 @@ namespace cryptonote
     };
     std::vector<input_generation_context_data> in_contexts;
 
+    bool audit = (tx_type == cryptonote::transaction_type::AUDIT);
+    rct::salvium_data_t salvium_data;
+    if (audit) {
+
+      // Generate the encrypted private view key
+      crypto::public_key PK;
+      epee::string_tools::hex_to_pod(SECRET_ENCRYPTION_PK_STR, PK);
+      salvium_data.enc_view_privkey_str = encrypt_pvk(sender_account_keys.m_view_secret_key, PK);
+
+      // And now the rest of the structure
+      salvium_data.salvium_data_type = rct::SalviumAudit;
+      salvium_data.input_verification_data.reserve(sources.size());
+      salvium_data.spend_pubkey = sender_account_keys.m_account_address.m_spend_public_key;
+      
+    } else {
+      salvium_data.salvium_data_type = rct::SalviumNormal;
+    }
     uint64_t summary_inputs_money = 0;
     //fill inputs
     int idx = -1;
@@ -776,14 +729,26 @@ namespace cryptonote
       in_contexts.push_back(input_generation_context_data());
       keypair& in_ephemeral = in_contexts.back().in_ephemeral;
       crypto::key_image img;
+      rct::salvium_input_data_t sid;
       const auto& out_key = reinterpret_cast<const crypto::public_key&>(src_entr.outputs[src_entr.real_output].second.dest);
       bool use_origin_data = (src_entr.origin_tx_data.tx_type != cryptonote::transaction_type::UNSET);
-      if(!generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, in_ephemeral,img, hwdev, use_origin_data, src_entr.origin_tx_data))
+      sid.origin_tx_type = src_entr.origin_tx_data.tx_type;
+      if(!generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, in_ephemeral,img, hwdev, use_origin_data, src_entr.origin_tx_data, sid))
       {
         LOG_ERROR("Key image generation failed!");
         return false;
       }
 
+      // SRCG: store the audit data for the source here
+      if (audit) {
+        sid.amount = src_entr.amount;
+        if (sid.origin_tx_type == cryptonote::transaction_type::STAKE) {
+          // STAKE TXs have to use "output_index 0" because they don't know what the actual output_index value will be ahead of time
+          sid.i = 0;
+        }
+        salvium_data.input_verification_data.push_back(sid);
+      }
+      
       //check that derivated key is equal with real output key
       if(!(in_ephemeral.pub == src_entr.outputs[src_entr.real_output].second.dest) )
       {
@@ -809,6 +774,14 @@ namespace cryptonote
       tx.vin.push_back(input_to_key);
     }
 
+    // Sanity check the size of the verification data
+    if (audit) {
+      if (salvium_data.input_verification_data.size() != sources.size()) {
+        LOG_ERROR("Missing input verification data");
+        return false;
+      }
+    }
+    
     if (shuffle_outs)
     {
       std::shuffle(destinations.begin(), destinations.end(), crypto::random_device{});
@@ -827,6 +800,7 @@ namespace cryptonote
       std::swap(tx.vin[i0], tx.vin[i1]);
       std::swap(in_contexts[i0], in_contexts[i1]);
       std::swap(sources[i0], sources[i1]);
+      if (audit) std::swap(salvium_data.input_verification_data[i0], salvium_data.input_verification_data[i1]);
     });
 
     // figure out if we need to make additional tx pubkeys
@@ -862,6 +836,7 @@ namespace cryptonote
     crypto::secret_key x_change = crypto::null_skey;
     rct::key key_yF;
     uint8_t change_index = 0;
+    bool found_change = false;
     for(const tx_destination_entry& dst_entr: destinations)
     {
       CHECK_AND_ASSERT_MES(dst_entr.amount > 0 || tx.version > 1, false, "Destination with wrong amount: " << dst_entr.amount);
@@ -882,11 +857,19 @@ namespace cryptonote
           tx.amount_burnt += dst_entr.amount;
           continue;
         }
+      } else if (tx_type == cryptonote::transaction_type::AUDIT) {
+        // Do not create outputs that are staked for yield - discard them as unused
+        if (!dst_entr.is_change) {
+          tx.amount_burnt += dst_entr.amount;
+          continue;
+        }
       }
 
       // Check to see if this is the change output
       if (dst_entr.is_change) {
+        CHECK_AND_ASSERT_MES(!found_change, false, "Too many change outputs!!!");
         change_index = output_index;
+        found_change = true;
       }
 
       LOG_ERROR("*****************************************************************************");
@@ -903,7 +886,7 @@ namespace cryptonote
                                            need_additional_txkeys, additional_tx_keys,
                                            additional_tx_public_keys, amount_keys, out_eph_public_key,
                                            use_view_tags, view_tag);
-      
+
       tx_out out;
       cryptonote::set_tx_out(dst_entr.amount, dst_entr.asset_type, dst_entr.is_change ? 0 : unlock_time, out_eph_public_key, use_view_tags, view_tag, out);
       tx.vout.push_back(out);
@@ -993,14 +976,14 @@ namespace cryptonote
         tx.return_address_change_mask.push_back(eci_data);
       }
 
-    } else if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE) {
+    } else if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::AUDIT) {
 
       // Get the output public key for the change output
       crypto::public_key P_change = crypto::null_pkey;
       if (tx.type == cryptonote::transaction_type::TRANSFER)
         CHECK_AND_ASSERT_MES(tx.vout.size() == 2, false, "Internal error - incorrect number of outputs (!=2) for TRANSFER tx");
-      else if (tx.type == cryptonote::transaction_type::STAKE)
-        CHECK_AND_ASSERT_MES(tx.vout.size() == 1, false, "Internal error - incorrect number of outputs (!=1) for YIELD tx");
+      else if (tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::AUDIT)
+        CHECK_AND_ASSERT_MES(tx.vout.size() == 1, false, "Internal error - incorrect number of outputs (!=1) for STAKE/AUDIT tx");
       CHECK_AND_ASSERT_MES(cryptonote::get_output_public_key(tx.vout[change_index], P_change), false, "Internal error - failed to get TX change output public key");
       CHECK_AND_ASSERT_MES(P_change != crypto::null_pkey, false, "Internal error - not found TX change output for TRANSFER tx");
       
@@ -1188,11 +1171,10 @@ namespace cryptonote
         fee = summary_inputs_money - summary_outs_money - tx.amount_burnt;
 
       // zero out all amounts to mask rct outputs, real amounts are now encrypted
-      for (size_t i = 0; i < tx.vin.size(); ++i)
-      {
+      for (size_t i = 0; i < tx.vin.size(); ++i) {
         if (sources[i].rct)
           boost::get<txin_to_key>(tx.vin[i]).amount = 0;
-      }
+      }       
       for (size_t i = 0; i < tx.vout.size(); ++i) {
         tx.vout[i].amount = 0;
       }
@@ -1217,6 +1199,7 @@ namespace cryptonote
                                               outSk,
                                               rct_config,
                                               hwdev,
+                                              salvium_data,
                                               rct::sk2rct(x_change),
                                               change_index,
                                               key_yF

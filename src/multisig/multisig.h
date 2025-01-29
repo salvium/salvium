@@ -67,6 +67,7 @@ namespace multisig
                                              const std::vector<crypto::key_image> &pkis,
                                              crypto::key_image &ki,
                                              const bool use_origin_data,
-                                             const cryptonote::origin_data& origin_tx_data
+                                             const cryptonote::origin_data& origin_tx_data,
+                                             rct::salvium_input_data_t& sid
                                              );
 } //namespace multisig

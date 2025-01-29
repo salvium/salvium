@@ -138,7 +138,8 @@ TEST(bulletproofs, multi_splitting)
     for (size_t i = 0; i < destinations.size(); ++i)
       destination_asset_types.push_back("SAL");
 
-    rct::rctSig s = rct::genRctSimple(rct::zero(), sc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, available, mixRing, amount_keys, index, outSk, rct_config, hw::get_device("default"));
+    rct::salvium_data_t salvium_data;
+    rct::rctSig s = rct::genRctSimple(rct::zero(), sc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, available, mixRing, amount_keys, index, outSk, rct_config, hw::get_device("default"), salvium_data);
     ASSERT_TRUE(rct::verRctSimple(s));
     for (size_t i = 0; i < n_outputs; ++i)
     {

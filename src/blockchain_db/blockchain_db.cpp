@@ -269,6 +269,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
                                 , const std::vector<std::pair<transaction, blobdata>>& txs
                                 , const cryptonote::network_type nettype
                                 , cryptonote::yield_block_info& ybi
+                                , cryptonote::audit_block_info& abi
                                 )
 {
   const block &blk = blck.first;
@@ -309,7 +310,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
   }
 
   std::map<std::string, int64_t> slippage_counts;
-  uint64_t yield_total = 0;
+  uint64_t audit_total = 0, yield_total = 0;
   if (blk.protocol_tx.version == 2)
   {
     num_rct_outs += blk.protocol_tx.vout.size();
@@ -356,7 +357,12 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
         slippage_counts[asset_type] += tx.first.amount_burnt;
       }
 
-      // Is this a YIELD TX?
+      // Is this an AUDIT TX?
+      if (tx.first.type == cryptonote::transaction_type::AUDIT) {
+        audit_total += tx.first.amount_burnt;
+      }
+
+      // Is this a STAKE TX?
       if (tx.first.type == cryptonote::transaction_type::STAKE) {
         yield_total += tx.first.amount_burnt;
       }
@@ -410,7 +416,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
 
   // call out to subclass implementation to add the block & metadata
   time1 = epee::misc_utils::get_tick_count();
-  add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, num_rct_outs, num_rct_outs_by_asset_type, blk_hash, slippage_total, yield_total, nettype, ybi);
+  add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, num_rct_outs, num_rct_outs_by_asset_type, blk_hash, slippage_total, yield_total, audit_total, nettype, ybi, abi);
   TIME_MEASURE_FINISH(time1);
   time_add_block1 += time1;
 

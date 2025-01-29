@@ -140,6 +140,9 @@ public:
   virtual bool get_txpool_tx_blob(const crypto::hash& txid, cryptonote::blobdata &bd, relay_category tx_category) const override { return false; }
   virtual uint64_t get_database_size() const override { return 0; }
 
+  virtual int get_audit_block_info(const uint64_t height, audit_block_info& abi) const override { return 0; }
+  virtual int get_audit_tx_info(const uint64_t height, std::vector<yield_tx_info>& ati_container) const override { return 0; }
+
   virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi) const override { return 0; }
   virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) const override { return 0; }
 
@@ -156,8 +159,10 @@ public:
                           const crypto::hash& blk_hash,
                           uint64_t slippage_total,
                           uint64_t yield_total,
+                          uint64_t audit_total,
                           const cryptonote::network_type nettype,
-                          cryptonote::yield_block_info& ybi
+                          cryptonote::yield_block_info& ybi,
+                          cryptonote::audit_block_info& abi
                           ) override { }
   virtual cryptonote::block get_block_from_height(const uint64_t& height) const override { return cryptonote::block(); }
   virtual void set_hard_fork_version(uint64_t height, uint8_t version) override {}
