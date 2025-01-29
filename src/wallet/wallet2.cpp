@@ -2402,7 +2402,7 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
                                      uint64_t &total_yield,
                                      uint64_t &yield_per_stake,
                                      uint64_t &ybi_data_size,
-                                     std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> &payouts
+                                     std::vector<std::tuple<size_t, std::string, std::string, uint64_t, uint64_t>> &payouts
                                      )
 {
   // Get the total circulating supply of SALs
@@ -2430,17 +2430,17 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
 
   // Iterate over the transfers in our wallet
   std::map<size_t, size_t> map_payouts;
-  std::map<std::string, std::pair<size_t, std::pair<uint64_t, uint64_t>>> payouts_active;
+  std::map<std::string, std::tuple<size_t, std::string, uint64_t, uint64_t>> payouts_active;
   if (m_transfers.size() > 0) {
     for (size_t idx = m_transfers.size()-1; idx>0; --idx) {
       const tools::wallet2::transfer_details& td = m_transfers[idx];
       //if (td.m_block_height < ybi_data[0].block_height) break;
       if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
         if (map_payouts.count(idx)) {
-          payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
+          payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.asset_type, td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
         } else {
           //payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
-          payouts_active[epee::string_tools::pod_to_hex(td.m_txid)] = std::make_pair(td.m_block_height, std::make_pair(td.m_tx.amount_burnt, 0));
+          payouts_active[epee::string_tools::pod_to_hex(td.m_txid)] = std::make_tuple(td.m_block_height, td.asset_type, td.m_tx.amount_burnt, 0);
         }
       } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
         // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
@@ -2462,18 +2462,21 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
 
       // EXPERIMENTAL - add up yield earned for active STAKE TXs
       for (auto &payout: payouts_active) {
-        if (ybi_data[idx].block_height < payout.second.first) continue; 
+
+        auto&[height,asset_type,total_burnt,total_accrued] = payout.second;
+        if (ybi_data[idx].block_height < height) continue; 
         boost::multiprecision::uint128_t amount_128 = ybi_data[idx].slippage_total_this_block;
-        amount_128 *= payout.second.second.first;
+        amount_128 *= total_burnt;
         amount_128 /= ybi_data[idx].locked_coins_tally;
-        payout.second.second.second += amount_128.convert_to<uint64_t>();
+        total_accrued += amount_128.convert_to<uint64_t>();
       }
     }
   }
 
   for (auto &payout: payouts_active) {
     // Copy to the list of payouts proper
-    payouts.push_back(std::make_tuple(payout.second.first, payout.first, payout.second.second.first, payout.second.second.second));
+    auto&[height,asset_type,total_burnt,total_accrued] = payout.second;
+    payouts.push_back(std::make_tuple(height, payout.first, asset_type, total_burnt, total_accrued));
   }
 
   // Get the total currently locked
@@ -2905,7 +2908,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
               // Additionally, with STAKE and AUDIT TXs, we need to update our "balance staked" subtotal, because otherwise our balance is out by the staked coins until they mature!
               // SRCG: must remember to deduct the number of staked coins when they mature!!
               LOG_PRINT_L1("***** STAKED/AUDITED COINS : " << tx.amount_burnt << " *****");
-              m_locked_coins.insert({P_change, {0, tx.amount_burnt}});
+              m_locked_coins.insert({P_change, {0, tx.amount_burnt, tx.source_asset_type}});
             }
             
           } else if (tx.type == cryptonote::transaction_type::TRANSFER) {
@@ -7026,10 +7029,12 @@ uint64_t wallet2::balance(uint32_t index_major, const std::string& asset_type, b
   uint64_t amount = 0;
   for (const auto& i : balance_per_subaddress(index_major, asset_type, strict))
     amount += i.second;
-  if (index_major == 0 && asset_type == "SAL") {
-    // Iterate over the locked coins, adding them to the _locked_ balance
-    for (const auto& i : m_locked_coins)
+
+  // Iterate over the locked coins, adding them to the _locked_ balance
+  for (const auto& i : m_locked_coins) {
+    if (index_major == 0 && asset_type == i.second.m_asset_type) {
       amount += i.second.m_amount;
+    }
   }
   return amount;
 }
@@ -11505,7 +11510,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_single(const crypt
 std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector<size_t> transfers_indices)
 {
   // Get the asset_type and associated information
-  THROW_WALLET_EXCEPTION_IF(transfers_indices.empty() || transfers_indices.size()>1, error::wallet_internal_error, tr("Incorrect number of transfers_indices on return_payment"));
+  THROW_WALLET_EXCEPTION_IF(transfers_indices.empty() || transfers_indices.size()>15, error::wallet_internal_error, tr("Incorrect number of transfers_indices on return_payment"));
   size_t idx = transfers_indices[0];
   THROW_WALLET_EXCEPTION_IF(idx >= get_num_transfer_details(), error::wallet_internal_error, tr("cannot locate return_payment origin index in m_transfers"));
   const transfer_details& td_origin = get_transfer_details(idx);
@@ -11518,6 +11523,14 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   uint32_t priority = adjust_priority(0);
   std::vector<uint8_t> extra; // No need for a TX extra beyond that which will be calculated herein
 
+  // Verify that all the indices share an origin
+  for (const auto &td_idx : transfers_indices) {
+    THROW_WALLET_EXCEPTION_IF(td_idx >= get_num_transfer_details(), error::wallet_internal_error, tr("cannot locate return_payment origin index in m_transfers"));
+    const transfer_details &td = get_transfer_details(td_idx);
+    THROW_WALLET_EXCEPTION_IF(td.m_txid != td_origin.m_txid, error::wallet_internal_error, tr("TX hashes do not match for inputs to return_payment"));
+    THROW_WALLET_EXCEPTION_IF(td.asset_type != td_origin.asset_type, error::wallet_internal_error, tr("TX asset_type values do not match for inputs to return_payment"));
+  }
+  
   // To return a payment, we need to know the y value to process the F value
   // ...but the y value is calculated differently depending on the original TX
   ec_scalar y;

@@ -8105,9 +8105,8 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
       }
     }
     
-    // We found the one we were looking for - take a copy of the key_image, etc.
+    // We found the one(s) we were looking for - take a copy of the key_image, etc.
     transfers_indices.push_back(idx);
-    break;
   }
 
   // Check we have a valid key_image
@@ -8132,21 +8131,32 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
       fail_msg_writer() << tr("Multiple transactions are created, which is not supposed to happen");
       return true;
     }
-    if (ptx_vector[0].selected_transfers.size() != 1)
+    if (ptx_vector[0].selected_transfers.size() != transfers_indices.size())
     {
-      fail_msg_writer() << tr("The transaction uses multiple or no inputs, which is not supposed to happen");
+      fail_msg_writer() << tr("The transaction uses incorrect number of inputs, which is not supposed to happen");
       return true;
     }
 
     // give user total and fee, and prompt to confirm
     uint64_t total_fee = ptx_vector[0].fee;
-    uint64_t total_sent = m_wallet->get_transfer_details(ptx_vector[0].selected_transfers.front()).amount();
+    uint64_t total_sent = 0;
+    std::string asset_type;
+    for (auto idx: ptx_vector[0].selected_transfers) {
+      const tools::wallet2::transfer_details &td = m_wallet->get_transfer_details(idx);
+      uint64_t sent = td.amount();
+      if (total_sent + sent < total_sent) {
+        fail_msg_writer() << tr("amount overflow detected");
+        return true;
+      }
+      total_sent += sent;
+      asset_type = td.asset_type;
+    }
     std::ostringstream prompt;
     if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
       return true;
-    prompt << boost::format(tr("Returning %s for a total fee of %s.  Is this okay?")) %
-      print_money(total_sent) %
-      print_money(total_fee);
+    prompt << boost::format(tr("Returning %s %s for a total fee of %s %s.  Is this okay?")) %
+      print_money(total_sent) % asset_type %
+      print_money(total_fee) % asset_type;
     std::string accepted = input_line(prompt.str(), true);
     if (std::cin.eof())
       return true;
@@ -8488,7 +8498,7 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
 
   // EXPERIMENTAL - change to get_yield_summary_info() method
   uint64_t t_burnt, t_supply, t_locked, t_yield, yps, ybi_size;
-  std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> yield_payouts;
+  std::vector<std::tuple<size_t, std::string, std::string, uint64_t, uint64_t>> yield_payouts;
   if (!m_wallet->get_yield_summary_info(t_burnt, t_supply, t_locked, t_yield, yps, ybi_size, yield_payouts)) {
     fail_msg_writer() << "failed to get yield info. Make sure you are connected to a daemon.";
     return false;
@@ -8501,25 +8511,30 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
   message_writer(console_color_default, false) << boost::format(tr("\nSTAKED FUNDS:"));
   for (auto &p: yield_payouts) {
     uint64_t height, burnt, yield;
-    std::string txid;
-    std::tie(height, txid, burnt, yield) = p;
+    std::string txid, asset_type;
+    std::tie(height, txid, asset_type, burnt, yield) = p;
+    epee::console_colors asset_type_color = (asset_type == "SAL") ? console_color_green : (asset_type == "SAL1") ? console_color_blue : console_color_green;
     if (blockchain_height > ybi_size + height)
-      message_writer(console_color_green, true) << boost::format(tr("Height %d, txid %s, staked %s SAL, earned %s SAL"))
+      message_writer(asset_type_color, true) << boost::format(tr("Height %d, txid %s, staked %s %s, earned %s %s"))
         % height
         % txid
         % print_money(burnt)
-        % print_money(yield);
+        % asset_type
+        % print_money(yield)
+        % asset_type;
     else 
-      message_writer(console_color_green, false) << boost::format(tr("Height %d (matures %d), txid %s, staked %s SAL, %s SAL accrued so far"))
+      message_writer(asset_type_color, false) << boost::format(tr("Height %d (matures %d), txid %s, staked %s %s, %s %s accrued so far"))
         % height
         % (height + stake_lock_period)
         % txid
         % print_money(burnt)
-        % print_money(yield);
- }
+        % asset_type
+        % print_money(yield)
+        % asset_type;
+  }
 
   // Output the necessary information about yield stats
-  message_writer(console_color_default, false) << boost::format(tr("\nYIELD INFO:\n\tSupply coins burnt over last %s: %d\n\tTotal coins locked: %d\n\tYield accrued over last %s: %d\n\tYield per SAL staked: %d"))
+  message_writer(console_color_default, false) << boost::format(tr("\nYIELD INFO:\n\tSupply coins burnt over last %s: %d\n\tTotal coins locked: %d\n\tYield accrued over last %s: %d\n\tYield per coin staked: %d"))
     % get_human_readable_timespan((ybi_size-1) * DIFFICULTY_TARGET_V2)
     % print_money(t_burnt)
     % print_money(t_locked)
