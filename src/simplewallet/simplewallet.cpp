@@ -214,7 +214,7 @@ namespace
   const char* USAGE_BURN("burn <amount> <asset_type>");
   const char* USAGE_CONVERT("convert <source_amount> <source_asset> <dest_asset> [<slippage_limit>]");
   const char* USAGE_STAKE("stake <amount>");
-  const char* USAGE_AUDIT("audit [index=N]");
+  const char* USAGE_AUDIT("audit [index=<N1>[,<N2>,...] | index=all]");
   const char* USAGE_PRICE_INFO("price_info");
   const char* USAGE_SUPPLY_INFO("supply_info");
   const char* USAGE_YIELD_INFO("yield_info");
@@ -3221,7 +3221,7 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
     message_writer() << tr("\"burn <amount> <asset_type>\" - destroy coins forever.");
     message_writer() << tr("\"convert <amount> <source_asset> <dest_asset> [<slippage_limit>]\" - convert between coin types.");
     message_writer() << tr("\"stake <amount>\" - stake SAL for 30 days to earn yield.");
-    message_writer() << tr("\"audit\" - audit your wallet main address (or subaddress if specified).");
+    message_writer() << tr("\"audit\" - audit your wallet main address (or subaddress(es) if specified).");
     message_writer() << tr("\"price_info\" - Display current pricing information for supported assets.");
     message_writer() << tr("\"supply_info\" - Display circulating supply information.");
     message_writer() << tr("\"yield_info\" - Display current stats on Salvium staking / yield.");
@@ -3418,7 +3418,7 @@ simple_wallet::simple_wallet()
   m_cmd_binder.set_handler("audit",
                            boost::bind(&simple_wallet::audit, this, _1),
                            tr(USAGE_AUDIT),
-                           tr("Sends your wallet balance for a single address (or subaddress) to audit (only available during AUDIT hard forks)"));
+                           tr("Sends your wallet balance (or a single address or subaddress(es)) to audit (only available during AUDIT hard forks)"));
   m_cmd_binder.set_handler("price_info",
                            boost::bind(&simple_wallet::price_info, this, _1),
                            tr(USAGE_PRICE_INFO),
