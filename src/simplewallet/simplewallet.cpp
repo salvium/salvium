@@ -6741,25 +6741,22 @@ bool simple_wallet::transfer_main(
 //  "transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> <amount> [<payment_id>]"
   if (!try_connect_to_daemon())
     return false;
-  /*
-  bool audit = false;
-  if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
-    if (transfer_type == Audit) {
-      audit = true;
-    }
-  }
-  */
   std::vector<std::string> local_args = args_;
 
   std::set<uint32_t> subaddr_indices;
   if (local_args.size() > 0 && local_args[0].substr(0, 6) == "index=")
   {
-    if (!parse_subaddress_indices(local_args[0], subaddr_indices))
-      return false;
+    if (local_args[0] == "index=all")
+    {
+      for (uint32_t i = 0; i < m_wallet->get_num_subaddresses(m_current_subaddress_account); ++i)
+        subaddr_indices.insert(i);
+    }
+    else if (!parse_subaddress_indices(local_args[0], subaddr_indices))
+    {
+      return true;
+    }
     local_args.erase(local_args.begin());
-    if (transfer_type == Audit)
-      while (subaddr_indices.size() > 1)
-        subaddr_indices.erase(std::prev(subaddr_indices.end()));  }
+  }
 
   uint32_t priority = m_wallet->get_default_priority();
   if (local_args.size() > 0 && parse_priority(local_args[0], priority))
@@ -6975,8 +6972,25 @@ bool simple_wallet::transfer_main(
     std::vector<tools::wallet2::pending_tx> ptx_vector;
     uint64_t unlock_block = 0;
     std::string err;
-    switch (transfer_type)
-    {
+    if (transfer_type == Audit) {
+
+      // Get the subaddress unlocked balances
+      std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddr = m_wallet->unlocked_balance_per_subaddress(m_current_subaddress_account, source_asset, true);
+      unlock_block = get_config(m_wallet->nettype()).AUDIT_LOCK_PERIOD;
+      for (const auto subaddr_index : subaddr_indices) {
+
+        // Skip this wallet if there is no balance unlocked to audit
+        if (unlocked_balance_per_subaddr.count(subaddr_index) == 0) continue;
+        
+        std::set<uint32_t> subaddr_indices_single;
+        subaddr_indices_single.insert(subaddr_index);
+        uint64_t unlock_block = get_config(m_wallet->nettype()).AUDIT_LOCK_PERIOD;
+        std::vector<tools::wallet2::pending_tx> ptx_vector_audit = m_wallet->create_transactions_all(0, cryptonote::transaction_type::AUDIT, source_asset, m_wallet->get_subaddress({m_current_subaddress_account, subaddr_index}), (subaddr_index>0), 1, fake_outs_count, unlock_block, priority, extra, m_current_subaddress_account, subaddr_indices_single);
+        ptx_vector.insert(ptx_vector.end(), ptx_vector_audit.begin(), ptx_vector_audit.end());
+      }
+      
+    } else {
+      switch (transfer_type) {
       case Burn:
         unlock_block = 0;
         ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::BURN, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
@@ -6984,10 +6998,6 @@ bool simple_wallet::transfer_main(
       case Convert:
         unlock_block = CONVERT_LOCK_PERIOD;
         ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::CONVERT, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
-        break;
-      case Audit:
-        unlock_block = get_config(m_wallet->nettype()).AUDIT_LOCK_PERIOD;
-        ptx_vector = m_wallet->create_transactions_all(0, cryptonote::transaction_type::AUDIT, source_asset, m_wallet->get_subaddress({m_current_subaddress_account, 0}), false, 1, fake_outs_count, unlock_block, priority, extra, m_current_subaddress_account, subaddr_indices);
         break;
       case Stake:
         unlock_block = get_config(m_wallet->nettype()).STAKE_LOCK_PERIOD;
@@ -7003,6 +7013,7 @@ bool simple_wallet::transfer_main(
       case Transfer:
         ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
         break;
+      }
     }
 
     if (ptx_vector.empty())

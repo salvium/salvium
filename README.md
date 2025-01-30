@@ -1,4 +1,4 @@
-# Salvium Zero v0.9.0-rc9
+# Salvium Zero v0.9.0-rc10
 
 Copyright (c) 2023-2024, Salvium
 Portions Copyright (c) 2014-2023, The Monero Project
