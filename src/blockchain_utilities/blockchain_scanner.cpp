@@ -29,6 +29,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include "common/command_line.h"
+#include "common/i18n.h"
+#include "common/password.h"
 #include "common/varint.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
 #include "cryptonote_core/tx_pool.h"
@@ -43,10 +45,19 @@
 #define MONERO_DEFAULT_LOG_CATEGORY "bcutil"
 
 #define DELIM "|"
+#define DEF_STAKE_MODE "all"
 
 namespace po = boost::program_options;
 using namespace epee;
 using namespace cryptonote;
+
+namespace scanner
+{
+  const char* tr(const char* str)
+  {
+    return i18n_translate(str, "tools::scanner");
+  }
+}
 
 static bool stop_requested = false;
 
@@ -70,6 +81,8 @@ int main(int argc, char* argv[])
   const command_line::arg_descriptor<uint64_t> arg_block_start  = {"block-start", "start at block number", block_start};
   const command_line::arg_descriptor<uint64_t> arg_block_stop = {"block-stop", "Stop at block number", block_stop};
   const command_line::arg_descriptor<std::string> arg_delimiter  = {"delimiter", "\"<string>\"", DELIM};
+  const command_line::arg_descriptor<std::string> arg_stake_mode  = {"stake", "\"<string>\"", DEF_STAKE_MODE};
+  const command_line::arg_descriptor<bool> arg_check_asset_types  = {"check-asset-types", "Scan for asset-type issues", false};
 
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_data_dir);
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_testnet_on);
@@ -78,6 +91,8 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_cmd_sett, arg_block_start);
   command_line::add_arg(desc_cmd_sett, arg_block_stop);
   command_line::add_arg(desc_cmd_sett, arg_delimiter);
+  command_line::add_arg(desc_cmd_sett, arg_stake_mode);
+  command_line::add_arg(desc_cmd_sett, arg_check_asset_types);
   command_line::add_arg(desc_cmd_only, command_line::arg_help);
 
   po::options_description desc_options("Allowed options");
@@ -116,6 +131,8 @@ int main(int argc, char* argv[])
   block_start = command_line::get_arg(vm, arg_block_start);
   block_stop = command_line::get_arg(vm, arg_block_stop);
   std::string delimiter = command_line::get_arg(vm, arg_delimiter);
+  std::string stake_mode = command_line::get_arg(vm, arg_stake_mode);
+  bool opt_check_asset_types = command_line::get_arg(vm, arg_check_asset_types);
 
   // If we wanted to use the memory pool, we would set up a fake_core.
 
@@ -158,7 +175,7 @@ int main(int argc, char* argv[])
     LOG_PRINT_L0("Error opening database: " << e.what());
     return 1;
   }
-  r = core_storage->blockchain.init(db, opt_testnet ? cryptonote::TESTNET : opt_stagenet ? cryptonote::STAGENET : cryptonote::MAINNET);
+  r = core_storage->blockchain.init(db, net_type);
 
   CHECK_AND_ASSERT_MES(r, 1, "Failed to initialize source blockchain storage");
   LOG_PRINT_L0("Source blockchain storage initialized OK");
@@ -203,6 +220,9 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
   uint32_t txhr[24] = {0};
   unsigned int i;
 
+  const std::map<uint8_t, std::pair<std::string, std::string>> audit_hard_forks = get_config(net_type).AUDIT_HARD_FORKS;
+  const uint64_t audit_lock_period = get_config(net_type).AUDIT_LOCK_PERIOD;
+  
   for (uint64_t h = block_start; h < block_stop; ++h)
   {
     cryptonote::blobdata bd = db->get_block_blob_from_height(h);
@@ -234,34 +254,60 @@ skip:
     std::map<size_t, std::vector<std::string>> used_tx_versions;
     used_assets.insert("SAL");
 
+    uint8_t hf_version = blk.major_version;
+    
     // Check TX versions
     if (blk.miner_tx.version != 2) {
       std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.miner_tx.hash << "" << delimiter << "invalid miner TX version detected" << delimiter << "version:" << blk.miner_tx.version << std::endl;
     }
-    if (blk.protocol_tx.version != 2) {
+    if (blk.protocol_tx.version != 2 && h>0) {
       std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.protocol_tx.hash << "" << delimiter << "invalid protocol TX version detected" << delimiter << "version:" << blk.protocol_tx.version << std::endl;
     }
     
     // Get the miner_tx assets
+    std::set<crypto::public_key> used_keys;
     for (const auto& miner_tx_vout : blk.miner_tx.vout) {
       std::string asset_type;
       if (!cryptonote::get_output_asset_type(miner_tx_vout, asset_type)) {
         throw std::runtime_error("Aborting: failed to get output asset type from miner_tx");
-      } else if (asset_type != "SAL") {
-        throw std::runtime_error("Aborting: invalid output asset type from miner_tx");
+      } else if (blk.major_version >= HF_VERSION_SALVIUM_ONE_PROOFS && asset_type != "SAL1") {
+        throw std::runtime_error("Aborting: invalid output asset type from miner_tx: " + asset_type);
+      } else if (blk.major_version < HF_VERSION_SALVIUM_ONE_PROOFS && asset_type != "SAL") {
+        throw std::runtime_error("Aborting: invalid output asset type from miner_tx: " + asset_type + ", HF:" + std::to_string(blk.major_version));
       }
       miner_tx_assets.insert(asset_type);
+      if (miner_tx_vout.amount > 13500000000 && h>0) {
+        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.miner_tx.hash << "" << delimiter << "invalid miner TX amount detected" << delimiter << "amount:" << miner_tx_vout.amount << std::endl;
+      }
+      crypto::public_key key;
+      cryptonote::get_output_public_key(miner_tx_vout, key);
+      if (used_keys.count(key)) {
+        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.miner_tx.hash << "" << delimiter << "invalid miner TX - duplicate output detected" << delimiter << "pubkey:" << key << std::endl;
+      }
+      used_keys.insert(key);
     }
 
     // Get the protocol_tx assets
+    used_keys.clear();
     for (const auto& protocol_tx_vout : blk.protocol_tx.vout) {
       std::string asset_type;
       if (!cryptonote::get_output_asset_type(protocol_tx_vout, asset_type)) {
         throw std::runtime_error("Aborting: failed to get output asset type from protocol_tx");
-      } else if (asset_type != "SAL") {
-        throw std::runtime_error("Aborting: invalid output asset type from protocol_tx");
+      } else if (blk.major_version >= HF_VERSION_SALVIUM_ONE_PROOFS && asset_type != "SAL1") {
+        throw std::runtime_error("Aborting: invalid output asset type from protocol_tx: " + asset_type);
+      } else if (blk.major_version < HF_VERSION_SALVIUM_ONE_PROOFS && asset_type != "SAL") {
+        throw std::runtime_error("Aborting: invalid output asset type from protocol_tx: " + asset_type + ", HF:" + std::to_string(blk.major_version));
       }
       protocol_tx_assets.insert(asset_type);
+      if (protocol_tx_vout.amount > 25000000000000) {
+        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.protocol_tx.hash << "" << delimiter << "large protocol TX amount detected from height " << (h-audit_lock_period) << delimiter << "amount:" << protocol_tx_vout.amount << std::endl;
+      }
+      crypto::public_key key;
+      cryptonote::get_output_public_key(protocol_tx_vout, key);
+      if (used_keys.count(key)) {
+        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.protocol_tx.hash << "" << delimiter << "invalid protocol TX - duplicate output detected" << delimiter << "pubkey:" << key << std::endl;
+      }
+      used_keys.insert(key);
     }
 
     for (const auto& tx_id : blk.tx_hashes)
@@ -285,207 +331,49 @@ skip:
         currsz += bd.size();
       currtxs++;
 
-      if (tx.version != 2) {
+      if (tx.type != cryptonote::transaction_type::TRANSFER &&
+          tx.type != cryptonote::transaction_type::BURN &&
+          tx.type != cryptonote::transaction_type::STAKE &&
+          tx.type != cryptonote::transaction_type::AUDIT) {
+        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "invalid TX type detected" << delimiter << "type:" << (uint8_t)tx.type << std::endl;
+      }
+      
+      if ((tx.version != 2 && hf_version < HF_VERSION_ENABLE_N_OUTS) || (tx.version != 3 && hf_version < HF_VERSION_ENABLE_N_OUTS && tx.type == cryptonote::transaction_type::TRANSFER)) {
         std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "invalid TX version detected" << delimiter << "version:" << tx.version << std::endl;
       }
-      
-      /*
-      std::string source;
-      std::string dest;
-      offshore::pricing_record pr;
-      if (!cryptonote::get_tx_asset_types(tx, source, dest, false)) {
-        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "At least 1 input or 1 output of the tx was invalid" << delimiter << "get_tx_asset_types() failed : ";
-        if (source.empty()) {
-          std::cout << "source is empty" << std::endl;
-        }
-        if (dest.empty()) {
-          std::cout << "dest is empty" << std::endl;
+    
+      if (tx.type == cryptonote::transaction_type::STAKE && stake_mode.compare("off")) {
+        if (stake_mode.compare("all") == 0) {
+          std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "STAKE TX detected" << delimiter << "amount:" << (tx.amount_burnt / 100000000) << std::endl;
+        } else if (stake_mode.compare("large") == 0 && tx.amount_burnt > 25000000000000llu) {
+          std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "large STAKE TX detected" << delimiter << "amount:" << (tx.amount_burnt / 100000000) << std::endl;
         }
       }
-      if (!cryptonote::get_tx_type(source, dest, offshore, onshore, offshore_transfer, xusd_to_xasset, xasset_to_xusd, xasset_transfer)) {
-        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "At least 1 input or 1 output of the tx was invalid" << delimiter << "get_tx_type() failed" << std::endl;
-      }
-      */
-      
-      // Add the source currency to the list of expected ones
-      used_assets.insert(tx.source_asset_type);
-      /*        
-      if ((offshore && !tx.rct_signatures.txnOffshoreFee) ||
-          (onshore && !tx.rct_signatures.txnOffshoreFee_usd) ||
-          (xusd_to_xasset && !tx.rct_signatures.txnOffshoreFee_usd) ||
-          (xasset_to_xusd && !tx.rct_signatures.txnOffshoreFee_xasset)) {
-        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "Missing conversion fee." << delimiter << "" <<
-          "Source:" << source << ", dest:" << dest <<
-          ", XHV fees:" << tx.rct_signatures.txnFee << "," << tx.rct_signatures.txnOffshoreFee <<
-          ", XUSD fees:" << tx.rct_signatures.txnFee_usd << "," << tx.rct_signatures.txnOffshoreFee_usd <<
-          ", burnt:" << tx.amount_burnt << ", minted:" << tx.amount_minted << std::endl;
-      } else if ((offshore || onshore || xusd_to_xasset || xasset_to_xusd) && (!tx.amount_burnt || !tx.amount_minted)) {
-        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "Missing burnt/minted value." << std::endl;
-      }
-      */
-      /*
-      // Only run these checks for conversions
-      if (source != dest) {
 
-        // Check PR record is not too old
-        if (h > (tx.pricing_record_height + 10)) {
-          std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "pricing record used by tx was too old" <<
-            delimiter << "tx.pricing_record_height = " << tx.pricing_record_height << std::endl;
-        }
-
-        // Get the PR used by the TX
-        cryptonote::blobdata bd_pr = db->get_block_blob_from_height(tx.pricing_record_height);
-        cryptonote::block blk_pr;
-        if (!cryptonote::parse_and_validate_block_from_blob(bd_pr, blk_pr)) {
-          LOG_PRINT_L0("Bad block from db");
-          return 1;
-        }
-
-        // Get a more convenient handle on the conversion PR
-        pr = blk_pr.pricing_record;
-        
-        // Verify the fees in 128-bit space
-        boost::multiprecision::uint128_t burnt_128 = tx.amount_burnt;
-        boost::multiprecision::uint128_t minted_128 = tx.amount_minted;
-
-        // calculate conversion fees
-        uint32_t fees_version = (h >= 831700) ? 2 : (h >= 653565) ? 2 : 1;
-        uint64_t blocks_to_unlock = tx.unlock_time - h + 1;
-
-        boost::multiprecision::uint128_t fee;
-        if (offshore) {
-          if (fees_version >= 3) {
-            std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter
-                      << "invalid fee version " << fees_version << "" << delimiter << "..." << std::endl;
-          } else if (fees_version == 2) {
-
-            fee = 
-              (blocks_to_unlock >= 5030) ? (tx.amount_burnt / 500) :
-              (blocks_to_unlock >= 1430) ? (tx.amount_burnt / 20) :
-              (blocks_to_unlock >= 710) ? (tx.amount_burnt / 10) :
-              tx.amount_burnt / 5;
-
+      if (opt_check_asset_types) {
+        if (tx.source_asset_type != "SAL") {
+          throw std::runtime_error("Aborting: invalid source asset type found in tx");
+        } else if (tx.destination_asset_type != "SAL") {
+          if (tx.destination_asset_type == "BURN") {
+            std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "BURN TX detected" << delimiter << "amount:" << tx.amount_burnt << std::endl;
           } else {
-
-            // Calculate the priority based on the unlock time
-            uint64_t priority =
-              (blocks_to_unlock >= 5030) ? 1 :
-              (blocks_to_unlock >= 1430) ? 2 :
-              (blocks_to_unlock >= 710) ? 3 :
-              4;
-            uint64_t unlock_time = 60 * pow(3, 4-priority);
-
-            // abs() implementation for uint64_t's
-            uint64_t delta = (pr.unused1 > pr.xUSD) ? pr.unused1 - pr.xUSD : pr.xUSD - pr.unused1;
-
-            // Estimate the fee
-            double scale = exp((M_PI / -1000.0) * (unlock_time - 60) * 1.2);
-            scale *= delta;
-            scale *= tx.amount_burnt;
-            scale /= 1000000000000;
-            fee = (boost::multiprecision::uint128_t)(scale);
-          }
-
-          if ((h >= 658500) && (fee != tx.rct_signatures.txnOffshoreFee)) {
-            std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter
-                      << "invalid fee " << tx.rct_signatures.txnOffshoreFee << "" << delimiter << "check:" << fee << std::endl;
-          }
-        
-        } else if (onshore) {
-          
-          if (fees_version >= 3) {
-            std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter
-                      << "invalid fee version " << fees_version << "" << delimiter << "..." << std::endl;
-          } else if (fees_version == 2) {
-
-            fee = 
-              (blocks_to_unlock >= 5030) ? (tx.amount_burnt / 500) :
-              (blocks_to_unlock >= 1430) ? (tx.amount_burnt / 20) :
-              (blocks_to_unlock >= 710) ? (tx.amount_burnt / 10) :
-              tx.amount_burnt / 5;
-            
-          } else {
-            
-            // Calculate the priority based on the unlock time
-            uint64_t priority =
-              (blocks_to_unlock >= 5030) ? 1 :
-              (blocks_to_unlock >= 1430) ? 2 :
-              (blocks_to_unlock >= 710) ? 3 :
-              4;
-            uint64_t unlock_time = 60 * pow(3, 4-priority);
-
-            // abs() implementation for uint64_t's
-            uint64_t delta = (pr.unused1 > pr.xUSD) ? pr.unused1 - pr.xUSD : pr.xUSD - pr.unused1;
-
-            // Estimate the fee
-            double scale = exp((M_PI / -1000.0) * (unlock_time - 60) * 1.2);
-            scale *= delta;
-            scale *= tx.amount_burnt;
-            scale /= 1000000000000;
-            fee = (boost::multiprecision::uint128_t)(scale);
-          }
-
-          if ((h >= 658500) && (fee != tx.rct_signatures.txnOffshoreFee_usd)) {
-            std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter
-                      << "invalid offshore fee " << tx.rct_signatures.txnOffshoreFee_usd << "" << delimiter << "check:" << fee << std::endl;
-          }
-
-        } else if (xusd_to_xasset) {
-
-          fee = tx.amount_burnt;
-          fee *= 3;
-          fee /= 1000;
-          
-          if (fee != tx.rct_signatures.txnOffshoreFee_usd) {
-            std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter
-                      << "invalid xusd_to_xasset fee " << tx.rct_signatures.txnOffshoreFee_usd << "" << delimiter << "check:" << fee << std::endl;
-          }
-
-        } else if (xasset_to_xusd) {
-
-          fee = tx.amount_burnt;
-          fee *= 3;
-          fee /= 1000;
-          
-          if (fee != tx.rct_signatures.txnOffshoreFee_xasset) {
-            std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter
-                      << "invalid xasset_to_xusd fee " << tx.rct_signatures.txnOffshoreFee_xasset << "" << delimiter << "check:" << fee << std::endl;
-          }
-
-        }
-        
-        // Check for 0 price in the source or destination currency
-        if (offshore|| xusd_to_xasset) {
-          if (!pr[dest]) {
-            std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "0 exchange rate used for dest " << dest << "" << delimiter << "..." << std::endl;
-          } else if (pr[dest] == 1000000000000) {
-            std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "1.0000 exchange rate used for dest " << dest << "" << delimiter << "..." << std::endl;
-          }
-        } else if (onshore || xasset_to_xusd) {
-          if (!pr[source]) {
-            std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "0 exchange rate used for source " << source << "" << delimiter << "..." << std::endl;
-          } else if (pr[source] == 1000000000000) {
-            std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "1.0000 exchange rate used for source " << source << "" << delimiter << "..." << std::endl;
+            throw std::runtime_error("Aborting: invalid destination asset type found in tx");
           }
         }
+
+        for (const auto& tx_vout : tx.vout) {
+          std::string asset_type;
+          if (!cryptonote::get_output_asset_type(tx_vout, asset_type)) {
+            throw std::runtime_error("Aborting: failed to get output asset type from tx");
+          } else if (asset_type != "SAL") {
+            throw std::runtime_error("Aborting: invalid output asset type from tx");
+          }
+        }
+            
+        // Add the source currency to the list of expected ones
+        used_assets.insert(tx.source_asset_type);
       }
-      */
     }
-
-    /*
-    // compare the asset sets
-    if (used_assets == miner_tx_assets) {
-    } else if (used_assets.empty() && (miner_tx_assets.size() == 1) && (miner_tx_assets.count("XHV") == 1)) {
-    } else {
-      std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.miner_tx.hash << "" << delimiter << "Mismatch in miner reward assets detected" << delimiter << "Used assets = { ";
-      for (auto const &i: used_assets)
-        std::cout << i << " ";
-      std::cout << "}, miner_tx claimed { ";
-      for (auto const &i: miner_tx_assets)
-        std::cout << i << " ";
-      std::cout << "}" << std::endl;
-    }
-    */
     
     currblks++;
 

@@ -1093,6 +1093,77 @@ namespace tools
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
+  bool wallet_rpc_server::on_audit(const wallet_rpc::COMMAND_RPC_AUDIT::request& req, wallet_rpc::COMMAND_RPC_AUDIT::response& res, epee::json_rpc::error& er, const connection_context *ctx)
+  {
+    std::vector<cryptonote::tx_destination_entry> dsts;
+    std::vector<uint8_t> extra;
+
+    if (!m_wallet) return not_open(er);
+    if (m_restricted)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Command unavailable in restricted mode.";
+      return false;
+    }
+
+    CHECK_MULTISIG_ENABLED();
+
+    std::string asset_type = req.asset_type.empty() ? "SAL" : req.asset_type;
+    
+    // validate the transfer requested and populate dsts & extra
+    std::list<wallet_rpc::transfer_destination> destinations;
+    destinations.push_back(wallet_rpc::transfer_destination());
+    destinations.back().amount = 0;
+    destinations.back().address = req.address;
+    destinations.back().asset_type = asset_type;
+
+    // validate the transfer requested and populate dsts & extra
+    if (!validate_transfer(destinations, asset_type, asset_type, cryptonote::transaction_type::AUDIT, req.payment_id, dsts, extra, true, er))
+    {
+      return false;
+    }
+
+    std::set<uint32_t> subaddr_indices;
+    if (req.subaddr_indices_all)
+    {
+      for (uint32_t i = 0; i < m_wallet->get_num_subaddresses(req.account_index); ++i)
+        subaddr_indices.insert(i);
+    }
+    else
+    {
+      subaddr_indices= req.subaddr_indices;
+    }
+
+    try
+    {
+      std::vector<wallet2::pending_tx> ptx_vector_all;
+      // Get the subaddress unlocked balances
+      std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddr = m_wallet->unlocked_balance_per_subaddress(req.account_index, asset_type, true);
+      for (const auto subaddr_index : subaddr_indices) {
+
+        // Skip this wallet if there is no balance unlocked to audit
+        if (unlocked_balance_per_subaddr.count(subaddr_index) == 0) continue;
+        
+        std::set<uint32_t> subaddr_indices_single;
+        subaddr_indices_single.insert(subaddr_index);
+        uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
+        uint32_t priority = m_wallet->adjust_priority(0);
+        uint64_t unlock_block = get_config(m_wallet->nettype()).AUDIT_LOCK_PERIOD;
+        std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_all(0, cryptonote::transaction_type::AUDIT, asset_type, m_wallet->get_subaddress({req.account_index, subaddr_index}), (subaddr_index > 0), 1, mixin, unlock_block, priority, extra, req.account_index, subaddr_indices_single);
+        ptx_vector_all.insert(ptx_vector_all.end(), ptx_vector.begin(), ptx_vector.end());
+      }
+      
+      return fill_response(ptx_vector_all, req.get_tx_keys, res.tx_key_list, res.amount_list, res.amounts_by_dest_list, res.fee_list, res.weight_list, res.multisig_txset, res.unsigned_txset, req.do_not_relay,
+                           res.tx_hash_list, req.get_tx_hex, res.tx_blob_list, req.get_tx_metadata, res.tx_metadata_list, res.spent_key_images_list, er);
+    }
+    catch (const std::exception& e)
+    {
+      handle_rpc_exception(std::current_exception(), er, WALLET_RPC_ERROR_CODE_GENERIC_TRANSFER_ERROR);
+      return false;
+    }
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::on_transfer(const wallet_rpc::COMMAND_RPC_TRANSFER::request& req, wallet_rpc::COMMAND_RPC_TRANSFER::response& res, epee::json_rpc::error& er, const connection_context *ctx)
   {
 

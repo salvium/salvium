@@ -351,7 +351,8 @@ TEST(ringct, range_proofs)
           destination_asset_types.push_back("SAL");
 
         //compute rct data with mixin 3
-        rctSig s = genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, amounts, amount_keys, 0, 3, rct_config, hw::get_device("default"));
+        rct::salvium_data_t salvium_data;
+        rctSig s = genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, amounts, amount_keys, 0, 3, rct_config, hw::get_device("default"), salvium_data);
 
         //verify rct data
         ASSERT_TRUE(verRctSimple(s));
@@ -368,7 +369,7 @@ TEST(ringct, range_proofs)
 
 
         //compute rct data with mixin 3
-        s = genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, amounts, amount_keys, 0, 3, rct_config, hw::get_device("default"));
+        s = genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, amounts, amount_keys, 0, 3, rct_config, hw::get_device("default"), salvium_data);
 
         //verify rct data
         ASSERT_FALSE(verRctSimple(s));
@@ -422,7 +423,8 @@ TEST(ringct, range_proofs_with_fee)
           destination_asset_types.push_back("SAL");
 
         //compute rct data with mixin 3
-        rctSig s = genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, amounts, amount_keys, 1, 3, rct_config, hw::get_device("default"));
+        rct::salvium_data_t salvium_data;
+        rctSig s = genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, amounts, amount_keys, 1, 3, rct_config, hw::get_device("default"), salvium_data);
 
         //verify rct data
         ASSERT_TRUE(verRctSimple(s));
@@ -439,7 +441,7 @@ TEST(ringct, range_proofs_with_fee)
 
 
         //compute rct data with mixin 3
-        s = genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, amounts, amount_keys, 500, 3, rct_config, hw::get_device("default"));
+        s = genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, amounts, amount_keys, 500, 3, rct_config, hw::get_device("default"), salvium_data);
 
         //verify rct data
         ASSERT_FALSE(verRctSimple(s));
@@ -504,7 +506,8 @@ TEST(ringct, simple)
         for (size_t i = 0; i < destinations.size(); ++i)
           destination_asset_types.push_back("SAL");
 
-        rctSig s = genRctSimple(message, sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, amount_keys, txnfee, 2, rct_config, hw::get_device("default"));
+        rct::salvium_data_t salvium_data;
+        rctSig s = genRctSimple(message, sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, amount_keys, txnfee, 2, rct_config, hw::get_device("default"), salvium_data);
 
         //verify ring ct signature
         ASSERT_TRUE(verRctSimple(s));
@@ -572,7 +575,8 @@ static rct::rctSig make_sample_simple_rct_sig(int n_inputs, const uint64_t input
     for (size_t i = 0; i < destinations.size(); ++i)
       destination_asset_types.push_back("SAL");
 
-    return genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, amount_keys, fee, 3, rct_config, hw::get_device("default"));
+    rct::salvium_data_t salvium_data;
+    return genRctSimple(rct::zero(), sc, pc, destinations, tx_type, in_asset_type, destination_asset_types, inamounts, outamounts, amount_keys, fee, 3, rct_config, hw::get_device("default"), salvium_data);
 }
 
 static bool range_proof_test(bool expected_valid,

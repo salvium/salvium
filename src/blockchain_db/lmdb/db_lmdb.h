@@ -78,6 +78,8 @@ typedef struct mdb_txn_cursors
   MDB_cursor *m_txc_circ_supply_tally;
   MDB_cursor *m_txc_yield_txs;
   MDB_cursor *m_txc_yield_blocks;
+  MDB_cursor *m_txc_audit_txs;
+  MDB_cursor *m_txc_audit_blocks;
 
 } mdb_txn_cursors;
 
@@ -104,6 +106,8 @@ typedef struct mdb_txn_cursors
 #define m_cur_circ_supply_tally m_cursors->m_txc_circ_supply_tally
 #define m_cur_yield_txs		m_cursors->m_txc_yield_txs
 #define m_cur_yield_blocks	m_cursors->m_txc_yield_blocks
+#define m_cur_audit_txs		m_cursors->m_txc_audit_txs
+#define m_cur_audit_blocks	m_cursors->m_txc_audit_blocks
 
 typedef struct mdb_rflags
 {
@@ -131,6 +135,8 @@ typedef struct mdb_rflags
   bool m_rf_circ_supply_tally;
   bool m_rf_yield_txs;
   bool m_rf_yield_blocks;
+  bool m_rf_audit_txs;
+  bool m_rf_audit_blocks;
 } mdb_rflags;
 
 typedef struct mdb_threadinfo
@@ -343,6 +349,7 @@ public:
                             , const std::vector<std::pair<transaction, blobdata>>& txs
                             , const cryptonote::network_type nettype
                             , cryptonote::yield_block_info& ybi
+                            , cryptonote::audit_block_info& abi
                             );
 
   virtual void set_batch_transactions(bool batch_transactions);
@@ -400,8 +407,10 @@ private:
                           const crypto::hash& blk_hash,
                           uint64_t slippage_total,
                           uint64_t yield_total,
+                          uint64_t audit_total,
                           const cryptonote::network_type nettype,
-                          cryptonote::yield_block_info& ybi
+                          cryptonote::yield_block_info& ybi,
+                          cryptonote::audit_block_info& abi
                           );
 
   virtual void remove_block();
@@ -455,9 +464,13 @@ private:
   // migrate from older DB version to current
   void migrate(const uint32_t oldversion);
 
-  // migrate from DB version 0 to 1
-  //void migrate_0_1();
+  // migrate from DB version 2 to 3
+  void migrate_2_3();
+  
   void cleanup_batch();
+
+  virtual int get_audit_block_info(const uint64_t height, audit_block_info& abi) const;
+  virtual int get_audit_tx_info(const uint64_t height, std::vector<yield_tx_info>& ati_container) const;
 
   virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi) const;
   virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) const;
@@ -498,6 +511,9 @@ private:
 
   MDB_dbi m_yield_txs;
   MDB_dbi m_yield_blocks;
+
+  MDB_dbi m_audit_txs;
+  MDB_dbi m_audit_blocks;
 
   mutable uint64_t m_cum_size;	// used in batch size estimation
   mutable unsigned int m_cum_count;

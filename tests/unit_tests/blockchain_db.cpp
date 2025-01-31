@@ -274,9 +274,10 @@ TYPED_TEST(BlockchainDBTest, AddBlock)
   // no blocks have been added yet (because genesis has no parent).
   //ASSERT_THROW(this->m_db->add_block(this->m_blocks[1], t_sizes[1], t_sizes[1], t_diffs[1], t_coins[1], this->m_txs[1]), BLOCK_PARENT_DNE);
 
+  cryptonote::audit_block_info abi;
   cryptonote::yield_block_info ybi;
-  ASSERT_NO_THROW(this->m_db->add_block(this->m_blocks[0], t_sizes[0], t_sizes[0], t_diffs[0], t_coins[0], this->m_txs[0], cryptonote::FAKECHAIN, ybi));
-  ASSERT_NO_THROW(this->m_db->add_block(this->m_blocks[1], t_sizes[1], t_sizes[1], t_diffs[1], t_coins[1], this->m_txs[1], cryptonote::FAKECHAIN, ybi));
+  ASSERT_NO_THROW(this->m_db->add_block(this->m_blocks[0], t_sizes[0], t_sizes[0], t_diffs[0], t_coins[0], this->m_txs[0], cryptonote::FAKECHAIN, ybi, abi));
+  ASSERT_NO_THROW(this->m_db->add_block(this->m_blocks[1], t_sizes[1], t_sizes[1], t_diffs[1], t_coins[1], this->m_txs[1], cryptonote::FAKECHAIN, ybi, abi));
 
   block b;
   ASSERT_TRUE(this->m_db->block_exists(get_block_hash(this->m_blocks[0].first)));
@@ -289,7 +290,7 @@ TYPED_TEST(BlockchainDBTest, AddBlock)
   ASSERT_TRUE(compare_blocks(this->m_blocks[0].first, b));
 
   // assert that we can't add the same block twice
-  ASSERT_THROW(this->m_db->add_block(this->m_blocks[0], t_sizes[0], t_sizes[0], t_diffs[0], t_coins[0], this->m_txs[0], cryptonote::FAKECHAIN, ybi), TX_EXISTS);
+  ASSERT_THROW(this->m_db->add_block(this->m_blocks[0], t_sizes[0], t_sizes[0], t_diffs[0], t_coins[0], this->m_txs[0], cryptonote::FAKECHAIN, ybi, abi), TX_EXISTS);
 
   for (auto& h : this->m_blocks[0].first.tx_hashes)
   {
@@ -315,15 +316,16 @@ TYPED_TEST(BlockchainDBTest, RetrieveBlockData)
 
   db_wtxn_guard guard(this->m_db);
 
+  cryptonote::audit_block_info abi;
   cryptonote::yield_block_info ybi;
-  ASSERT_NO_THROW(this->m_db->add_block(this->m_blocks[0], t_sizes[0], t_sizes[0],  t_diffs[0], t_coins[0], this->m_txs[0], cryptonote::FAKECHAIN, ybi));
+  ASSERT_NO_THROW(this->m_db->add_block(this->m_blocks[0], t_sizes[0], t_sizes[0],  t_diffs[0], t_coins[0], this->m_txs[0], cryptonote::FAKECHAIN, ybi, abi));
 
   ASSERT_EQ(t_sizes[0], this->m_db->get_block_weight(0));
   ASSERT_EQ(t_diffs[0], this->m_db->get_block_cumulative_difficulty(0));
   ASSERT_EQ(t_diffs[0], this->m_db->get_block_difficulty(0));
   ASSERT_EQ(t_coins[0], this->m_db->get_block_already_generated_coins(0));
 
-  ASSERT_NO_THROW(this->m_db->add_block(this->m_blocks[1], t_sizes[1], t_sizes[1], t_diffs[1], t_coins[1], this->m_txs[1], cryptonote::FAKECHAIN, ybi));
+  ASSERT_NO_THROW(this->m_db->add_block(this->m_blocks[1], t_sizes[1], t_sizes[1], t_diffs[1], t_coins[1], this->m_txs[1], cryptonote::FAKECHAIN, ybi, abi));
   ASSERT_EQ(t_diffs[1] - t_diffs[0], this->m_db->get_block_difficulty(1));
 
   ASSERT_HASH_EQ(get_block_hash(this->m_blocks[0].first), this->m_db->get_block_hash_from_height(0));

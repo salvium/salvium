@@ -149,6 +149,7 @@ namespace rct {
         unsigned int mixin,
         const RCTConfig &rct_config,
         hw::device &hwdev,
+        const rct::salvium_data_t &salvium_data,
         const key &x_change = rct::zero(),
         const size_t change_index = 0,
         const key &key_yF = rct::zero()
@@ -169,6 +170,7 @@ namespace rct {
         ctkeyV &outSk,
         const RCTConfig &rct_config,
         hw::device &hwdev,
+        const rct::salvium_data_t &salvium_data,
         const key &x_change = rct::zero(),
         const size_t change_index = 0,
         const key &key_yF = rct::zero()

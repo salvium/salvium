@@ -246,6 +246,7 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
   std::vector<rct::multisig_kLRki> kLRkis;
   std::unordered_set<crypto::public_key> used_L;
   const cryptonote::origin_data origin_tx_data{3,crypto::null_pkey, 0};
+  rct::salvium_input_data_t sid;
   for (size_t tdidx = 0; tdidx < inputs; ++tdidx)
   {
     kLRkis.push_back(rct::multisig_kLRki());
@@ -254,13 +255,13 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
     for (size_t msidx = 0; msidx < total; ++msidx)
       for (size_t n = 0; n < account_ki[msidx][tdidx].size(); ++n)
         pkis.push_back(account_ki[msidx][tdidx][n]);
-    r = multisig::generate_multisig_composite_key_image(miner_account[0].get_keys(), subaddresses, output_pub_key[tdidx], tx_pub_key[tdidx], additional_tx_keys, 0, pkis, (crypto::key_image&)kLRki.ki, false, origin_tx_data);
+    r = multisig::generate_multisig_composite_key_image(miner_account[0].get_keys(), subaddresses, output_pub_key[tdidx], tx_pub_key[tdidx], additional_tx_keys, 0, pkis, (crypto::key_image&)kLRki.ki, false, origin_tx_data, sid);
     CHECK_AND_ASSERT_MES(r, false, "Failed to generate composite key image");
     MDEBUG("composite ki: " << kLRki.ki);
     for (size_t n = 1; n < total; ++n)
     {
       rct::key ki;
-      r = multisig::generate_multisig_composite_key_image(miner_account[n].get_keys(), subaddresses, output_pub_key[tdidx], tx_pub_key[tdidx], additional_tx_keys, 0, pkis, (crypto::key_image&)ki, false, origin_tx_data);
+      r = multisig::generate_multisig_composite_key_image(miner_account[n].get_keys(), subaddresses, output_pub_key[tdidx], tx_pub_key[tdidx], additional_tx_keys, 0, pkis, (crypto::key_image&)ki, false, origin_tx_data, sid);
       CHECK_AND_ASSERT_MES(r, false, "Failed to generate composite key image");
       CHECK_AND_ASSERT_MES(kLRki.ki == ki, false, "Composite key images do not match");
     }

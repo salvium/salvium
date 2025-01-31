@@ -486,11 +486,13 @@ private:
     {
       uint32_t m_index_major;
       uint64_t m_amount;
+      std::string m_asset_type;
 
       BEGIN_SERIALIZE_OBJECT()
         VERSION_FIELD(0)
         VARINT_FIELD(m_index_major)
         VARINT_FIELD(m_amount)
+        FIELD(m_asset_type)
       END_SERIALIZE()
     };
     
@@ -1755,7 +1757,7 @@ private:
                                 uint64_t &total_yield,
                                 uint64_t &yield_per_stake,
                                 uint64_t &ybi_data_size,
-                                std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> &payouts
+                                std::vector<std::tuple<size_t, std::string, std::string, uint64_t, uint64_t>> &payouts
                                 );
     
   private:
@@ -2365,6 +2367,7 @@ namespace boost
     {
       a & x.m_index_major;
       a & x.m_amount;
+      a & x.m_asset_type;
     }
 
     template <class Archive>

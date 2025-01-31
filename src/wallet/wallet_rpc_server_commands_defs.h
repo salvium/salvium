@@ -864,6 +864,42 @@ namespace wallet_rpc
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
+  struct COMMAND_RPC_AUDIT
+  {
+    struct request_t
+    {
+      std::string address;
+      uint32_t account_index;
+      std::set<uint32_t> subaddr_indices;
+      bool subaddr_indices_all;
+      uint64_t ring_size;
+      std::string payment_id;
+      bool get_tx_keys;
+      bool do_not_relay;
+      bool get_tx_hex;
+      bool get_tx_metadata;
+      std::string asset_type;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(address)
+        KV_SERIALIZE(account_index)
+        KV_SERIALIZE(subaddr_indices)
+        KV_SERIALIZE_OPT(subaddr_indices_all, false)
+        KV_SERIALIZE_OPT(ring_size, (uint64_t)0)
+        KV_SERIALIZE(payment_id)
+        KV_SERIALIZE(get_tx_keys)
+        KV_SERIALIZE_OPT(do_not_relay, false)
+        KV_SERIALIZE_OPT(get_tx_hex, false)
+        KV_SERIALIZE_OPT(get_tx_metadata, false)
+        KV_SERIALIZE(asset_type)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    typedef split_transfer_response response_t;
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
   struct COMMAND_RPC_SWEEP_ALL
   {
     struct request_t

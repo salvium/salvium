@@ -30,6 +30,9 @@ contrib/gitian/builder/
 contrib/gitian/docker/
 contrib/gitian/sigs/
 
+# Audit tool
+src/blockchain_utilities/blockchain_audit.cpp
+
 # Created by https://www.gitignore.io
 
 ### C++ ###

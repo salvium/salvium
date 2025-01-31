@@ -142,6 +142,18 @@ set(blockchain_scanner_private_headers)
 monero_private_headers(blockchain_scanner
 	  ${blockchain_scanner_private_headers})
 
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp" AND NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp")
+  set(blockchain_audit_sources
+    blockchain_audit.cpp
+    )
+
+  set(blockchain_audit_private_headers)
+
+  monero_private_headers(blockchain_audit
+  	  ${blockchain_audit_private_headers})
+else()
+    message(FATAL_ERROR "blockchain_audit.cpp not found - not building the audit tool")
+endif()
 
 monero_add_executable(blockchain_import
   ${blockchain_import_sources}
@@ -311,6 +323,32 @@ set_property(TARGET blockchain_scanner
 	PROPERTY
 	OUTPUT_NAME "salvium-blockchain-scanner")
 install(TARGETS blockchain_scanner DESTINATION bin)
+
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp" AND NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp")
+  monero_add_executable(blockchain_audit
+    ${blockchain_audit_sources}
+    ${blockchain_audit_private_headers})
+
+  target_link_libraries(blockchain_audit
+    PRIVATE
+      wallet
+      crypto
+      cncrypto
+      cryptonote_core
+      blockchain_db
+      version
+      epee
+      ${Boost_FILESYSTEM_LIBRARY}
+      ${Boost_SYSTEM_LIBRARY}
+      ${Boost_THREAD_LIBRARY}
+      ${CMAKE_THREAD_LIBS_INIT}
+      ${EXTRA_LIBRARIES})
+
+  set_property(TARGET blockchain_audit
+	PROPERTY
+	OUTPUT_NAME "salvium-blockchain-audit")
+  install(TARGETS blockchain_audit DESTINATION bin)
+endif()
 
 monero_add_executable(blockchain_stats
   ${blockchain_stats_sources}
