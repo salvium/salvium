@@ -152,7 +152,7 @@ if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp" AND NOT IS_DIRECTO
   monero_private_headers(blockchain_audit
   	  ${blockchain_audit_private_headers})
 else()
-    message(FATAL_ERROR "blockchain_audit.cpp not found - not building the audit tool")
+    message(STATUS "blockchain_audit.cpp not found - not building the audit tool")
 endif()
 
 monero_add_executable(blockchain_import
