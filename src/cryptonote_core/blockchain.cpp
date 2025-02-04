@@ -3951,6 +3951,20 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     }
   }
 
+  if (tx.type == cryptonote::transaction_type::AUDIT) {
+    // Make sure we are supposed to accept AUDIT txs at this point
+    const std::map<uint8_t, std::pair<std::string, std::string>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
+    CHECK_AND_ASSERT_MES(audit_hard_forks.find(hf_version) != audit_hard_forks.end(), false, "trying to audit outside an audit fork");
+    std::string expected_asset_type = audit_hard_forks.at(hf_version).first;
+    CHECK_AND_ASSERT_MES(tx.source_asset_type == expected_asset_type, false, "trying to spend " << tx.source_asset_type << " coins in an AUDIT TX");
+  } else {
+    if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL1", false, "trying to spend " << tx.source_asset_type << " coins in a non-AUDIT TX");
+    } else {
+      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL", false, "trying to spend " << tx.source_asset_type << " coins in a non-AUDIT TX");
+    }
+  }
+  
   std::vector<std::vector<rct::ctkey>> pubkeys(tx.vin.size());
   std::vector < uint64_t > results;
   results.resize(tx.vin.size(), 0);

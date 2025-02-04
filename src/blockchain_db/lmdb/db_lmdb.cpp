@@ -215,7 +215,7 @@ namespace
  * yield_block_data block height {slippage_coins, locked_coins, lc_total, network_health}
  * yield_tx_data    block height {txn hash, locked_coins, return_address}
  *
- * audit_data block height {locked_coins, lc_total}
+ * audit_block_data block height {locked_coins, lc_total}
  * audit_tx_data    block height {txn hash, locked_coins, return_address}
  *
  * Note: where the data items are of uniform size, DUPFIXED tables have
