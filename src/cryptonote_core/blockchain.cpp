@@ -1550,12 +1550,9 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   }
   
   // if nothing is created by this TX - check no money is included
-  CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 1, false, "coinbase protocol transaction in the block has no inputs");
   size_t vout_size = b.protocol_tx.vout.size();
-  if (vout_size == 0) {
-    LOG_PRINT_L2("coinbase protocol transaction in the block has no outputs");
-    return true;
-  }
+  CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 1, false, "coinbase protocol transaction in the block has no inputs");
+  CHECK_AND_ASSERT_MES(vout_size != 0, true, "coinbase protocol transaction in the block has no outputs");
 
   // Can we have matured STAKE transactions yet?
   uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
