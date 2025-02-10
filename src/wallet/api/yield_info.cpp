@@ -123,7 +123,7 @@ namespace Monero {
     return m_yield_per_stake;
   }
 
-  std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> YieldInfoImpl::payouts() const
+  std::vector<std::tuple<size_t, std::string, std::string, uint64_t, uint64_t>> YieldInfoImpl::payouts() const
   {
     return m_payouts;
   }

@@ -158,6 +158,10 @@ public:
                                                 PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
                                                 uint32_t subaddr_account = 0,
                                                 std::set<uint32_t> subaddr_indices = {}) override;
+    PendingTransaction * createAuditTransaction(uint32_t mixin_count,
+                                                PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
+                                                uint32_t subaddr_account = 0,
+                                                std::set<uint32_t> subaddr_indices = {}) override;
     PendingTransaction * createTransactionMultDest(const transaction_type &tx_type,
                                                    const std::vector<std::string> &dst_addr, const std::string &payment_id,
                                                    optional<std::vector<uint64_t>> amount, uint32_t mixin_count,
