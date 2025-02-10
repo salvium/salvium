@@ -145,9 +145,12 @@ monero_private_headers(blockchain_scanner
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp" AND NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp")
   set(blockchain_audit_sources
     blockchain_audit.cpp
+    threadpool_boost.cpp
     )
 
-  set(blockchain_audit_private_headers)
+  set(blockchain_audit_private_headers
+    threadpool_boost.h
+    )
 
   monero_private_headers(blockchain_audit
   	  ${blockchain_audit_private_headers})
@@ -329,6 +332,8 @@ if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp" AND NOT IS_DIRECTO
     ${blockchain_audit_sources}
     ${blockchain_audit_private_headers})
 
+  target_include_directories(blockchain_audit PRIVATE /usr/include/mysql-cppconn/jdbc)
+    
   target_link_libraries(blockchain_audit
     PRIVATE
       wallet
@@ -338,6 +343,7 @@ if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp" AND NOT IS_DIRECTO
       blockchain_db
       version
       epee
+      mysqlcppconn
       ${Boost_FILESYSTEM_LIBRARY}
       ${Boost_SYSTEM_LIBRARY}
       ${Boost_THREAD_LIBRARY}
