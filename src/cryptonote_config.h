@@ -231,6 +231,8 @@
 #define HF_VERSION_AUDIT1                       6
 #define HF_VERSION_SALVIUM_ONE_PROOFS           6
 
+#define HF_VERSION_AUDIT1_PAUSE                 7
+
 #define HF_VERSION_REQUIRE_VIEW_TAGS            255
 #define HF_VERSION_ENABLE_CONVERT               255
 #define HF_VERSION_ENABLE_ORACLE                255

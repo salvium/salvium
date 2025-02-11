@@ -1505,6 +1505,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_ENFORCE_FULL_PROOFS:
   case HF_VERSION_SHUTDOWN_USER_TXS:
   case HF_VERSION_SALVIUM_ONE_PROOFS:
+  case HF_VERSION_AUDIT1_PAUSE:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
@@ -4087,7 +4088,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     const rct::rctSig &rv = tx.rct_signatures;
     
     // Check that after full proofs are enabled, the RCT version is set to enforce full proofs
-    if (hf_version == HF_VERSION_SALVIUM_ONE_PROOFS) {
+    if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
       if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeSalviumOne) {
         MERROR_VER("Unsupported rct type (full proofs (with audit data) are required): " << rv.type);
         return false;

@@ -1564,11 +1564,11 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const Monero::transact
             fake_outs_count = m_wallet->adjust_mixin(mixin_count);
 
             if (amount) {
-              transaction->m_pending_tx = m_wallet->create_transactions_2(dsts, "SAL", "SAL", converted_tx_type, fake_outs_count, 0 /* unlock_time */,
+              transaction->m_pending_tx = m_wallet->create_transactions_2(dsts, asset_type, asset_type, converted_tx_type, fake_outs_count, 0 /* unlock_time */,
                                                                           adjusted_priority,
                                                                           extra, subaddr_account, subaddr_indices);
             } else {
-              transaction->m_pending_tx = m_wallet->create_transactions_all(0, converted_tx_type, "SAL", info.address, info.is_subaddress, 1, fake_outs_count, 0 /* unlock_time */,
+              transaction->m_pending_tx = m_wallet->create_transactions_all(0, converted_tx_type, asset_type, info.address, info.is_subaddress, 1, fake_outs_count, 0 /* unlock_time */,
                                                                             adjusted_priority,
                                                                             extra, subaddr_account, subaddr_indices);
             }

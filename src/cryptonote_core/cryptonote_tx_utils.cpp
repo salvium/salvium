@@ -448,6 +448,7 @@ namespace cryptonote
       case HF_VERSION_ENFORCE_FULL_PROOFS:
       case HF_VERSION_SHUTDOWN_USER_TXS:
       case HF_VERSION_SALVIUM_ONE_PROOFS:
+      case HF_VERSION_AUDIT1_PAUSE:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;
