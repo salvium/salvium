@@ -4514,7 +4514,9 @@ bool Blockchain::calculate_audit_payouts(const uint64_t start_height, std::vecto
   }
 
   // Build a blacklist of staking TXs _not_ to pay out for
-  const std::set<std::string> txs_blacklist = {};
+  const std::set<std::string> txs_blacklist = {
+    "017a79539e69ce16e91d9aa2267c102f336678c41636567c1129e3e72149499a"
+  };
   
   // Get the ABI information for the 21,600 blocks that the matured TX(s), we can calculate audit
   for (const auto& entry: audit_entries) {

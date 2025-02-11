@@ -6981,12 +6981,22 @@ bool simple_wallet::transfer_main(
 
         // Skip this wallet if there is no balance unlocked to audit
         if (unlocked_balance_per_subaddr.count(subaddr_index) == 0) continue;
-        
-        std::set<uint32_t> subaddr_indices_single;
-        subaddr_indices_single.insert(subaddr_index);
-        uint64_t unlock_block = get_config(m_wallet->nettype()).AUDIT_LOCK_PERIOD;
-        std::vector<tools::wallet2::pending_tx> ptx_vector_audit = m_wallet->create_transactions_all(0, cryptonote::transaction_type::AUDIT, source_asset, m_wallet->get_subaddress({m_current_subaddress_account, subaddr_index}), (subaddr_index>0), 1, fake_outs_count, unlock_block, priority, extra, m_current_subaddress_account, subaddr_indices_single);
-        ptx_vector.insert(ptx_vector.end(), ptx_vector_audit.begin(), ptx_vector_audit.end());
+
+        try {
+          
+          std::set<uint32_t> subaddr_indices_single;
+          subaddr_indices_single.insert(subaddr_index);
+          uint64_t unlock_block = get_config(m_wallet->nettype()).AUDIT_LOCK_PERIOD;
+          std::vector<tools::wallet2::pending_tx> ptx_vector_audit = m_wallet->create_transactions_all(0, cryptonote::transaction_type::AUDIT, source_asset, m_wallet->get_subaddress({m_current_subaddress_account, subaddr_index}), (subaddr_index>0), 1, fake_outs_count, unlock_block, priority, extra, m_current_subaddress_account, subaddr_indices_single);
+          ptx_vector.insert(ptx_vector.end(), ptx_vector_audit.begin(), ptx_vector_audit.end());
+
+        } catch (const std::exception &e) {
+
+          // Let's skip this wallet - we have already reported the error
+          if (unlocked_balance_per_subaddr[subaddr_index].first < 250000000) {
+            fail_msg_writer() << boost::format(tr("Subaddress index %u has insufficient funds (%s) to pay for audit")) % subaddr_index % print_money(unlocked_balance_per_subaddr[subaddr_index].first);
+          }
+        }
       }
       
     } else {
