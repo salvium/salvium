@@ -3778,6 +3778,11 @@ std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
       //amount += m_coinbase;
     }
 
+    if (amount < 0) {
+      // Negative number can't be converted to a 64-bit UINT, so return 0, but retain -ve number privately
+      LOG_PRINT_L2("BlockchainLMDB::" << __func__ << " - supply of " << currency_label << " is negative (" << amount << ") but outputting zero");
+      amount = 0;
+    }
     circulating_supply[currency_label] = amount.convert_to<uint64_t>();
   }
 
