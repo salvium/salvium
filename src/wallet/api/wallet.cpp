@@ -1444,6 +1444,34 @@ PendingTransaction *WalletImpl::createStakeTransaction(uint64_t amount, uint32_t
   return createTransactionMultDest(Monero::transaction_type::STAKE, std::vector<string> {dst_addr}, payment_id, amount ? (std::vector<uint64_t> {amount}) : (optional<std::vector<uint64_t>>()), mixin_count, asset_type, is_return, priority, subaddr_account, subaddr_indices);
 }
 
+PendingTransaction *WalletImpl::createAuditTransaction(
+    uint32_t mixin_count,
+    PendingTransaction::Priority priority,
+    uint32_t subaddr_account,
+    std::set<uint32_t> subaddr_indices
+) {
+    // Need to populate {dst_entr, payment_id, asset_type, is_return}
+    const string dst_addr = m_wallet->get_subaddress_as_str({subaddr_account, 0});//MY LOCAL (SUB)ADDRESS
+    const string payment_id = "";
+    const string asset_type = "SAL";
+    const bool is_return = false;
+
+    LOG_ERROR("createAuditTransaction: called");
+  
+    return createTransactionMultDest(
+        Monero::transaction_type::AUDIT,
+        std::vector<string> {dst_addr},
+        payment_id,
+        (optional<std::vector<uint64_t>>()), 
+        mixin_count,
+        asset_type,
+        is_return,
+        priority,
+        subaddr_account,
+        subaddr_indices
+    );
+}
+
 // TODO:
 // 1 - properly handle payment id (add another menthod with explicit 'payment_id' param)
 // 2 - check / design how "Transaction" can be single interface
@@ -1536,11 +1564,11 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const Monero::transact
             fake_outs_count = m_wallet->adjust_mixin(mixin_count);
 
             if (amount) {
-              transaction->m_pending_tx = m_wallet->create_transactions_2(dsts, "SAL", "SAL", converted_tx_type, fake_outs_count, 0 /* unlock_time */,
+              transaction->m_pending_tx = m_wallet->create_transactions_2(dsts, asset_type, asset_type, converted_tx_type, fake_outs_count, 0 /* unlock_time */,
                                                                           adjusted_priority,
                                                                           extra, subaddr_account, subaddr_indices);
             } else {
-              transaction->m_pending_tx = m_wallet->create_transactions_all(0, converted_tx_type, "SAL", info.address, info.is_subaddress, 1, fake_outs_count, 0 /* unlock_time */,
+              transaction->m_pending_tx = m_wallet->create_transactions_all(0, converted_tx_type, asset_type, info.address, info.is_subaddress, 1, fake_outs_count, 0 /* unlock_time */,
                                                                             adjusted_priority,
                                                                             extra, subaddr_account, subaddr_indices);
             }

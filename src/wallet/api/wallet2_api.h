@@ -58,7 +58,8 @@ enum transaction_type : uint8_t {
     BURN = 5,
     STAKE = 6,
     RETURN = 7,
-    MAX = 7
+    AUDIT = 8,
+    MAX = 8
 };
   
     namespace Utils {
@@ -97,7 +98,7 @@ struct YieldInfo
   virtual uint64_t yield() const = 0;
   virtual uint64_t yield_per_stake() const = 0;
   virtual std::string period() const = 0;
-  virtual std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> payouts() const = 0;
+  virtual std::vector<std::tuple<size_t, std::string, std::string, uint64_t, uint64_t>> payouts() const = 0;
 };
 
   
@@ -874,6 +875,20 @@ struct Wallet
 
     virtual PendingTransaction * createStakeTransaction(uint64_t amount,
                                                         uint32_t mixin_count,
+                                                        PendingTransaction::Priority = PendingTransaction::Priority_Low,
+                                                        uint32_t subaddr_account = 0,
+                                                        std::set<uint32_t> subaddr_indices = {}) = 0;
+
+    /*!
+     * \brief createAuditTransaction  creates audit transaction.
+     * \param mixin_count             mixin count. if 0 passed, wallet will use default value
+     * \param subaddr_indices         set of subaddress indices to use for transfer or sweeping. if set empty, all are chosen when sweeping, and one or more are automatically chosen when transferring. after execution, returns the set of actually used indices
+     * \param priority
+     * \return                        PendingTransaction object. caller is responsible to check PendingTransaction::status()
+     *                                after object returned
+     */
+
+    virtual PendingTransaction * createAuditTransaction(uint32_t mixin_count,
                                                         PendingTransaction::Priority = PendingTransaction::Priority_Low,
                                                         uint32_t subaddr_account = 0,
                                                         std::set<uint32_t> subaddr_indices = {}) = 0;

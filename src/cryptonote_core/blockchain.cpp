@@ -1505,6 +1505,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_ENFORCE_FULL_PROOFS:
   case HF_VERSION_SHUTDOWN_USER_TXS:
   case HF_VERSION_SALVIUM_ONE_PROOFS:
+  case HF_VERSION_AUDIT1_PAUSE:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
@@ -1556,7 +1557,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
     LOG_PRINT_L2("coinbase protocol transaction in the block has no outputs");
     return true;
   }
-
+   
   // Can we have matured STAKE transactions yet?
   uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   if (height <= stake_lock_period) {
@@ -3951,6 +3952,20 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     }
   }
 
+  if (tx.type == cryptonote::transaction_type::AUDIT) {
+    // Make sure we are supposed to accept AUDIT txs at this point
+    const std::map<uint8_t, std::pair<std::string, std::string>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
+    CHECK_AND_ASSERT_MES(audit_hard_forks.find(hf_version) != audit_hard_forks.end(), false, "trying to audit outside an audit fork");
+    std::string expected_asset_type = audit_hard_forks.at(hf_version).first;
+    CHECK_AND_ASSERT_MES(tx.source_asset_type == expected_asset_type, false, "trying to spend " << tx.source_asset_type << " coins in an AUDIT TX");
+  } else {
+    if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL1", false, "trying to spend " << tx.source_asset_type << " coins in a non-AUDIT TX");
+    } else {
+      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL", false, "trying to spend " << tx.source_asset_type << " coins in a non-AUDIT TX");
+    }
+  }
+  
   std::vector<std::vector<rct::ctkey>> pubkeys(tx.vin.size());
   std::vector < uint64_t > results;
   results.resize(tx.vin.size(), 0);
@@ -4073,7 +4088,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     const rct::rctSig &rv = tx.rct_signatures;
     
     // Check that after full proofs are enabled, the RCT version is set to enforce full proofs
-    if (hf_version == HF_VERSION_SALVIUM_ONE_PROOFS) {
+    if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
       if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeSalviumOne) {
         MERROR_VER("Unsupported rct type (full proofs (with audit data) are required): " << rv.type);
         return false;
@@ -4500,7 +4515,9 @@ bool Blockchain::calculate_audit_payouts(const uint64_t start_height, std::vecto
   }
 
   // Build a blacklist of staking TXs _not_ to pay out for
-  const std::set<std::string> txs_blacklist = {};
+  const std::set<std::string> txs_blacklist = {
+    "017a79539e69ce16e91d9aa2267c102f336678c41636567c1129e3e72149499a"
+  };
   
   // Get the ABI information for the 21,600 blocks that the matured TX(s), we can calculate audit
   for (const auto& entry: audit_entries) {

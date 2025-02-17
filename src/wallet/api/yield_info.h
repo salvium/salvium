@@ -53,7 +53,7 @@ public:
   uint64_t yield() const override;
   uint64_t yield_per_stake() const override;
   std::string period() const override;
-  std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> payouts() const override;
+  std::vector<std::tuple<size_t, std::string, std::string, uint64_t, uint64_t>> payouts() const override;
 
 private:
   friend class WalletImpl;
@@ -68,7 +68,7 @@ private:
   uint64_t m_yield_per_stake;
   uint64_t m_num_entries;
   std::string m_period;
-  std::vector<std::tuple<size_t, std::string, uint64_t, uint64_t>> m_payouts;
+  std::vector<std::tuple<size_t, std::string, std::string, uint64_t, uint64_t>> m_payouts;
 };
 
 }
