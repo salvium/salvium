@@ -37,8 +37,8 @@ namespace Monero {
 
 TransactionInfo::~TransactionInfo() {}
 
-TransactionInfo::Transfer::Transfer(uint64_t _amount, const string &_address)
-    : amount(_amount), address(_address) {}
+TransactionInfo::Transfer::Transfer(uint64_t _amount, const string &_address, const string &_asset)
+    : amount(_amount), address(_address), asset(_asset) {}
 
 
 TransactionInfoImpl::TransactionInfoImpl()
@@ -152,6 +152,11 @@ uint64_t TransactionInfoImpl::unlockTime() const
 Monero::transaction_type TransactionInfoImpl::type() const
 {
   return m_type;
+}
+
+string TransactionInfoImpl::asset() const
+{
+  return m_asset;
 }
   
 } // namespace

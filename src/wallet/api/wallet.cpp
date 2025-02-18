@@ -946,14 +946,14 @@ void WalletImpl::setSubaddressLookahead(uint32_t major, uint32_t minor)
     m_wallet->set_subaddress_lookahead(major, minor);
 }
 
-uint64_t WalletImpl::balance(uint32_t accountIndex) const
+uint64_t WalletImpl::balance(const std::string& asset, uint32_t accountIndex) const
 {
-    return m_wallet->balance(accountIndex, "SAL", false);
+    return m_wallet->balance(accountIndex, asset, false);
 }
 
-uint64_t WalletImpl::unlockedBalance(uint32_t accountIndex) const
+uint64_t WalletImpl::unlockedBalance(const std::string& asset, uint32_t accountIndex) const
 {
-    return m_wallet->unlocked_balance(accountIndex, "SAL", false);
+    return m_wallet->unlocked_balance(accountIndex, asset, false);
 }
 
 uint64_t WalletImpl::blockChainHeight() const
@@ -1436,7 +1436,7 @@ PendingTransaction *WalletImpl::createStakeTransaction(uint64_t amount, uint32_t
   // Need to populate {dst_entr, payment_id, asset_type, is_return}
   const string dst_addr = m_wallet->get_subaddress_as_str({subaddr_account, 0});//MY LOCAL (SUB)ADDRESS
   const string payment_id = "";
-  const string asset_type = "SAL";
+  const string asset_type = "SAL1";
   const bool is_return = false;
 
   LOG_ERROR("createStakeTransaction: called");
@@ -1564,7 +1564,7 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const Monero::transact
             fake_outs_count = m_wallet->adjust_mixin(mixin_count);
 
             if (amount) {
-              transaction->m_pending_tx = m_wallet->create_transactions_2(dsts, "SAL", "SAL", converted_tx_type, fake_outs_count, 0 /* unlock_time */,
+              transaction->m_pending_tx = m_wallet->create_transactions_2(dsts, "SAL1", "SAL1", converted_tx_type, fake_outs_count, 0 /* unlock_time */,
                                                                           adjusted_priority,
                                                                           extra, subaddr_account, subaddr_indices);
             } else {

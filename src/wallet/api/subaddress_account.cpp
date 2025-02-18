@@ -65,7 +65,9 @@ void SubaddressAccountImpl::refresh()
       m_wallet->m_wallet->get_subaddress_as_str({i,0}),
       m_wallet->m_wallet->get_subaddress_label({i,0}),
       cryptonote::print_money(m_wallet->m_wallet->balance(i, "SAL", false)),
-      cryptonote::print_money(m_wallet->m_wallet->unlocked_balance(i, "SAL", false))
+      cryptonote::print_money(m_wallet->m_wallet->unlocked_balance(i, "SAL", false)),
+      cryptonote::print_money(m_wallet->m_wallet->balance(i, "SAL1", false)),
+      cryptonote::print_money(m_wallet->m_wallet->unlocked_balance(i, "SAL1", false))
     ));
   }
 }

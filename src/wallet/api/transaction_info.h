@@ -55,6 +55,7 @@ public:
     virtual std::set<uint32_t> subaddrIndex() const override;
     virtual uint32_t subaddrAccount() const override;
     virtual std::string label() const override;
+    virtual std::string asset() const override;
 
     virtual std::string hash() const override;
     virtual std::time_t timestamp() const override;
@@ -73,6 +74,7 @@ private:
     uint64_t    m_fee;
     uint64_t    m_blockheight;
     std::string m_description;
+    std::string m_asset;
     std::set<uint32_t> m_subaddrIndex;        // always unique index for incoming transfers; can be multiple indices for outgoing transfers
     uint32_t m_subaddrAccount;
     std::string m_label;
