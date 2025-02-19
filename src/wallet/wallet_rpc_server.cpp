@@ -1136,6 +1136,13 @@ namespace tools
 
     try
     {
+      // Get the audit information
+      const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_wallet->nettype()).AUDIT_HARD_FORKS;
+      const uint8_t hf_version = m_wallet->get_current_hard_fork();
+      if (audit_hard_forks.find(hf_version) == audit_hard_forks.end()) {
+        return false;
+      }
+      
       std::vector<wallet2::pending_tx> ptx_vector_all;
       // Get the subaddress unlocked balances
       std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddr = m_wallet->unlocked_balance_per_subaddress(req.account_index, asset_type, true);
@@ -1148,7 +1155,7 @@ namespace tools
         subaddr_indices_single.insert(subaddr_index);
         uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
         uint32_t priority = m_wallet->adjust_priority(0);
-        uint64_t unlock_block = get_config(m_wallet->nettype()).AUDIT_LOCK_PERIOD;
+        uint64_t unlock_block = audit_hard_forks.at(hf_version).first;
         std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_all(0, cryptonote::transaction_type::AUDIT, asset_type, m_wallet->get_subaddress({req.account_index, subaddr_index}), (subaddr_index > 0), 1, mixin, unlock_block, priority, extra, req.account_index, subaddr_indices_single);
         ptx_vector_all.insert(ptx_vector_all.end(), ptx_vector.begin(), ptx_vector.end());
       }

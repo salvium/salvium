@@ -220,8 +220,7 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
   uint32_t txhr[24] = {0};
   unsigned int i;
 
-  const std::map<uint8_t, std::pair<std::string, std::string>> audit_hard_forks = get_config(net_type).AUDIT_HARD_FORKS;
-  const uint64_t audit_lock_period = get_config(net_type).AUDIT_LOCK_PERIOD;
+  const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(net_type).AUDIT_HARD_FORKS;
   
   for (uint64_t h = block_start; h < block_stop; ++h)
   {
@@ -300,7 +299,7 @@ skip:
       }
       protocol_tx_assets.insert(asset_type);
       if (protocol_tx_vout.amount > 25000000000000) {
-        std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.protocol_tx.hash << "" << delimiter << "large protocol TX amount detected from height " << (h-audit_lock_period) << delimiter << "amount:" << protocol_tx_vout.amount << std::endl;
+        //std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << blk.protocol_tx.hash << "" << delimiter << "large protocol TX amount detected from height " << (h-audit_lock_period) << delimiter << "amount:" << protocol_tx_vout.amount << std::endl;
       }
       crypto::public_key key;
       cryptonote::get_output_public_key(protocol_tx_vout, key);

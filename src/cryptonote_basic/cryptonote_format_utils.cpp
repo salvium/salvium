@@ -1276,10 +1276,13 @@ namespace cryptonote
       if (hf_version < HF_VERSION_SALVIUM_ONE_PROOFS) {
         // Prior to the first audit, ONLY SAL was supported
         CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
-      } else if (hf_version == HF_VERSION_SALVIUM_ONE_PROOFS) {
+      } else {
         if (tx.type == cryptonote::transaction_type::AUDIT) {
+          // HERE BE DRAGONS!!!
+          // SRCG: This will NOT always be the case - when we add an audit for SALx it'll need to support that as well
           // The CHANGE for an AUDIT TX must be SAL (and 0 value, and unspendable, and to the origin wallet, and ...)
           CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+          // LAND AHOY!!!
         } else if (tx.type == cryptonote::transaction_type::PROTOCOL) {
           // PROTOCOL TXs are responsible for paying out SAL and SAL1 during the AUDIT
           CHECK_AND_ASSERT_MES(asset_type == "SAL1" || asset_type == "SAL", false, "wrong output asset type:" << asset_type);
@@ -1287,9 +1290,6 @@ namespace cryptonote
           // All other TX types must only spend + create SAL1 (MINER, TRANSFER)
           CHECK_AND_ASSERT_MES(asset_type == "SAL1", false, "wrong output asset type:" << asset_type);
         }
-      } else {
-        // After the first AUDIT, only SAL1 is supported
-        CHECK_AND_ASSERT_MES(asset_type == "SAL1", false, "wrong output asset type:" << asset_type);
       }
     }
     return true;

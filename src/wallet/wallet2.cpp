@@ -7076,6 +7076,8 @@ std::map<uint32_t, uint64_t> wallet2::balance_per_subaddress(uint32_t index_majo
   {
    for (const auto& utx: m_unconfirmed_txs)
    {
+     // Skip UTXs that have the wrong asset type
+     if (utx.second.m_tx.source_asset_type != asset_type) continue;
     if (utx.second.m_subaddr_account == index_major && utx.second.m_state != wallet2::unconfirmed_transfer_details::failed)
     {
       // all changes go to 0-th subaddress (in the current subaddress account)
