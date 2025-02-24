@@ -151,6 +151,7 @@ void TransactionHistoryImpl::refresh()
         ti->m_confirmations = (wallet_height > pd.m_block_height) ? wallet_height - pd.m_block_height : 0;
         ti->m_unlock_time = pd.m_unlock_time;
         ti->m_type = static_cast<Monero::transaction_type>(static_cast<uint8_t>(pd.m_tx_type));
+        ti->m_asset = pd.m_asset_type;
         m_history.push_back(ti);
 
     }
@@ -195,10 +196,11 @@ void TransactionHistoryImpl::refresh()
         ti->m_timestamp = pd.m_timestamp;
         ti->m_confirmations = (wallet_height > pd.m_block_height) ? wallet_height - pd.m_block_height : 0;
         ti->m_type = static_cast<Monero::transaction_type>(static_cast<uint8_t>(pd.m_tx.type));
+        ti->m_asset = pd.m_tx.source_asset_type;
 
         // single output transaction might contain multiple transfers
         for (const auto &d: pd.m_dests) {
-            ti->m_transfers.push_back({d.amount, d.address(m_wallet->m_wallet->nettype(), pd.m_payment_id)});
+            ti->m_transfers.push_back({d.amount, d.address(m_wallet->m_wallet->nettype(), pd.m_payment_id), d.asset_type});
         }
 
         m_history.push_back(ti);
@@ -232,9 +234,10 @@ void TransactionHistoryImpl::refresh()
         ti->m_timestamp = pd.m_timestamp;
         ti->m_confirmations = 0;
         ti->m_type = static_cast<Monero::transaction_type>(static_cast<uint8_t>(pd.m_tx.type));
+        ti->m_asset = pd.m_tx.source_asset_type;
         for (const auto &d : pd.m_dests)
         {
-            ti->m_transfers.push_back({d.amount, d.address(m_wallet->m_wallet->nettype(), pd.m_payment_id)});
+            ti->m_transfers.push_back({d.amount, d.address(m_wallet->m_wallet->nettype(), pd.m_payment_id), d.asset_type});
         }        
         m_history.push_back(ti);
     }
@@ -262,6 +265,7 @@ void TransactionHistoryImpl::refresh()
         ti->m_timestamp = pd.m_timestamp;
         ti->m_confirmations = 0;
         ti->m_type = static_cast<Monero::transaction_type>(static_cast<uint8_t>(pd.m_tx_type));
+        ti->m_asset = pd.m_asset_type;
         m_history.push_back(ti);
         
         LOG_PRINT_L1(__FUNCTION__ << ": Unconfirmed payment found " << pd.m_amount);

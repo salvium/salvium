@@ -946,14 +946,14 @@ void WalletImpl::setSubaddressLookahead(uint32_t major, uint32_t minor)
     m_wallet->set_subaddress_lookahead(major, minor);
 }
 
-uint64_t WalletImpl::balance(uint32_t accountIndex) const
+uint64_t WalletImpl::balance(const std::string& asset, uint32_t accountIndex) const
 {
-    return m_wallet->balance(accountIndex, "SAL", false);
+    return m_wallet->balance(accountIndex, asset, false);
 }
 
-uint64_t WalletImpl::unlockedBalance(uint32_t accountIndex) const
+uint64_t WalletImpl::unlockedBalance(const std::string& asset, uint32_t accountIndex) const
 {
-    return m_wallet->unlocked_balance(accountIndex, "SAL", false);
+    return m_wallet->unlocked_balance(accountIndex, asset, false);
 }
 
 uint64_t WalletImpl::blockChainHeight() const
@@ -1436,7 +1436,7 @@ PendingTransaction *WalletImpl::createStakeTransaction(uint64_t amount, uint32_t
   // Need to populate {dst_entr, payment_id, asset_type, is_return}
   const string dst_addr = m_wallet->get_subaddress_as_str({subaddr_account, 0});//MY LOCAL (SUB)ADDRESS
   const string payment_id = "";
-  const string asset_type = "SAL";
+  const string asset_type = "SAL1";
   const bool is_return = false;
 
   LOG_ERROR("createStakeTransaction: called");
@@ -1568,9 +1568,30 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const Monero::transact
                                                                           adjusted_priority,
                                                                           extra, subaddr_account, subaddr_indices);
             } else {
-              transaction->m_pending_tx = m_wallet->create_transactions_all(0, converted_tx_type, asset_type, info.address, info.is_subaddress, 1, fake_outs_count, 0 /* unlock_time */,
-                                                                            adjusted_priority,
-                                                                            extra, subaddr_account, subaddr_indices);
+              std::vector<tools::wallet2::pending_tx> m_pending_txs;
+              for (auto it = subaddr_indices.begin(); it != subaddr_indices.end(); ++it) {
+
+                // Skip this wallet if there is no balance unlocked to audit
+                const auto unlocked_balance_per_subaddr = m_wallet->unlocked_balance_per_subaddress(subaddr_account, "SAL", true);
+                if (unlocked_balance_per_subaddr.count(*it) == 0) continue;
+
+                const auto result = m_wallet->create_transactions_all(
+                    0,
+                    converted_tx_type,
+                    asset_type,
+                    m_wallet->get_subaddress({subaddr_account, *it}),
+                    ((*it) > 0),
+                    1,
+                    fake_outs_count,
+                    0 /* unlock_time */,
+                    adjusted_priority,
+                    extra,
+                    subaddr_account,
+                    std::set<uint32_t> {*it}
+                );
+                m_pending_txs.insert(m_pending_txs.end(), result.begin(), result.end());
+              }
+              transaction->m_pending_tx = m_pending_txs;
             }
             pendingTxPostProcess(transaction);
 

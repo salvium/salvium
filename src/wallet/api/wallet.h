@@ -111,8 +111,8 @@ public:
     void setTrustedDaemon(bool arg) override;
     bool trustedDaemon() const override;
     bool setProxy(const std::string &address) override;
-    uint64_t balance(uint32_t accountIndex = 0) const override;
-    uint64_t unlockedBalance(uint32_t accountIndex = 0) const override;
+    uint64_t balance(const std::string& asset, uint32_t accountIndex = 0) const override;
+    uint64_t unlockedBalance(const std::string& asset, uint32_t accountIndex = 0) const override;
     uint64_t blockChainHeight() const override;
     uint64_t approximateBlockChainHeight() const override;
     uint64_t estimateBlockChainHeight() const override;

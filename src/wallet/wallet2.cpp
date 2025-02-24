@@ -2573,10 +2573,16 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   if (!miner_tx && !pool)
     process_unconfirmed(txid, tx, height);
 
-  std::string source_asset =
-    (tx.type == cryptonote::transaction_type::MINER) ? "SAL" :
-    (tx.type == cryptonote::transaction_type::PROTOCOL) ? "SAL" :
-    tx.source_asset_type;
+  std::string source_asset;
+  if (use_fork_rules(get_salvium_one_proofs_fork(), 0)) {
+    if (tx.type == cryptonote::transaction_type::MINER && tx.type == cryptonote::transaction_type::PROTOCOL) {
+      source_asset = "SAL1";
+    }
+  } else if (tx.type == cryptonote::transaction_type::MINER && tx.type == cryptonote::transaction_type::PROTOCOL) {
+    source_asset = "SAL";
+  } else {
+    source_asset = tx.source_asset_type;
+  }
   
   // per receiving subaddress index
   std::unordered_map<cryptonote::subaddress_index, std::map<std::string, uint64_t>> tx_money_got_in_outs;
@@ -7060,18 +7066,21 @@ uint64_t wallet2::unlocked_balance(uint32_t index_major, const std::string& asse
 std::map<uint32_t, uint64_t> wallet2::balance_per_subaddress(uint32_t index_major, const std::string& asset_type, bool strict) const
 {
   std::map<uint32_t, uint64_t> amount_per_subaddr;
-  for (const auto& idx: m_transfers_indices.at(asset_type))
-  {
-    const transfer_details& td = m_transfers[idx];
-    if (td.m_subaddr_index.major == index_major && !is_spent(td, strict) && !td.m_frozen)
+  if (m_transfers_indices.count(asset_type) > 0) {
+    for (const auto& idx: m_transfers_indices.at(asset_type))
     {
-      auto found = amount_per_subaddr.find(td.m_subaddr_index.minor);
-      if (found == amount_per_subaddr.end())
-        amount_per_subaddr[td.m_subaddr_index.minor] = td.amount();
-      else
-        found->second += td.amount();
+      const transfer_details& td = m_transfers[idx];
+      if (td.m_subaddr_index.major == index_major && !is_spent(td, strict) && !td.m_frozen)
+      {
+        auto found = amount_per_subaddr.find(td.m_subaddr_index.minor);
+        if (found == amount_per_subaddr.end())
+          amount_per_subaddr[td.m_subaddr_index.minor] = td.amount();
+        else
+          found->second += td.amount();
+      }
     }
   }
+
   if (!strict)
   {
    for (const auto& utx: m_unconfirmed_txs)
@@ -7118,6 +7127,10 @@ std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> wallet2::
   std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> amount_per_subaddr;
   const uint64_t blockchain_height = get_blockchain_current_height();
   const uint64_t now = time(NULL);
+  if (m_transfers_indices.count(asset_type) == 0) {
+    return amount_per_subaddr;
+  }
+
   for(const auto& idx: m_transfers_indices[asset_type])
   {
     transfer_details& td = m_transfers[idx];
