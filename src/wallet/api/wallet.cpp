@@ -1568,9 +1568,30 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const Monero::transact
                                                                           adjusted_priority,
                                                                           extra, subaddr_account, subaddr_indices);
             } else {
-              transaction->m_pending_tx = m_wallet->create_transactions_all(0, converted_tx_type, "SAL", info.address, info.is_subaddress, 1, fake_outs_count, 0 /* unlock_time */,
-                                                                            adjusted_priority,
-                                                                            extra, subaddr_account, subaddr_indices);
+              std::vector<tools::wallet2::pending_tx> m_pending_txs;
+              for (auto it = subaddr_indices.begin(); it != subaddr_indices.end(); ++it) {
+
+                // Skip this wallet if there is no balance unlocked to audit
+                const auto unlocked_balance_per_subaddr = m_wallet->unlocked_balance_per_subaddress(subaddr_account, "SAL", true);
+                if (unlocked_balance_per_subaddr.count(*it) == 0) continue;
+
+                const auto result = m_wallet->create_transactions_all(
+                    0,
+                    converted_tx_type,
+                    "SAL",
+                    m_wallet->get_subaddress({subaddr_account, *it}),
+                    info.is_subaddress,
+                    1,
+                    fake_outs_count,
+                    0 /* unlock_time */,
+                    adjusted_priority,
+                    extra,
+                    subaddr_account,
+                    std::set<uint32_t> {*it}
+                );
+                m_pending_txs.insert(m_pending_txs.end(), result.begin(), result.end());
+              }
+              transaction->m_pending_tx = m_pending_txs;
             }
             pendingTxPostProcess(transaction);
 
