@@ -291,7 +291,10 @@ namespace config
   
   uint32_t const GENESIS_NONCE = 10000;
 
-  const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> AUDIT_HARD_FORKS = { {HF_VERSION_AUDIT1, {30*24*10, {"SAL", "SAL1"}}} };
+  const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> AUDIT_HARD_FORKS = {
+    {HF_VERSION_AUDIT1, {30*24*10, {"SAL", "SAL1"}}},
+    {HF_VERSION_AUDIT2, {30*24*14, {"SAL", "SAL1"}}}
+  };
   
   const uint64_t STAKE_LOCK_PERIOD = 30*24*30;
 
