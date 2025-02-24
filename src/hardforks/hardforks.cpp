@@ -75,8 +75,14 @@ const hardfork_t testnet_hard_forks[] = {
   // version 6 (audit 1) starts from block 815
   { 6, 815, 0, 1734608000 },
 
-  // version 7 (audit 1 pause) starts from block 900
+  // version 7 (audit 1 pause, blacklist controlling payouts) starts from block 900
   { 7, 900, 0, 1739264400 },
+
+  // version 8 (audit 1 resume) starts from block 950
+  { 8, 950, 0, 1739270000 },
+
+  // version 9 (audit 1 complete, whitelist controlling payouts) starts from block 1000
+  { 9, 1000, 0, 1739280000 },
 };
 const size_t num_testnet_hard_forks = sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]);
 const uint64_t testnet_hard_fork_version_1_till = ((uint64_t)-1);

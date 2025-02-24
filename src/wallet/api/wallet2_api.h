@@ -209,9 +209,10 @@ struct TransactionInfo
     };
 
     struct Transfer {
-        Transfer(uint64_t _amount, const std::string &address);
+        Transfer(uint64_t _amount, const std::string &address, const std::string &asset);
         const uint64_t amount;
         const std::string address;
+        const std::string asset;
     };
 
     virtual ~TransactionInfo() = 0;
@@ -228,6 +229,7 @@ struct TransactionInfo
     virtual std::string label() const = 0;
     virtual uint64_t confirmations() const = 0;
     virtual uint64_t unlockTime() const = 0;
+    virtual std::string asset() const = 0;
     //! transaction_id
     virtual std::string hash() const = 0;
     virtual std::time_t timestamp() const = 0;
@@ -326,25 +328,35 @@ struct Subaddress
 
 struct SubaddressAccountRow {
 public:
-    SubaddressAccountRow(std::size_t _rowId, const std::string &_address, const std::string &_label, const std::string &_balance, const std::string &_unlockedBalance):
+    SubaddressAccountRow(std::size_t _rowId, const std::string &_address, const std::string &_label, const std::string &_balance, const std::string &_unlockedBalance, const std::string &_balance_sal1, const std::string &_unlockedBalance_sal1):
         m_rowId(_rowId),
         m_address(_address),
         m_label(_label),
-        m_balance(_balance),
-        m_unlockedBalance(_unlockedBalance) {}
+        m_balance_sal(_balance),
+        m_unlockedBalance_sal(_unlockedBalance),
+        m_balance_sal1(_balance_sal1),
+        m_unlockedBalance_sal1(_unlockedBalance_sal1) {}
 
 private:
     std::size_t m_rowId;
     std::string m_address;
     std::string m_label;
-    std::string m_balance;
-    std::string m_unlockedBalance;
+    std::string m_balance_sal;
+    std::string m_balance_sal1;
+    std::string m_unlockedBalance_sal;
+    std::string m_unlockedBalance_sal1;
 public:
     std::string extra;
     std::string getAddress() const {return m_address;}
     std::string getLabel() const {return m_label;}
-    std::string getBalance() const {return m_balance;}
-    std::string getUnlockedBalance() const {return m_unlockedBalance;}
+    std::string getBalance(const std::string& asset) const {
+        if (asset == "SAL") return m_balance_sal;
+        else return m_balance_sal1;
+    }
+    std::string getUnlockedBalance(const std::string& asset) const {
+        if (asset == "SAL") return m_unlockedBalance_sal;
+        else return m_unlockedBalance_sal1;
+    }
     std::size_t getRowId() const {return m_rowId;}
 };
 
@@ -642,18 +654,18 @@ struct Wallet
     virtual void setTrustedDaemon(bool arg) = 0;
     virtual bool trustedDaemon() const = 0;
     virtual bool setProxy(const std::string &address) = 0;
-    virtual uint64_t balance(uint32_t accountIndex = 0) const = 0;
-    uint64_t balanceAll() const {
+    virtual uint64_t balance(const std::string &asset, uint32_t accountIndex = 0) const = 0;
+    uint64_t balanceAll(const std::string &asset) const {
         uint64_t result = 0;
         for (uint32_t i = 0; i < numSubaddressAccounts(); ++i)
-            result += balance(i);
+            result += balance(asset, i);
         return result;
     }
-    virtual uint64_t unlockedBalance(uint32_t accountIndex = 0) const = 0;
-    uint64_t unlockedBalanceAll() const {
+    virtual uint64_t unlockedBalance(const std::string &asset, uint32_t accountIndex = 0) const = 0;
+    uint64_t unlockedBalanceAll(const std::string &asset) const {
         uint64_t result = 0;
         for (uint32_t i = 0; i < numSubaddressAccounts(); ++i)
-            result += unlockedBalance(i);
+            result += unlockedBalance(asset, i);
         return result;
     }
 

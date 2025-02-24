@@ -1506,6 +1506,8 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_SHUTDOWN_USER_TXS:
   case HF_VERSION_SALVIUM_ONE_PROOFS:
   case HF_VERSION_AUDIT1_PAUSE:
+  case HF_VERSION_AUDIT2:
+  case HF_VERSION_AUDIT2_PAUSE:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
@@ -1584,10 +1586,36 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
 
   // Get the audit data for the block that matures at this height
   std::vector<std::pair<yield_tx_info, uint64_t>> audit_payouts;
+  const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
+  for (const auto &audit_hf : audit_hard_forks) {
+    uint64_t audit_lock_period = audit_hf.second.first;
+    uint64_t matured_audit_height = height - audit_lock_period - 1;
+    uint8_t hf = m_hardfork->get_ideal_version(matured_audit_height);
+    if (hf == audit_hf.first) {
+      // Found a matching audit
+      // Maturing height was during an audit - process accordingly
+      cryptonote::audit_block_info abi_matured;
+      ok = get_abi_entry(matured_audit_height, abi_matured);
+      if (!ok) {
+        LOG_PRINT_L1("Block at height: " << height << " - failed to obtain audit block information - aborting");
+        return false;
+      } else if (abi_matured.locked_coins_this_block == 0) {
+        LOG_PRINT_L1("Block at height: " << height << " - no audit payouts due - skipping");
+      } else {
+        // Iterate over the cached data for audits, calculating the audit payouts due
+        if (!calculate_audit_payouts(matured_audit_height, audit_payouts)) {
+          LOG_ERROR("Block at height: " << height << " - Failed to obtain audit payout information - aborting");
+          return false;
+        }
+      }
+      break;
+    }
+  }
+  /*
+  const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
   uint64_t audit_lock_period = get_config(m_nettype).AUDIT_LOCK_PERIOD;
   uint64_t matured_audit_height = height - audit_lock_period - 1;
   uint8_t hf = m_hardfork->get_ideal_version(matured_audit_height);
-  const std::map<uint8_t, std::pair<std::string, std::string>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
   if (audit_hard_forks.find(hf) != audit_hard_forks.end()) {
     // Maturing height was during an audit - process accordingly
     cryptonote::audit_block_info abi_matured;
@@ -1605,7 +1633,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
       }
     }
   }
-
+  */
   // Check we have the correct number of entries
   CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == yield_payouts.size() + audit_payouts.size(), false, "Invalid number of outputs in protocol_tx - aborting");
   
@@ -1981,12 +2009,13 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
 
   // Get the audit data for the block that matures at this height
   std::vector<std::pair<yield_tx_info, uint64_t>> audit_payouts;
-  uint64_t audit_lock_period = get_config(m_nettype).AUDIT_LOCK_PERIOD;
-  uint64_t matured_audit_height = height - audit_lock_period - 1;
-  if (height > audit_lock_period) {
+  const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
+  for (const auto &audit_hf : audit_hard_forks) {
+    uint64_t audit_lock_period = audit_hf.second.first;
+    uint64_t matured_audit_height = height - audit_lock_period - 1;
     uint8_t hf = m_hardfork->get_ideal_version(matured_audit_height);
-    const std::map<uint8_t, std::pair<std::string, std::string>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
-    if (audit_hard_forks.find(hf) != audit_hard_forks.end()) {
+    if (hf == audit_hf.first) {
+      // Found a matching audit
       // Maturing height was during an audit - process accordingly
       cryptonote::audit_block_info abi_matured;
       ok = get_abi_entry(matured_audit_height, abi_matured);
@@ -2003,7 +2032,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
         }
 
         // Get the asset types
-        const std::pair<std::string, std::string> audit_asset_types = audit_hard_forks.at(hf);
+        const std::pair<std::string, std::string> audit_asset_types = audit_hf.second.second;
       
         // Create the protocol_metadata entries here
         for (const auto& audit_entry: audit_payouts) {
@@ -2020,6 +2049,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
           protocol_entries.push_back(entry);
         }
       }
+      break;
     }
   }
   
@@ -3954,9 +3984,9 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
 
   if (tx.type == cryptonote::transaction_type::AUDIT) {
     // Make sure we are supposed to accept AUDIT txs at this point
-    const std::map<uint8_t, std::pair<std::string, std::string>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
+    const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
     CHECK_AND_ASSERT_MES(audit_hard_forks.find(hf_version) != audit_hard_forks.end(), false, "trying to audit outside an audit fork");
-    std::string expected_asset_type = audit_hard_forks.at(hf_version).first;
+    std::string expected_asset_type = audit_hard_forks.at(hf_version).second.first;
     CHECK_AND_ASSERT_MES(tx.source_asset_type == expected_asset_type, false, "trying to spend " << tx.source_asset_type << " coins in an AUDIT TX");
   } else {
     if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {

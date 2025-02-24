@@ -6974,9 +6974,17 @@ bool simple_wallet::transfer_main(
     std::string err;
     if (transfer_type == Audit) {
 
+      const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_wallet->nettype()).AUDIT_HARD_FORKS;
+      uint8_t hf_version = m_wallet->get_current_hard_fork();
+      const auto audit_hf = audit_hard_forks.find(hf_version);
+      if (audit_hf == audit_hard_forks.end()) {
+        fail_msg_writer() << tr("failed to find audit hard fork");
+        return false;
+      }
+      unlock_block = audit_hf->second.first;
+      
       // Get the subaddress unlocked balances
       std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddr = m_wallet->unlocked_balance_per_subaddress(m_current_subaddress_account, source_asset, true);
-      unlock_block = get_config(m_wallet->nettype()).AUDIT_LOCK_PERIOD;
       for (const auto subaddr_index : subaddr_indices) {
 
         // Skip this wallet if there is no balance unlocked to audit
@@ -6986,7 +6994,6 @@ bool simple_wallet::transfer_main(
           
           std::set<uint32_t> subaddr_indices_single;
           subaddr_indices_single.insert(subaddr_index);
-          uint64_t unlock_block = get_config(m_wallet->nettype()).AUDIT_LOCK_PERIOD;
           std::vector<tools::wallet2::pending_tx> ptx_vector_audit = m_wallet->create_transactions_all(0, cryptonote::transaction_type::AUDIT, source_asset, m_wallet->get_subaddress({m_current_subaddress_account, subaddr_index}), (subaddr_index>0), 1, fake_outs_count, unlock_block, priority, extra, m_current_subaddress_account, subaddr_indices_single);
           ptx_vector.insert(ptx_vector.end(), ptx_vector_audit.begin(), ptx_vector_audit.end());
 
@@ -8396,12 +8403,12 @@ bool simple_wallet::audit(const std::vector<std::string> &args_)
      return true;
   }
   
-  const std::map<uint8_t, std::pair<std::string, std::string>> audit_hard_forks = get_config(m_wallet->nettype()).AUDIT_HARD_FORKS;
+  const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_wallet->nettype()).AUDIT_HARD_FORKS;
   const uint8_t hf_version = m_wallet->get_current_hard_fork();
   if (audit_hard_forks.find(hf_version) != audit_hard_forks.end()) {
 
     // Get the asset types
-    const std::pair<std::string, std::string> audit_asset_types = audit_hard_forks.at(hf_version);
+    const std::pair<std::string, std::string> audit_asset_types = audit_hard_forks.at(hf_version).second;
     transfer_main(Audit, audit_asset_types.first, audit_asset_types.first, local_args, false);
     
   } else {
