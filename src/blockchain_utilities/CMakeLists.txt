@@ -142,8 +142,7 @@ set(blockchain_scanner_private_headers)
 monero_private_headers(blockchain_scanner
 	  ${blockchain_scanner_private_headers})
 
-if (BUILD_TAG)
-else()
+if (BUILD_AUDIT)
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp" AND NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp")
     set(blockchain_audit_sources
       blockchain_audit.cpp
@@ -330,8 +329,7 @@ set_property(TARGET blockchain_scanner
 	OUTPUT_NAME "salvium-blockchain-scanner")
 install(TARGETS blockchain_scanner DESTINATION bin)
 
-if (BUILD_TAG)
-else()
+if (BUILD_AUDIT)
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp" AND NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp")
     monero_add_executable(blockchain_audit
       ${blockchain_audit_sources}
