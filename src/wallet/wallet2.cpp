@@ -2768,7 +2768,10 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
               crypto::public_key pk_locked_coins = crypto::null_pkey;
               THROW_WALLET_EXCEPTION_IF(!get_output_public_key(td_origin.m_tx.vout[td_origin.m_internal_output_index], pk_locked_coins), error::wallet_internal_error, "Failed to get output public key for locked coins");
               // At this point, we need to clear the "locked coins" count, because otherwise we will be counting yield stakes twice in our balance
-              THROW_WALLET_EXCEPTION_IF(!m_locked_coins.erase(pk_locked_coins), error::wallet_internal_error, "Failed to remove protocol_tx entry from m_locked_coins");
+              //THROW_WALLET_EXCEPTION_IF(!m_locked_coins.erase(pk_locked_coins), error::wallet_internal_error, "Failed to remove protocol_tx entry from m_locked_coins");
+              if (!m_locked_coins.erase(pk_locked_coins)) {
+                LOG_ERROR("Failed to remove protocol_tx entry from m_locked_coins - possible duplicate output key detected");
+              }
             }
           }
         }
