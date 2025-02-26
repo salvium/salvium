@@ -66,6 +66,7 @@ namespace cryptonote
     uint8_t type;
     crypto::public_key P_change;
     crypto::public_key return_pubkey;
+    uint64_t origin_height;
   };
 
   //---------------------------------------------------------------
