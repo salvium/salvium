@@ -390,6 +390,7 @@ namespace tools
       wallet_rpc::transfer_destination &td = entry.destinations.back();
       td.amount = d.amount;
       td.address = d.address(m_wallet->nettype(), pd.m_payment_id);
+      td.asset_type = pd.m_tx.source_asset_type;
     }
 
     entry.asset_type = pd.m_tx.source_asset_type;
@@ -422,6 +423,7 @@ namespace tools
       wallet_rpc::transfer_destination &td = entry.destinations.back();
       td.amount = d.amount;
       td.address = d.address(m_wallet->nettype(), pd.m_payment_id);
+      td.asset_type = pd.m_tx.source_asset_type;
     }
 
     entry.type = is_failed ? "failed" : "pending";
