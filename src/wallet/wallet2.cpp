@@ -1252,6 +1252,7 @@ wallet2::wallet2(network_type nettype, uint64_t kdf_rounds, bool unattended, std
   m_credits_target(0),
   m_enable_multisig(false),
   m_freeze_incoming_payments(false),
+  m_send_change_back_to_subaddress(false),
   m_pool_info_query_time(0),
   m_has_ever_refreshed_from_node(false),
   m_allow_mismatched_daemon_version(false)
@@ -2574,12 +2575,12 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     process_unconfirmed(txid, tx, height);
 
   std::string source_asset;
-  if (use_fork_rules(get_salvium_one_proofs_fork(), 0)) {
-    if (tx.type == cryptonote::transaction_type::MINER && tx.type == cryptonote::transaction_type::PROTOCOL) {
+  if (tx.type == cryptonote::transaction_type::MINER || tx.type == cryptonote::transaction_type::PROTOCOL) {
+    if (use_fork_rules(get_salvium_one_proofs_fork(), 0)) {
       source_asset = "SAL1";
+    } else {
+      source_asset = "SAL";
     }
-  } else if (tx.type == cryptonote::transaction_type::MINER && tx.type == cryptonote::transaction_type::PROTOCOL) {
-    source_asset = "SAL";
   } else {
     source_asset = tx.source_asset_type;
   }
@@ -5144,6 +5145,9 @@ boost::optional<wallet2::keys_file_data> wallet2::get_keys_file_data(const epee:
   value2.SetInt(m_freeze_incoming_payments ? 1 : 0);
   json.AddMember("freeze_incoming_payments", value2, json.GetAllocator());
 
+  value2.SetInt(m_send_change_back_to_subaddress ? 1 : 0);
+  json.AddMember("send_change_back_to_subaddress", value2, json.GetAllocator());
+
   // Serialize the JSON object
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
@@ -5291,6 +5295,7 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
     m_credits_target = 0;
     m_enable_multisig = false;
     m_freeze_incoming_payments = false;
+    m_send_change_back_to_subaddress = false;
     m_allow_mismatched_daemon_version = false;
   }
   else if(json.IsObject())
@@ -5530,6 +5535,8 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
     m_enable_multisig = field_enable_multisig;
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, freeze_incoming_payments, int, Int, false, false);
     m_freeze_incoming_payments = field_freeze_incoming_payments;
+    GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, send_change_back_to_subaddress, int, Int, false, false);
+    m_send_change_back_to_subaddress = field_send_change_back_to_subaddress;
   }
   else
   {
@@ -10244,8 +10251,16 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
   cryptonote::tx_destination_entry change_dts = AUTO_VAL_INIT(change_dts);
   change_dts.amount = found_money - needed_money;
   change_dts.asset_type = source_asset;
-  change_dts.addr = get_subaddress({subaddr_account, subaddr_index});
-  change_dts.is_subaddress = subaddr_account != 0 || subaddr_index != 0;
+
+  // Lazy devs can't be bothered to code a proper solution for get_transfer_by_txid,
+  // so we have to provide a hack for them and their poor code.
+  if (m_send_change_back_to_subaddress || tx_type == cryptonote::transaction_type::AUDIT) {
+    change_dts.addr = get_subaddress({subaddr_account, subaddr_index});
+    change_dts.is_subaddress = subaddr_account != 0 || subaddr_index != 0;
+  } else {
+    change_dts.addr = get_subaddress({subaddr_account, 0});
+    change_dts.is_subaddress = subaddr_account != 0;
+  }
   change_dts.is_change = true;
   splitted_dsts.push_back(change_dts);
 
