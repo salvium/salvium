@@ -1003,6 +1003,12 @@ private:
     std::string path() const;
 
     /*!
+     * \brief has_proxy_option      Check the global proxy (--proxy) has been defined or not.
+     * \return                      returns bool representing the global proxy (--proxy).
+     */
+    bool has_proxy_option() const;
+
+    /*!
      * \brief verifies given password is correct for default wallet keys file
      */
     bool verify_password(const epee::wipeable_string& password);
@@ -1032,7 +1038,8 @@ private:
       epee::net_utils::ssl_options_t ssl_options = epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
     bool set_daemon(std::string daemon_address = "http://localhost:8080",
       boost::optional<epee::net_utils::http::login> daemon_login = boost::none, bool trusted_daemon = true,
-      epee::net_utils::ssl_options_t ssl_options = epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
+      epee::net_utils::ssl_options_t ssl_options = epee::net_utils::ssl_support_t::e_ssl_support_autodetect,
+      const std::string &proxy = "");
     bool set_proxy(const std::string &address);
 
     void stop() { m_run.store(false, std::memory_order_relaxed); m_message_store.stop(); }
@@ -1618,7 +1625,7 @@ private:
     std::vector<std::pair<uint64_t, uint64_t>> estimate_backlog(const std::vector<std::pair<double, double>> &fee_levels);
     std::vector<std::pair<uint64_t, uint64_t>> estimate_backlog(uint64_t min_tx_weight, uint64_t max_tx_weight, const std::vector<uint64_t> &fees);
 
-    uint64_t estimate_fee(bool use_per_byte_fee, bool use_rct, int n_inputs, int mixin, int n_outputs, size_t extra_size, bool bulletproof, bool clsag, bool bulletproof_plus, bool use_view_tags, uint64_t base_fee, uint64_t fee_quantization_mask) const;
+    static uint64_t estimate_fee(bool use_per_byte_fee, bool use_rct, int n_inputs, int mixin, int n_outputs, size_t extra_size, bool bulletproof, bool clsag, bool bulletproof_plus, bool use_view_tags, uint64_t base_fee, uint64_t fee_quantization_mask);
     uint64_t get_fee_multiplier(uint32_t priority, int fee_algorithm = -1);
     uint64_t get_base_fee(uint32_t priority);
     uint64_t get_base_fee();
@@ -1881,6 +1888,7 @@ private:
     cryptonote::account_base m_account;
     boost::optional<epee::net_utils::http::login> m_daemon_login;
     std::string m_daemon_address;
+    std::string m_proxy;
     std::string m_wallet_file;
     std::string m_keys_file;
     std::string m_mms_file;
@@ -2494,7 +2502,7 @@ namespace boost
         bool use_bulletproofs = x.rct_config.range_proof_type != rct::RangeProofBorromean;
         a & use_bulletproofs;
         if (!typename Archive::is_saving())
-          x.rct_config = { use_bulletproofs ? rct::RangeProofBulletproof : rct::RangeProofBorromean, 0 };
+          x.rct_config = { use_bulletproofs ? rct::RangeProofPaddedBulletproof : rct::RangeProofBorromean, 0 };
         return;
       }
       a & x.rct_config;

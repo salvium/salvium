@@ -31,6 +31,7 @@
 #include "mlocker.h"
 
 #include <boost/utility/string_ref.hpp>
+#include <boost/algorithm/string.hpp> 
 #include <sstream>
 #include <string>
 #include <cstdint>
@@ -69,23 +70,17 @@ namespace string_tools
 #ifdef _WIN32
    std::string get_current_module_path();
 #endif
-  bool set_module_name_and_folder(const std::string& path_to_process_);
-  bool trim_left(std::string& str);
-  bool trim_right(std::string& str);
+  void set_module_name_and_folder(const std::string& path_to_process_);
   //----------------------------------------------------------------------------
   inline std::string& trim(std::string& str)
   {
-    trim_left(str);
-    trim_right(str);
+    boost::trim(str);
     return str;
   }
   //----------------------------------------------------------------------------
-  inline std::string trim(const std::string& str_)
+  inline std::string trim(const std::string& str)
   {
-    std::string str = str_;
-    trim_left(str);
-    trim_right(str);
-    return str;
+    return boost::trim_copy(str);
   }
   std::string pad_string(std::string s, size_t n, char c = ' ', bool prepend = false);
   
@@ -94,6 +89,7 @@ namespace string_tools
   std::string pod_to_hex(const t_pod_type& s)
   {
     static_assert(std::is_standard_layout<t_pod_type>(), "expected standard layout type");
+    static_assert(alignof(t_pod_type) == 1, "type may have padding");
     return to_hex::string(as_byte_span(s));
   }
   //----------------------------------------------------------------------------
@@ -101,6 +97,8 @@ namespace string_tools
   bool hex_to_pod(const boost::string_ref hex_str, t_pod_type& s)
   {
     static_assert(std::is_standard_layout<t_pod_type>(), "expected standard layout type");
+    static_assert(alignof(t_pod_type) == 1, "type may have padding");
+    static_assert(std::is_trivially_copyable<t_pod_type>(), "type must be trivially copyable");
     return from_hex::to_buffer(as_mut_byte_span(s), hex_str);
   }
   //----------------------------------------------------------------------------
