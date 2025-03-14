@@ -356,16 +356,16 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
           slippage_counts[asset_type] = 0;
         slippage_counts[asset_type] += tx.first.amount_burnt;
       }
+    }
 
-      // Is this an AUDIT TX?
-      if (tx.first.type == cryptonote::transaction_type::AUDIT) {
-        audit_total += tx.first.amount_burnt;
-      }
-
-      // Is this a STAKE TX?
-      if (tx.first.type == cryptonote::transaction_type::STAKE) {
-        yield_total += tx.first.amount_burnt;
-      }
+    // Is this an AUDIT TX?
+    if (tx.first.type == cryptonote::transaction_type::AUDIT) {
+      audit_total += tx.first.amount_burnt;
+    }
+    
+    // Is this a STAKE TX?
+    if (tx.first.type == cryptonote::transaction_type::STAKE) {
+      yield_total += tx.first.amount_burnt;
     }
     ++tx_i;
   }
