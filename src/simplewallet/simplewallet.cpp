@@ -8549,12 +8549,18 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
 
   // EXPERIMENTAL - change to get_yield_summary_info() method
   uint64_t t_burnt, t_supply, t_locked, t_yield, yps, ybi_size;
-  std::vector<std::tuple<size_t, std::string, std::string, uint64_t, uint64_t>> yield_payouts;
+  std::vector<tools::wallet2::yield_payout_t> yield_payouts;
   if (!m_wallet->get_yield_summary_info(t_burnt, t_supply, t_locked, t_yield, yps, ybi_size, yield_payouts)) {
     fail_msg_writer() << "failed to get yield info. Make sure you are connected to a daemon.";
     return false;
   }
 
+  // Resort the payouts so they're in height order
+  std::sort( yield_payouts.begin( ), yield_payouts.end( ), [ ]( const tools::wallet2::yield_payout_t& lhs, const tools::wallet2::yield_payout_t& rhs )
+  {
+    return std::get<0>(lhs) < std::get<0>(rhs);
+  });
+  
   // Get the chain height
   const uint64_t blockchain_height = m_wallet->get_blockchain_current_height();
   uint64_t stake_lock_period = get_config(m_wallet->nettype()).STAKE_LOCK_PERIOD;

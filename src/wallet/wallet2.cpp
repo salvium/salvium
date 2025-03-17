@@ -2412,7 +2412,7 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
                                      uint64_t &total_yield,
                                      uint64_t &yield_per_stake,
                                      uint64_t &ybi_data_size,
-                                     std::vector<std::tuple<size_t, std::string, std::string, uint64_t, uint64_t>> &payouts
+                                     std::vector<yield_payout_t> &payouts
                                      )
 {
   // Get the total circulating supply of SALs

@@ -124,7 +124,7 @@ bool isFat32(const wchar_t* root_path)
 
 // Helper function to generate genesis transaction
 void print_genesis_tx_hex(const cryptonote::network_type nettype) {
-  /*
+
   using namespace cryptonote;
 
   account_base miner_acc1;
@@ -141,9 +141,9 @@ void print_genesis_tx_hex(const cryptonote::network_type nettype) {
   miner_key_file << "Miner account address:" << std::endl;
   miner_key_file << cryptonote::get_account_address_as_str((network_type)nettype, false, miner_acc1.get_keys().m_account_address);
   miner_key_file << std::endl<< "Miner spend secret key:"  << std::endl;
-  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(miner_acc1.get_keys().m_spend_secret_key));
+  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(unwrap(unwrap(miner_acc1.get_keys().m_spend_secret_key))));
   miner_key_file << std::endl << "Miner view secret key:" << std::endl;
-  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(miner_acc1.get_keys().m_view_secret_key));
+  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(unwrap(unwrap(miner_acc1.get_keys().m_view_secret_key))));
   miner_key_file << std::endl << std::endl;
   miner_key_file.close();
 
@@ -153,13 +153,13 @@ void print_genesis_tx_hex(const cryptonote::network_type nettype) {
   std::cout << "Object:" << std::endl;
   std::cout << obj_to_json_str(tx_genesis) << std::endl << std::endl;
 
-  std::cout << "Gennerating miner wallet..." << std::endl;
+  std::cout << "Generating miner wallet..." << std::endl;
   std::cout << "Miner account address:" << std::endl;
   std::cout << cryptonote::get_account_address_as_str((network_type)nettype, false, miner_acc1.get_keys().m_account_address);
   std::cout << std::endl << "Miner spend secret key:"  << std::endl;
-  epee::to_hex::formatted(std::cout, epee::as_byte_span(miner_acc1.get_keys().m_spend_secret_key));
+  epee::to_hex::formatted(std::cout, epee::as_byte_span(unwrap(unwrap(miner_acc1.get_keys().m_spend_secret_key))));
   std::cout << std::endl << "Miner view secret key:" << std::endl;
-  epee::to_hex::formatted(std::cout, epee::as_byte_span(miner_acc1.get_keys().m_view_secret_key));
+  epee::to_hex::formatted(std::cout, epee::as_byte_span(unwrap(unwrap(miner_acc1.get_keys().m_view_secret_key))));
   std::cout << std::endl << std::endl;
 
   std::stringstream ss;
@@ -168,7 +168,6 @@ void print_genesis_tx_hex(const cryptonote::network_type nettype) {
   std::string tx_hex = ss.str();
   std::cout << "Insert this line into your coin configuration file: " << std::endl;
   std::cout << "std::string const GENESIS_TX = \"" << epee::string_tools::buff_to_hex_nodelimer(tx_hex) << "\";" << std::endl;
-  */
   return;
 }
 
