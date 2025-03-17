@@ -14779,7 +14779,7 @@ void wallet2::process_background_cache(const background_sync_data_t &background_
   {
     MDEBUG("Processing background synced tx " << bgs_tx.first);
 
-    process_new_transaction(bgs_tx.first, bgs_tx.second.tx, bgs_tx.second.output_indices, bgs_tx.second.height, 0, bgs_tx.second.block_timestamp,
+    process_new_transaction(bgs_tx.first, bgs_tx.second.tx, bgs_tx.second.output_indices, bgs_tx.second.output_indices, bgs_tx.second.height, 0, bgs_tx.second.block_timestamp,
         cryptonote::is_coinbase(bgs_tx.second.tx), false/*pool*/, bgs_tx.second.double_spend_seen, {}, {}, true/*ignore_callbacks*/);
 
     // Re-set destination addresses if they were previously set
