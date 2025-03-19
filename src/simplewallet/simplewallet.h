@@ -148,6 +148,7 @@ namespace cryptonote
     bool set_ignore_outputs_above(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_ignore_outputs_below(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_track_uses(const std::vector<std::string> &args = std::vector<std::string>());
+    bool setup_background_sync(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_show_wallet_name_when_locked(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_inactivity_lock_timeout(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_setup_background_mining(const std::vector<std::string> &args = std::vector<std::string>());
@@ -156,6 +157,7 @@ namespace cryptonote
     bool set_load_deprecated_formats(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_enable_multisig(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_freeze_incoming_payments(const std::vector<std::string> &args = std::vector<std::string>());
+    bool set_send_change_back_to_subaddress(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_persistent_rpc_client_id(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_auto_mine_for_rpc_payment_threshold(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_credits_target(const std::vector<std::string> &args = std::vector<std::string>());

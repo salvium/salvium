@@ -1243,31 +1243,35 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool check_output_types(const transaction& tx, const uint8_t hf_version)
   {
+    if (tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::STAKE) {
+      CHECK_AND_ASSERT_MES(tx.vout.size() == 1, false, "audit and stake transactions should have 1 output");
+    }
+    
     for (const auto &o: tx.vout)
     {
       if (hf_version > HF_VERSION_REQUIRE_VIEW_TAGS)
       {
         // from v15, require outputs have view tags
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
-          << o.target.type().name() << ", expected txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
+          << o.target.type().name() << ", expected txout_to_tagged_key in transaction");
       }
       else if (hf_version < HF_VERSION_VIEW_TAGS)
       {
         // require outputs to be of type txout_to_key
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key), false, "wrong variant type: "
-          << o.target.type().name() << ", expected txout_to_key in transaction id=" << get_transaction_hash(tx));
+          << o.target.type().name() << ", expected txout_to_key in transaction");
       }
       else  //(hf_version == HF_VERSION_VIEW_TAGS || hf_version == HF_VERSION_VIEW_TAGS+1)
       {
         // require outputs be of type txout_to_key OR txout_to_tagged_key
         // to allow grace period before requiring all to be txout_to_tagged_key
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key) || o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
-          << o.target.type().name() << ", expected txout_to_key or txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
+          << o.target.type().name() << ", expected txout_to_key or txout_to_tagged_key in transaction");
 
         // require all outputs in a tx be of the same type
         CHECK_AND_ASSERT_MES(o.target.type() == tx.vout[0].target.type(), false, "non-matching variant types: "
           << o.target.type().name() << " and " << tx.vout[0].target.type().name() << ", "
-          << "expected matching variant types in transaction id=" << get_transaction_hash(tx));
+          << "expected matching variant types in transaction");
       }
 
       // Verify the asset type

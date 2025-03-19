@@ -71,7 +71,7 @@
     else if((query_info.m_URI == s_pattern) && (cond)) \
     { \
       handled = true; \
-      uint64_t ticks = misc_utils::get_tick_count(); \
+      uint64_t ticks = epee::misc_utils::get_tick_count(); \
       boost::value_initialized<command_type::request> req; \
       bool parse_res = epee::serialization::load_t_from_json(static_cast<command_type::request&>(req), query_info.m_body); \
       if (!parse_res) \
@@ -107,7 +107,7 @@
     else if(query_info.m_URI == s_pattern) \
     { \
       handled = true; \
-      uint64_t ticks = misc_utils::get_tick_count(); \
+      uint64_t ticks = epee::misc_utils::get_tick_count(); \
       boost::value_initialized<command_type::request> req; \
       bool parse_res = epee::serialization::load_t_from_binary(static_cast<command_type::request&>(req), epee::strspan<uint8_t>(query_info.m_body)); \
       if (!parse_res) \
@@ -117,7 +117,7 @@
          response_info.m_response_comment = "Bad request"; \
          return true; \
       } \
-      uint64_t ticks1 = misc_utils::get_tick_count(); \
+      uint64_t ticks1 = epee::misc_utils::get_tick_count(); \
       boost::value_initialized<command_type::response> resp;\
       MINFO(m_conn_context << "calling " << s_pattern); \
       bool res = false; \
@@ -129,7 +129,7 @@
         response_info.m_response_comment = "Internal Server Error"; \
         return true; \
       } \
-      uint64_t ticks2 = misc_utils::get_tick_count(); \
+      uint64_t ticks2 = epee::misc_utils::get_tick_count(); \
       epee::byte_slice buffer; \
       epee::serialization::store_t_to_binary(static_cast<command_type::response&>(resp), buffer, 64 * 1024); \
       uint64_t ticks3 = epee::misc_utils::get_tick_count(); \
@@ -170,6 +170,13 @@
       rsp.error.message = "Invalid Request"; \
       epee::serialization::store_t_to_json(static_cast<epee::json_rpc::error_response&>(rsp), response_info.m_body); \
       return true; \
+    } \
+    epee::serialization::storage_entry params_; \
+    params_ = epee::serialization::storage_entry(epee::serialization::section()); \
+    if(!ps.get_value("params", params_, nullptr)) \
+    { \
+      epee::serialization::section params_section; \
+      ps.set_value("params", std::move(params_section), nullptr); \
     } \
     if(false) return true; //just a stub to have "else if"
 

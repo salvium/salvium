@@ -83,7 +83,7 @@ uint16_t parse_public_rpc_port(const po::variables_map &vm)
   }
 
   uint16_t rpc_port;
-  if (!string_tools::get_xtype_from_string(rpc_port, rpc_port_str))
+  if (!epee::string_tools::get_xtype_from_string(rpc_port, rpc_port_str))
   {
     throw std::runtime_error("invalid RPC port " + rpc_port_str);
   }
@@ -153,7 +153,7 @@ void print_genesis_tx_hex(const cryptonote::network_type nettype) {
   std::cout << "Object:" << std::endl;
   std::cout << obj_to_json_str(tx_genesis) << std::endl << std::endl;
 
-  std::cout << "Gennerating miner wallet..." << std::endl;
+  std::cout << "Generating miner wallet..." << std::endl;
   std::cout << "Miner account address:" << std::endl;
   std::cout << cryptonote::get_account_address_as_str((network_type)nettype, false, miner_acc1.get_keys().m_account_address);
   std::cout << std::endl << "Miner spend secret key:"  << std::endl;
@@ -168,7 +168,6 @@ void print_genesis_tx_hex(const cryptonote::network_type nettype) {
   std::string tx_hex = ss.str();
   std::cout << "Insert this line into your coin configuration file: " << std::endl;
   std::cout << "std::string const GENESIS_TX = \"" << epee::string_tools::buff_to_hex_nodelimer(tx_hex) << "\";" << std::endl;
-
   return;
 }
 

@@ -48,8 +48,8 @@ extern "C" {
 }
 #include "crypto/crypto.h"
 
-#include "cryptonote_basic/cryptonote_basic.h"
-#include "cryptonote_protocol/enums.h"
+//#include "cryptonote_basic/cryptonote_basic.h"
+//#include "cryptonote_protocol/enums.h"
 
 #include "rctTypes.h"
 #include "rctOps.h"
