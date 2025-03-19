@@ -1482,16 +1482,12 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   
   // if nothing is created by this TX - check no money is included
   CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 1, false, "coinbase protocol transaction in the block has no inputs");
-  size_t vout_size = b.protocol_tx.vout.size();
-  if (vout_size == 0) {
-    LOG_PRINT_L2("coinbase protocol transaction in the block has no outputs");
-    return true;
-  }
    
   // Can we have matured STAKE transactions yet?
   uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   if (height <= stake_lock_period) {
-    return false;
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "protocol transaction in the block has outputs");
+    return true;
   }
 
   // Get the staking data for the block that matured this time
@@ -1543,28 +1539,9 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   // Check we have the correct number of entries
   CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == yield_payouts.size() + audit_payouts.size(), false, "Invalid number of outputs in protocol_tx - aborting");
   
-  // go through each vout and validate
-  //std::set<crypto::public_key> used_keys;
-
   // Merge the yield and audit payouts into an iterable vector
   std::vector<std::pair<yield_tx_info, uint64_t>> payouts{yield_payouts};
   payouts.insert(payouts.end(), audit_payouts.begin(), audit_payouts.end());
-  /*
-  if (hf_version >= HF_VERSION_AUDIT2) {
-    std::sort(payouts.begin(), payouts.end(), [](const auto& lhs, const auto& rhs) {
-      // If block heights are different (only possible with mixed AUDIT+STAKE) sort by them first
-      if (lhs.first.block_height < rhs.first.block_height) return true;
-      if (lhs.first.block_height > rhs.first.block_height) return false;
-      
-      // If output keys are different, sort by them second
-      if (lhs.first.return_address < rhs.first.return_address) return true;
-      if (lhs.first.return_address > rhs.first.return_address) return false;
-      
-      // If block heights _and_ output keys are same, sort by amount third
-      return lhs.second < rhs.second;
-    });
-  }
-  */
   
   size_t output_idx = 0;
   for (auto it = payouts.begin(); it != payouts.end(); it++, output_idx++) {
@@ -1575,8 +1552,9 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
     CHECK_AND_ASSERT_MES(out_key == it->first.return_address, false, "Incorrect output key detected in protocol_tx");
 
     // Verify the output amount
-    CHECK_AND_ASSERT_MES(b.protocol_tx.vout[output_idx].amount == it->second, false, "Incorrect output amount detected in protocol_tx");
-
+    uint64_t expected_amount = it->second;
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vout[output_idx].amount == expected_amount, false, "Incorrect output amount detected in protocol_tx. expected_amount: " << expected_amount);
+    
     // Verify the output asset type
     std::string out_asset_type;
     cryptonote::get_output_asset_type(b.protocol_tx.vout[output_idx], out_asset_type);
@@ -4526,6 +4504,7 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
     }
     yield_block_info ybi = m_yield_block_info_cache[idx];
     if (ybi.slippage_total_this_block == 0) continue;
+    if (ybi.locked_coins_tally == 0) continue;
     
     boost::multiprecision::int128_t slippage_128 = ybi.slippage_total_this_block;
 
