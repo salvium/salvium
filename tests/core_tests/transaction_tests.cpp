@@ -52,9 +52,9 @@ bool test_genesis_tx()
   std::cout << "Miner account address:" << std::endl;
   std::cout << cryptonote::get_account_address_as_str((network_type)nettype, false, miner_acc1.get_keys().m_account_address);
   std::cout << std::endl << "Miner spend secret key:"  << std::endl;
-  epee::to_hex::formatted(std::cout, epee::as_byte_span(miner_acc1.get_keys().m_spend_secret_key));
+  epee::to_hex::formatted(std::cout, epee::as_byte_span(unwrap(unwrap(miner_acc1.get_keys().m_spend_secret_key))));
   std::cout << std::endl << "Miner view secret key:" << std::endl;
-  epee::to_hex::formatted(std::cout, epee::as_byte_span(miner_acc1.get_keys().m_view_secret_key));
+  epee::to_hex::formatted(std::cout, epee::as_byte_span(unwrap(unwrap(miner_acc1.get_keys().m_view_secret_key))));
   std::cout << std::endl << std::endl;
 
   //Create file with miner keys information
@@ -68,9 +68,9 @@ bool test_genesis_tx()
   miner_key_file << "Miner account address:" << std::endl;
   miner_key_file << cryptonote::get_account_address_as_str((network_type)nettype, false, miner_acc1.get_keys().m_account_address);
   miner_key_file << std::endl<< "Miner spend secret key:"  << std::endl;
-  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(miner_acc1.get_keys().m_spend_secret_key));
+  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(unwrap(unwrap(miner_acc1.get_keys().m_spend_secret_key))));
   miner_key_file << std::endl << "Miner view secret key:" << std::endl;
-  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(miner_acc1.get_keys().m_view_secret_key));
+  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(unwrap(unwrap(miner_acc1.get_keys().m_view_secret_key))));
   miner_key_file << std::endl << std::endl;
   miner_key_file.close();
 
