@@ -138,7 +138,7 @@ static bool check_tx_is_expanded(const cryptonote::transaction& tx, const rct::c
  */
 static void expand_transaction_fully(cryptonote::transaction& tx, const rct::ctkeyM& input_pubkeys)
 {
-    const uint8_t hf_version = 1;
+    const uint8_t hf_version = 4;
     
     const crypto::hash tx_prefix_hash = cryptonote::get_transaction_prefix_hash(tx);
     CHECK_AND_ASSERT_THROW_MES(cryptonote::expand_transaction_1(tx, false), "expand 1 failed");
@@ -214,29 +214,29 @@ static bool modification_changes_do_serialize
     return did_change;
 }
 
-// Contains binary representation of mainnet transaction (height 2777777):
-// e89415b95564aa7e3587c91422756ba5303e727996e19c677630309a0d52a7ca
-static constexpr const char* tx1_file_name = "txs/bpp_tx_e89415.bin";
+// Contains binary representation of a local testnet transaction
+// 29d01fde215589faf866153b538851420c0bf5e3479b58981598ac375c92f45e
+static constexpr const char* tx1_file_name = "txs/bpp_tx_29d01f.bin";
 
 // This contains destination key / mask pairs for each output in the input ring of the above tx
 static const rct::ctkeyM tx1_input_pubkeys =
 {{
-    make_ctkey("e50f476129d40af31e0938743f7f2d60e867aab31294f7acaf6e38f0976f0228", "51e788ddf5c95c124a7314d45a91b52d60db25a0572de9c2b4ec515aca3d4481"),
-    make_ctkey("804245d067fcfe6cd66376db0571869989bc68b3e22a0f902109c7530df47a59", "c3cc65d3b3a05defaa05213dc3b0496f9b86dbeeefbff28db34b134b6ee3230b"),
-    make_ctkey("527563a03b498e47732b815f5f0c5875a70e0fb71a37c88123f0f8686349fae4", "04417c03b397cd11e403275ec89cb0ab5b8476bb88470e9ae7208ea63dacf073"),
-    make_ctkey("bffca8b5c7fe4235ba7136d6b5325f63df343dc147940b677f50217f8953bca6", "5cd8c5e54e07275422c9c5a9f4a7268d26c494ffba419e878b7e873a02ae2e76"),
-    make_ctkey("1f73385ea74308aa78b5abf585faac14a5e78a6e23f0f68c9c14681108b28ef0", "5c02b3156daaa8ec476d3244439d90efa266f3e51cb9c8eb384d8b9a8efaa024"),
-    make_ctkey("a2421eae8bb256644b34feeab48c6086c2c9feb40d2643436dc45e303eee8ab2", "787823abffa988b56d4a7b4a834630f71520220fd82fad035955e616ec095788"),
-    make_ctkey("17d8d8dc1e1c25b7295f2eab44c4ccc08a629b8e8d781bbb6f9a51a9561bcd4c", "db1ea24be6947e03176a297160dba16d65f37751bb0ef2ba71a4590d12b61dfc"),
-    make_ctkey("2c39348a9ab04dbabe3b5249819b7845ed8aaebd0d8eddd98bda0bf40753a398", "4e6cd25fbd10e2e040be84e3bf8043c612daeef625e66a5e5bcff88c9c46e82c"),
-    make_ctkey("c4c97157f23b45c7084526aaa9958fe858bebe446a7efa22c491c439b74271b1", "e251db2c86193a11a5bffefffe48c20e3d92a8dc98cb3a2f41704e565bcd860a"),
-    make_ctkey("d342045525139a8551bcdfa7aa0117d2ac2327cb6cf449ca59420c300e4471a5", "789c11f72060ad80f4cda5d89b24d49f9435bf765598dea7a91776e99f05f87c"),
-    make_ctkey("9a972ccf2c74f648070b0be839749c98eca87166de401a6c1f59e64b938a46c1", "5444cbed5cec31fb6ed1612f815d292f2bf3d2ff584bbcd8e5201ec59670d414"),
-    make_ctkey("49ccb806ccf5cbd74bae8d9fb2da8918ab61d0774ee6a6c3a6ccd237db22a088", "0c5db942fb44f29f6ef956e24db91f98a6de6e7288b0b04d01b8f260453d1431"),
-    make_ctkey("74417e8d1483df2df6fe68c88fc9a72639c35d765b38351b838521addf45dadc", "a1a606d6c4762ef51c1759bcb8b5c88be1d323025400c41fe6885431064b64dc"),
-    make_ctkey("48c4c349adaf7b3be27656ea70d1c83b93e1511bb0aac987861a4da9689b0e95", "ad14ffd5edac199ea7c5437d558089b0f2f03aa74bde43611322d769968b5a1c"),
-    make_ctkey("2d2ffade0f85ddd83a036469e49542e93cad94f9bea535f0ea2eb2f56304517e", "bcc48d00bd06dc5439200e749d0caf8a062b072d0c0eb1f78f6a4d8f2373e5f4"),
-    make_ctkey("4ee857d0ce17f66eca9c81eb326e404ceb50c8198248f2f827c440ee7aa0c0d7", "a8a9d61d4abbfb123630ffd214c834cc45113eaa51dd2f904cc6ae0c3c5d70e3")
+    make_ctkey("63d68fbd469c3551dbe896a8378b13e7e736cd757bf6be79d65b7a0a7817feee", "a56a0fe30b42deb0b3f9936b3f76690f4e5afa9be0a76890837b3262be9e6b27"),
+    make_ctkey("68e6fcde4bb5f5c886fec6a6ae78def4a66256e79a64d659731d68df296eaeb8", "c4aa183fbf90d0de8a9439d492ac413410d24f28075a7d2cf0eac8c6489a7ba9"),
+    make_ctkey("08441f9bf852fabc9483c368c67682d5620e5d18a60d0c11e2375d92096972a7", "96e4cc44fe8b60fc77230f707ad471eee5ff9362e50cd571980ce5b9f5e52c27"),
+    make_ctkey("38473887968921b397fe0d80884b650933fdf065139afc7ed727c3460e4eea50", "b924be2b891e59f61721abdebfe3f2a0fb5b713393a08e9e010fd139cd8d42e5"),
+    make_ctkey("78cbe27e9af8825e549b970360b225b37bf0d415c6635f46a52fab9239962423", "8e4208849191a8564e792525e50653c37c4e85d1d0794d7a8595c451dbea9e8e"),
+    make_ctkey("6baaaa4e27042605a71c69b660aca41e03f69eaf49868d968e118192d9c6218b", "41170e19efdc0652d80e769b7905cfc1b8dc46a09ffc84132c879d8c13754a9a"),
+    make_ctkey("e39f62a204a763e665d2dc153e80da6c9914b9c48449f88f5e8a979929e95a51", "d470bcc5bb7b41c748dc5658e0febbb55c1dbce20ce2e8030412b48326caa280"),
+    make_ctkey("1ae427f3d5c16c13ca578b4e7b539d2c08d2ab983c137806492824decb6ff753", "21063b6c7aaf715bd9a4ecccb574a632ce95a66d703beed93d6595ebd90a03f8"),
+    make_ctkey("2aaa84b067688251bb5d85d221347a0df0c270c651ffd6caddfe84e324b4528b", "9a9e92119ff2e4b8fa323484e3cf1cfc7be9c9ab32b104209d9f8636185120a1"),
+    make_ctkey("ec06974c4f221aef3f525f11307e1cf7f2acf7405e185af162bb826768666dfb", "71d23177781106b6d4893eb7a3f72cdba1a208c3e0672b4b8fda4d35c034ed03"),
+    make_ctkey("d7080b687c2e43cc8e4e76e092287f6fd66174e08e82e1e4e942909f220edac1", "baf6775d67e314debc86038c1761c022db1dfc83e22046aef5479995086d9b5d"),
+    make_ctkey("80f478e2004945113a1edc1e6d2354be851565aaf3fda6068d594beeef5e2f06", "24fbd7503854721cd98545af1e85dc4e75007366481ff2ee9e47b502b6eea38f"),
+    make_ctkey("72da19698f3a131a1d738508a4a0d8545790169b4bacedbc59e16e530c2da221", "e04126ddfb0e2a0132718aef02706fbd93376e478049a61013512e89684059c3"),
+    make_ctkey("cc949eefb6ca2b5ef19a2269ad895582a82c850d7a206465e0e40d54846d58d4", "f02e512919365cab215269b937664e7efacfcce1cdec864c44773cf3d304fe32"),
+    make_ctkey("5eea81559f4eeb5f4b0b66b9709ae9a512e0b74ce8e4fae11b01e1d53deceaeb", "e695bb00335c33787b754a6d4ee22cc406099be5eb410694c110db5c8a567bed"),
+    make_ctkey("b7f55351c1d1ce9f2389d6f5dcc094f34e9244dd129c0c8e6415accd096a612a", "0c715842353aff730d2e5d75d506cb7025415366aa4b76e3813fea10eb86ae71")
 }};
 } // anonymous namespace
 
@@ -253,7 +253,7 @@ TEST(verRctNonSemanticsSimple, tx1_preconditions)
 
     const crypto::hash tx_prefix_hash = cryptonote::get_transaction_prefix_hash(tx);
 
-    const uint8_t hf_version = 1;
+    const uint8_t hf_version = 4;
     
     EXPECT_EQ(1, tx.vin.size());
     EXPECT_EQ(2, tx.vout.size());

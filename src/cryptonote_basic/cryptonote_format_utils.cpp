@@ -1288,8 +1288,12 @@ namespace cryptonote
           CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
           // LAND AHOY!!!
         } else if (tx.type == cryptonote::transaction_type::PROTOCOL) {
-          // PROTOCOL TXs are responsible for paying out SAL and SAL1 during the AUDIT
-          CHECK_AND_ASSERT_MES(asset_type == "SAL1" || asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+          if (hf_version < HF_VERSION_AUDIT1_PAUSE) {
+            // PROTOCOL TXs are responsible for paying out SAL and SAL1 during the first AUDIT
+            CHECK_AND_ASSERT_MES(asset_type == "SAL1" || asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+          } else {
+            CHECK_AND_ASSERT_MES(asset_type == "SAL1", false, "wrong output asset type:" << asset_type);
+          }
         } else {
           // All other TX types must only spend + create SAL1 (MINER, TRANSFER)
           CHECK_AND_ASSERT_MES(asset_type == "SAL1", false, "wrong output asset type:" << asset_type);

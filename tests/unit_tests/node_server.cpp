@@ -398,17 +398,21 @@ TEST(cryptonote_protocol_handler, race_condition)
   ){
     auto &storage = core.get_blockchain_storage();
     const auto height = storage.get_current_blockchain_height();
-    const auto hardfork = storage.get_current_hard_fork_version();
+    const auto hardfork = 4;
     block.major_version = hardfork;
     block.minor_version = storage.get_ideal_hard_fork_version();
     block.prev_id = storage.get_tail_id();
     auto &db = storage.get_db();
     block.timestamp = db.get_top_block_timestamp();
     block.nonce = 0xACAB;
+
+    // set miner tx
     block.miner_tx.vin.clear();
     block.miner_tx.vout.clear();
     block.miner_tx.extra.clear();
     block.miner_tx.version = hardfork >= 4 ? 2 : 1;
+    block.miner_tx.type = cryptonote::transaction_type::MINER;
+    block.miner_tx.amount_burnt = 1; // avoid no staking reward error 
     block.miner_tx.unlock_time = height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
     block.miner_tx.vin.push_back(cryptonote::txin_gen{height});
     cryptonote::add_tx_pub_key_to_extra(block.miner_tx, {});
@@ -419,7 +423,19 @@ TEST(cryptonote_protocol_handler, race_condition)
       reward,
       hardfork
     );
-    block.miner_tx.vout.push_back(cryptonote::tx_out{reward, cryptonote::txout_to_key{}});
+    cryptonote::txout_to_key out; out.asset_type = "SAL";
+    block.miner_tx.vout.push_back(cryptonote::tx_out{reward, out});
+
+    // set protocol tx
+    block.protocol_tx.vin.clear();
+    block.protocol_tx.vout.clear();
+    block.protocol_tx.extra.clear();
+    block.protocol_tx.version = hardfork >= 4 ? 2 : 1;
+    block.protocol_tx.type = cryptonote::transaction_type::PROTOCOL;
+    block.protocol_tx.unlock_time = height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
+    block.protocol_tx.vin.push_back(cryptonote::txin_gen{height});
+    cryptonote::add_tx_pub_key_to_extra(block.protocol_tx, {});
+
     diff = storage.get_difficulty_for_next_block();
   };
   struct stat {

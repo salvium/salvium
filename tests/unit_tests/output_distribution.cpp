@@ -47,18 +47,18 @@ public:
   TestDB(size_t bc_height = test_distribution_size): blockchain_height(bc_height) { m_open = true; }
   virtual uint64_t height() const override { return blockchain_height; }
 
-  // std::pair<std::vector<uint64_t>, uint64_t> get_block_cumulative_rct_outputs(const std::vector<uint64_t> &heights, const std::string asset_type) const override
-  // {
-  //   std::vector<uint64_t> d;
-  //   for (uint64_t h: heights)
-  //   {
-  //     uint64_t c = 0;
-  //     for (uint64_t i = 0; i <= h; ++i)
-  //       c += test_distribution[i];
-  //     d.push_back(c);
-  //   }
-  //   return d;
-  // }
+  std::pair<std::vector<uint64_t>, uint64_t> get_block_cumulative_rct_outputs(const std::vector<uint64_t> &heights, const std::string asset_type) const override
+  {
+    std::vector<uint64_t> d;
+    for (uint64_t h: heights)
+    {
+      uint64_t c = 0;
+      for (uint64_t i = 0; i <= h; ++i)
+        c += test_distribution[i];
+      d.push_back(c);
+    }
+    return std::make_pair(d, test_distribution_size);
+  }
 
   std::vector<uint64_t> get_block_weights(uint64_t start_offset, size_t count) const override
   {
@@ -101,27 +101,27 @@ TEST(output_distribution, extend)
   ASSERT_TRUE(res != boost::none);
   ASSERT_EQ(res->distribution.size(), 2);
   ASSERT_EQ(res->distribution, std::vector<uint64_t>({5, 0}));
-
+  
   res = cryptonote::rpc::RpcHandler::get_output_distribution(::get_output_distribution, 0, "SAL", 28, 29, ::get_block_hash, true, test_distribution_size);
   ASSERT_TRUE(res != boost::none);
   ASSERT_EQ(res->distribution.size(), 2);
   ASSERT_EQ(res->distribution, std::vector<uint64_t>({55, 55}));
-
+  
   res = cryptonote::rpc::RpcHandler::get_output_distribution(::get_output_distribution, 0, "SAL", 28, 30, ::get_block_hash, false, test_distribution_size);
   ASSERT_TRUE(res != boost::none);
   ASSERT_EQ(res->distribution.size(), 3);
   ASSERT_EQ(res->distribution, std::vector<uint64_t>({5, 0, 2}));
-
+  
   res = cryptonote::rpc::RpcHandler::get_output_distribution(::get_output_distribution, 0, "SAL", 28, 30, ::get_block_hash, true, test_distribution_size);
   ASSERT_TRUE(res != boost::none);
   ASSERT_EQ(res->distribution.size(), 3);
   ASSERT_EQ(res->distribution, std::vector<uint64_t>({55, 55, 57}));
-
+  
   res = cryptonote::rpc::RpcHandler::get_output_distribution(::get_output_distribution, 0, "SAL", 28, 31, ::get_block_hash, false, test_distribution_size);
   ASSERT_TRUE(res != boost::none);
   ASSERT_EQ(res->distribution.size(), 4);
   ASSERT_EQ(res->distribution, std::vector<uint64_t>({5, 0, 2, 3}));
-
+  
   res = cryptonote::rpc::RpcHandler::get_output_distribution(::get_output_distribution, 0, "SAL", 28, 31, ::get_block_hash, true, test_distribution_size);
   ASSERT_TRUE(res != boost::none);
   ASSERT_EQ(res->distribution.size(), 4);

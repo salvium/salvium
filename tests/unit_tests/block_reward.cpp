@@ -34,6 +34,8 @@
 
 using namespace cryptonote;
 
+#define TARGET_MINUTES DIFFICULTY_TARGET_V2 / 60
+
 namespace
 {
   //--------------------------------------------------------------------------------------------------------------------
@@ -53,24 +55,23 @@ namespace
 
   TEST_F(block_reward_and_already_generated_coins, handles_first_values)
   {
-  	// 17592186044415 from neozaru, confirmed by fluffypony
-    TEST_ALREADY_GENERATED_COINS(0, UINT64_C(17592186044415));
-    TEST_ALREADY_GENERATED_COINS(m_block_reward, UINT64_C(17592169267200));
-    TEST_ALREADY_GENERATED_COINS(UINT64_C(2756434948434199641), UINT64_C(14963444829249));
+    TEST_ALREADY_GENERATED_COINS(0, UINT64_C(2210000000000000)); // premine amount
+    TEST_ALREADY_GENERATED_COINS(m_block_reward, UINT64_C(15478134155));
+    TEST_ALREADY_GENERATED_COINS(UINT64_C(2756434948434199641), UINT64_C(14981030583644));
   }
 
   TEST_F(block_reward_and_already_generated_coins, correctly_steps_from_2_to_1)
   {
-    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY - ((2 << 20) + 1), FINAL_SUBSIDY_PER_MINUTE);
-    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY -  (2 << 20)     , FINAL_SUBSIDY_PER_MINUTE);
-    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY - ((2 << 20) - 1), FINAL_SUBSIDY_PER_MINUTE);
+    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY - ((2 << 20) + 1), FINAL_SUBSIDY_PER_MINUTE * TARGET_MINUTES);
+    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY -  (2 << 20)     , FINAL_SUBSIDY_PER_MINUTE * TARGET_MINUTES);
+    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY - ((2 << 20) - 1), FINAL_SUBSIDY_PER_MINUTE * TARGET_MINUTES);
   }
 
   TEST_F(block_reward_and_already_generated_coins, handles_max)
   {
-    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY - ((1 << 20) + 1), FINAL_SUBSIDY_PER_MINUTE);
-    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY -  (1 << 20)     , FINAL_SUBSIDY_PER_MINUTE);
-    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY - ((1 << 20) - 1), FINAL_SUBSIDY_PER_MINUTE);
+    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY - ((1 << 20) + 1), FINAL_SUBSIDY_PER_MINUTE * TARGET_MINUTES);
+    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY -  (1 << 20)     , FINAL_SUBSIDY_PER_MINUTE * TARGET_MINUTES);
+    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY - ((1 << 20) - 1), FINAL_SUBSIDY_PER_MINUTE * TARGET_MINUTES);
   }
 
   //--------------------------------------------------------------------------------------------------------------------
@@ -89,7 +90,8 @@ namespace
       m_block_not_too_big = get_block_reward(median_block_weight, current_block_weight, already_generated_coins, m_block_reward, 1);
     }
 
-    static const uint64_t already_generated_coins = 0;
+    // something > 0 to skip the premine case on `get_block_reward`function.
+    static const uint64_t already_generated_coins = 1;
 
     bool m_block_not_too_big;
     uint64_t m_block_reward;
@@ -162,7 +164,8 @@ namespace
       m_block_not_too_big = get_block_reward(epee::misc_utils::median(m_last_block_weights), current_block_weight, already_generated_coins, m_block_reward, 1);
     }
 
-    static const uint64_t already_generated_coins = 0;
+    // something > 0 to skip the premine case on `get_block_reward`function.
+    static const uint64_t already_generated_coins = 1;
 
     std::vector<size_t> m_last_block_weights;
     uint64_t m_last_block_weights_median;

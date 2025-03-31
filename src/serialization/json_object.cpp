@@ -270,7 +270,7 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
   INSERT_INTO_JSON_OBJECT(dest, outputs, tx.vout);
   INSERT_INTO_JSON_OBJECT(dest, extra, tx.extra);
   INSERT_INTO_JSON_OBJECT(dest, type, static_cast<uint8_t>(tx.type));
-  if (tx.type != cryptonote::transaction_type::PROTOCOL) {
+  if (tx.type != cryptonote::transaction_type::PROTOCOL && tx.type != cryptonote::transaction_type::UNSET) {
     INSERT_INTO_JSON_OBJECT(dest, amount_burnt, tx.amount_burnt);
     if (tx.type != cryptonote::transaction_type::MINER) {
       if (tx.type == cryptonote::transaction_type::TRANSFER && tx.version >= TRANSACTION_VERSION_N_OUTS) {
@@ -313,7 +313,7 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
   uint8_t tx_type = 0;
   GET_FROM_JSON_OBJECT(val, tx_type, type);
   tx.type = static_cast<cryptonote::transaction_type>(tx_type);
-  if (tx.type != cryptonote::transaction_type::PROTOCOL) {
+  if (tx.type != cryptonote::transaction_type::PROTOCOL && tx.type != cryptonote::transaction_type::UNSET) {
     GET_FROM_JSON_OBJECT(val, tx.amount_burnt, amount_burnt);
     if (tx.type != cryptonote::transaction_type::MINER) {
       if (tx.type == cryptonote::transaction_type::TRANSFER && tx.version >= TRANSACTION_VERSION_N_OUTS) {

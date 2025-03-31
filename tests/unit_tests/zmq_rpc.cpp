@@ -247,7 +247,7 @@ namespace
     {
       cryptonote::account_base temp_account;
       temp_account.generate();
-      return make_transaction({temp_account.get_keys().m_account_address});
+      return make_transaction({temp_account.get_keys().m_account_address, temp_account.get_keys().m_account_address});
     }
 
     cryptonote::block make_block()
