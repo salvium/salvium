@@ -749,7 +749,7 @@ TEST(Serialization, portability_wallet)
     ++pd1;
     ASSERT_EQ(epee::string_tools::pod_to_hex(pd0->first), "0000000000000000000000000000000000000000000000000000000000000000");
     ASSERT_EQ(epee::string_tools::pod_to_hex(pd1->first), "0000000000000000000000000000000000000000000000000000000000000000");
-    if (epee::string_tools::pod_to_hex(pd0->second.m_tx_hash) == "ec34c9bb12b99af33d49691384eee5bed9171498ff04e59516505f35d1fc5efc")
+    if (epee::string_tools::pod_to_hex(pd0->second.m_tx_hash) == "857cbe184830d93a93c4a164fe492124152e0b21b3c04e8f4145ac83611c47ee")
       swap(pd0, pd1);
     ASSERT_EQ(epee::string_tools::pod_to_hex(pd0->second.m_tx_hash), "733674c4f446d73620c6300b8376c88903f29795e3fb808d43aeee0dc99a1a9e");
     ASSERT_EQ(epee::string_tools::pod_to_hex(pd1->second.m_tx_hash), "857cbe184830d93a93c4a164fe492124152e0b21b3c04e8f4145ac83611c47ee");

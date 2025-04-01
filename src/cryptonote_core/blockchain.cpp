@@ -3622,7 +3622,14 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
       return false;
     }
   }
-  
+
+  // Check for invalid TX types
+  if (tx.type == cryptonote::transaction_type::UNSET || tx.type > cryptonote::transaction_type::MAX) {
+    MERROR("TX type `" + std::to_string(tx.type) + "' is not supported");
+    tvc.m_version_mismatch = true;
+    return false;
+  }
+
   return true;
 }
 //------------------------------------------------------------------
