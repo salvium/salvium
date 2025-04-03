@@ -368,7 +368,6 @@ static cryptonote::transaction construct_carrot_pruned_transaction_fake_inputs(
     carrot::make_pruned_transaction_from_carrot_proposal_v1(tx_proposal,
         /*s_view_balance_dev=*/nullptr,
         &k_view_dev,
-        acc_keys.m_account_address.m_spend_public_key,
         tx);
 
     return tx;
