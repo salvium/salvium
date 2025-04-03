@@ -1193,31 +1193,14 @@ namespace cryptonote
     if (tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::STAKE) {
       CHECK_AND_ASSERT_MES(tx.vout.size() == 1, false, "audit and stake transactions should have 1 output");
     }
-    CHECK_AND_ASSERT_MES(tx.vout.size() > 0, false, "no outputs in transaction");
 
     for (const auto &o: tx.vout)
     {
-      if (hf_version > HF_VERSION_CARROT)
+      if (hf_version >= HF_VERSION_CARROT)
       {
         // from v18, require outputs be carrot outputs
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_carrot_v1), false, "wrong variant type: "
           << o.target.type().name() << ", expected txout_to_carrot_v1 in transaction id=" << get_transaction_hash(tx));
-      }
-      else if (hf_version == HF_VERSION_CARROT)
-      {
-        // during v17, require outputs be of type txout_to_tagged_key OR txout_to_carrot_v1
-        // to allow grace period before requiring all to be txout_to_carrot_v1
-        CHECK_AND_ASSERT_MES(
-          o.target.type() == typeid(txout_to_carrot_v1) ||
-          o.target.type() == typeid(txout_to_tagged_key) ||
-          o.target.type() == typeid(txout_to_key),
-          false, "wrong variant type: " << o.target.type().name()
-          << ", expected txout_to_key or txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
-
-        // require all outputs in a tx be of the same type
-        CHECK_AND_ASSERT_MES(o.target.type() == tx.vout[0].target.type(), false, "non-matching variant types: "
-          << o.target.type().name() << " and " << tx.vout[0].target.type().name() << ", "
-          << "expected matching variant types in transaction id=" << get_transaction_hash(tx));
       } else {
         // require outputs be of type txout_to_key OR txout_to_tagged_key
         // to allow grace period before requiring all to be txout_to_tagged_key

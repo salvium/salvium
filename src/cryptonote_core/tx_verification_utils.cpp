@@ -26,6 +26,9 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <boost/iterator/transform_iterator.hpp>
+
+#include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_core/blockchain.h"
 #include "cryptonote_core/tx_verification_utils.h"
 #include "ringct/rctSigs.h"
@@ -109,6 +112,32 @@ static crypto::hash calc_tx_mixring_hash(const transaction& tx, const rct::ctkey
 
 namespace cryptonote
 {
+
+uint64_t get_transaction_weight_limit(const uint8_t hf_version)
+{
+    // from v2, limit a tx to 50% of the minimum block weight
+    if (hf_version >= 2)
+        return get_min_block_weight(hf_version) / 2 - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
+    else
+        return get_min_block_weight(hf_version) - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
+}
+
+bool are_transaction_output_pubkeys_sorted(const transaction_prefix &tx_prefix)
+{
+    crypto::public_key last_output_pubkey = crypto::null_pkey;
+    for (const tx_out &o : tx_prefix.vout) {
+      crypto::public_key output_pubkey;
+      if (!get_output_public_key(o, output_pubkey)) {
+        return false;
+      }
+      else if (!(output_pubkey > last_output_pubkey)) {
+        return false;
+      }
+      last_output_pubkey = output_pubkey;
+    }
+
+    return true;
+}
 
 bool ver_rct_non_semantics_simple_cached
 (

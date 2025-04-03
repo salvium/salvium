@@ -110,15 +110,6 @@ namespace cryptonote
       return amount * ACCEPT_THRESHOLD;
     }
 
-    uint64_t get_transaction_weight_limit(uint8_t version)
-    {
-      // from v2, limit a tx to 50% of the minimum block weight
-      if (version >= 2)
-        return get_min_block_weight(version) / 2 - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
-      else
-        return get_min_block_weight(version) - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
-    }
-
     // external lock must be held for the comparison+set to work properly
     void set_if_less(std::atomic<time_t>& next_check, const time_t candidate) noexcept
     {
