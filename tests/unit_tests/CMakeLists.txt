@@ -57,6 +57,7 @@ set(unit_tests_sources
   epee_utils.cpp
   expect.cpp
   fee.cpp
+  fake_pruned_blockchain.cpp
   json_serialization.cpp
   check_output_types.cpp
   protocol_tx.cpp
