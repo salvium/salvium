@@ -312,3 +312,13 @@ TEST(Crypto, tree_branch)
     }
   }
 }
+
+TEST(Crypto, genesis_tx_output_torsion)
+{
+  rct::key k;
+  // see config::GENESIS_TX
+  epee::string_tools::hex_to_pod("9b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd088071", k);
+  ge_p3 x;
+  ASSERT_EQ(ge_frombytes_vartime(&x, k.bytes), 0);
+  EXPECT_FALSE(rct::isInMainSubgroup(k));
+}
