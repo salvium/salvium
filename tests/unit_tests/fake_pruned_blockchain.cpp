@@ -32,12 +32,9 @@
 #include "fake_pruned_blockchain.h"
 
 //local headers
-#include "carrot_core/device_ram_borrowed.h"
-#include "carrot_core/output_set_finalization.h"
-#include "carrot_impl/carrot_tx_builder_utils.h"
-#include "carrot_impl/carrot_tx_format_utils.h"
 #include "common/container_helpers.h"
-#include "crypto/generators.h"
+#include "ringct/rctOps.h"
+#include "tx_construction_helpers.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "unit_tests.fake_pruned_bc"
@@ -45,318 +42,122 @@
 namespace mock
 {
 //----------------------------------------------------------------------------------------------------------------------
-bool construct_miner_tx_fake_reward_1out(const size_t height,
-    const rct::xmr_amount reward,
-    const cryptonote::account_public_address &miner_address,
-    cryptonote::transaction& tx,
-    const uint8_t hf_version)
+//----------------------------------------------------------------------------------------------------------------------
+static constexpr std::size_t selene_chunk_width = fcmp_pp::curve_trees::SELENE_CHUNK_WIDTH;
+static constexpr std::size_t helios_chunk_width = fcmp_pp::curve_trees::HELIOS_CHUNK_WIDTH;
+const auto curve_trees = fcmp_pp::curve_trees::curve_trees_v1(selene_chunk_width, helios_chunk_width);
+//----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
+template <class C>
+static bool compare_curve_point(const typename C::Point &p1, const typename C::Point &p2)
 {
-    const bool is_carrot = hf_version >= HF_VERSION_CARROT;
-    if (is_carrot)
+    const crypto::ec_point p1_compressed = C().to_bytes(p1);
+    const crypto::ec_point p2_compressed = C().to_bytes(p2);
+    return p1_compressed == p2_compressed;
+}
+//----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
+template <class C>
+static bool compare_curve_layer(const std::vector<typename C::Point> &p1s,
+    const std::vector<typename C::Point> &p2s)
+{
+    if (p1s.size() != p2s.size())
+        return false;
+    for (size_t i = 0; i < p1s.size(); ++i)
     {
-        carrot::CarrotDestinationV1 miner_destination;
-        make_carrot_main_address_v1(miner_address.m_spend_public_key,
-            miner_address.m_view_public_key,
-            miner_destination);
-        
-        const carrot::CarrotPaymentProposalV1 normal_payment_proposal{
-            .destination = miner_destination,
-            .amount = reward,
-            .randomness = carrot::gen_janus_anchor()
-        };
-
-        std::vector<carrot::CarrotCoinbaseEnoteV1> coinbase_enotes;
-        carrot::get_coinbase_output_enotes({normal_payment_proposal},
-            height,
-            coinbase_enotes);
-
-        tx = carrot::store_carrot_to_coinbase_transaction_v1(coinbase_enotes);
-    }
-    else // !is_carrot
-    {
-        tx.vin.clear();
-        tx.vout.clear();
-        tx.extra.clear();
-
-        cryptonote::txin_gen in;
-        in.height = height;
-
-        cryptonote::keypair txkey = cryptonote::keypair::generate(hw::get_device("default"));
-        cryptonote::add_tx_pub_key_to_extra(tx, txkey.pub);
-        if (!cryptonote::sort_tx_extra(tx.extra, tx.extra))
+        if (!compare_curve_point<C>(p1s.at(i), p2s.at(i)))
             return false;
-
-        crypto::key_derivation derivation;
-        crypto::public_key out_eph_public_key;
-        bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
-        CHECK_AND_ASSERT_MES(r, false,
-            "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", "
-            << crypto::secret_key_explicit_print_ref{txkey.sec} << ")");
-
-        const size_t local_output_index = 0;
-        r = crypto::derive_public_key(derivation, local_output_index, miner_address.m_spend_public_key, out_eph_public_key);
-        CHECK_AND_ASSERT_MES(r, false,
-            "while creating outs: failed to derive_public_key(" << derivation << ", "
-            << local_output_index << ", "<< miner_address.m_spend_public_key << ")");
-
-        const bool use_view_tags = hf_version >= HF_VERSION_VIEW_TAGS;
-        crypto::view_tag view_tag;
-        if (use_view_tags)
-            crypto::derive_view_tag(derivation, local_output_index, view_tag);
-
-        cryptonote::tx_out out;
-        cryptonote::set_tx_out(reward, out_eph_public_key, use_view_tags, view_tag, out);
-
-        tx.vout.push_back(out);
-
-        if (hf_version >= 4)
-            tx.version = 2;
-        else
-            tx.version = 1;
-
-        tx.unlock_time = height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
-        tx.vin.push_back(in);
-
-        tx.invalidate_hashes();
     }
-
     return true;
 }
 //----------------------------------------------------------------------------------------------------------------------
-cryptonote::transaction construct_miner_tx_fake_reward_1out(const size_t height,
-    const rct::xmr_amount reward,
-    const cryptonote::account_public_address &miner_address,
-    const uint8_t hf_version)
-{
-    cryptonote::transaction tx;
-    const bool r = construct_miner_tx_fake_reward_1out(height, reward, miner_address, tx, hf_version);
-    CHECK_AND_ASSERT_THROW_MES(r, "failed to construct miner tx");
-    return tx;
-}
 //----------------------------------------------------------------------------------------------------------------------
-cryptonote::tx_source_entry gen_tx_source_entry_fake_members(
-    const stripped_down_tx_source_entry_t &in,
-    const size_t mixin,
-    const uint64_t max_global_output_index)
+template <class C>
+static bool compare_curve_chunks(const std::vector<std::vector<typename C::Point>> &chunks1,
+    const std::vector<std::vector<typename C::Point>> &chunks2)
 {
-    const size_t ring_size = mixin + 1;
-    const bool is_rct = in.mask == rct::I;
-
-    CHECK_AND_ASSERT_THROW_MES(in.global_output_index <= max_global_output_index,
-        "real global output index too low");
-    CHECK_AND_ASSERT_THROW_MES(max_global_output_index >= ring_size,
-        "not enough global output indices for mixin");
-
-    cryptonote::tx_source_entry res;
-
-    // populate ring with fake data
-    std::unordered_set<uint64_t> used_indices;
-    res.outputs.reserve(mixin + 1);
-    res.outputs.push_back(
-        {in.global_output_index,
-            { rct::pk2rct(in.onetime_address), rct::commit(in.amount, in.mask) }});
-    used_indices.insert(in.global_output_index);
-    while (res.outputs.size() < ring_size)
+    if (chunks1.size() != chunks2.size())
+        return false;
+    for (size_t i = 0; i < chunks1.size(); ++i)
     {
-        const uint64_t global_output_index = crypto::rand_range<uint64_t>(0, max_global_output_index);
-        if (used_indices.count(global_output_index))
-            continue;
-        used_indices.insert(global_output_index);
-        const rct::ctkey output_pair{rct::pkGen(),
-            is_rct ? rct::pkGen() : rct::zeroCommitVartime(in.amount)};
-        res.outputs.push_back({global_output_index, output_pair});
+        if (!compare_curve_layer<C>(chunks1.at(i), chunks2.at(i)))
+            return false;
     }
-    // sort by index
-    std::sort(res.outputs.begin(), res.outputs.end(), [](const auto &a, const auto &b) -> bool {
-        return a.first < b.first;
-    });
-
-    // real_output
-    res.real_output = 0;
-    while (res.outputs.at(res.real_output).second.dest != in.onetime_address)
-        ++res.real_output;
-
-    // copy from in
-    res.real_out_tx_key = in.real_out_tx_key;
-    res.real_out_additional_tx_keys = in.real_out_additional_tx_keys;
-    res.real_output_in_tx_index = in.local_output_index;
-    res.amount = in.amount;
-    res.rct = is_rct;
-    res.mask = in.mask;
-
-    return res;
+    return true;
 }
 //----------------------------------------------------------------------------------------------------------------------
-cryptonote::transaction construct_pre_carrot_tx_with_fake_inputs(
-    const cryptonote::account_keys &sender_account_keys,
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddresses,
-    std::vector<stripped_down_tx_source_entry_t> &&stripped_sources,
-    std::vector<cryptonote::tx_destination_entry> &destinations,
-    const boost::optional<cryptonote::account_public_address> &change_addr,
-    const rct::xmr_amount fee,
-    const uint8_t hf_version,
-    const bool sweep_unmixable_override)
+//----------------------------------------------------------------------------------------------------------------------
+static bool compare_output_tuple(const fcmp_pp::curve_trees::OutputTuple &tup1,
+    const fcmp_pp::curve_trees::OutputTuple &tup2)
 {
-    // derive config from hf version
-    const bool rct = hf_version >= HF_VERSION_DYNAMIC_FEE && !sweep_unmixable_override;
-    rct::RCTConfig rct_config;
-    switch (hf_version)
-    {
-        case 1:
-        case 2:
-        case 3:
-        case HF_VERSION_DYNAMIC_FEE:
-        case 5:
-        case HF_VERSION_MIN_MIXIN_4:
-        case 7:
-            rct_config = { rct::RangeProofBorromean, 0 };
-            break;
-        case HF_VERSION_PER_BYTE_FEE:
-        case 9:
-            rct_config = { rct::RangeProofPaddedBulletproof, 1 };
-            break;
-        case HF_VERSION_SMALLER_BP:
-        case 11:
-        case HF_VERSION_MIN_2_OUTPUTS:
-            rct_config = { rct::RangeProofPaddedBulletproof, 2 };
-            break;
-        case HF_VERSION_CLSAG:
-        case 14:
-            rct_config = { rct::RangeProofPaddedBulletproof, 3 };
-            break;
-        case HF_VERSION_BULLETPROOF_PLUS:
-        case 16:
-            rct_config = { rct::RangeProofPaddedBulletproof, 4 };
-            break;
-        default:
-            ASSERT_MES_AND_THROW("unrecognized hf version");
-    }
-    const bool use_view_tags = hf_version >= HF_VERSION_VIEW_TAGS;
-    const size_t mixin = 15;
-    const uint64_t max_global_output_index = 1000000;
-
-    // count missing money and balance if necessary
-    boost::multiprecision::int128_t missing_money = fee;
-    for (const cryptonote::tx_destination_entry &destination : destinations)
-        missing_money += destination.amount;
-    for (const stripped_down_tx_source_entry_t &stripped_source : stripped_sources)
-        missing_money -= stripped_source.amount;
-    if (missing_money > 0)
-    {
-        const rct::xmr_amount missing_money64 = boost::numeric_cast<rct::xmr_amount>(missing_money);
-
-        hw::device &hwdev = hw::get_device("default");
-        cryptonote::keypair main_tx_keypair = cryptonote::keypair::generate(hwdev);
-
-        std::vector<crypto::public_key> dummy_additional_tx_public_keys;
-        std::vector<rct::key> amount_keys;
-        crypto::public_key input_onetime_address;
-        crypto::view_tag vt;
-        const bool r = hwdev.generate_output_ephemeral_keys(rct ? 2 : 1,
-            cryptonote::account_keys(),
-            main_tx_keypair.pub, 
-            main_tx_keypair.sec,
-            cryptonote::tx_destination_entry(missing_money64, sender_account_keys.m_account_address, false),
-            boost::none,
-            /*output_index=*/0,
-            /*need_additional_txkeys=*/false,
-            /*additional_tx_keys=*/{},
-            dummy_additional_tx_public_keys,
-            amount_keys,
-            input_onetime_address,
-            use_view_tags,
-            vt);
-        CHECK_AND_ASSERT_THROW_MES(r, "failed to generate balancing input");
-
-        const stripped_down_tx_source_entry_t balancing_in{
-            .global_output_index = crypto::rand_range<uint64_t>(0, max_global_output_index),
-            .onetime_address = input_onetime_address,
-            .real_out_tx_key = main_tx_keypair.pub,
-            .real_out_additional_tx_keys = {},
-            .local_output_index = 0,
-            .amount = missing_money64,
-            .mask = rct ? rct::genCommitmentMask(amount_keys.at(0)) : rct::I
-        };
-
-        stripped_sources.push_back(balancing_in);
-    }
-
-    // populate random sources
-    std::vector<cryptonote::tx_source_entry> sources;
-    sources.reserve(stripped_sources.size());
-    for (const auto &stripped_source : stripped_sources)
-        sources.push_back(gen_tx_source_entry_fake_members(stripped_source,
-            mixin,
-            max_global_output_index));
-
-    // construct tx
-    cryptonote::transaction tx;
-    crypto::secret_key tx_key;
-    std::vector<crypto::secret_key> additional_tx_keys;
-    fcmp_pp::ProofParams dummy_fcmp_params;
-    const bool r = cryptonote::construct_tx_and_get_tx_key(
-        sender_account_keys,
-        subaddresses,
-        sources,
-        destinations,
-        change_addr,
-        /*extra=*/{},
-        tx,
-        tx_key,
-        additional_tx_keys,
-        dummy_fcmp_params,
-        rct,
-        rct_config, 
-        use_view_tags);
-    CHECK_AND_ASSERT_THROW_MES(r, "failed to construct tx");
-    return tx;
+    return tup1.O == tup2.O && tup1.I == tup2.I && tup1.C == tup2.C;
 }
 //----------------------------------------------------------------------------------------------------------------------
-cryptonote::transaction construct_carrot_pruned_transaction_fake_inputs(
-    const std::vector<carrot::CarrotPaymentProposalV1> &normal_payment_proposals,
-    const std::vector<carrot::CarrotPaymentProposalVerifiableSelfSendV1> &selfsend_payment_proposals,
-    const cryptonote::account_keys &acc_keys)
+//----------------------------------------------------------------------------------------------------------------------
+static bool compare_leaf_layer(const std::vector<fcmp_pp::curve_trees::OutputTuple> &leaves1,
+    const std::vector<fcmp_pp::curve_trees::OutputTuple> &leaves2)
 {
-    carrot::select_inputs_func_t select_inputs = [](
-        const boost::multiprecision::int128_t &nominal_output_sum,
-        const std::map<std::size_t, rct::xmr_amount> &fee_by_input_count,
-        const std::size_t,
-        const std::size_t,
-        std::vector<carrot::CarrotSelectedInput> &select_inputs_out
-    )
+    MDEBUG("compare_leaf_layer: " << leaves1.size() << " vs " << leaves2.size());
+    if (leaves1.size() != leaves2.size())
+        return false;
+    bool r = true;
+    for (size_t i = 0; i < leaves1.size(); ++i)
     {
-        const auto in_amount = boost::numeric_cast<rct::xmr_amount>(nominal_output_sum + fee_by_input_count.at(1));
-        const crypto::key_image ki = rct::rct2ki(rct::pkGen());
-        select_inputs_out = {carrot::CarrotSelectedInput{.amount = in_amount, .key_image = ki}};
-    };
-
-    const carrot::view_incoming_key_ram_borrowed_device k_view_dev(acc_keys.m_view_secret_key);
-
-    carrot::CarrotTransactionProposalV1 tx_proposal;
-    carrot::make_carrot_transaction_proposal_v1_transfer(
-        normal_payment_proposals,
-        selfsend_payment_proposals,
-        fake_fee_per_weight,
-        /*extra=*/{},
-        std::move(select_inputs),
-        /*s_view_balance_dev=*/nullptr,
-        &k_view_dev,
-        acc_keys.m_account_address.m_spend_public_key,
-        tx_proposal);
-
-    cryptonote::transaction tx;
-    carrot::make_pruned_transaction_from_carrot_proposal_v1(tx_proposal,
-        /*s_view_balance_dev=*/nullptr,
-        &k_view_dev,
-        tx);
-
-    return tx;
+        MDEBUG("    Leaf O: " << leaves1.at(i).O << " vs " << leaves2.at(i).O);
+        if (!compare_output_tuple(leaves1.at(i), leaves2.at(i)))
+            r = false;
+    }
+    return r;
 }
 //----------------------------------------------------------------------------------------------------------------------
-const cryptonote::account_public_address null_addr{
-    .m_spend_public_key = crypto::get_G(),
-    .m_view_public_key = crypto::get_G()
-};
+//----------------------------------------------------------------------------------------------------------------------
+static bool compare_paths_between_tree_cache_and_global_tree(
+    const fcmp_pp::curve_trees::TreeCacheV1 &tree_cache,
+    const CurveTreesGlobalTree &global_tree,
+    const std::vector<fcmp_pp::curve_trees::OutputContext> &leaves)
+{
+    // this check compares the paths returned by tree_cache and global_tree against each other for a
+    // given set of leaves
+
+    using namespace fcmp_pp::curve_trees;
+
+    CHECK_AND_ASSERT_MES(tree_cache.get_n_leaf_tuples() == global_tree.get_n_leaf_tuples(), false, 
+        "mismatch in number of leaf tuples");
+    for (const OutputContext &leaf : leaves)
+    {
+        CurveTreesV1::Path path_in_cache;
+        CHECK_AND_ASSERT_THROW_MES(tree_cache.get_output_path(leaf.output_pair, path_in_cache),
+            "could not get path from tree cache");
+        const CurveTreesV1::Path path_in_global =
+            global_tree.get_path_at_leaf_idx(leaf.output_id);
+        CHECK_AND_ASSERT_MES(compare_leaf_layer(path_in_cache.leaves, path_in_global.leaves), false,
+            "paths' leaves are not equal");
+        CHECK_AND_ASSERT_MES(compare_curve_chunks<Selene>(path_in_cache.c1_layers, path_in_global.c1_layers),
+            false,
+            "paths' c1 layers are not equal");
+        CHECK_AND_ASSERT_MES(compare_curve_chunks<Helios>(path_in_cache.c2_layers, path_in_global.c2_layers),
+            false,
+            "paths' c2 layers are not equal");
+    }
+    return true;
+}
+//----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
+static bool is_valid_output_pair_for_tree(const fcmp_pp::curve_trees::OutputPair &p)
+{
+    return rct::isInMainSubgroup(rct::pk2rct(p.output_pubkey)) && rct::isInMainSubgroup(p.commitment);
+}
+//----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
+fake_pruned_blockchain::fake_pruned_blockchain(const uint64_t start_block_index,
+    const cryptonote::network_type nettype):
+    m_start_block_index(start_block_index),
+    m_nettype(nettype),
+    m_num_outputs(0),
+    m_global_curve_tree(*curve_trees)
+{
+    add_starting_block();
+}
 //----------------------------------------------------------------------------------------------------------------------
 void fake_pruned_blockchain::add_block(const uint8_t hf_version,
     std::vector<cryptonote::transaction> &&txs,

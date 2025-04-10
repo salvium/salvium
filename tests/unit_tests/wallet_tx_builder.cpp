@@ -32,6 +32,8 @@
 #include "carrot_core/config.h"
 #include "common/container_helpers.h"
 #include "ringct/rctOps.h"
+#include "ringct/rctSigs.h"
+#include "tx_construction_helpers.h"
 #include "wallet/tx_builder.h"
 
 static tools::wallet2::transfer_details gen_transfer_details()
