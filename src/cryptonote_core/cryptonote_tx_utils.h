@@ -37,6 +37,8 @@
 #include "oracle/pricing_record.h"
 #include "cryptonote_protocol/enums.h"
 
+#include "hardforks/hardforks.h"
+
 namespace cryptonote
 {
   /*
@@ -72,7 +74,9 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool construct_protocol_tx(const size_t height, transaction& tx, std::vector<protocol_data_entry>& protocol_data, const uint8_t hf_version);
   //---------------------------------------------------------------
-  bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, const blobdata& extra_nonce = blobdata(), size_t max_outs = 999, uint8_t hard_fork_version = 1);
+  bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, network_type nettype = network_type::FAKECHAIN, const std::vector<hardfork_t>& hardforks = {}, const blobdata& extra_nonce = blobdata(), size_t max_outs = 999, uint8_t hard_fork_version = 1);
+  //---------------------------------------------------------------
+  std::tuple<bool, uint64_t> check_treasury_payout(network_type nettype, uint64_t height, const std::vector<hardfork_t>& hardforks, const uint8_t hf_version);
 
   struct tx_source_entry
   {

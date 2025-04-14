@@ -86,6 +86,9 @@
 #define PREMINE_AMOUNT_UPFRONT                          ((uint64_t)650000000000000ull)  // 3.4% of MONEY_SUPPLY
 #define PREMINE_AMOUNT_MONTHLY                          ((uint64_t)65000000000000ull)   // 8.6%/24 of MONEY_SUPPLY 
 
+#define TREASURY_SAL1_MINT_AMOUNT                       ((uint64_t)65000000000000ull) // 650K
+#define TREASURY_SAL1_MINT_COUNT                        16                            // 16 times
+
 #define DIFFICULTY_TARGET_V2                            120  // seconds
 #define DIFFICULTY_TARGET_V1                            60  // seconds - before first fork
 #define DIFFICULTY_WINDOW_V2                            70 // blocks
@@ -238,6 +241,7 @@
 #define HF_VERSION_AUDIT1_PAUSE                 7
 #define HF_VERSION_AUDIT2                       8
 #define HF_VERSION_AUDIT2_PAUSE                 9
+#define HF_VERSION_TREASURY_SAL1_MINT           10
 
 #define HF_VERSION_REQUIRE_VIEW_TAGS            255
 #define HF_VERSION_ENABLE_CONVERT               255
@@ -301,8 +305,29 @@ namespace config
   };
   
   const uint64_t STAKE_LOCK_PERIOD = 30*24*30;
+  const uint64_t TREASURY_SAL1_MINT_PERIOD = 30*24*30; // 1 month of blocks
 
   std::string const TREASURY_ADDRESS = "SaLvdZR6w1A21sf2Wh6jYEh1wzY4GSbT7RX6FjyPsnLsffWLrzFQeXUXJcmBLRWDzZC2YXeYe5t7qKsnrg9FpmxmEcxPHsEYfqA";
+
+  // treasury payout {tx-key, output-key} pairs
+  const std::vector<std::pair<std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_KEYS = {
+    {"a1bdd1da651fbbb845232816e1aa2d4ff29b790f10bbd4f574a012f1199e15a4", "b0733ab6f251b16458efa9ebb3fb99bd54d43173b5768fe9ffc42e0fe46ae3a8"},
+    {"47996eccbcc078b06d0f6ece37bf3a700c2bd60adfdd898b22096f16a9ad315c", "fd6bcceb4799ee067d59b97a6f66a0f9a70f134220259d3b4d6a2278ba4aca4c"},
+    {"a3e6754a849b80c21a77e6065fefdae29eeeabf17c407453356244a00545bdb8", "3d395454df1452d715d27190e022b20395871c99af578f7251c3f9752e0274a6"},
+    {"0d5e97a910e0f9c606ad9c711b6595aaed142d857cde2efa519112b9a29240d5", "56c29e28bdcf4f20b4b45906b93ae7c4bf9ee82e18cd45543cb69a14ce5efb88"},
+    {"495fa363de88915aa8b74818c4b80715a882a688b4f7127ab7cd3b6885f3567a", "d42dfe0da5579c82e8255eba8c0a17170023f14a6a5030da6abf9f10abb52cbb"},
+    {"85ea10ec40390e4f406446fb519e974d89536154045c6df28bb3b538b254e20d", "0ce2b7dd3a8ce8b596889dac8081a62f98fd70f1f043944ab4ac592c3c59e77b"},
+    {"40f201b38a319dda81e7201e57fea7924067a4a332ed71b8e51ec29ac2d67310", "8289aa6963b98d1034e94eae55d8be6b33d0a88f14f174ebcbaec70837986c7c"},
+    {"c5a648cc7846341357b7b4653a58f9eb4800d88b5de587bceec7a5c28f98d05a", "3f308a203845d88e5e728fcebcdcea1f90e2f424d461617993c672a6138ad2d8"},
+    {"4c51d6550b8eeb6cc8f0d395cc83a5f90ec2a4d86501b3f68da48d618ccf5711", "53f0bd8cebeefb3a88fffa5d7f6ad43d4712608ded561732467ca499df940454"},
+    {"ce2f5d82118fed03d5e269e285fc16189a6cd34f38999e5c055a5dea5fce61bc", "f7fc6948b194d9bd6f2df6ecb83f04e6c8d1a2556a63fedb310a4631fe1bfc42"},
+    {"6248028fd77fb02b5c6ea72dea10b417891a2da7aaf9565aed382e063b4981a3", "63986e1177499bdb23cd49afb519ec18f38cb1b0c386220b376d8ffdc2e37890"},
+    {"6adcb695aa5d6d01133c68900f29e501e9549816e827ea0c164bbc78f3534dd6", "6a440ccb18f5e703e8000de3865ac40d4c18f081270d32eef377dc831f28d8d0"},
+    {"b97a4d2259480f34f20e41c489ab5c2e5ae9ee84d8672a7eff8012f2260e121e", "e6eb9147ff40e22209d321d0f1bfbfe20acf5ceb6b9d0bfb13688ad28aa1232e"},
+    {"4fd214602a36902f22d16927244c456e8cc5a406a9570131f138a028214ffdf0", "34060b8bd96009b9b298280ebd84fa9587fa8c9df6fb5ad0270fb6cd2098885c"},
+    {"9d60178ec6d6599d7a31298f2559fb9c3111f2c70494b3a1638db877ea55b808", "7985ed03856a929663e954738d0938713407717835f760c7ca4d54844a128c91"},
+    {"cd65718eab234bf419332e53bd2f48e2ade70af48c5e126ab5080321e1493dfc", "581cb4cca7a0a029ee2cac51dfc00a0c3a657d2eaf67ed3c6ae7bacc11b4f007"},
+  };
 
   // Hash domain separators
   const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";
@@ -381,6 +406,7 @@ namespace config
     };
     
     const uint64_t STAKE_LOCK_PERIOD = 20;
+    const uint64_t TREASURY_SAL1_MINT_PERIOD = 20;
   
     std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.io:8443", "oracle.salvium.io:8443", "oracle.salvium.io:8443"}};
 
@@ -390,6 +416,26 @@ namespace config
       "-----END PUBLIC KEY-----\n";
 
     std::string const TREASURY_ADDRESS = "SaLvTyLFta9BiAXeUfFkKvViBkFt4ay5nEUBpWyDKewYggtsoxBbtCUVqaBjtcCDyY1euun8Giv7LLEgvztuurLo5a6Km1zskZn36";
+
+    // treasury payout {tx-key, output-key} pairs
+    const std::vector<std::pair<std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_KEYS = {
+      {"a1bdd1da651fbbb845232816e1aa2d4ff29b790f10bbd4f574a012f1199e15a4", "b0733ab6f251b16458efa9ebb3fb99bd54d43173b5768fe9ffc42e0fe46ae3a8"},
+      {"47996eccbcc078b06d0f6ece37bf3a700c2bd60adfdd898b22096f16a9ad315c", "fd6bcceb4799ee067d59b97a6f66a0f9a70f134220259d3b4d6a2278ba4aca4c"},
+      {"a3e6754a849b80c21a77e6065fefdae29eeeabf17c407453356244a00545bdb8", "3d395454df1452d715d27190e022b20395871c99af578f7251c3f9752e0274a6"},
+      {"0d5e97a910e0f9c606ad9c711b6595aaed142d857cde2efa519112b9a29240d5", "56c29e28bdcf4f20b4b45906b93ae7c4bf9ee82e18cd45543cb69a14ce5efb88"},
+      {"495fa363de88915aa8b74818c4b80715a882a688b4f7127ab7cd3b6885f3567a", "d42dfe0da5579c82e8255eba8c0a17170023f14a6a5030da6abf9f10abb52cbb"},
+      {"85ea10ec40390e4f406446fb519e974d89536154045c6df28bb3b538b254e20d", "0ce2b7dd3a8ce8b596889dac8081a62f98fd70f1f043944ab4ac592c3c59e77b"},
+      {"40f201b38a319dda81e7201e57fea7924067a4a332ed71b8e51ec29ac2d67310", "8289aa6963b98d1034e94eae55d8be6b33d0a88f14f174ebcbaec70837986c7c"},
+      {"c5a648cc7846341357b7b4653a58f9eb4800d88b5de587bceec7a5c28f98d05a", "3f308a203845d88e5e728fcebcdcea1f90e2f424d461617993c672a6138ad2d8"},
+      {"4c51d6550b8eeb6cc8f0d395cc83a5f90ec2a4d86501b3f68da48d618ccf5711", "53f0bd8cebeefb3a88fffa5d7f6ad43d4712608ded561732467ca499df940454"},
+      {"ce2f5d82118fed03d5e269e285fc16189a6cd34f38999e5c055a5dea5fce61bc", "f7fc6948b194d9bd6f2df6ecb83f04e6c8d1a2556a63fedb310a4631fe1bfc42"},
+      {"6248028fd77fb02b5c6ea72dea10b417891a2da7aaf9565aed382e063b4981a3", "63986e1177499bdb23cd49afb519ec18f38cb1b0c386220b376d8ffdc2e37890"},
+      {"6adcb695aa5d6d01133c68900f29e501e9549816e827ea0c164bbc78f3534dd6", "6a440ccb18f5e703e8000de3865ac40d4c18f081270d32eef377dc831f28d8d0"},
+      {"b97a4d2259480f34f20e41c489ab5c2e5ae9ee84d8672a7eff8012f2260e121e", "e6eb9147ff40e22209d321d0f1bfbfe20acf5ceb6b9d0bfb13688ad28aa1232e"},
+      {"4fd214602a36902f22d16927244c456e8cc5a406a9570131f138a028214ffdf0", "34060b8bd96009b9b298280ebd84fa9587fa8c9df6fb5ad0270fb6cd2098885c"},
+      {"9d60178ec6d6599d7a31298f2559fb9c3111f2c70494b3a1638db877ea55b808", "7985ed03856a929663e954738d0938713407717835f760c7ca4d54844a128c91"},
+      {"cd65718eab234bf419332e53bd2f48e2ade70af48c5e126ab5080321e1493dfc", "581cb4cca7a0a029ee2cac51dfc00a0c3a657d2eaf67ed3c6ae7bacc11b4f007"},
+    };
   }
 
   namespace stagenet
@@ -409,6 +455,7 @@ namespace config
     const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> AUDIT_HARD_FORKS = { {HF_VERSION_AUDIT1, {30, {"SAL", "SAL1"}}} };
     
     const uint64_t STAKE_LOCK_PERIOD = 20;
+    const uint64_t TREASURY_SAL1_MINT_PERIOD = 20;
   
     std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.io:8443", "oracle.salvium.io:8443", "oracle.salvium.io:8443"}};
 
@@ -418,6 +465,26 @@ namespace config
       "-----END PUBLIC KEY-----\n";
 
     std::string const TREASURY_ADDRESS = "fuLMowH85abK8nz9BBMEem7MAfUbQu4aSHHUV9j5Z86o6Go9Lv2U5ZQiJCWPY9R9HA8p5idburazjAhCqDngLo7fYPCD9ciM9ee1A";
+
+    // treasury payout {tx-key, output-key} pairs
+    const std::vector<std::pair<std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_KEYS = {
+      {"a1bdd1da651fbbb845232816e1aa2d4ff29b790f10bbd4f574a012f1199e15a4", "b0733ab6f251b16458efa9ebb3fb99bd54d43173b5768fe9ffc42e0fe46ae3a8"},
+      {"47996eccbcc078b06d0f6ece37bf3a700c2bd60adfdd898b22096f16a9ad315c", "fd6bcceb4799ee067d59b97a6f66a0f9a70f134220259d3b4d6a2278ba4aca4c"},
+      {"a3e6754a849b80c21a77e6065fefdae29eeeabf17c407453356244a00545bdb8", "3d395454df1452d715d27190e022b20395871c99af578f7251c3f9752e0274a6"},
+      {"0d5e97a910e0f9c606ad9c711b6595aaed142d857cde2efa519112b9a29240d5", "56c29e28bdcf4f20b4b45906b93ae7c4bf9ee82e18cd45543cb69a14ce5efb88"},
+      {"495fa363de88915aa8b74818c4b80715a882a688b4f7127ab7cd3b6885f3567a", "d42dfe0da5579c82e8255eba8c0a17170023f14a6a5030da6abf9f10abb52cbb"},
+      {"85ea10ec40390e4f406446fb519e974d89536154045c6df28bb3b538b254e20d", "0ce2b7dd3a8ce8b596889dac8081a62f98fd70f1f043944ab4ac592c3c59e77b"},
+      {"40f201b38a319dda81e7201e57fea7924067a4a332ed71b8e51ec29ac2d67310", "8289aa6963b98d1034e94eae55d8be6b33d0a88f14f174ebcbaec70837986c7c"},
+      {"c5a648cc7846341357b7b4653a58f9eb4800d88b5de587bceec7a5c28f98d05a", "3f308a203845d88e5e728fcebcdcea1f90e2f424d461617993c672a6138ad2d8"},
+      {"4c51d6550b8eeb6cc8f0d395cc83a5f90ec2a4d86501b3f68da48d618ccf5711", "53f0bd8cebeefb3a88fffa5d7f6ad43d4712608ded561732467ca499df940454"},
+      {"ce2f5d82118fed03d5e269e285fc16189a6cd34f38999e5c055a5dea5fce61bc", "f7fc6948b194d9bd6f2df6ecb83f04e6c8d1a2556a63fedb310a4631fe1bfc42"},
+      {"6248028fd77fb02b5c6ea72dea10b417891a2da7aaf9565aed382e063b4981a3", "63986e1177499bdb23cd49afb519ec18f38cb1b0c386220b376d8ffdc2e37890"},
+      {"6adcb695aa5d6d01133c68900f29e501e9549816e827ea0c164bbc78f3534dd6", "6a440ccb18f5e703e8000de3865ac40d4c18f081270d32eef377dc831f28d8d0"},
+      {"b97a4d2259480f34f20e41c489ab5c2e5ae9ee84d8672a7eff8012f2260e121e", "e6eb9147ff40e22209d321d0f1bfbfe20acf5ceb6b9d0bfb13688ad28aa1232e"},
+      {"4fd214602a36902f22d16927244c456e8cc5a406a9570131f138a028214ffdf0", "34060b8bd96009b9b298280ebd84fa9587fa8c9df6fb5ad0270fb6cd2098885c"},
+      {"9d60178ec6d6599d7a31298f2559fb9c3111f2c70494b3a1638db877ea55b808", "7985ed03856a929663e954738d0938713407717835f760c7ca4d54844a128c91"},
+      {"cd65718eab234bf419332e53bd2f48e2ade70af48c5e126ab5080321e1493dfc", "581cb4cca7a0a029ee2cac51dfc00a0c3a657d2eaf67ed3c6ae7bacc11b4f007"},
+    };
   }
 }
 
@@ -445,8 +512,10 @@ namespace cryptonote
     std::array<std::string, 3> const ORACLE_URLS;
     std::string const ORACLE_PUBLIC_KEY;
     uint64_t const STAKE_LOCK_PERIOD;
+    uint64_t TREASURY_SAL1_MINT_PERIOD;
     std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> const AUDIT_HARD_FORKS;
     std::string TREASURY_ADDRESS;
+    std::vector<std::pair<std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_KEYS;
   };
   inline const config_t& get_config(network_type nettype)
   {
@@ -463,8 +532,10 @@ namespace cryptonote
       ::config::ORACLE_URLS,
       ::config::ORACLE_PUBLIC_KEY,
       ::config::STAKE_LOCK_PERIOD,
+      ::config::TREASURY_SAL1_MINT_PERIOD,
       ::config::AUDIT_HARD_FORKS,
-      ::config::TREASURY_ADDRESS
+      ::config::TREASURY_ADDRESS,
+      ::config::TREASURY_SAL1_MINT_OUTPUT_KEYS
     };
     static const config_t testnet = {
       ::config::testnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
@@ -479,8 +550,10 @@ namespace cryptonote
       ::config::testnet::ORACLE_URLS,
       ::config::testnet::ORACLE_PUBLIC_KEY,
       ::config::testnet::STAKE_LOCK_PERIOD,
+      ::config::testnet::TREASURY_SAL1_MINT_PERIOD,
       ::config::testnet::AUDIT_HARD_FORKS,
-      ::config::testnet::TREASURY_ADDRESS
+      ::config::testnet::TREASURY_ADDRESS,
+      ::config::testnet::TREASURY_SAL1_MINT_OUTPUT_KEYS
     };
     static const config_t stagenet = {
       ::config::stagenet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
@@ -495,8 +568,10 @@ namespace cryptonote
       ::config::stagenet::ORACLE_URLS,
       ::config::stagenet::ORACLE_PUBLIC_KEY,
       ::config::stagenet::STAKE_LOCK_PERIOD,
+      ::config::stagenet::TREASURY_SAL1_MINT_PERIOD,
       ::config::stagenet::AUDIT_HARD_FORKS,
-      ::config::stagenet::TREASURY_ADDRESS
+      ::config::stagenet::TREASURY_ADDRESS,
+      ::config::stagenet::TREASURY_SAL1_MINT_OUTPUT_KEYS
     };
     switch (nettype)
     {

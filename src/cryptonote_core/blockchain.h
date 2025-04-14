@@ -1493,6 +1493,16 @@ namespace cryptonote
     difficulty_type get_next_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, block_extended_info& bei) const;
 
     /**
+     * @brief validates the treasury payout for a block
+     * @param tx transaction to validate
+     * @param payout_index the index of the payout to check
+     * @param hf_version the consensus rules to apply
+     * 
+     * @return bool indicating payout valid, and the index of the output within miner transaction outputs.
+     */
+    std::tuple<bool, size_t> validate_treasury_payout(const transaction& tx, const uint64_t payout_index, uint8_t hf_version) const;
+
+    /**
      * @brief sanity checks a miner transaction before validating an entire block
      *
      * This function merely checks basic things like the structure of the miner
