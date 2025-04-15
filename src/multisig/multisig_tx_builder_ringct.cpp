@@ -1138,11 +1138,7 @@ bool tx_builder_ringct_t::init(
   // misc. fields
   unsigned_tx.unlock_time = unlock_time;
   unsigned_tx.type = (tx_type == cryptonote::transaction_type::RETURN) ? cryptonote::TRANSFER : tx_type;
-  unsigned_tx.source_asset_type = "SAL";
-  if (tx_type == cryptonote::transaction_type::BURN)
-    unsigned_tx.destination_asset_type = "BURN";
-  else
-    unsigned_tx.destination_asset_type = "SAL";
+  unsigned_tx.source_asset_type = "SAL1";
 
   // sort inputs
   sort_sources(sources);

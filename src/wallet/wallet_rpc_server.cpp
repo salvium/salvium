@@ -535,7 +535,7 @@ namespace tools
     if (!m_wallet) return not_open(er);
 
     std::vector<std::string> assets_in_wallet = m_wallet->list_asset_types();
-    std::string asset_type = req.asset_type.empty() ? "SAL" : boost::algorithm::to_upper_copy(req.asset_type);
+    std::string asset_type = req.asset_type.empty() ? "SAL1" : boost::algorithm::to_upper_copy(req.asset_type);
     // verify that the asset is in the list of in-wallet assets
     if (std::find(assets_in_wallet.begin(), assets_in_wallet.end(), asset_type) == assets_in_wallet.end()) {
       er.message = std::string("Source asset '") + asset_type + "' not found in wallet"; 
@@ -754,8 +754,8 @@ namespace tools
         info.base_address = m_wallet->get_subaddress_as_str(subaddr_index);
 
         //for (const auto& asset: asset_types) {
-          info.balance = m_wallet->balance(subaddr_index.major, "SAL", req.strict_balances);
-          info.unlocked_balance = m_wallet->unlocked_balance(subaddr_index.major, "SAL", req.strict_balances);
+          info.balance = m_wallet->balance(subaddr_index.major, "SAL1", req.strict_balances);
+          info.unlocked_balance = m_wallet->unlocked_balance(subaddr_index.major, "SAL1", req.strict_balances);
           //}
         info.label = m_wallet->get_subaddress_label(subaddr_index);
         info.tag = account_tags.second[subaddr_index.major];
@@ -1774,7 +1774,7 @@ namespace tools
 
     CHECK_MULTISIG_ENABLED();
 
-    std::string asset_type = req.asset_type.empty() ? "SAL" : req.asset_type;
+    std::string asset_type = req.asset_type.empty() ? "SAL1" : req.asset_type;
     
     // validate the transfer requested and populate dsts & extra
     std::list<wallet_rpc::transfer_destination> destinations;
@@ -1846,7 +1846,7 @@ namespace tools
 
     CHECK_MULTISIG_ENABLED();
 
-    std::string asset_type = req.asset_type.empty() ? "SAL" : req.asset_type;
+    std::string asset_type = req.asset_type.empty() ? "SAL1" : req.asset_type;
     
     // validate the transfer requested and populate dsts & extra
     std::list<wallet_rpc::transfer_destination> destinations;
