@@ -68,7 +68,17 @@ carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_tra
     const rct::xmr_amount ignore_below,
     const wallet2::unique_index_container& subtract_fee_from_outputs,
     const std::uint64_t top_block_index,
-    const cryptonote::account_base &acb);
+    const cryptonote::account_keys &acc_keys);
+carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_transfer_subtractable(
+    wallet2 &w,
+    const std::vector<cryptonote::tx_destination_entry> &dsts,
+    const std::uint32_t priority,
+    const std::vector<uint8_t> &extra,
+    const std::uint32_t subaddr_account,
+    const std::set<uint32_t> &subaddr_indices,
+    const rct::xmr_amount ignore_above,
+    const rct::xmr_amount ignore_below,
+    const wallet2::unique_index_container &subtract_fee_from_outputs);
 
 carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_transfer(
     const wallet2::transfer_container &transfers,
@@ -81,7 +91,16 @@ carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_tra
     const rct::xmr_amount ignore_above,
     const rct::xmr_amount ignore_below,
     const std::uint64_t top_block_index,
-    const cryptonote::account_base &acb);
+    const cryptonote::account_keys &acc_keys);
+carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_transfer(
+    wallet2 &w,
+    const std::vector<cryptonote::tx_destination_entry> &dsts,
+    const std::uint32_t priority,
+    const std::vector<uint8_t> &extra,
+    const std::uint32_t subaddr_account,
+    const std::set<uint32_t> &subaddr_indices,
+    const rct::xmr_amount ignore_above,
+    const rct::xmr_amount ignore_below);
 
 carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_sweep(
     const wallet2::transfer_container &transfers,
@@ -93,6 +112,14 @@ carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_swe
     const rct::xmr_amount fee_per_weight,
     const std::vector<uint8_t>& extra,
     const std::uint64_t top_block_index,
-    const cryptonote::account_base &acb);
+    const cryptonote::account_keys &acc_keys);
+carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_sweep(
+    wallet2 &w,
+    const std::vector<crypto::key_image> &input_key_images,
+    const cryptonote::account_public_address &address,
+    const bool is_subaddress,
+    const size_t n_dests,
+    const std::uint32_t priority,
+    const std::vector<uint8_t> &extra);
 } //namespace wallet
 } //namespace tools
