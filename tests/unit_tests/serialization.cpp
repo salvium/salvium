@@ -1136,7 +1136,7 @@ TEST(Serialization, portability_signed_tx)
   ASSERT_TRUE(ptx.dests[0].amount == 1400000000000);
   ASSERT_TRUE(cryptonote::get_account_address_as_str(nettype, false, ptx.dests[0].addr) == "9xnhrMczQkPeoGi6dyu6BgKAYX4tZsDs6KHCkyTStDBKL4M4pM1gfCR3utmTAcSaKHGa1R5o266FbdnubErmij3oMdLyYgA");
   // ptx.construction_data
-  auto& tcd = ptx.construction_data;
+  auto& tcd = std::get<tools::wallet2::tx_construction_data>(ptx.construction_data);
   ASSERT_TRUE(tcd.sources.size() == 1);
   auto& tse = tcd.sources[0];
   // ptx.construction_data.sources[0].outputs

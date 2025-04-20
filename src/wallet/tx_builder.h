@@ -76,8 +76,6 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const std::vector<uint8_t> &extra,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
-    const rct::xmr_amount ignore_above,
-    const rct::xmr_amount ignore_below,
     const wallet2::unique_index_container &subtract_fee_from_outputs);
 
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep(
@@ -123,5 +121,8 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const std::vector<uint8_t> &extra,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices);
+wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionProposalV1 &tx_proposal,
+    const wallet2::transfer_container &transfers,
+    const cryptonote::account_keys &acc_keys);
 } //namespace wallet
 } //namespace tools

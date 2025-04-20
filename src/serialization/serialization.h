@@ -50,6 +50,8 @@
 #include <boost/type_traits/integral_constant.hpp>
 #include <boost/mpl/bool.hpp>
 
+#include "common/va_args.h"
+
 /*! \struct is_blob_type 
  *
  * \brief a descriptor for dispatching serialize
@@ -139,6 +141,19 @@ inline bool do_serialize(Archive &ar, bool &v)
   template <bool W, template <bool> class Archive>			\
   bool do_serialize_object(Archive<W> &ar){
 
+
+/*! \macro BEGIN_SERIALIZE_OBJECT_FN
+ *
+ * \brief Begins the environment of the DSL as a free function in object-style
+ *
+ * Inside, instead of FIELD() and VARINT_FIELD(), use FIELD_F() and
+ * VARINT_FIELD_F(). Otherwise, this macro is similar to
+ * BEGIN_SERIALIZE_OBJECT(), as you should list only field serializations.
+ */
+#define BEGIN_SERIALIZE_OBJECT_FN(stype, ...)                                           \
+  template <bool W, template <bool> class Archive>                                      \
+  bool do_serialize_object(Archive<W> &ar, stype &v VA_ARGS_COMMAPREFIX(__VA_ARGS__)) {
+
 /*! \macro PREPARE_CUSTOM_VECTOR_SERIALIZATION
  */
 #define PREPARE_CUSTOM_VECTOR_SERIALIZATION(size, vec)			\
@@ -173,6 +188,12 @@ inline bool do_serialize(Archive &ar, bool &v)
     if (!r || !ar.good()) return false;			\
   } while(0);
 
+/*! \macro FIELD_F(f)
+ *
+ * \brief tags the field with the variable name and then serializes it (for use in a free function)
+ */
+#define FIELD_F(f, ...) FIELD_N(#f, v.f VA_ARGS_COMMAPREFIX(__VA_ARGS__))
+
 /*! \macro FIELDS(f)
  *
  * \brief does not add a tag to the serialized value
@@ -203,6 +224,12 @@ inline bool do_serialize(Archive &ar, bool &v)
     ar.serialize_varint(f);			\
     if (!ar.good()) return false;		\
   } while(0);
+
+/*! \macro VARINT_FIELD_F(f)
+ *
+ * \brief tags and serializes the varint \a f (for use in a free function)
+ */
+#define VARINT_FIELD_F(f) VARINT_FIELD_N(#f, v.f)
 
 /*! \macro MAGIC_FIELD(m)
  */

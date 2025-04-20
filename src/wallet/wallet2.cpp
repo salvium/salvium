@@ -923,9 +923,25 @@ bool get_short_payment_id(crypto::hash8 &payment_id8, const tools::wallet2::pend
   return false;
 }
 
+static const tools::wallet2::tx_construction_data &get_construction_data(const tools::wallet2::pending_tx &ptx)
+{
+  THROW_WALLET_EXCEPTION_IF(!std::holds_alternative<tools::wallet2::tx_construction_data>(ptx.construction_data),
+    tools::error::wallet_internal_error,
+    "Getting pre-carrot construction data only works for pre-carrot pending txs");
+  return std::get<tools::wallet2::tx_construction_data>(ptx.construction_data);
+}
+
+static tools::wallet2::tx_construction_data &get_construction_data(tools::wallet2::pending_tx &ptx)
+{
+  THROW_WALLET_EXCEPTION_IF(!std::holds_alternative<tools::wallet2::tx_construction_data>(ptx.construction_data),
+    tools::error::wallet_internal_error,
+    "Getting pre-carrot construction data only works for pre-carrot pending txs");
+  return std::get<tools::wallet2::tx_construction_data>(ptx.construction_data);
+}
+
 tools::wallet2::tx_construction_data get_construction_data_with_decrypted_short_payment_id(const tools::wallet2::pending_tx &ptx, hw::device &hwdev)
 {
-  tools::wallet2::tx_construction_data construction_data = ptx.construction_data;
+  tools::wallet2::tx_construction_data construction_data = get_construction_data(ptx);
   crypto::hash8 payment_id = null_hash8;
   if (get_short_payment_id(payment_id, ptx, hwdev))
   {
@@ -2052,7 +2068,7 @@ bool wallet2::frozen(const multisig_tx_set& txs) const
   std::unordered_set<crypto::key_image> kis_to_sign;
   for (const auto& ptx : txs.m_ptx)
   {
-    const tools::wallet2::tx_construction_data& cd = ptx.construction_data;
+    const tools::wallet2::tx_construction_data& cd = get_construction_data(ptx);
     CHECK_AND_ASSERT_THROW_MES(cd.sources.size() == ptx.tx.vin.size(), "mismatched multisg tx set source sizes");
     for (size_t src_idx = 0; src_idx < cd.sources.size(); ++src_idx)
     {
@@ -7567,6 +7583,43 @@ void wallet2::commit_tx(pending_tx& ptx)
   crypto::hash txid;
 
   txid = get_transaction_hash(ptx.tx);
+
+  // if it's already processed, bail
+  if (std::find_if(m_transfers.begin(), m_transfers.end(), [&txid](const transfer_details &td) { return td.m_txid == txid; }) != m_transfers.end())
+  {
+    MDEBUG("Transaction " << txid << " already processed");
+    return;
+  }
+  if (m_unconfirmed_txs.find(txid) != m_unconfirmed_txs.end())
+  {
+    MDEBUG("Transaction " << txid << " already processed");
+    return;
+  }
+  if (m_confirmed_txs.find(txid) != m_confirmed_txs.end())
+  {
+    MDEBUG("Transaction " << txid << " already processed");
+    return;
+  }
+
+  // collect subaddr account and subaddr indices
+  std::optional<std::uint32_t> subaddr_account_opt;
+  std::set<std::uint32_t> subaddr_indices;
+  for (const size_t selected_transfer : ptx.selected_transfers)
+  {
+    const transfer_details &td = m_transfers.at(selected_transfer);
+    if (subaddr_account_opt && *subaddr_account_opt != td.m_subaddr_index.major)
+    {
+      MWARNING("Mismatched subaddr accounts in inputs: " << *subaddr_account_opt << " vs " << td.m_subaddr_index.major);
+    }
+    else
+    {
+      subaddr_account_opt = td.m_subaddr_index.major;
+    }
+
+    subaddr_indices.insert(td.m_subaddr_index.minor);
+  }
+  const std::uint32_t subaddr_account = subaddr_account_opt.value_or(0);
+
   crypto::hash payment_id = crypto::null_hash;
   std::vector<cryptonote::tx_destination_entry> dests;
   uint64_t amount_in = 0;
@@ -7577,7 +7630,7 @@ void wallet2::commit_tx(pending_tx& ptx)
     for(size_t idx: ptx.selected_transfers)
       amount_in += m_transfers[idx].amount();
   }
-  add_unconfirmed_tx(ptx.tx, amount_in, dests, payment_id, ptx.change_dts.amount, ptx.construction_data.subaddr_account, ptx.construction_data.subaddr_indices);
+  add_unconfirmed_tx(ptx.tx, amount_in, dests, payment_id, ptx.change_dts.amount, subaddr_account, subaddr_indices);
   if (store_tx_info() && ptx.tx_key != crypto::null_skey)
   {
     m_tx_keys[txid] = ptx.tx_key;
@@ -7601,8 +7654,8 @@ void wallet2::commit_tx(pending_tx& ptx)
   //fee includes dust if dust policy specified it.
   LOG_PRINT_L1("Transaction successfully sent. <" << txid << ">" << ENDL
             << "Commission: " << print_money(ptx.fee) << " (dust sent to dust addr: " << print_money((ptx.dust_added_to_fee ? 0 : ptx.dust)) << ")" << ENDL
-               << "Balance: " << print_money(balance(ptx.construction_data.subaddr_account, source_asset, false)) << ENDL
-               << "Unlocked: " << print_money(unlocked_balance(ptx.construction_data.subaddr_account, source_asset, false)) << ENDL
+               << "Balance: " << print_money(balance(subaddr_account, source_asset, false)) << ENDL
+               << "Unlocked: " << print_money(unlocked_balance(subaddr_account, source_asset, false)) << ENDL
             << "Please, wait for confirmation for your balance to be unlocked.");
 }
 
@@ -8112,7 +8165,7 @@ std::string wallet2::save_multisig_tx(multisig_tx_set txs)
 
   // txes generated, get rid of used k values
   for (size_t n = 0; n < txs.m_ptx.size(); ++n)
-    for (size_t idx: txs.m_ptx[n].construction_data.selected_transfers)
+    for (size_t idx: get_construction_data(txs.m_ptx[n]).selected_transfers)
     {
       memwipe(m_transfers[idx].m_multisig_k.data(), m_transfers[idx].m_multisig_k.size() * sizeof(m_transfers[idx].m_multisig_k[0]));
       m_transfers[idx].m_multisig_k.clear();
@@ -8121,7 +8174,7 @@ std::string wallet2::save_multisig_tx(multisig_tx_set txs)
   // zero out some data we don't want to share
   for (auto &ptx: txs.m_ptx)
   {
-    for (auto &e: ptx.construction_data.sources)
+    for (auto &e: get_construction_data(ptx).sources)
       memwipe(&e.multisig_kLRki.k, sizeof(e.multisig_kLRki.k));
   }
 
@@ -8234,10 +8287,10 @@ bool wallet2::parse_multisig_tx_from_str(std::string multisig_tx_st, multisig_tx
     CHECK_AND_ASSERT_MES(ptx.selected_transfers.size() == ptx.tx.vin.size(), false, "Mismatched selected_transfers/vin sizes");
     for (size_t idx: ptx.selected_transfers)
       CHECK_AND_ASSERT_MES(idx < m_transfers.size(), false, "Transfer index out of range");
-    CHECK_AND_ASSERT_MES(ptx.construction_data.selected_transfers.size() == ptx.tx.vin.size(), false, "Mismatched cd selected_transfers/vin sizes");
-    for (size_t idx: ptx.construction_data.selected_transfers)
+    CHECK_AND_ASSERT_MES(get_construction_data(ptx).selected_transfers.size() == ptx.tx.vin.size(), false, "Mismatched cd selected_transfers/vin sizes");
+    for (size_t idx: get_construction_data(ptx).selected_transfers)
       CHECK_AND_ASSERT_MES(idx < m_transfers.size(), false, "Transfer index out of range");
-    CHECK_AND_ASSERT_MES(ptx.construction_data.sources.size() == ptx.tx.vin.size(), false, "Mismatched sources/vin sizes");
+    CHECK_AND_ASSERT_MES(get_construction_data(ptx).sources.size() == ptx.tx.vin.size(), false, "Mismatched sources/vin sizes");
   }
 
   return true;
@@ -8325,7 +8378,7 @@ bool wallet2::sign_multisig_tx(multisig_tx_set &exported_txs, std::vector<crypto
   {
     tools::wallet2::pending_tx &ptx = exported_txs.m_ptx[n];
     THROW_WALLET_EXCEPTION_IF(ptx.multisig_sigs.empty(), error::wallet_internal_error, "No signatures found in multisig tx");
-    const tools::wallet2::tx_construction_data &sd = ptx.construction_data;
+    tools::wallet2::tx_construction_data &sd = get_construction_data(ptx);
     LOG_PRINT_L1(" " << (n+1) << ": " << sd.sources.size() << " inputs, ring size " << (sd.sources[0].outputs.size()) <<
         ", signed by " << exported_txs.m_signers.size() << "/" << m_multisig_threshold);
 
@@ -8335,17 +8388,17 @@ bool wallet2::sign_multisig_tx(multisig_tx_set &exported_txs, std::vector<crypto
     THROW_WALLET_EXCEPTION_IF(
       not multisig_tx_builder.init(
         m_account.get_keys(),
-        ptx.construction_data.extra,
+        sd.extra,
         ptx.tx.type,
         get_current_hard_fork(),
-        ptx.construction_data.unlock_time,
-        ptx.construction_data.subaddr_account,
-        ptx.construction_data.subaddr_indices,
-        ptx.construction_data.sources,
-        ptx.construction_data.splitted_dsts,
-        ptx.construction_data.change_dts,
-        ptx.construction_data.rct_config,
-        ptx.construction_data.use_rct,
+        sd.unlock_time,
+        sd.subaddr_account,
+        sd.subaddr_indices,
+        sd.sources,
+        sd.splitted_dsts,
+        sd.change_dts,
+        sd.rct_config,
+        sd.use_rct,
         true,  //true = we are reconstructing the tx (it was first constructed by the tx proposer)
         ptx.tx_key,
         ptx.additional_tx_keys,
@@ -8419,7 +8472,7 @@ bool wallet2::sign_multisig_tx(multisig_tx_set &exported_txs, std::vector<crypto
         {
           THROW_WALLET_EXCEPTION_IF(found, error::wallet_internal_error, "More than one transaction is final");
           THROW_WALLET_EXCEPTION_IF(
-            not multisig_tx_builder.finalize_tx(ptx.construction_data.sources, sig.c_0, sig.s, ptx.tx),
+            not multisig_tx_builder.finalize_tx(get_construction_data(ptx).sources, sig.c_0, sig.s, ptx.tx),
             error::wallet_internal_error,
             "error: multisig::signing::tx_builder_ringct_t::finalize_tx"
           );
@@ -8441,7 +8494,7 @@ bool wallet2::sign_multisig_tx(multisig_tx_set &exported_txs, std::vector<crypto
   // signatures generated, get rid of any unused k values (must do export_multisig() to make more tx attempts with the
   //   inputs in the transactions worked on here)
   for (size_t n = 0; n < exported_txs.m_ptx.size(); ++n)
-    for (size_t idx: exported_txs.m_ptx[n].construction_data.selected_transfers)
+    for (size_t idx: get_construction_data(exported_txs.m_ptx[n]).selected_transfers)
     {
       memwipe(m_transfers[idx].m_multisig_k.data(), m_transfers[idx].m_multisig_k.size() * sizeof(m_transfers[idx].m_multisig_k[0]));
       m_transfers[idx].m_multisig_k.clear();
@@ -9968,21 +10021,23 @@ void wallet2::transfer_selected(const std::vector<cryptonote::tx_destination_ent
   ptx.tx_key = tx_key;
   ptx.additional_tx_keys = additional_tx_keys;
   ptx.dests = dsts;
-  ptx.construction_data.sources = sources;
-  ptx.construction_data.change_dts = change_dts;
-  ptx.construction_data.splitted_dsts = splitted_dsts;
-  ptx.construction_data.selected_transfers = selected_transfers;
-  ptx.construction_data.extra = tx.extra;
-  ptx.construction_data.unlock_time = unlock_time;
-  ptx.construction_data.use_rct = false;
-  ptx.construction_data.rct_config = { rct::RangeProofBorromean, 0 };
-  ptx.construction_data.use_view_tags = use_view_tags;
-  ptx.construction_data.dests = dsts;
+  tx_construction_data pre_carrot_construction_data;
+  pre_carrot_construction_data.sources = sources;
+  pre_carrot_construction_data.change_dts = change_dts;
+  pre_carrot_construction_data.splitted_dsts = splitted_dsts;
+  pre_carrot_construction_data.selected_transfers = selected_transfers;
+  pre_carrot_construction_data.extra = tx.extra;
+  pre_carrot_construction_data.unlock_time = 0;
+  pre_carrot_construction_data.use_rct = false;
+  pre_carrot_construction_data.rct_config = { rct::RangeProofBorromean, 0 };
+  pre_carrot_construction_data.use_view_tags = use_view_tags;
+  pre_carrot_construction_data.dests = dsts;
   // record which subaddress indices are being used as inputs
-  ptx.construction_data.subaddr_account = subaddr_account;
-  ptx.construction_data.subaddr_indices.clear();
+  pre_carrot_construction_data.subaddr_account = subaddr_account;
+  pre_carrot_construction_data.subaddr_indices.clear();
   for (size_t idx: selected_transfers)
-    ptx.construction_data.subaddr_indices.insert(m_transfers[idx].m_subaddr_index.minor);
+    pre_carrot_construction_data.subaddr_indices.insert(m_transfers[idx].m_subaddr_index.minor);
+  ptx.construction_data = pre_carrot_construction_data;
   LOG_PRINT_L2("transfer_selected done");
 }
 
@@ -10368,24 +10423,26 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
   ptx.dests = dsts;
   ptx.multisig_sigs = multisig_sigs;
   ptx.multisig_tx_key_entropy = multisig_tx_key_entropy;
-  ptx.construction_data.sources = sources_copy;
-  ptx.construction_data.change_dts = change_dts;
-  ptx.construction_data.splitted_dsts = splitted_dsts;
-  ptx.construction_data.selected_transfers = ptx.selected_transfers;
-  ptx.construction_data.extra = tx.extra;
-  ptx.construction_data.unlock_time = unlock_time;
-  ptx.construction_data.use_rct = true;
-  ptx.construction_data.rct_config = rct_config;/*{
+  tx_construction_data pre_carrot_construction_data;
+  pre_carrot_construction_data.sources = sources_copy;
+  pre_carrot_construction_data.change_dts = change_dts;
+  pre_carrot_construction_data.splitted_dsts = splitted_dsts;
+  pre_carrot_construction_data.selected_transfers = ptx.selected_transfers;
+  pre_carrot_construction_data.extra = tx.extra;
+  pre_carrot_construction_data.unlock_time = 0;
+  pre_carrot_construction_data.use_rct = true;
+  pre_carrot_construction_data.rct_config = rct_config; /*{
     rct::RangeProofPaddedBulletproof,
     use_fork_rules(HF_VERSION_BULLETPROOF_PLUS, -10) ? 4 : 3
-    };*/
-  ptx.construction_data.use_view_tags = use_view_tags;//use_fork_rules(get_view_tag_fork(), 0);
-  ptx.construction_data.dests = dsts;
+  };*/
+  pre_carrot_construction_data.use_view_tags = use_fork_rules(get_view_tag_fork(), 0);
+  pre_carrot_construction_data.dests = dsts;
   // record which subaddress indices are being used as inputs
-  ptx.construction_data.subaddr_account = subaddr_account;
-  ptx.construction_data.subaddr_indices.clear();
+  pre_carrot_construction_data.subaddr_account = subaddr_account;
+  pre_carrot_construction_data.subaddr_indices.clear();
   for (size_t idx: selected_transfers)
-    ptx.construction_data.subaddr_indices.insert(m_transfers[idx].m_subaddr_index.minor);
+    pre_carrot_construction_data.subaddr_indices.insert(m_transfers[idx].m_subaddr_index.minor);
+  ptx.construction_data = pre_carrot_construction_data;
   LOG_PRINT_L2("transfer_selected_rct done");
 }
 
