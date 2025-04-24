@@ -65,7 +65,7 @@ using namespace epee;
 #define CHECK_MULTISIG_ENABLED() \
   do \
   { \
-    if (m_wallet->multisig() && !m_wallet->is_multisig_enabled()) \
+    if (m_wallet->get_multisig_status().multisig_is_active && !m_wallet->is_multisig_enabled()) \
     { \
       er.code = WALLET_RPC_ERROR_CODE_DISABLED; \
       er.message = "This wallet is multisig, and multisig is disabled. Multisig is an experimental feature and may have bugs. Things that could go wrong include: funds sent to a multisig wallet can't be spent at all, can only be spent with the participation of a malicious group member, or can be stolen by a malicious group member. You can enable it by running this once in salvium-wallet-cli: set enable-multisig-experimental 1"; \
@@ -107,7 +107,7 @@ using namespace epee;
       er.message = "Command not supported by HW wallet"; \
       return false; \
     } \
-    if (m_wallet->multisig()) \
+    if (m_wallet->get_multisig_status().multisig_is_active) \
     { \
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR; \
       er.message = "Multisig wallet cannot enable background sync"; \
@@ -551,7 +551,7 @@ namespace tools
         if (!balance_info.balance)
           continue;
         balance_info.unlocked_balance = req.all_accounts ? m_wallet->unlocked_balance_all(req.strict, asset, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock) : m_wallet->unlocked_balance(req.account_index, asset, req.strict, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock);
-        balance_info.multisig_import_needed = m_wallet->multisig() && m_wallet->has_multisig_partial_key_images();
+        balance_info.multisig_import_needed = m_wallet->get_multisig_status().multisig_is_active && m_wallet->has_multisig_partial_key_images();
         std::map<uint32_t, std::map<uint32_t, uint64_t>> balance_per_subaddress_per_account;
         std::map<uint32_t, std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>>> unlocked_balance_per_subaddress_per_account;
         if (req.all_accounts)
@@ -1139,7 +1139,7 @@ namespace tools
       fill(spent_key_images, key_image_list);
     }
 
-    if (m_wallet->multisig())
+    if (m_wallet->get_multisig_status().multisig_is_active)
     {
       multisig_txset = epee::string_tools::buff_to_hex_nodelimer(m_wallet->save_multisig_tx(ptx_vector));
       if (multisig_txset.empty())
@@ -2278,10 +2278,11 @@ namespace tools
       if (req.key_type.compare("mnemonic") == 0)
       {
         epee::wipeable_string seed;
-        bool ready;
-        if (m_wallet->multisig(&ready))
+        const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+        if (ms_status.multisig_is_active)
         {
-          if (!ready)
+          if (!ms_status.is_ready)
           {
             er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
             er.message = "This wallet is multisig, but not yet finalized";
@@ -4285,7 +4286,14 @@ namespace tools
   bool wallet_rpc_server::on_is_multisig(const wallet_rpc::COMMAND_RPC_IS_MULTISIG::request& req, wallet_rpc::COMMAND_RPC_IS_MULTISIG::response& res, epee::json_rpc::error& er, const connection_context *ctx)
   {
     if (!m_wallet) return not_open(er);
-    res.multisig = m_wallet->multisig(&res.ready, &res.threshold, &res.total);
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    res.multisig = ms_status.multisig_is_active;
+    res.kex_is_done = ms_status.kex_is_done;
+    res.ready = ms_status.is_ready;
+    res.threshold = ms_status.threshold;
+    res.total = ms_status.total;
+
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -4298,7 +4306,7 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    if (m_wallet->multisig())
+    if (m_wallet->get_multisig_status().multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_ALREADY_MULTISIG;
       er.message = "This wallet is already multisig";
@@ -4328,7 +4336,7 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    if (m_wallet->multisig())
+    if (m_wallet->get_multisig_status().multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_ALREADY_MULTISIG;
       er.message = "This wallet is already multisig";
@@ -4367,14 +4375,15 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    bool ready;
-    if (!m_wallet->multisig(&ready))
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    if (!ms_status.multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is not multisig";
       return false;
     }
-    if (!ready)
+    if (!ms_status.is_ready)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is multisig, but not yet finalized";
@@ -4408,15 +4417,15 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    bool ready;
-    uint32_t threshold, total;
-    if (!m_wallet->multisig(&ready, &threshold, &total))
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    if (!ms_status.multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is not multisig";
       return false;
     }
-    if (!ready)
+    if (!ms_status.is_ready)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is multisig, but not yet finalized";
@@ -4424,7 +4433,7 @@ namespace tools
     }
     CHECK_MULTISIG_ENABLED();
 
-    if (req.info.size() < threshold - 1)
+    if (req.info.size() + 1 < ms_status.threshold)
     {
       er.code = WALLET_RPC_ERROR_CODE_THRESHOLD_NOT_REACHED;
       er.message = "Needs multisig export info from more participants";
@@ -4488,9 +4497,9 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    bool ready;
-    uint32_t threshold, total;
-    if (!m_wallet->multisig(&ready, &threshold, &total))
+    multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    if (!ms_status.multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is not multisig";
@@ -4498,7 +4507,7 @@ namespace tools
     }
     CHECK_MULTISIG_ENABLED();
 
-    if (req.multisig_info.size() + 1 < total)
+    if (req.multisig_info.size() + 1 < ms_status.total)
     {
       er.code = WALLET_RPC_ERROR_CODE_THRESHOLD_NOT_REACHED;
       er.message = "Needs multisig info from more participants";
@@ -4508,8 +4517,8 @@ namespace tools
     try
     {
       res.multisig_info = m_wallet->exchange_multisig_keys(req.password, req.multisig_info, req.force_update_use_with_caution);
-      m_wallet->multisig(&ready);
-      if (ready)
+      ms_status = m_wallet->get_multisig_status();
+      if (ms_status.is_ready)
       {
         res.address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
       }
@@ -4518,6 +4527,47 @@ namespace tools
     {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = std::string("Error calling exchange_multisig_info: ") + e.what();
+      return false;
+    }
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool wallet_rpc_server::on_get_multisig_key_exchange_booster(const wallet_rpc::COMMAND_RPC_GET_MULTISIG_KEY_EXCHANGE_BOOSTER::request& req, wallet_rpc::COMMAND_RPC_GET_MULTISIG_KEY_EXCHANGE_BOOSTER::response& res, epee::json_rpc::error& er, const connection_context *ctx)
+  {
+    if (!m_wallet) return not_open(er);
+    if (m_restricted)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Command unavailable in restricted mode.";
+      return false;
+    }
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    if (ms_status.is_ready)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_ALREADY_MULTISIG;
+      er.message = "This wallet is multisig, and already finalized";
+      return false;
+    }
+
+    if (req.multisig_info.size() == 0)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_THRESHOLD_NOT_REACHED;
+      er.message = "Needs multisig info from more participants";
+      return false;
+    }
+
+    try
+    {
+      res.multisig_info = m_wallet->get_multisig_key_exchange_booster(req.password,
+        req.multisig_info,
+        req.threshold,
+        req.num_signers);
+    }
+    catch (const std::exception &e)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+      er.message = std::string("Error calling exchange_multisig_info_booster: ") + e.what();
       return false;
     }
     return true;
@@ -4532,15 +4582,15 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    bool ready;
-    uint32_t threshold, total;
-    if (!m_wallet->multisig(&ready, &threshold, &total))
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    if (!ms_status.multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is not multisig";
       return false;
     }
-    if (!ready)
+    if (!ms_status.is_ready)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is multisig, but not yet finalized";
@@ -4602,15 +4652,15 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    bool ready;
-    uint32_t threshold, total;
-    if (!m_wallet->multisig(&ready, &threshold, &total))
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    if (!ms_status.multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is not multisig";
       return false;
     }
-    if (!ready)
+    if (!ms_status.is_ready)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is multisig, but not yet finalized";
@@ -4635,7 +4685,7 @@ namespace tools
       return false;
     }
 
-    if (txs.m_signers.size() < threshold)
+    if (txs.m_signers.size() < ms_status.threshold)
     {
       er.code = WALLET_RPC_ERROR_CODE_THRESHOLD_NOT_REACHED;
       er.message = "Not enough signers signed this transaction.";

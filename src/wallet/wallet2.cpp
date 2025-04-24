@@ -1102,27 +1102,29 @@ boost::mutex wallet_keys_unlocker::lockers_lock;
 std::map<wallet2*, std::size_t> wallet_keys_unlocker::lockers_per_wallet = {};
 wallet_keys_unlocker::wallet_keys_unlocker(wallet2 &w, const epee::wipeable_string *password):
   w(w),
-  can_relock(true)
+  should_relock(true)
 {
   static_assert(!std::is_move_assignable_v<wallet2> && !std::is_move_constructible_v<wallet2>,
     "Keeping track of wallet instances by pointer doesn't work if wallet2 can be moved");
 
-  if (password == nullptr || !w.is_spendkey_encryption_enabled())
+  if (password == nullptr || !w.is_key_encryption_enabled())
   {
-    can_relock = false;
+    should_relock = false;
     return;
   }
+
+  w.generate_chacha_key_from_password(*password, key);
 
   boost::lock_guard<boost::mutex> lock(lockers_lock);
   if (lockers_per_wallet[std::addressof(w)]++ > 0)
     return;
-  w.generate_chacha_key_from_password(*password, key);
+
   w.decrypt_keys(key);
 }
 
 wallet_keys_unlocker::~wallet_keys_unlocker()
 {
-  if (!can_relock)
+  if (!should_relock)
     return;
 
   try
@@ -1454,20 +1456,20 @@ bool wallet2::get_seed(epee::wipeable_string& electrum_words, const epee::wipeab
 //----------------------------------------------------------------------------------------------------
 bool wallet2::get_multisig_seed(epee::wipeable_string& seed, const epee::wipeable_string &passphrase) const
 {
-  bool ready;
-  uint32_t threshold, total;
-  if (!multisig(&ready, &threshold, &total))
+  const multisig::multisig_account_status ms_status{get_multisig_status()};
+
+  if (!ms_status.multisig_is_active)
   {
     std::cout << "This is not a multisig wallet" << std::endl;
     return false;
   }
-  if (!ready)
+  if (!ms_status.is_ready)
   {
     std::cout << "This multisig wallet is not yet finalized" << std::endl;
     return false;
   }
 
-  const uint64_t num_expected_ms_keys = num_priv_multisig_keys_post_setup(threshold, total);
+  const uint64_t num_expected_ms_keys = num_priv_multisig_keys_post_setup(ms_status.threshold, ms_status.total);
 
   crypto::secret_key skey;
   crypto::public_key pkey;
@@ -1475,8 +1477,8 @@ bool wallet2::get_multisig_seed(epee::wipeable_string& seed, const epee::wipeabl
   THROW_WALLET_EXCEPTION_IF(num_expected_ms_keys != keys.m_multisig_keys.size(),
     error::wallet_internal_error, "Unexpected number of private multisig keys")
   epee::wipeable_string data;
-  data.append((const char*)&threshold, sizeof(uint32_t));
-  data.append((const char*)&total, sizeof(uint32_t));
+  data.append((const char*)&ms_status.threshold, sizeof(uint32_t));
+  data.append((const char*)&ms_status.total, sizeof(uint32_t));
   skey = keys.m_spend_secret_key;
   data.append((const char*)&skey, sizeof(skey));
   pkey = keys.m_account_address.m_spend_public_key;
@@ -2386,7 +2388,7 @@ void wallet2::scan_key_image(const wallet::enote_view_incoming_scan_info_t &enot
     return;
 
   // if keys are encrypted, ask for password
-  if (is_spendkey_encryption_enabled())
+  if (is_key_encryption_enabled())
   {
     static critical_section password_lock;
     CRITICAL_REGION_LOCAL(password_lock);
@@ -5337,6 +5339,14 @@ bool wallet2::verify_password(const std::string& keys_file_name, const epee::wip
   return r;
 }
 
+bool wallet2::is_key_encryption_enabled() const
+{
+  return !is_unattended()
+    && ask_password() == tools::wallet2::AskPasswordToDecrypt
+    && !watch_only()
+    && !is_background_syncing();
+}
+
 void wallet2::encrypt_keys(const crypto::chacha_key &key)
 {
   m_account.encrypt_keys(key);
@@ -5737,26 +5747,52 @@ void wallet2::restore(const std::string& wallet_, const epee::wipeable_string& p
   }
 }
 //----------------------------------------------------------------------------------------------------
+void wallet2::get_uninitialized_multisig_account(multisig::multisig_account &account_out) const
+{
+  // create uninitialized multisig account
+  account_out = multisig::multisig_account{
+      // k_base = H(normal private spend key)
+      multisig::get_multisig_blinded_secret_key(this->get_account().get_keys().m_spend_secret_key),
+      // k_view = H(normal private view key)
+      multisig::get_multisig_blinded_secret_key(this->get_account().get_keys().m_view_secret_key)
+    };
+}
+//----------------------------------------------------------------------------------------------------
+void wallet2::get_reconstructed_multisig_account(multisig::multisig_account &account_out) const
+{
+  const multisig::multisig_account_status ms_status{this->get_multisig_status()};
+  CHECK_AND_ASSERT_THROW_MES(ms_status.multisig_is_active,
+    "The wallet is not multisig, so the multisig account couldn't be reconstructed");
+
+  // reconstruct multisig account
+  crypto::public_key common_pubkey;
+  crypto::secret_key_to_public_key(this->get_account().get_keys().m_view_secret_key, common_pubkey);
+
+  multisig::multisig_keyset_map_memsafe_t kex_origins_map;
+  for (const auto &derivation : m_multisig_derivations)
+    kex_origins_map[derivation];
+
+  account_out = multisig::multisig_account{
+      m_multisig_threshold,
+      m_multisig_signers,
+      this->get_account().get_keys().m_spend_secret_key,
+      this->get_account().get_keys().m_view_secret_key,
+      this->get_account().get_keys().m_multisig_keys,
+      this->get_account().get_keys().m_view_secret_key,
+      m_account_public_address.m_spend_public_key,
+      common_pubkey,
+      m_multisig_rounds_passed,
+      std::move(kex_origins_map),
+      ""
+    };
+}
+//----------------------------------------------------------------------------------------------------
 std::string wallet2::make_multisig(const epee::wipeable_string &password,
   const std::vector<std::string> &initial_kex_msgs,
   const std::uint32_t threshold)
 {
   // decrypt account keys
-  epee::misc_utils::auto_scope_leave_caller keys_reencryptor;
-  if (m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only)
-  {
-    crypto::chacha_key chacha_key;
-    crypto::generate_chacha_key(password.data(), password.size(), chacha_key, m_kdf_rounds);
-    m_account.encrypt_viewkey(chacha_key);
-    m_account.decrypt_keys(chacha_key);
-    keys_reencryptor = epee::misc_utils::create_scope_leave_handler(
-        [&, this, chacha_key]()
-        {
-          m_account.encrypt_keys(chacha_key);
-          m_account.decrypt_viewkey(chacha_key);
-        }
-      );
-  }
+  std::optional<wallet_keys_unlocker> unlocker(std::in_place, *this, &password);
 
   // create multisig account
   multisig::multisig_account multisig_account{
@@ -5833,7 +5869,7 @@ std::string wallet2::make_multisig(const epee::wipeable_string &password,
   m_account_public_address.m_spend_public_key = multisig_account.get_multisig_pubkey();
 
   // re-encrypt keys
-  keys_reencryptor = epee::misc_utils::auto_scope_leave_caller();
+  unlocker.reset();
 
   if (!m_wallet_file.empty())
     create_keys_file(m_wallet_file, false, password, boost::filesystem::exists(m_wallet_file + ".address.txt"));
@@ -5850,45 +5886,15 @@ std::string wallet2::exchange_multisig_keys(const epee::wipeable_string &passwor
   const std::vector<std::string> &kex_messages,
   const bool force_update_use_with_caution /*= false*/)
 {
-  bool ready{false};
-  CHECK_AND_ASSERT_THROW_MES(multisig(&ready), "The wallet is not multisig");
+  const multisig::multisig_account_status ms_status{this->get_multisig_status()};
+  CHECK_AND_ASSERT_THROW_MES(ms_status.multisig_is_active, "The wallet is not multisig");
 
   // decrypt account keys
-  epee::misc_utils::auto_scope_leave_caller keys_reencryptor;
-  if (m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only)
-  {
-    crypto::chacha_key chacha_key;
-    crypto::generate_chacha_key(password.data(), password.size(), chacha_key, m_kdf_rounds);
-    m_account.encrypt_viewkey(chacha_key);
-    m_account.decrypt_keys(chacha_key);
-    keys_reencryptor = epee::misc_utils::create_scope_leave_handler(
-        [&, this, chacha_key]()
-        {
-          m_account.encrypt_keys(chacha_key);
-          m_account.decrypt_viewkey(chacha_key);
-        }
-      );
-  }
+  std::optional<wallet_keys_unlocker> unlocker(std::in_place, *this, &password);
 
   // reconstruct multisig account
-  multisig::multisig_keyset_map_memsafe_t kex_origins_map;
-
-  for (const auto &derivation : m_multisig_derivations)
-    kex_origins_map[derivation];
-
-  multisig::multisig_account multisig_account{
-      m_multisig_threshold,
-      m_multisig_signers,
-      get_account().get_keys().m_spend_secret_key,
-      crypto::null_skey,  //base common privkey: not used
-      get_account().get_keys().m_multisig_keys,
-      get_account().get_keys().m_view_secret_key,
-      m_account_public_address.m_spend_public_key,
-      m_account_public_address.m_view_public_key,
-      m_multisig_rounds_passed,
-      std::move(kex_origins_map),
-      ""
-    };
+  multisig::multisig_account multisig_account;
+  this->get_reconstructed_multisig_account(multisig_account);
 
   // KLUDGE: early return if there are no kex messages and main kex is complete (will return the post-kex verification round
   //         message) (it's a kludge because this behavior would be more appropriate for a standalone wallet method)
@@ -5904,7 +5910,7 @@ std::string wallet2::exchange_multisig_keys(const epee::wipeable_string &passwor
   std::vector<multisig::multisig_kex_msg> expanded_msgs;
   expanded_msgs.reserve(kex_messages.size());
 
-  for (const auto &msg : kex_messages)
+  for (const std::string &msg : kex_messages)
     expanded_msgs.emplace_back(msg);
 
   // update multisig kex
@@ -5936,31 +5942,31 @@ std::string wallet2::exchange_multisig_keys(const epee::wipeable_string &passwor
   if (multisig_account.multisig_is_ready())
   {
     // keys are encrypted again
-    keys_reencryptor = epee::misc_utils::auto_scope_leave_caller();
+    unlocker.reset();
 
     if (!m_wallet_file.empty())
     {
-      bool r = store_keys(m_keys_file, password, false);
+      bool r = this->store_keys(m_keys_file, password, false);
       THROW_WALLET_EXCEPTION_IF(!r, error::file_save_error, m_keys_file);
 
       if (boost::filesystem::exists(m_wallet_file + ".address.txt"))
       {
-        r = save_to_file(m_wallet_file + ".address.txt", m_account.get_public_address_str(m_nettype), true);
+        r = this->save_to_file(m_wallet_file + ".address.txt", m_account.get_public_address_str(m_nettype), true);
         if(!r) MERROR("String with address text not saved");
       }
     }
 
     m_subaddresses.clear();
     m_subaddress_labels.clear();
-    add_subaddress_account(tr("Primary account"));
+    this->add_subaddress_account(tr("Primary account"));
 
     if (!m_wallet_file.empty())
-      store();
+      this->store();
   }
 
   // wallet/file relationship
   if (!m_wallet_file.empty())
-    create_keys_file(m_wallet_file, false, password, boost::filesystem::exists(m_wallet_file + ".address.txt"));
+    this->create_keys_file(m_wallet_file, false, password, boost::filesystem::exists(m_wallet_file + ".address.txt"));
 
   return multisig_account.get_next_kex_round_msg();
 }
@@ -5978,20 +5984,81 @@ std::string wallet2::get_multisig_first_kex_msg() const
   return multisig_account.get_next_kex_round_msg();
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::multisig(bool *ready, uint32_t *threshold, uint32_t *total) const
+std::string wallet2::get_multisig_key_exchange_booster(const epee::wipeable_string &password,
+  const std::vector<std::string> &kex_messages,
+  const std::uint32_t threshold,
+  const std::uint32_t num_signers)
 {
-  if (!m_multisig)
-    return false;
-  if (threshold)
-    *threshold = m_multisig_threshold;
-  if (total)
-    *total = m_multisig_signers.size();
-  if (ready)
+  CHECK_AND_ASSERT_THROW_MES(kex_messages.size() > 0, "No key exchange messages passed in.");
+
+  // decrypt account keys
+  wallet_keys_unlocker unlocker(*this, &password);
+
+  // prepare multisig account
+  multisig::multisig_account multisig_account;
+
+  const multisig::multisig_account_status ms_status{this->get_multisig_status()};
+  CHECK_AND_ASSERT_THROW_MES(!ms_status.is_ready, "Multisig wallet creation process has already been finished.");
+
+  if (ms_status.multisig_is_active)
   {
-    *ready = !(get_account().get_keys().m_account_address.m_spend_public_key == rct::rct2pk(rct::identity())) &&
+    // case: this wallet is in the middle of multisig key exchange
+    // - boost the round that comes after the in-progress round
+
+    CHECK_AND_ASSERT_THROW_MES(threshold == m_multisig_threshold,
+      "Expected threshold does not match multisig wallet setting.");
+    CHECK_AND_ASSERT_THROW_MES(num_signers == m_multisig_signers.size(),
+      "Expected number of signers does not match multisig wallet setting.");
+
+    // reconstruct multisig account
+    this->get_reconstructed_multisig_account(multisig_account);
+  }
+  else
+  {
+    // case: make_multisig() has not been called
+    // DANGER: If 'num_signers - threshold > 1', but this wallet's future multisig settings
+    //         will be 'num_signers - threshold == 1', then the booster message WILL leak the
+    //         future multisig wallet's private keys in this case where the wallet2 multisig wallet is uninitialized.
+
+    this->get_uninitialized_multisig_account(multisig_account);
+  }
+
+  // open kex messages
+  std::vector<multisig::multisig_kex_msg> expanded_msgs;
+  expanded_msgs.reserve(kex_messages.size());
+
+  for (const std::string &msg : kex_messages)
+    expanded_msgs.emplace_back(msg);
+
+  // get kex booster message
+  // note: booster does not change wallet state other than decrypting/reencrypting account keys
+  return multisig_account.get_multisig_kex_round_booster(threshold, num_signers, expanded_msgs).get_msg();
+}
+//----------------------------------------------------------------------------------------------------
+multisig::multisig_account_status wallet2::get_multisig_status() const
+{
+  multisig::multisig_account_status ret;
+
+  if (m_multisig)
+  {
+    ret.multisig_is_active = true;
+    ret.threshold = m_multisig_threshold;
+    ret.total = m_multisig_signers.size();
+    ret.kex_is_done = !(get_account().get_keys().m_account_address.m_spend_public_key == rct::rct2pk(rct::identity())) &&
+      (m_multisig_rounds_passed >= multisig::multisig_kex_rounds_required(m_multisig_signers.size(), m_multisig_threshold));
+    ret.is_ready = ret.kex_is_done &&
       (m_multisig_rounds_passed == multisig::multisig_setup_rounds_required(m_multisig_signers.size(), m_multisig_threshold));
   }
-  return true;
+  else
+  {
+    ret.multisig_is_active = false;
+    ret.threshold = 0;
+    ret.total = 0;
+    ret.kex_is_done = false;
+    ret.is_ready = false;
+  }
+
+  return ret;
 }
 //----------------------------------------------------------------------------------------------------
 bool wallet2::has_multisig_partial_key_images() const
@@ -15481,15 +15548,19 @@ void wallet2::generate_genesis(cryptonote::block& b) const {
 //----------------------------------------------------------------------------------------------------
 mms::multisig_wallet_state wallet2::get_multisig_wallet_state() const
 {
+  const multisig::multisig_account_status ms_status{get_multisig_status()};
+
   mms::multisig_wallet_state state;
   state.nettype = m_nettype;
-  state.multisig = multisig(&state.multisig_is_ready);
+  state.multisig = ms_status.multisig_is_active;
+  state.multisig_is_ready = ms_status.is_ready;
+  state.multisig_kex_is_done = ms_status.kex_is_done;
   state.has_multisig_partial_key_images = has_multisig_partial_key_images();
   state.multisig_rounds_passed = m_multisig_rounds_passed;
   state.num_transfer_details = m_transfers.size();
   if (state.multisig)
   {
-    THROW_WALLET_EXCEPTION_IF(!m_original_keys_available, error::wallet_internal_error, "MMS use not possible because own original Salvium address not available");
+    THROW_WALLET_EXCEPTION_IF(!m_original_keys_available, error::wallet_internal_error, "MMS use not possible because own original Monero address not available");
     state.address = m_original_address;
     state.view_secret_key = m_original_view_secret_key;
   }

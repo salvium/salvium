@@ -58,6 +58,7 @@
 #include "common/util.h"
 #include "crypto/chacha.h"
 #include "crypto/hash.h"
+#include "multisig/multisig_account.h"
 #include "ringct/rctTypes.h"
 #include "ringct/rctOps.h"
 #include "checkpoints/checkpoints.h"
@@ -90,6 +91,7 @@
 
 class Serialization_portability_wallet_Test;
 class wallet_accessor_test;
+namespace multisig { class multisig_account; }
 
 namespace tools
 {
@@ -129,7 +131,7 @@ private:
     ~wallet_keys_unlocker();
   private:
     wallet2 &w;
-    bool can_relock;
+    bool should_relock;
     crypto::chacha_key key;
     static boost::mutex lockers_lock;
     static std::map<wallet2*, std::size_t> lockers_per_wallet;
@@ -981,6 +983,18 @@ private:
      */
     void restore(const std::string& wallet_, const epee::wipeable_string& password, const std::string &device_name, bool create_address_file = false);
 
+  private:
+    /*!
+     * \brief Creates an uninitialized multisig account
+     * \outparam: the uninitialized multisig account
+     */
+    void get_uninitialized_multisig_account(multisig::multisig_account &account_out) const;
+    /*!
+     * \brief Reconstructs a multisig account from wallet2 state
+     * \outparam: the reconstructed multisig account
+     */
+    void get_reconstructed_multisig_account(multisig::multisig_account &account_out) const;
+  public:
     /*!
      * \brief Creates a multisig wallet
      * \return empty if done, non empty if we need to send another string
@@ -1002,6 +1016,13 @@ private:
      * \return string to send to other participants
      */
     std::string get_multisig_first_kex_msg() const;
+     /*!
+     * \brief Use multisig kex messages for an in-progress kex round to 'boost' the following round for another group member
+     */
+    std::string get_multisig_key_exchange_booster(const epee::wipeable_string &password,
+      const std::vector<std::string> &kex_messages,
+      const std::uint32_t threshold,
+      const std::uint32_t num_signers);
     /*!
      * Export multisig info
      * This will generate and remember new k values
@@ -1067,6 +1088,7 @@ private:
     cryptonote::account_base& get_account(){return m_account;}
     const cryptonote::account_base& get_account()const{return m_account;}
 
+    bool is_key_encryption_enabled() const;
     void encrypt_keys(const crypto::chacha_key &key);
     void encrypt_keys(const epee::wipeable_string &password);
     void decrypt_keys(const crypto::chacha_key &key);
@@ -1150,8 +1172,8 @@ private:
 
     cryptonote::network_type nettype() const { return m_nettype; }
     bool watch_only() const { return m_watch_only; }
-    bool multisig(bool *ready = NULL, uint32_t *threshold = NULL, uint32_t *total = NULL) const;
     bool is_background_wallet() const { return m_is_background_wallet; }
+    multisig::multisig_account_status get_multisig_status() const;
     bool has_multisig_partial_key_images() const;
     bool has_unknown_key_images() const;
     bool get_multisig_seed(epee::wipeable_string& seed, const epee::wipeable_string &passphrase = std::string()) const;
@@ -1706,8 +1728,6 @@ private:
     uint32_t adjust_priority(uint32_t priority);
 
     bool is_unattended() const { return m_unattended; }
-    bool is_spendkey_encryption_enabled() const
-    { return m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only && !m_multisig && !m_is_background_wallet; }
 
     std::pair<size_t, uint64_t> estimate_tx_size_and_weight(bool use_rct, int n_inputs, int ring_size, int n_outputs, size_t extra_size);
 
