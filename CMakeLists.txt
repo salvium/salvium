@@ -1087,6 +1087,9 @@ find_package(Boost 1.58 QUIET REQUIRED COMPONENTS ${BOOST_COMPONENTS})
 add_definitions(-DBOOST_ASIO_ENABLE_SEQUENTIAL_STRAND_ALLOCATION)
 add_definitions(-DBOOST_NO_AUTO_PTR)
 add_definitions(-DBOOST_UUID_DISABLE_ALIGNMENT) # This restores UUID's std::has_unique_object_representations property
+# Boost has two conflicting save/load impls for `std::variant`, one in serialization/variant.hpp,
+# and one in serialization/std_variant.hpp. This macro disables the one in variant.hpp.
+add_definitions(-DBOOST_NO_CXX17_HDR_VARIANT)
 
 set(CMAKE_FIND_LIBRARY_SUFFIXES ${OLD_LIB_SUFFIXES})
 if(NOT Boost_FOUND)
