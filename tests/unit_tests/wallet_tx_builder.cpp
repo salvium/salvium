@@ -158,7 +158,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposal_wallet2_transfer_1)
     const uint64_t top_block_index = std::max(transfers.front().m_block_height, transfers.back().m_block_height)
         + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE;
 
-    const carrot::CarrotTransactionProposalV1 tx_proposal = tools::wallet::make_carrot_transaction_proposal_wallet2_transfer(
+    const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(
         transfers,
         /*subaddress_map=*/{},
         dsts,
@@ -168,8 +168,12 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposal_wallet2_transfer_1)
         /*subaddr_indices=*/{},
         /*ignore_above=*/MONEY_SUPPLY,
         /*ignore_below=*/0,
+        {},
         top_block_index,
         alice);
+
+    ASSERT_EQ(1, tx_proposals.size());
+    const carrot::CarrotTransactionProposalV1 tx_proposal = tx_proposals.at(0);
 
     std::vector<crypto::key_image> expected_key_images{
         transfers.front().m_key_image,
