@@ -29,10 +29,12 @@
 set(crypto_sources
   aesb.c
   blake256.c
+  blake2b.c
   chacha.c
   crypto-ops-data.c
   crypto-ops.c
   crypto.cpp
+  generators.cpp
   groestl.c
   hash-extra-blake.c
   hash-extra-groestl.c
