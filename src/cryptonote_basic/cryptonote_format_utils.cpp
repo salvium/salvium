@@ -970,8 +970,17 @@ namespace cryptonote
   uint64_t get_outs_money_amount(const transaction& tx)
   {
     uint64_t outputs_amount = 0;
-    for(const auto& o: tx.vout)
-      outputs_amount += o.amount;
+    for(const auto& o: tx.vout) {
+      if(o.target.type() == typeid(txout_to_tagged_key)) {
+        if (boost::get<txout_to_tagged_key>(o.target).asset_type == "SAL1") {
+          outputs_amount += o.amount;
+        }
+      } else if (o.target.type() == typeid(txout_to_key)) {
+        if (boost::get<txout_to_key>(o.target).asset_type == "SAL1") {
+          outputs_amount += o.amount;
+        }
+      }
+    }
     return outputs_amount;
   }
   //---------------------------------------------------------------
