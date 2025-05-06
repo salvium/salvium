@@ -89,6 +89,9 @@ const hardfork_t testnet_hard_forks[] = {
 
   // version 9 (audit 1 complete, whitelist controlling payouts) starts from block 1000
   { 9, 1000, 0, 1739280000 },
+
+  // version 10 treasury mint starts from block 1100
+  {10, 1100, 0, 1739780005 },
 };
 const size_t num_testnet_hard_forks = sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]);
 const uint64_t testnet_hard_fork_version_1_till = ((uint64_t)-1);
