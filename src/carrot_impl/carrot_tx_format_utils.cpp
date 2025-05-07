@@ -283,7 +283,7 @@ bool try_load_carrot_from_transaction_v1(const cryptonote::transaction &tx,
         return false;
 
     const size_t n_ephemeral = enote_ephemeral_pubkeys.size();
-    if (n_ephemeral < 0 || n_ephemeral > nouts)
+    if (n_ephemeral == 0 || n_ephemeral > nouts)
         return false;
 
     // collect D_e
