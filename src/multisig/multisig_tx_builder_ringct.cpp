@@ -186,10 +186,7 @@ static bool compute_keys_for_sources(
       src.real_output_in_tx_index,
       tmp_keys,
       tmp_key_image,
-      hwdev,
-      use_origin_data,
-      src.origin_tx_data,
-      sid
+      hwdev
     )) {
       return false;
     }

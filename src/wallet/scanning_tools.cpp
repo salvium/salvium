@@ -572,7 +572,7 @@ void view_incoming_scan_transaction(
     // 3. view-incoming scan output enotes
     for (size_t local_output_index = 0; local_output_index < n_outputs; ++local_output_index)
     {
-        auto &enote_scan_info = enote_scan_infos_out[local_output_index];
+        auto &enote_scan_info = const_cast<std::optional<enote_view_incoming_scan_info_t>&>(enote_scan_infos_out[local_output_index]);
 
         const cryptonote::tx_out &enote_destination = tx.vout.at(local_output_index);
 

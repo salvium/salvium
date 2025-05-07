@@ -125,15 +125,14 @@ private:
   class wallet_keys_unlocker
   {
   public:
-    wallet_keys_unlocker(wallet2 &w, const boost::optional<tools::password_container> &password);
-    wallet_keys_unlocker(wallet2 &w, bool locked, const epee::wipeable_string &password);
+    wallet_keys_unlocker(wallet2 &w, const epee::wipeable_string *password);
     ~wallet_keys_unlocker();
   private:
     wallet2 &w;
-    bool locked;
+    bool can_relock;
     crypto::chacha_key key;
     static boost::mutex lockers_lock;
-    static unsigned int lockers;
+    static std::map<wallet2*, std::size_t> lockers_per_wallet;
   };
 
   class i_wallet2_callback
@@ -847,6 +846,7 @@ private:
       uint64_t index_in_background_sync_data;
       cryptonote::transaction tx;
       std::vector<uint64_t> output_indices;
+      std::vector<uint64_t> asset_output_indices;
       uint64_t height;
       uint64_t block_timestamp;
       bool double_spend_seen;
@@ -1878,6 +1878,7 @@ private:
         const crypto::hash &txid,
         const cryptonote::transaction& tx,
         const std::vector<uint64_t> &o_indices,
+        const std::vector<uint64_t> &asset_type_o_indices,
         const uint64_t height,
         const uint8_t block_version,
         const uint64_t ts,
@@ -1923,7 +1924,7 @@ private:
      * that this function deletes data that is not useful for background syncing
      */
     void clear_user_data();
-    void pull_blocks(bool first, bool try_incremental, uint64_t start_height, uint64_t& blocks_start_height, const std::list<crypto::hash> &short_chain_history, std::vector<cryptonote::block_complete_entry> &blocks, std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_output_indices> &o_indices, std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_asset_type_output_indices> &asset_type_output_indices, uint64_t &current_height);
+    void pull_blocks(bool first, bool try_incremental, uint64_t start_height, uint64_t &blocks_start_height, const std::list<crypto::hash> &short_chain_history, std::vector<cryptonote::block_complete_entry> &blocks, std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_output_indices> &o_indices, std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_asset_type_output_indices> &asset_type_output_indices, uint64_t &current_height, std::vector<std::tuple<cryptonote::transaction, crypto::hash, bool>>& process_pool_txs);
     void pull_hashes(uint64_t start_height, uint64_t& blocks_start_height, const std::list<crypto::hash> &short_chain_history, std::vector<crypto::hash> &hashes);
     void fast_refresh(uint64_t stop_height, uint64_t &blocks_start_height, std::list<crypto::hash> &short_chain_history, bool force = false);
     void pull_and_parse_next_blocks(bool first, bool try_incremental, uint64_t start_height, uint64_t &blocks_start_height, std::list<crypto::hash> &short_chain_history, const std::vector<cryptonote::block_complete_entry> &prev_blocks, const std::vector<parsed_block> &prev_parsed_blocks, std::vector<cryptonote::block_complete_entry> &blocks, std::vector<parsed_block> &parsed_blocks, std::vector<std::tuple<cryptonote::transaction, crypto::hash, bool>>& process_pool_txs, bool &last, bool &error, std::exception_ptr &exception);
@@ -2083,7 +2084,6 @@ private:
     // m_refresh_from_block_height was defaulted to zero.*/
     bool m_explicit_refresh_from_block_height;
     uint64_t m_pool_info_query_time;
-    std::vector<std::tuple<cryptonote::transaction, crypto::hash, bool>> m_process_pool_txs;
     uint64_t m_skip_to_height;
     // m_skip_to_height is useful when we don't want to modify the wallet's restore height.
     // m_refresh_from_block_height is also a wallet's restore height which should remain constant unless explicitly modified by the user.

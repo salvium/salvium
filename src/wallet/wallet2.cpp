@@ -1098,8 +1098,8 @@ uint64_t gamma_picker::pick()
 };
 
 boost::mutex wallet_keys_unlocker::lockers_lock;
-unsigned int wallet_keys_unlocker::lockers = 0;
-wallet_keys_unlocker::wallet_keys_unlocker(wallet2 &w, const boost::optional<tools::password_container> &password):
+std::map<wallet2*, std::size_t> wallet_keys_unlocker::lockers_per_wallet = {};
+wallet_keys_unlocker::wallet_keys_unlocker(wallet2 &w, const epee::wipeable_string *password):
   w(w),
   can_relock(true)
 {
@@ -1108,40 +1108,34 @@ wallet_keys_unlocker::wallet_keys_unlocker(wallet2 &w, const boost::optional<too
 
   if (password == nullptr || !w.is_spendkey_encryption_enabled())
   {
-    locked = false;
+    can_relock = false;
     return;
   }
-  const epee::wipeable_string pass = password->password();
-  w.generate_chacha_key_from_password(pass, key);
-  w.decrypt_keys(key);
-}
 
-wallet_keys_unlocker::wallet_keys_unlocker(wallet2 &w, bool locked, const epee::wipeable_string &password):
-  w(w),
-  locked(locked)
-{
   boost::lock_guard<boost::mutex> lock(lockers_lock);
-  if (lockers++ > 0)
-    locked = false;
-  if (!locked)
+  if (lockers_per_wallet[std::addressof(w)]++ > 0)
     return;
-  w.generate_chacha_key_from_password(password, key);
+  w.generate_chacha_key_from_password(*password, key);
   w.decrypt_keys(key);
 }
 
 wallet_keys_unlocker::~wallet_keys_unlocker()
 {
+  if (!can_relock)
+    return;
+
   try
   {
     boost::lock_guard<boost::mutex> lock(lockers_lock);
-    if (lockers == 0)
+    wallet2* w_ptr = std::addressof(w);
+    if (lockers_per_wallet[w_ptr] == 0)
     {
       MERROR("There are no lockers in wallet_keys_unlocker dtor");
       return;
     }
-    --lockers;
-    if (!locked)
-      return;
+    if (--lockers_per_wallet[w_ptr] > 0)
+      return; // there are other unlock-ers for this wallet, do nothing for now
+    lockers_per_wallet.erase(w_ptr);
     w.encrypt_keys(key);
   }
   catch (...)
@@ -2397,6 +2391,7 @@ void wallet2::process_new_transaction(
   const crypto::hash &txid,
   const cryptonote::transaction& tx,
   const std::vector<uint64_t> &o_indices,
+  const std::vector<uint64_t> &asset_type_o_indices,
   const uint64_t height,
   const uint8_t block_version,
   const uint64_t ts,
@@ -2529,7 +2524,7 @@ void wallet2::process_new_scanned_transaction(
     const rct::xmr_amount extra_received_money = enote_scan_info->amount - (burning_td ? burning_td->amount() : 0);
     const cryptonote::subaddress_index subaddr_index_cn{
         enote_scan_info->subaddr_index->index.major, enote_scan_info->subaddr_index->index.minor};
-    tx_money_got_in_outs[subaddr_index_cn] += extra_received_money;
+    tx_money_got_in_outs[subaddr_index_cn][enote_scan_info->asset_type] += extra_received_money;
     tx_amounts_individual_outs[subaddr_index_cn].push_back(extra_received_money);
 
     // set payment id
@@ -2609,7 +2604,7 @@ void wallet2::process_new_scanned_transaction(
     // money received callbacks
     LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
     if (!ignore_callbacks && 0 != m_callback)
-      m_callback->on_money_received(height, txid, tx, td.m_amount, 0, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time);
+      m_callback->on_money_received(height, txid, tx, td.m_amount, td.asset_type, 0, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time, td.m_td_origin_idx);
   }
 
   THROW_WALLET_EXCEPTION_IF(tx_money_got_in_outs.size() != tx_amounts_individual_outs.size(), error::wallet_internal_error, "Inconsistent size of output arrays");
@@ -2739,12 +2734,10 @@ void wallet2::process_new_scanned_transaction(
   {
     if (subaddr_account && i->first.major == *subaddr_account)
     {
-      // sub_change += i->second;
       // tx_amounts_individual_outs.erase(i->first);
       // i = tx_money_got_in_outs.erase(i);
       // delete individual change asset output
       for (auto assets_it = i->second.begin(); assets_it != i->second.end();) {
-        sub_change += i->second[source_asset];
         if (assets_it->first == source_asset)
           assets_it = i->second.erase(assets_it);
         else
@@ -2764,70 +2757,33 @@ void wallet2::process_new_scanned_transaction(
   if (tx_money_got_in_outs.size() > 0)
   {
     bool all_same = true;
-    std::vector<payment_details> temp_payments;
-    for (auto& tsi : tx_scan_info) {
-      if (!tsi.received) continue;
-      cryptonote::subaddress_index si = tsi.received->index;
-      bool updated_payment = false;
-      for (auto& payment : temp_payments) {
-        if (payment.m_subaddr_index == si && payment.m_unlock_time == tsi.unlock_time) {
-          // Add to existing payment
-          payment.m_amount += tsi.amount;
-          payment.m_amounts.push_back(tsi.amount);
-          updated_payment = true;
+    for (const auto& i : tx_money_got_in_outs)
+    {
+      for (const auto& j : i.second)
+      {
+        payment_details payment;
+        payment.m_tx_hash      = txid;
+        payment.m_fee          = fee;
+        payment.m_asset_type   = j.first;
+        payment.m_amount       = j.second;
+        payment.m_amounts      = tx_amounts_individual_outs[i.first];
+        payment.m_block_height = height;
+        payment.m_unlock_time  = tx.unlock_time;
+        payment.m_timestamp    = ts;
+        payment.m_coinbase     = miner_tx;
+        payment.m_subaddr_index = i.first;
+        if (pool) {
+          if (emplace_or_replace(m_unconfirmed_payments, payment_id, pool_payment_details{payment, double_spend_seen}))
+            all_same = false;
+          if (0 != m_callback)
+            m_callback->on_unconfirmed_money_received(height, txid, tx, payment.m_amount, payment.m_subaddr_index);
         }
-        if (updated_payment) break;
-      }
-      if (updated_payment) continue;
-      
-      // Create a new payment
-      temp_payments.push_back(payment_details{});
-      payment_details& payment = temp_payments.back();
-      payment.m_tx_hash       = txid;
-      payment.m_fee           = fee;
-      // SRCG - figure out what this needs to be (pretty sure we should never get here with CONVERT!)
-      payment.m_amount        = tsi.amount;
-      payment.m_asset_type    = tsi.asset_type;
-      payment.m_amounts.push_back(tsi.amount);
-      payment.m_block_height  = height;
-      payment.m_unlock_time   = tsi.unlock_time;
-      payment.m_timestamp     = ts;
-      payment.m_coinbase      = miner_tx;
-      payment.m_subaddr_index = si;
-      if (tx.type == cryptonote::transaction_type::MINER) {
-
-        payment.m_unlock_time = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW; // All protocol_tx payments are coinbase
-        payment.m_tx_type     = cryptonote::transaction_type::MINER;
-          
-      } else if (tx.type == cryptonote::transaction_type::PROTOCOL) {
-
-        payment.m_unlock_time = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW; // All protocol_tx payments are coinbase
-        if (td_origin_idx != ((uint64_t)-1)) {
-          // Get the origin TD information
-          payment.m_amount    = payment.m_amounts.empty() ? 0 : payment.m_amounts[0];
-          payment.m_tx_type   = m_transfers[td_origin_idx].m_tx.type;
-          payment.m_fee       = m_transfers[td_origin_idx].m_tx.amount_burnt;
-        } else {
-          assert(false);
-        }
-          
-      } else {
-        payment.m_tx_type     = tx.type;
+        else
+          m_payments.emplace(payment_id, payment);
+        LOG_PRINT_L2("Payment found in " << (pool ? "pool" : "block") << ": " << payment_id << " / " << payment.m_tx_hash << " / " << payment.m_amount);
       }
     }
 
-    // Now iterate over the temp_payment entries
-    for (auto& payment : temp_payments) {
-      if (pool) {
-        if (emplace_or_replace(m_unconfirmed_payments, payment_id, pool_payment_details{payment, double_spend_seen}))
-          all_same = false;
-        if (0 != m_callback)
-          m_callback->on_unconfirmed_money_received(height, txid, tx, payment.m_amount, payment.m_subaddr_index);
-      }
-      else
-        m_payments.emplace(payment_id, payment);
-      LOG_PRINT_L2("Payment found in " << (pool ? "pool" : "block") << ": " << payment_id << " / " << payment.m_tx_hash << " / " << payment.m_amount);
-    }
     // if it's a pool tx and we already had it, don't notify again
     if (pool && all_same)
       notify = false;
@@ -2961,10 +2917,6 @@ void wallet2::process_new_blockchain_entry(const cryptonote::block& b,
     output_key_images.remove_prefix(n_outs_in_tx);
     TIME_MEASURE_FINISH(miner_tx_handle_time);
 
-    // Store the current cache offset for later use
-    size_t protocol_tx_cache_data_offset = tx_cache_data_offset;
-    ++tx_cache_data_offset;
-
     TIME_MEASURE_START(txs_handle_time);
     THROW_WALLET_EXCEPTION_IF(bche.txs.size() != b.tx_hashes.size(), error::wallet_internal_error, "Wrong amount of transactions for block");
     THROW_WALLET_EXCEPTION_IF(bche.txs.size() != parsed_block.txes.size(), error::wallet_internal_error, "Wrong amount of transactions for block");
@@ -2988,10 +2940,6 @@ void wallet2::process_new_blockchain_entry(const cryptonote::block& b,
       output_key_images.remove_prefix(n_outs_in_tx);
     }
     TIME_MEASURE_FINISH(txs_handle_time);
-
-    TIME_MEASURE_START(protocol_tx_handle_time);
-    process_new_transaction(get_transaction_hash(b.protocol_tx), b.protocol_tx, parsed_block.o_indices.indices[1].indices, parsed_block.asset_type_output_indices.indices[1].indices, height, b.major_version, b.timestamp, true, false, false, tx_cache_data[protocol_tx_cache_data_offset], output_tracker_cache);
-    TIME_MEASURE_FINISH(protocol_tx_handle_time);
 
     m_last_block_reward = cryptonote::get_outs_money_amount(b.miner_tx);
     LOG_PRINT_L2("Processed block: " << bl_id << ", height " << height << ", " <<  miner_tx_handle_time + txs_handle_time << "(" << miner_tx_handle_time << "/" << txs_handle_time <<")ms");
@@ -3122,17 +3070,17 @@ void wallet2::process_pool_info_extent(const cryptonote::COMMAND_RPC_GET_BLOCKS_
   update_pool_state_from_pool_data(res.pool_info_extent == COMMAND_RPC_GET_BLOCKS_FAST::INCREMENTAL, res.removed_pool_txids, added_pool_txs, process_txs, refreshed);
 }
 //----------------------------------------------------------------------------------------------------
-void wallet2::pull_blocks(bool first, bool try_incremental, uint64_t start_height, uint64_t &blocks_start_height, const std::list<crypto::hash> &short_chain_history, std::vector<cryptonote::block_complete_entry> &blocks, std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_output_indices> &o_indices, std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_asset_type_output_indices> &asset_type_output_indices, uint64_t &current_height)
+void wallet2::pull_blocks(bool first, bool try_incremental, uint64_t start_height, uint64_t &blocks_start_height, const std::list<crypto::hash> &short_chain_history, std::vector<cryptonote::block_complete_entry> &blocks, std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_output_indices> &o_indices, std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_asset_type_output_indices> &asset_type_output_indices, uint64_t &current_height, std::vector<std::tuple<cryptonote::transaction, crypto::hash, bool>>& process_pool_txs)
 {
   cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request req = AUTO_VAL_INIT(req);
   cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response res = AUTO_VAL_INIT(res);
   req.block_ids = short_chain_history;
 
-  MDEBUG("Pulling blocks: start_height " << start_height);
-
   req.prune = true;
   req.start_height = start_height;
   req.no_miner_tx = m_refresh_type == RefreshNoCoinbase;
+
+  MDEBUG("Pulling blocks: start_height " << start_height);
 
   req.requested_info = (first && !m_background_syncing) ? COMMAND_RPC_GET_BLOCKS_FAST::BLOCKS_AND_POOL : COMMAND_RPC_GET_BLOCKS_FAST::BLOCKS_ONLY;
   if (try_incremental && !m_background_syncing)
@@ -3140,15 +3088,11 @@ void wallet2::pull_blocks(bool first, bool try_incremental, uint64_t start_heigh
 
   {
     const boost::lock_guard<boost::recursive_mutex> lock{m_daemon_rpc_mutex};
-    uint64_t pre_call_credits = m_rpc_payment_state.credits;
-    req.client = get_client_signature();
     bool r = net_utils::invoke_http_bin("/getblocks.bin", req, res, *m_http_client, rpc_timeout);
     THROW_ON_RPC_RESPONSE_ERROR(r, {}, res, "getblocks.bin", error::get_blocks_error, get_rpc_status(res.status));
     THROW_WALLET_EXCEPTION_IF(res.blocks.size() != res.output_indices.size(), error::wallet_internal_error,
         "mismatched blocks (" + boost::lexical_cast<std::string>(res.blocks.size()) + ") and output_indices (" +
         boost::lexical_cast<std::string>(res.output_indices.size()) + ") sizes from daemon");
-    uint64_t pool_info_cost = res.added_pool_txs.size() * COST_PER_TX + (res.remaining_added_pool_txids.size() + res.removed_pool_txids.size()) * COST_PER_POOL_HASH;
-    check_rpc_cost("/getblocks.bin", res.credits, pre_call_credits, 1 + res.blocks.size() * COST_PER_BLOCK + pool_info_cost);
   }
 
   blocks_start_height = res.start_height;
@@ -3167,14 +3111,14 @@ void wallet2::pull_blocks(bool first, bool try_incremental, uint64_t start_heigh
   {
     if (res.pool_info_extent != COMMAND_RPC_GET_BLOCKS_FAST::NONE)
     {
-      process_pool_info_extent(res, m_process_pool_txs, true);
+      process_pool_info_extent(res, process_pool_txs, true);
     }
     else
     {
       // If we did not get any pool info, neither incremental nor the whole pool, we probably talk
       // to a daemon that does not yet support giving back pool info with the 'getblocks' call,
       // and we have to update in the "old way"
-      update_pool_state_by_pool_query(m_process_pool_txs, true);
+      update_pool_state_by_pool_query(process_pool_txs, true);
     }
   }
 
@@ -3203,40 +3147,26 @@ void wallet2::pull_hashes(uint64_t start_height, uint64_t &blocks_start_height, 
 //----------------------------------------------------------------------------------------------------
 void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vector<cryptonote::block_complete_entry> &blocks, const std::vector<parsed_block> &parsed_blocks, uint64_t& blocks_added, std::map<std::pair<uint64_t, uint64_t>, size_t> &output_tracker_cache)
 {
-  size_t current_index = start_height;
   blocks_added = 0;
 
   THROW_WALLET_EXCEPTION_IF(blocks.size() != parsed_blocks.size(), error::wallet_internal_error, "size mismatch");
-  THROW_WALLET_EXCEPTION_IF(!m_blockchain.is_in_bounds(current_index), error::out_of_hashchain_bounds_error);
-
-  //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  //Force processing of genesis transaction
-  if ((m_blockchain.size() == 1) && (start_height == 0)) {
-    cryptonote::block genesis;
-    generate_genesis(genesis);
-
-    if (m_blockchain[0] == get_block_hash(genesis)) {
-      LOG_PRINT_L2("Processing genesis transaction: " << string_tools::pod_to_hex(get_transaction_hash(genesis.miner_tx)));
-      std::vector<uint64_t> o_indices_genesis = {0}; //genesis transaction output
-      std::vector<uint64_t> a_indices_genesis = {0}; //genesis transaction asset output
-      process_new_transaction(get_transaction_hash(genesis.miner_tx), genesis.miner_tx, o_indices_genesis, a_indices_genesis, 0, 0, genesis.timestamp, true, false, false, {} );
-    } else {
-      LOG_ERROR("Skip processing of genesis transaction, genesis block hash does not match: " << string_tools::pod_to_hex(get_block_hash(genesis)));
-    }
-  }
-  //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  THROW_WALLET_EXCEPTION_IF(!m_blockchain.is_in_bounds(start_height), error::out_of_hashchain_bounds_error);
 
   tools::threadpool& tpool = tools::threadpool::getInstanceForCompute();
 
   size_t num_txes = 0;
-  for (size_t i = 0; i < blocks.size(); ++i)
-    num_txes += 2 + parsed_blocks[i].txes.size();
-  tx_cache_data.resize(num_txes);
-  size_t txidx = 0;
-  for (size_t i = 0; i < blocks.size(); ++i)
+  size_t num_tx_outputs = 0;
+  for (const parsed_block &par_blk : parsed_blocks)
   {
-    THROW_WALLET_EXCEPTION_IF(parsed_blocks[i].txes.size() != parsed_blocks[i].block.tx_hashes.size(),
-        error::wallet_internal_error, "Mismatched parsed_blocks[i].txes.size() and parsed_blocks[i].block.tx_hashes.size()");
+    num_txes += 1 + par_blk.txes.size();
+    num_tx_outputs += par_blk.block.miner_tx.vout.size();
+    for (const cryptonote::transaction &tx : par_blk.txes)
+      num_tx_outputs += tx.vout.size();
+  }
+  crypto::hash prev_block_id;
+  bool has_prev_block = m_blockchain.is_in_bounds(start_height - 1);
+  if (has_prev_block) {
+    prev_block_id = m_blockchain[start_height - 1];
   }
 
   hw::device &hwdev =  m_account.get_device();
@@ -3364,7 +3294,7 @@ void check_block_hard_fork_version(cryptonote::network_type nettype, uint8_t hf_
   daemon_is_outdated = height < start_height || height >= end_height;
 }
 //----------------------------------------------------------------------------------------------------
-void wallet2::pull_and_parse_next_blocks(bool first, bool try_incremental, uint64_t start_height, uint64_t &blocks_start_height, std::list<crypto::hash> &short_chain_history, const std::vector<cryptonote::block_complete_entry> &prev_blocks, const std::vector<parsed_block> &prev_parsed_blocks, std::vector<cryptonote::block_complete_entry> &blocks, std::vector<parsed_block> &parsed_blocks, bool &last, bool &error, std::exception_ptr &exception)
+void wallet2::pull_and_parse_next_blocks(bool first, bool try_incremental, uint64_t start_height, uint64_t &blocks_start_height, std::list<crypto::hash> &short_chain_history, const std::vector<cryptonote::block_complete_entry> &prev_blocks, const std::vector<parsed_block> &prev_parsed_blocks, std::vector<cryptonote::block_complete_entry> &blocks, std::vector<parsed_block> &parsed_blocks, std::vector<std::tuple<cryptonote::transaction, crypto::hash, bool>>& process_pool_txs, bool &last, bool &error, std::exception_ptr &exception)
 {
   error = false;
   last = false;
@@ -3388,7 +3318,7 @@ void wallet2::pull_and_parse_next_blocks(bool first, bool try_incremental, uint6
     std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_asset_type_output_indices> asset_type_output_indices;
     
     uint64_t current_height;
-    pull_blocks(first, try_incremental, start_height, blocks_start_height, short_chain_history, blocks, o_indices, asset_type_output_indices, current_height);
+    pull_blocks(first, try_incremental, start_height, blocks_start_height, short_chain_history, blocks, o_indices, asset_type_output_indices, current_height, process_pool_txs);
     THROW_WALLET_EXCEPTION_IF(blocks.size() != o_indices.size(), error::wallet_internal_error, "Mismatched sizes of blocks and o_indices");
     THROW_WALLET_EXCEPTION_IF(blocks.size() != asset_type_output_indices.size(), error::wallet_internal_error, "Mismatched sizes of blocks and asset_type_output_indices");
 
@@ -3815,7 +3745,7 @@ void wallet2::process_pool_state(const std::vector<std::tuple<cryptonote::transa
     const cryptonote::transaction &tx = std::get<0>(e);
     const crypto::hash &tx_hash = std::get<1>(e);
     const bool double_spend_seen = std::get<2>(e);
-    process_new_transaction(tx_hash, tx, std::vector<uint64_t>(), 0, 0, now, false, true, double_spend_seen);
+    process_new_transaction(tx_hash, tx, std::vector<uint64_t>(), std::vector<uint64_t>(), 0, 0, now, false, true, double_spend_seen);
     m_scanned_pool_txs[0].insert(tx_hash);
     if (m_scanned_pool_txs[0].size() > 5000)
     {
@@ -3964,6 +3894,10 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
   uint64_t blocks_start_height;
   std::vector<cryptonote::block_complete_entry> blocks;
   std::vector<parsed_block> parsed_blocks;
+  // TODO moneromooo-monero says this about the "refreshed" variable:
+  // "I had to reorder some code to fix... a timing info leak IIRC. In turn, this undid something I had fixed before, ... a subtle race condition with the txpool.
+  // It was pretty subtle IIRC, and so I needed time to think about how to refix it after the move, and I never got to it."
+  // https://github.com/monero-project/monero/pull/6097
   bool refreshed = false;
   std::map<std::pair<uint64_t, uint64_t>, size_t> output_tracker_cache = create_output_tracker_cache();
   hw::device &hwdev = m_account.get_device();
@@ -3996,7 +3930,7 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
 
   auto scope_exit_handler_hwdev = epee::misc_utils::create_scope_leave_handler([&](){hwdev.computing_key_images(false);});
 
-  m_process_pool_txs.clear();
+  std::vector<std::tuple<cryptonote::transaction, crypto::hash, bool>> process_pool_txs;
   // Getting and processing the pool state has moved down into method 'pull_blocks' to
   // allow for "conventional" as well as "incremental" update. However the following
   // principle of getting all info first (pool AND blocks) and only process txs afterwards
@@ -4028,7 +3962,7 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
         break;
       }
       if (!last)
-        tpool.submit(&waiter, [&]{pull_and_parse_next_blocks(first, try_incremental, start_height, next_blocks_start_height, short_chain_history, blocks, parsed_blocks, next_blocks, next_parsed_blocks, last, error, exception);});
+        tpool.submit(&waiter, [&]{pull_and_parse_next_blocks(first, try_incremental, start_height, next_blocks_start_height, short_chain_history, blocks, parsed_blocks, next_blocks, next_parsed_blocks, process_pool_txs, last, error, exception);});
 
       if (!first)
       {
@@ -4046,7 +3980,8 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
           cryptonote::block b;
           generate_genesis(b);
           m_blockchain.clear();
-          m_blockchain.push_back(get_block_hash(b));
+          const crypto::hash genesis_hash = get_block_hash(b);
+          m_blockchain.push_back(genesis_hash);
           short_chain_history.clear();
           get_short_chain_history(short_chain_history);
           fast_refresh(stop_height, blocks_start_height, short_chain_history, true);
@@ -4099,12 +4034,6 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
       THROW_WALLET_EXCEPTION_IF(!waiter.wait(), error::wallet_internal_error, "Exception in thread pool");
       throw;
     }
-    catch (const error::payment_required&)
-    {
-      // no point in trying again, it'd just eat up credits
-      THROW_WALLET_EXCEPTION_IF(!waiter.wait(), error::wallet_internal_error, "Exception in thread pool");
-      throw;
-    }
     catch (const error::reorg_depth_error&)
     {
       THROW_WALLET_EXCEPTION_IF(!waiter.wait(), error::wallet_internal_error, "Exception in thread pool");
@@ -4144,8 +4073,8 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
   try
   {
     // If stop() is called we don't need to check pending transactions
-    if (check_pool && m_run.load(std::memory_order_relaxed) && !m_process_pool_txs.empty())
-      process_pool_state(m_process_pool_txs);
+    if (check_pool && m_run.load(std::memory_order_relaxed) && !process_pool_txs.empty())
+      process_pool_state(process_pool_txs);
   }
   catch (...)
   {
@@ -4157,9 +4086,9 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
     m_background_sync_data.first_refresh_done = true;
 
   LOG_PRINT_L1("Refresh done, blocks received: " << blocks_fetched << ", balance (all accounts): ");
-  for(const auto& asset: m_transfers_indices) {
+  for(const auto& asset: m_transfers_indices)
     LOG_PRINT_L1(asset.first << " : balance " << print_money(balance_all(false, asset.first)) << ", unlocked: " << print_money(unlocked_balance_all(false, asset.first)));
-  }
+
 }
 //----------------------------------------------------------------------------------------------------
 bool wallet2::refresh(bool trusted_daemon, uint64_t & blocks_fetched, bool& received_money, bool& ok)
@@ -6351,14 +6280,11 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
     THROW_WALLET_EXCEPTION_IF(true, error::file_read_error, "failed to load keys from buffer");
   }
 
-  wallet_keys_unlocker unlocker(*this, m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only && !m_is_background_wallet, password);
+  wallet_keys_unlocker unlocker(*this, &password);
 
   //keys loaded ok!
   //try to load wallet cache. but even if we failed, it is not big problem
   load_wallet_cache(use_fs, cache_buf);
-
-  if (!m_persistent_rpc_client_id)
-    set_rpc_client_secret_key(rct::rct2sk(rct::skGen()));
 
   // Wallets used to wipe, but not erase, old unused multisig key info, which lead to huge memory leaks.
   // Here we erase these multisig keys if they're zero'd out to free up space.
@@ -7825,7 +7751,7 @@ bool wallet2::sign_tx(unsigned_tx_set &exported_txs, std::vector<wallet2::pendin
         continue;
       crypto::key_image ki;
       cryptonote::keypair in_ephemeral;
-      if (generate_key_image_helper(keys, m_subaddresses, output_public_key, tx_pub_key, additional_tx_pub_keys, i, in_ephemeral, ki, hwdev, false, origin_tx_data, sid))
+      if (generate_key_image_helper(keys, m_subaddresses, output_public_key, tx_pub_key, additional_tx_pub_keys, i, in_ephemeral, ki, hwdev))
         signed_txes.tx_key_images[output_public_key] = ki;
       else
         MERROR("Failed to calculate key image");
@@ -12276,7 +12202,7 @@ std::string wallet2::get_spend_proof(const crypto::hash &txid, const std::string
     const std::vector<crypto::public_key> in_additionakl_tx_pub_keys = get_additional_tx_pub_keys_from_extra(in_td.m_tx);
     keypair in_ephemeral;
     crypto::key_image in_img;
-    THROW_WALLET_EXCEPTION_IF(!generate_key_image_helper(m_account.get_keys(), m_subaddresses, in_tx_out_pkey, in_tx_pub_key, in_additionakl_tx_pub_keys, in_td.m_internal_output_index, in_ephemeral, in_img, m_account.get_device(), false, origin_tx_data, sid),
+    THROW_WALLET_EXCEPTION_IF(!generate_key_image_helper(m_account.get_keys(), m_subaddresses, in_tx_out_pkey, in_tx_pub_key, in_additionakl_tx_pub_keys, in_td.m_internal_output_index, in_ephemeral, in_img, m_account.get_device()),
       error::wallet_internal_error, "failed to generate key image");
     THROW_WALLET_EXCEPTION_IF(in_key->k_image != in_img, error::wallet_internal_error, "key image mismatch");
 
@@ -12950,7 +12876,7 @@ std::string wallet2::get_reserve_proof(const boost::optional<std::pair<uint32_t,
     // derive ephemeral secret key
     crypto::key_image ki;
     cryptonote::keypair ephemeral;
-    const bool r = cryptonote::generate_key_image_helper(m_account.get_keys(), m_subaddresses, td.get_public_key(), tx_pub_key,  additional_tx_pub_keys, td.m_internal_output_index, ephemeral, ki, m_account.get_device(), false, od, sid);
+    const bool r = cryptonote::generate_key_image_helper(m_account.get_keys(), m_subaddresses, td.get_public_key(), tx_pub_key,  additional_tx_pub_keys, td.m_internal_output_index, ephemeral, ki, m_account.get_device());
     THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to generate key image");
     THROW_WALLET_EXCEPTION_IF(ephemeral.pub != td.get_public_key(), error::wallet_internal_error, "Derived public key doesn't agree with the stored one");
 
@@ -13554,7 +13480,7 @@ std::pair<uint64_t, std::vector<std::pair<crypto::key_image, crypto::signature>>
     // generate ephemeral secret key
     crypto::key_image ki;
     cryptonote::keypair in_ephemeral;
-    bool r = cryptonote::generate_key_image_helper(m_account.get_keys(), m_subaddresses, pkey, tx_pub_key, additional_tx_pub_keys, td.m_internal_output_index, in_ephemeral, ki, m_account.get_device(), false, od, sid);
+    bool r = cryptonote::generate_key_image_helper(m_account.get_keys(), m_subaddresses, pkey, tx_pub_key, additional_tx_pub_keys, td.m_internal_output_index, in_ephemeral, ki, m_account.get_device());
     THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to generate key image");
 
     THROW_WALLET_EXCEPTION_IF(td.m_key_image_known && !td.m_key_image_partial && ki != td.m_key_image,
@@ -13805,18 +13731,19 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
       ++it;
 
       // get received (change) amount
-      uint64_t tx_money_got_in_outs = 0;
+      std::map<std::string, uint64_t> tx_money_got_in_outs;
       const auto enote_scan_infos = wallet::view_incoming_scan_transaction(spent_tx,
         m_account.get_keys(),
         m_subaddresses);
       for (const auto &enote_scan_info : enote_scan_infos)
         if (enote_scan_info && enote_scan_info->subaddr_index)
-          tx_money_got_in_outs += enote_scan_info->amount; //! @TODO: check overflow
+          tx_money_got_in_outs[enote_scan_info->asset_type] += enote_scan_info->amount; //! @TODO: check overflow
 
       // get asset types
       std::string source_asset;
       std::string dest_asset;
       crypto::hash txid;
+      bool miner_tx = cryptonote::is_coinbase(spent_tx);
       epee::string_tools::hex_to_pod(e.tx_hash, txid);
       THROW_WALLET_EXCEPTION_IF(!cryptonote::get_tx_asset_types(spent_tx, txid, source_asset, dest_asset, miner_tx), error::wallet_internal_error, "Failed to get asset types");
 
@@ -14041,7 +13968,7 @@ void wallet2::process_background_cache(const background_sync_data_t &background_
   {
     MDEBUG("Processing background synced tx " << bgs_tx.first);
 
-    process_new_transaction(bgs_tx.first, bgs_tx.second.tx, bgs_tx.second.output_indices, bgs_tx.second.height, 0, bgs_tx.second.block_timestamp,
+    process_new_transaction(bgs_tx.first, bgs_tx.second.tx, bgs_tx.second.output_indices, bgs_tx.second.asset_output_indices, bgs_tx.second.height, 0, bgs_tx.second.block_timestamp,
         cryptonote::is_coinbase(bgs_tx.second.tx), false/*pool*/, bgs_tx.second.double_spend_seen, true/*ignore_callbacks*/);
 
     // Re-set destination addresses if they were previously set
@@ -14532,7 +14459,7 @@ process:
     crypto::public_key out_key = td.get_public_key();
     if (should_expand(td.m_subaddr_index))
       create_one_off_subaddress(td.m_subaddr_index);
-    bool r = cryptonote::generate_key_image_helper(m_account.get_keys(), m_subaddresses, out_key, tx_pub_key, additional_tx_pub_keys, td.m_internal_output_index, in_ephemeral, td.m_key_image, m_account.get_device(), false, od, sid);
+    bool r = cryptonote::generate_key_image_helper(m_account.get_keys(), m_subaddresses, out_key, tx_pub_key, additional_tx_pub_keys, td.m_internal_output_index, in_ephemeral, td.m_key_image, m_account.get_device());
     THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to generate key image");
     if (should_expand(td.m_subaddr_index))
       expand_subaddresses(td.m_subaddr_index);
@@ -14641,7 +14568,7 @@ size_t wallet2::import_outputs(const std::tuple<uint64_t, uint64_t, std::vector<
     const crypto::public_key& out_key = etd.m_pubkey;
     if (should_expand(td.m_subaddr_index))
       create_one_off_subaddress(td.m_subaddr_index);
-    bool r = cryptonote::generate_key_image_helper(m_account.get_keys(), m_subaddresses, out_key, tx_pub_key, additional_tx_pub_keys, td.m_internal_output_index, in_ephemeral, td.m_key_image, m_account.get_device(), false, od, sid);
+    bool r = cryptonote::generate_key_image_helper(m_account.get_keys(), m_subaddresses, out_key, tx_pub_key, additional_tx_pub_keys, td.m_internal_output_index, in_ephemeral, td.m_key_image, m_account.get_device());
     THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to generate key image");
     if (should_expand(td.m_subaddr_index))
       expand_subaddresses(td.m_subaddr_index);

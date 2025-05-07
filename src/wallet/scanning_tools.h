@@ -67,6 +67,8 @@ struct enote_view_incoming_scan_info_t
     rct::xmr_amount amount;
     // z
     rct::key amount_blinding_factor;
+    // asset type
+    std::string asset_type;
 
     // legacy: 8 k_v R, carrot: s^ctx_sr
     crypto::key_derivation derivation;
