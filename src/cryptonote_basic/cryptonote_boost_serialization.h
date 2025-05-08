@@ -197,7 +197,7 @@ namespace boost
     a & x.vout;
     a & x.extra;
     a & x.type;
-    if (x.type != cryptonote::transaction_type::PROTOCOL) {
+    if (x.type != cryptonote::transaction_type::PROTOCOL && x.type != cryptonote::transaction_type::UNSET) {
       a & x.amount_burnt;
       if (x.type != cryptonote::transaction_type::MINER) {
         if (x.type == cryptonote::transaction_type::TRANSFER && x.version >= TRANSACTION_VERSION_N_OUTS) {

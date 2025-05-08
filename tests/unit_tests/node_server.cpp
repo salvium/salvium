@@ -35,6 +35,7 @@
 #include "cryptonote_core/i_core_events.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.inl"
+#include "unit_tests_utils.h"
 #include <condition_variable>
 
 #define MAKE_IPV4_ADDRESS(a,b,c,d) epee::net_utils::ipv4_network_address{MAKE_IP(a,b,c,d),0}
@@ -114,6 +115,18 @@ static bool is_blocked(Server &server, const epee::net_utils::network_address &a
       return true;
     }
   }
+
+  if (address.get_type_id() != epee::net_utils::address_type::ipv4)
+    return false;
+  
+  const epee::net_utils::ipv4_network_address ipv4_address = address.as<epee::net_utils::ipv4_network_address>();
+
+  // check if in a blocked ipv4 subnet
+  const std::map<epee::net_utils::ipv4_network_subnet, time_t> subnets = server.get_blocked_subnets();
+  for (const auto &subnet : subnets)
+    if (subnet.first.matches(ipv4_address))
+      return true;
+
   return false;
 }
 
@@ -224,6 +237,18 @@ TEST(ban, subnet)
   test_core pr_core;
   cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol(pr_core, NULL);
   Server server(cprotocol);
+  {
+    boost::program_options::options_description opts{};
+    Server::init_options(opts);
+    cryptonote::core::init_options(opts);
+
+    char** args = nullptr;
+    boost::program_options::variables_map vm;
+    boost::program_options::store(
+      boost::program_options::parse_command_line(0, args, opts), vm
+    );
+    server.init(vm);
+  }
   cprotocol.set_p2p_endpoint(&server);
 
   ASSERT_TRUE(server.block_subnet(MAKE_IPV4_SUBNET(1,2,3,4,24), 10));
@@ -264,6 +289,78 @@ TEST(ban, ignores_port)
   ASSERT_TRUE(server.unblock_host(MAKE_IPV4_ADDRESS_PORT(1,2,3,4,5)));
   ASSERT_FALSE(is_blocked(server,MAKE_IPV4_ADDRESS_PORT(1,2,3,4,5)));
   ASSERT_FALSE(is_blocked(server,MAKE_IPV4_ADDRESS_PORT(1,2,3,4,6)));
+}
+
+TEST(ban, file_banlist)
+{
+  test_core pr_core;
+  cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol(pr_core, NULL);
+  Server server(cprotocol);
+  cprotocol.set_p2p_endpoint(&server);
+
+  auto create_node_dir = [](){
+    boost::system::error_code ec;
+    auto path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path("daemon-%%%%%%%%%%%%%%%%", ec);
+    if (ec)
+      return boost::filesystem::path{};
+    auto success = boost::filesystem::create_directory(path, ec);
+    if (!ec && success)
+      return path;
+    return boost::filesystem::path{};
+  };
+  const auto node_dir = create_node_dir();
+  ASSERT_TRUE(!node_dir.empty());
+  auto auto_remove_node_dir = epee::misc_utils::create_scope_leave_handler([&node_dir](){
+      boost::filesystem::remove_all(node_dir);
+    });
+
+  boost::program_options::variables_map vm;
+  boost::program_options::store(
+    boost::program_options::command_line_parser({
+      "--data-dir",
+      node_dir.string(),
+      "--ban-list",
+      (unit_test::data_dir / "node" / "banlist_1.txt").string()
+    }).options([]{
+      boost::program_options::options_description options_description{};
+      cryptonote::core::init_options(options_description);
+      Server::init_options(options_description);
+      return options_description;
+    }()).run(),
+    vm
+  );
+
+  ASSERT_TRUE(server.init(vm));
+
+  // Test cases (look in the banlist_1.txt file)
+
+  // magicfolk
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(255,255,255,0,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(128,128,128,0,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(150,75,0,0,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(99,98,0,0,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(99,98,0,255,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(99,98,1,0,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(99,98,1,0,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(99,98,255,255,9999)) );
+  EXPECT_FALSE( is_blocked(server, MAKE_IPV4_ADDRESS_PORT(99,99,0,0,9999)) );
+
+  // personal enemies
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(1,2,3,4,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(6,7,8,9,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(1,0,0,7,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(1,0,0,7,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(100,98,1,13,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(100,98,1,0,9999)) );
+  EXPECT_TRUE(  is_blocked(server, MAKE_IPV4_ADDRESS_PORT(100,98,1,255,9999)) );
+  EXPECT_FALSE( is_blocked(server, MAKE_IPV4_ADDRESS_PORT(100,98,2,0,9999)) );
+  EXPECT_FALSE( is_blocked(server, MAKE_IPV4_ADDRESS_PORT(100,98,0,255,9999)) );
+
+  // angel
+  EXPECT_FALSE( is_blocked(server, MAKE_IPV4_ADDRESS_PORT(007,007,007,007,9999)) );
+
+  // random IP
+  EXPECT_FALSE( is_blocked(server, MAKE_IPV4_ADDRESS_PORT(145,036,205,235,9999)) );
 }
 
 TEST(node_server, bind_same_p2p_port)
@@ -341,14 +438,14 @@ TEST(cryptonote_protocol_handler, race_condition)
   using connections_t = std::vector<connection_ptr>;
   using shared_state_t = typename connection_t::shared_state;
   using shared_state_ptr = std::shared_ptr<shared_state_t>;
-  using io_context_t = boost::asio::io_service;
+  using io_context_t = boost::asio::io_context;
   using event_t = epee::simple_event;
   using ec_t = boost::system::error_code;
   auto create_conn_pair = [](connection_ptr in, connection_ptr out) {
     using endpoint_t = boost::asio::ip::tcp::endpoint;
     using acceptor_t = boost::asio::ip::tcp::acceptor;
     io_context_t io_context;
-    endpoint_t endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 5262);
+    endpoint_t endpoint(boost::asio::ip::make_address("127.0.0.1"), 5262);
     acceptor_t acceptor(io_context);
     ec_t ec;
     acceptor.open(endpoint.protocol(), ec);
@@ -356,7 +453,7 @@ TEST(cryptonote_protocol_handler, race_condition)
     acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
     acceptor.bind(endpoint, ec);
     EXPECT_EQ(ec.value(), 0);
-    acceptor.listen(boost::asio::socket_base::max_connections, ec);
+    acceptor.listen(boost::asio::socket_base::max_listen_connections, ec);
     EXPECT_EQ(ec.value(), 0);
     out->socket().open(endpoint.protocol(), ec);
     EXPECT_EQ(ec.value(), 0);
@@ -374,7 +471,7 @@ TEST(cryptonote_protocol_handler, race_condition)
     conn.get_context(context);
     return context.m_connection_id;
   };
-  using work_t = boost::asio::io_service::work;
+  using work_t = boost::asio::executor_work_guard<boost::asio::io_context::executor_type>;
   using work_ptr = std::shared_ptr<work_t>;
   using workers_t = std::vector<std::thread>;
   using commands_handler_t = epee::levin::levin_commands_handler<context_t>;
@@ -408,8 +505,9 @@ TEST(cryptonote_protocol_handler, race_condition)
     block.miner_tx.vin.clear();
     block.miner_tx.vout.clear();
     block.miner_tx.extra.clear();
-    block.miner_tx.version = hardfork >= 4 ? 2 : 1;
-    block.miner_tx.unlock_time = height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
+    block.miner_tx.version = 2;
+    block.miner_tx.type = cryptonote::transaction_type::MINER;
+    block.miner_tx.unlock_time = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
     block.miner_tx.vin.push_back(cryptonote::txin_gen{height});
     cryptonote::add_tx_pub_key_to_extra(block.miner_tx, {});
     cryptonote::get_block_reward(
@@ -419,7 +517,21 @@ TEST(cryptonote_protocol_handler, race_condition)
       reward,
       hardfork
     );
-    block.miner_tx.vout.push_back(cryptonote::tx_out{reward, cryptonote::txout_to_key{}});
+    block.miner_tx.amount_burnt = reward/5; // avoid no staking reward error
+    reward -= block.miner_tx.amount_burnt;
+    cryptonote::txout_to_key out; out.asset_type = "SAL";
+    block.miner_tx.vout.push_back(cryptonote::tx_out{reward, out});
+
+    // set protocol tx
+    block.protocol_tx.vin.clear();
+    block.protocol_tx.vout.clear();
+    block.protocol_tx.extra.clear();
+    block.protocol_tx.version = (height > 0) ? 2 : 1;
+    block.protocol_tx.type = cryptonote::transaction_type::PROTOCOL;
+    block.protocol_tx.unlock_time = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
+    block.protocol_tx.vin.push_back(cryptonote::txin_gen{height});
+    cryptonote::add_tx_pub_key_to_extra(block.protocol_tx, {});
+
     diff = storage.get_difficulty_for_next_block();
   };
   struct stat {
@@ -693,7 +805,7 @@ TEST(cryptonote_protocol_handler, race_condition)
   };
 
   io_context_t io_context;
-  work_ptr work = std::make_shared<work_t>(io_context);
+  work_ptr work = std::make_shared<work_t>(io_context.get_executor());
   workers_t workers;
   while (workers.size() < 4) {
     workers.emplace_back([&io_context]{
@@ -730,7 +842,7 @@ TEST(cryptonote_protocol_handler, race_condition)
       auto conn = connections.first;
       auto shared_state = daemon.main.shared_state;
       const auto tag = get_conn_tag(*conn);
-      conn->strand_.post([tag, conn, shared_state, &events]{
+      boost::asio::post(conn->strand_, [tag, conn, shared_state, &events]{
         shared_state->for_connection(tag, [](context_t &context){
           context.m_expect_height = -1;
           context.m_expect_response = -1;
@@ -757,10 +869,10 @@ TEST(cryptonote_protocol_handler, race_condition)
     events.check.raise();
     events.finish.wait();
 
-    connections.first->strand_.post([connections]{
+    boost::asio::post(connections.first->strand_, [connections]{
       connections.first->cancel();
     });
-    connections.second->strand_.post([connections]{
+    boost::asio::post(connections.second->strand_, [connections]{
       connections.second->cancel();
     });
     connections.first.reset();
@@ -804,7 +916,7 @@ TEST(cryptonote_protocol_handler, race_condition)
       work_ptr work;
       workers_t workers;
     } check;
-    check.work = std::make_shared<work_t>(check.io_context);
+    check.work = std::make_shared<work_t>(check.io_context.get_executor());
     while (check.workers.size() < 2) {
       check.workers.emplace_back([&check]{
         check.io_context.run();
@@ -825,7 +937,7 @@ TEST(cryptonote_protocol_handler, race_condition)
       auto conn = daemon.main.conn.back();
       auto shared_state = daemon.main.shared_state;
       const auto tag = get_conn_tag(*conn);
-      conn->strand_.post([tag, conn, shared_state, &events]{
+      boost::asio::post(conn->strand_, [tag, conn, shared_state, &events]{
         shared_state->for_connection(tag, [](context_t &context){
           EXPECT_TRUE(context.m_state == contexts::cryptonote::state_normal);
           return true;
@@ -877,13 +989,13 @@ TEST(cryptonote_protocol_handler, race_condition)
 
     for (;daemon.main.conn.size(); daemon.main.conn.pop_back()) {
       auto conn = daemon.main.conn.back();
-      conn->strand_.post([conn]{
+      boost::asio::post(conn->strand_, [conn]{
         conn->cancel();
       });
     }
     for (;daemon.alt.conn.size(); daemon.alt.conn.pop_back()) {
       auto conn = daemon.alt.conn.back();
-      conn->strand_.post([conn]{
+      boost::asio::post(conn->strand_, [conn]{
         conn->cancel();
       });
     }
@@ -1053,8 +1165,8 @@ TEST(node_server, race_condition)
     using connection_ptr = boost::shared_ptr<connection_t>;
     using shared_state_t = typename connection_t::shared_state;
     using shared_state_ptr = std::shared_ptr<shared_state_t>;
-    using io_context_t = boost::asio::io_service;
-    using work_t = boost::asio::io_service::work;
+    using io_context_t = boost::asio::io_context;
+    using work_t = boost::asio::executor_work_guard<boost::asio::io_context::executor_type>;
     using work_ptr = std::shared_ptr<work_t>;
     using workers_t = std::vector<std::thread>;
     using endpoint_t = boost::asio::ip::tcp::endpoint;
@@ -1071,23 +1183,23 @@ TEST(node_server, race_condition)
       static void destroy(epee::levin::levin_commands_handler<context_t>* ptr) { delete ptr; }
     };
     io_context_t io_context;
-    work_ptr work = std::make_shared<work_t>(io_context);
+    work_ptr work = std::make_shared<work_t>(io_context.get_executor());
     workers_t workers;
     while (workers.size() < 4) {
       workers.emplace_back([&io_context]{
         io_context.run();
       });
     }
-    io_context.post([&]{
+    boost::asio::post(io_context, [&]{
       protocol.on_idle();
     });
-    io_context.post([&]{
+    boost::asio::post(io_context, [&]{
       protocol.on_idle();
     });
     shared_state_ptr shared_state = std::make_shared<shared_state_t>();
     shared_state->set_handler(new command_handler_t, &command_handler_t::destroy);
     connection_ptr conn{new connection_t(io_context, shared_state, {}, {})};
-    endpoint_t endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 48080);
+    endpoint_t endpoint(boost::asio::ip::make_address("127.0.0.1"), 48080);
     conn->socket().connect(endpoint);
     conn->socket().set_option(boost::asio::ip::tcp::socket::reuse_address(true));
     conn->start({}, {});
@@ -1110,7 +1222,7 @@ TEST(node_server, race_condition)
       P2P_DEFAULT_HANDSHAKE_INVOKE_TIMEOUT
     );
     handshaked.wait();
-    conn->strand_.post([conn]{
+    boost::asio::post(conn->strand_, [conn]{
       conn->cancel();
     });
     conn.reset();

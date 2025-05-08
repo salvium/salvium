@@ -296,7 +296,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
   blobdata protocol_bd = tx_to_blob(blk.protocol_tx);
   add_transaction(blk_hash, std::make_pair(blk.protocol_tx, blobdata_ref(protocol_bd)));
 
-  if (blk.miner_tx.version == 2)
+  if (blk.miner_tx.version >= 2)
   {
     num_rct_outs += blk.miner_tx.vout.size();
 
@@ -311,7 +311,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
 
   std::map<std::string, int64_t> slippage_counts;
   uint64_t audit_total = 0, yield_total = 0;
-  if (blk.protocol_tx.version == 2)
+  if (blk.protocol_tx.version >= 2)
   {
     num_rct_outs += blk.protocol_tx.vout.size();
 

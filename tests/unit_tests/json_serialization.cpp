@@ -22,11 +22,11 @@ namespace test
     {
         cryptonote::transaction tx{};
         if (!cryptonote::construct_miner_tx(0, 0, 5000, 500, 500, to, tx))
-            throw std::runtime_error{"transaction construction error"};
+            throw std::runtime_error{"miner transaction construction error"};
 
         crypto::hash id{0};
         if (!cryptonote::get_transaction_hash(tx, id))
-            throw std::runtime_error{"could not get transaction hash"};
+            throw std::runtime_error{"could not get miner  transaction hash"};
 
         return tx;
     }
@@ -54,7 +54,7 @@ namespace test
             for (auto const input : boost::adaptors::index(source.vout))
             {
                 source_amount += input.value().amount;
-                auto const& key = boost::get<cryptonote::txout_to_key>(input.value().target);
+                auto const& key = boost::get<cryptonote::txout_to_tagged_key>(input.value().target);
 
                 actual_sources.push_back(
                     {{}, 0, key_field.pub_key, {}, std::size_t(input.index()), input.value().amount, rct, rct::identity()}
@@ -76,11 +76,11 @@ namespace test
 
         std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
         subaddresses[from.m_account_address.m_spend_public_key] = {0,0};
-        std::string source_asset = "FULM";
-        std::string dest_asset = "FULM";
+        std::string source_asset = "SAL";
+        std::string dest_asset = "SAL";
 
-        if (!cryptonote::construct_tx_and_get_tx_key(from, subaddresses, actual_sources, to, 1/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, boost::none, {}, tx, 0, tx_key, extra_keys, rct, { bulletproof ? rct::RangeProofBulletproof : rct::RangeProofBorromean, bulletproof ? 2 : 0 }))
-            throw std::runtime_error{"transaction construction error"};
+        if (!cryptonote::construct_tx_and_get_tx_key(from, subaddresses, actual_sources, to, 4/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, boost::none, {}, tx, 0, tx_key, extra_keys, rct, { bulletproof ? rct::RangeProofBulletproof : rct::RangeProofBorromean, bulletproof ? 4 : 0 }))
+            throw std::runtime_error{"transfer transaction construction error"};
 
         return tx;
     }
@@ -159,9 +159,9 @@ TEST(JsonSerialization, RegularTransaction)
 
     const auto miner_tx = test::make_miner_transaction(acct1.get_keys().m_account_address);
     const auto tx = test::make_transaction(
-        acct1.get_keys(), {miner_tx}, {acct2.get_keys().m_account_address}, false, false
+        acct1.get_keys(), {miner_tx}, {acct2.get_keys().m_account_address, acct2.get_keys().m_account_address}, false, false
     );
-
+    
     crypto::hash tx_hash{};
     ASSERT_TRUE(cryptonote::get_transaction_hash(tx, tx_hash));
 
@@ -190,7 +190,7 @@ TEST(JsonSerialization, RingctTransaction)
 
     const auto miner_tx = test::make_miner_transaction(acct1.get_keys().m_account_address);
     const auto tx = test::make_transaction(
-        acct1.get_keys(), {miner_tx}, {acct2.get_keys().m_account_address}, true, false
+        acct1.get_keys(), {miner_tx}, {acct2.get_keys().m_account_address, acct2.get_keys().m_account_address}, true, false
     );
 
     crypto::hash tx_hash{};
@@ -221,7 +221,7 @@ TEST(JsonSerialization, BulletproofTransaction)
 
     const auto miner_tx = test::make_miner_transaction(acct1.get_keys().m_account_address);
     const auto tx = test::make_transaction(
-        acct1.get_keys(), {miner_tx}, {acct2.get_keys().m_account_address}, true, true
+        acct1.get_keys(), {miner_tx}, {acct2.get_keys().m_account_address, acct2.get_keys().m_account_address}, true, true
     );
 
     crypto::hash tx_hash{};

@@ -224,7 +224,9 @@ namespace cryptonote
       FIELD(vout)
       FIELD(extra)
       VARINT_FIELD(type)
-      if (type != cryptonote::transaction_type::PROTOCOL) {
+      if (type != cryptonote::transaction_type::UNSET &&
+          type != cryptonote::transaction_type::PROTOCOL) {
+
         VARINT_FIELD(amount_burnt)
         if (type != cryptonote::transaction_type::MINER) {
           if (type == cryptonote::transaction_type::TRANSFER && version >= TRANSACTION_VERSION_N_OUTS) {

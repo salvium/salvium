@@ -1416,14 +1416,74 @@ bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t heigh
   return true;
 }
 //------------------------------------------------------------------
+std::tuple<bool, size_t> Blockchain::validate_treasury_payout(const transaction& tx, const uint64_t payout_index, uint8_t hf_version) const {
+  // find the treasury output
+  const auto treasury_output_keys = get_config(m_nettype).TREASURY_SAL1_MINT_OUTPUT_KEYS;
+  const auto expected_output_key = treasury_output_keys[payout_index].second;
+  const auto &output = std::find_if(tx.vout.begin(), tx.vout.end(), [&expected_output_key](const tx_out &o) {
+    std::string output_key;
+    if (o.target.type() == typeid(txout_to_key)) {
+      output_key = epee::string_tools::pod_to_hex(boost::get<txout_to_key>(o.target).key);
+    } else if (o.target.type() == typeid(txout_to_tagged_key)) {
+      output_key = epee::string_tools::pod_to_hex(boost::get<txout_to_tagged_key>(o.target).key);
+    } else {
+      return false;
+    }
+
+    return output_key == expected_output_key; 
+  });
+
+  if (output == tx.vout.end()) {
+    MERROR_VER("Miner transaction does not contain treasury output");
+    return {false, 0};
+  }
+
+  if (output->amount != TREASURY_SAL1_MINT_AMOUNT) {
+    MERROR_VER("Miner transaction contains treasury output with invalid amount");
+    return {false, 0};
+  }
+
+  if (output->target.type() != typeid(txout_to_key)) {
+    MERROR_VER("Miner transaction contains treasury output with invalid target type");
+    return {false, 0};
+  }
+
+  if (boost::get<txout_to_key>(output->target).unlock_time != CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW) {
+    MERROR_VER("Miner transaction contains treasury output with invalid target key");
+    return {false, 0};
+  }
+
+  return {true, output - tx.vout.begin()};
+}
+//------------------------------------------------------------------
 // This function validates the miner transaction reward
 bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
+
+  // validate treasury payout
+  size_t treasury_index_in_tx_outputs;
+  auto [treasury_payout_exist, treasury_payout_index] = check_treasury_payout(m_nettype, boost::get<txin_gen>(b.miner_tx.vin[0]).height, m_hardfork->get_hardforks(), version);
+  if (treasury_payout_exist) {
+    // check the treasury payout
+    auto [valid, index_in_tx_outputs] = validate_treasury_payout(b.miner_tx, treasury_payout_index, version);
+    if (!valid) {
+      MERROR_VER("Miner transaction treasury output was invalid");
+      return false;
+    }
+    treasury_index_in_tx_outputs = index_in_tx_outputs;
+  }
+
   //validate reward
   uint64_t money_in_use = 0;
-  for (auto& o: b.miner_tx.vout)
-    money_in_use += o.amount;
+  for(size_t i = 0; i < b.miner_tx.vout.size(); i++)
+  {
+    // skip the treasury output
+    if (treasury_payout_exist && (i == treasury_index_in_tx_outputs)) {
+      continue;
+    }
+    money_in_use += b.miner_tx.vout[i].amount;
+  }
   partial_block_reward = false;
 
   switch (version) {
@@ -1436,6 +1496,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_AUDIT1_PAUSE:
   case HF_VERSION_AUDIT2:
   case HF_VERSION_AUDIT2_PAUSE:
+  case HF_VERSION_TREASURY_SAL1_MINT:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
@@ -2002,7 +2063,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   //make blocks coin-base tx looks close to real coinbase tx to get truthful blob weight
   uint8_t hf_version = b.major_version;
   size_t max_outs = hf_version >= 4 ? 1 : 11;
-  bool r = construct_miner_tx(height, median_weight, already_generated_coins, txs_weight, fee, miner_address, b.miner_tx, ex_nonce, max_outs, hf_version);
+  bool r = construct_miner_tx(height, median_weight, already_generated_coins, txs_weight, fee, miner_address, b.miner_tx, m_nettype, m_hardfork->get_hardforks(), ex_nonce, max_outs, hf_version);
   CHECK_AND_ASSERT_MES(r, false, "Failed to construct miner tx, first chance");
   size_t cumulative_weight = txs_weight + get_transaction_weight(b.miner_tx);
 #if defined(DEBUG_CREATE_BLOCK_TEMPLATE)
@@ -2011,7 +2072,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
 #endif
   for (size_t try_count = 0; try_count != 10; ++try_count)
   {
-    r = construct_miner_tx(height, median_weight, already_generated_coins, cumulative_weight, fee, miner_address, b.miner_tx, ex_nonce, max_outs, hf_version);
+    r = construct_miner_tx(height, median_weight, already_generated_coins, cumulative_weight, fee, miner_address, b.miner_tx, m_nettype, m_hardfork->get_hardforks(), ex_nonce, max_outs, hf_version);
 
     CHECK_AND_ASSERT_MES(r, false, "Failed to construct miner tx, second chance");
     size_t coinbase_weight = get_transaction_weight(b.miner_tx);
@@ -3622,7 +3683,14 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
       return false;
     }
   }
-  
+
+  // Check for invalid TX types
+  if (tx.type == cryptonote::transaction_type::UNSET || tx.type > cryptonote::transaction_type::MAX) {
+    MERROR("TX type `" + std::to_string(tx.type) + "' is not supported");
+    tvc.m_version_mismatch = true;
+    return false;
+  }
+
   return true;
 }
 //------------------------------------------------------------------
@@ -6194,7 +6262,7 @@ void Blockchain::cancel()
 }
 
 #if defined(PER_BLOCK_CHECKPOINT)
-static const char expected_block_hashes_hash[] = "7dace1238f8711aa30690e0e787c81d5cc9ee99c81b6ff0f88545903ecb9a976";
+static const char expected_block_hashes_hash[] = "a2a5a9bc5d606392ac5c14be55b90a92b8577b8ffdac5c63cc6174f41764c753";
 void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints)
 {
   if (get_checkpoints == nullptr || !m_fast_sync)

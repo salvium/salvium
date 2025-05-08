@@ -52,9 +52,9 @@ bool test_genesis_tx()
   std::cout << "Miner account address:" << std::endl;
   std::cout << cryptonote::get_account_address_as_str((network_type)nettype, false, miner_acc1.get_keys().m_account_address);
   std::cout << std::endl << "Miner spend secret key:"  << std::endl;
-  epee::to_hex::formatted(std::cout, epee::as_byte_span(miner_acc1.get_keys().m_spend_secret_key));
+  epee::to_hex::formatted(std::cout, epee::as_byte_span(unwrap(unwrap(miner_acc1.get_keys().m_spend_secret_key))));
   std::cout << std::endl << "Miner view secret key:" << std::endl;
-  epee::to_hex::formatted(std::cout, epee::as_byte_span(miner_acc1.get_keys().m_view_secret_key));
+  epee::to_hex::formatted(std::cout, epee::as_byte_span(unwrap(unwrap(miner_acc1.get_keys().m_view_secret_key))));
   std::cout << std::endl << std::endl;
 
   //Create file with miner keys information
@@ -68,9 +68,9 @@ bool test_genesis_tx()
   miner_key_file << "Miner account address:" << std::endl;
   miner_key_file << cryptonote::get_account_address_as_str((network_type)nettype, false, miner_acc1.get_keys().m_account_address);
   miner_key_file << std::endl<< "Miner spend secret key:"  << std::endl;
-  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(miner_acc1.get_keys().m_spend_secret_key));
+  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(unwrap(unwrap(miner_acc1.get_keys().m_spend_secret_key))));
   miner_key_file << std::endl << "Miner view secret key:" << std::endl;
-  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(miner_acc1.get_keys().m_view_secret_key));
+  epee::to_hex::formatted(miner_key_file, epee::as_byte_span(unwrap(unwrap(miner_acc1.get_keys().m_view_secret_key))));
   miner_key_file << std::endl << std::endl;
   miner_key_file.close();
 
@@ -192,7 +192,7 @@ bool test_block_creation()
   bool r = get_account_address_from_str(info, MAINNET, "0099be99c70ef10fd534c43c88e9d13d1c8853213df7e362afbec0e4ee6fec4948d0c190b58f4b356cd7feaf8d9d0a76e7c7e5a9a0a497a6b1faf7a765882dd08ac2");
   CHECK_AND_ASSERT_MES(r, false, "failed to import");
   block b;
-  r = construct_miner_tx(90, epee::misc_utils::median(szs), 3553616528562147, 33094, 10000000, info.address, b.miner_tx, blobdata(), 11);
+  r = construct_miner_tx(90, epee::misc_utils::median(szs), 3553616528562147, 33094, 10000000, info.address, b.miner_tx, cryptonote::network_type::FAKECHAIN, {}, blobdata(), 11);
   return r;
 }
 

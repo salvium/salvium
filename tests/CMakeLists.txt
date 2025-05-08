@@ -73,10 +73,10 @@ else ()
 endif (GTest_FOUND)
 
 file(COPY
-  data/wallet_9svHk1.keys
-  data/wallet_9svHk1
+  data/wallet_SaLvTyL.keys
+  data/wallet_SaLvTyL
   data/outputs
-  data/unsigned_monero_tx
+  data/unsigned_salvium_tx
   data/signed_monero_tx
   data/sha256sum
   DESTINATION data)

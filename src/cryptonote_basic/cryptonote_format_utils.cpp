@@ -970,8 +970,17 @@ namespace cryptonote
   uint64_t get_outs_money_amount(const transaction& tx)
   {
     uint64_t outputs_amount = 0;
-    for(const auto& o: tx.vout)
-      outputs_amount += o.amount;
+    for(const auto& o: tx.vout) {
+      if(o.target.type() == typeid(txout_to_tagged_key)) {
+        if (boost::get<txout_to_tagged_key>(o.target).asset_type == "SAL1") {
+          outputs_amount += o.amount;
+        }
+      } else if (o.target.type() == typeid(txout_to_key)) {
+        if (boost::get<txout_to_key>(o.target).asset_type == "SAL1") {
+          outputs_amount += o.amount;
+        }
+      }
+    }
     return outputs_amount;
   }
   //---------------------------------------------------------------
@@ -1288,8 +1297,12 @@ namespace cryptonote
           CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
           // LAND AHOY!!!
         } else if (tx.type == cryptonote::transaction_type::PROTOCOL) {
-          // PROTOCOL TXs are responsible for paying out SAL and SAL1 during the AUDIT
-          CHECK_AND_ASSERT_MES(asset_type == "SAL1" || asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+          if (hf_version < HF_VERSION_AUDIT1_PAUSE) {
+            // PROTOCOL TXs are responsible for paying out SAL and SAL1 during the first AUDIT
+            CHECK_AND_ASSERT_MES(asset_type == "SAL1" || asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+          } else {
+            CHECK_AND_ASSERT_MES(asset_type == "SAL1", false, "wrong output asset type:" << asset_type);
+          }
         } else {
           // All other TX types must only spend + create SAL1 (MINER, TRANSFER)
           CHECK_AND_ASSERT_MES(asset_type == "SAL1", false, "wrong output asset type:" << asset_type);

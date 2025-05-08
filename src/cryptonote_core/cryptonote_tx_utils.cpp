@@ -335,6 +335,34 @@ namespace cryptonote
   }
   */
   //---------------------------------------------------------------
+  std::tuple<bool, uint64_t> check_treasury_payout(
+    network_type nettype,
+    uint64_t height,
+    const std::vector<hardfork_t>& hardforks,
+    const uint8_t hf_version
+  ) {
+    if (hf_version >= HF_VERSION_TREASURY_SAL1_MINT) {
+      // find the hardfork height
+      const auto& hf = std::find_if(hardforks.begin(), hardforks.end(), [](const hardfork_t& hf) {
+        return hf.version == HF_VERSION_TREASURY_SAL1_MINT;
+      });
+
+      // since we are at least at the hard fork HF_VERSION_TREASURY_SAL1_MINT, we assume height >= hf->height
+      const auto diff = height - hf->height;
+      const auto mint_period = get_config(nettype).TREASURY_SAL1_MINT_PERIOD;
+
+      // pay per period
+      if (diff % mint_period == 0) {
+        const auto payout_index = diff / mint_period;
+        if (payout_index < TREASURY_SAL1_MINT_COUNT) {
+          return {true, payout_index};
+        }
+      }
+    }
+
+    return {false, 0};
+  }
+  //---------------------------------------------------------------
   bool construct_protocol_tx(
     const size_t height,
     transaction& tx,
@@ -389,11 +417,14 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, const blobdata& extra_nonce, size_t max_outs, uint8_t hard_fork_version) {
+  bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, network_type nettype, const std::vector<hardfork_t>& hardforks, const blobdata& extra_nonce, size_t max_outs, uint8_t hard_fork_version) {
 
     // Clear the TX contents
     tx.set_null();
     tx.type = cryptonote::transaction_type::MINER;
+
+    // check for treasury payouts
+    auto[treasury_payout_exist, treasury_payout_index] = check_treasury_payout(nettype, height, hardforks, hard_fork_version);
 
     keypair txkey = keypair::generate(hw::get_device("default"));
     add_tx_pub_key_to_extra(tx, txkey.pub);
@@ -451,6 +482,7 @@ namespace cryptonote
       case HF_VERSION_AUDIT1_PAUSE:
       case HF_VERSION_AUDIT2:
       case HF_VERSION_AUDIT2_PAUSE:
+      case HF_VERSION_TREASURY_SAL1_MINT:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;
@@ -464,7 +496,7 @@ namespace cryptonote
       std::string asset_type = "SAL";
       if (hard_fork_version >= HF_VERSION_SALVIUM_ONE_PROOFS)
         asset_type = "SAL1";
-      cryptonote::set_tx_out(amount, asset_type, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);    
+      cryptonote::set_tx_out(amount, asset_type, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, !treasury_payout_exist, view_tag, out);    
       tx.vout.push_back(out);
 
     } else {
@@ -477,10 +509,29 @@ namespace cryptonote
 
     CHECK_AND_ASSERT_MES(summary_amounts == block_reward, false, "Failed to construct miner tx, summary_amounts = " << summary_amounts << " not equal block_reward = " << block_reward);
 
+    // add the treasury payout if needed
+    if (treasury_payout_exist) {
+      std::vector<crypto::public_key> additional_tx_public_keys = {txkey.pub};
+      const auto output_keys = get_config(nettype).TREASURY_SAL1_MINT_OUTPUT_KEYS;
+      const auto keys = output_keys[treasury_payout_index];
+
+      crypto::public_key tx_key;
+      CHECK_AND_ASSERT_MES(epee::string_tools::hex_to_pod(keys.first, tx_key), false, "fail to deserialize treasury tx key");
+      crypto::public_key output_key;
+      CHECK_AND_ASSERT_MES(epee::string_tools::hex_to_pod(keys.second, output_key), false, "fail to deserialize treasury output key");
+
+      // Create the TX output for this payout
+      tx_out out;
+      cryptonote::set_tx_out(TREASURY_SAL1_MINT_AMOUNT, "SAL1", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, output_key, false, crypto::view_tag{}, out);
+      tx.vout.push_back(out);
+
+      // add tx pub key to tx extra
+      additional_tx_public_keys.push_back(tx_key);
+      add_additional_tx_pub_keys_to_extra(tx.extra, additional_tx_public_keys);
+    }
+
     tx.version = 2;
-
     tx.vin.push_back(in);
-
     tx.invalidate_hashes();
 
     //LOG_PRINT("MINER_TX generated ok, block_reward=" << print_money(block_reward) << "("  << print_money(block_reward - fee) << "+" << print_money(fee)

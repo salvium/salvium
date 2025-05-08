@@ -104,12 +104,12 @@ TEST(check_output_types, check_all)
   EXPECT_TRUE(check_output_types(tx, hf_version));
   tx.vout.clear();
  
-  // after version 6, non-AUDIT txs should only allow SAL1 outputs
+  // during version 6, protocol txs should allow SAL & SAL1 outputs
   tx.type = transaction_type::PROTOCOL;
  
   out.asset_type = "SAL";
   tx.vout.push_back(tx_out {0, out});
-  EXPECT_FALSE(check_output_types(tx, hf_version));
+  EXPECT_TRUE(check_output_types(tx, hf_version));
   tx.vout.clear();
  
   out.asset_type = "SAL1";
@@ -117,7 +117,10 @@ TEST(check_output_types, check_all)
   EXPECT_TRUE(check_output_types(tx, hf_version));
   tx.vout.clear();
  
+  // after version 7, non-AUDIT txs should only allow SAL1 outputs
   tx.type = transaction_type::TRANSFER;
+  hf_version = 7;
+  
   out.asset_type = "SAL";
   tx.vout.push_back(tx_out {0, out});
   EXPECT_FALSE(check_output_types(tx, hf_version));
@@ -126,5 +129,24 @@ TEST(check_output_types, check_all)
   out.asset_type = "SAL1";
   tx.vout.push_back(tx_out {0, out});
   EXPECT_TRUE(check_output_types(tx, hf_version));
+  tx.vout.clear();
+
+  tx.type = transaction_type::PROTOCOL;
+
+  out.asset_type = "SAL";
+  tx.vout.push_back(tx_out {0, out});
+  EXPECT_FALSE(check_output_types(tx, hf_version));
+  tx.vout.clear();
+ 
+  out.asset_type = "SAL1";
+  tx.vout.push_back(tx_out {0, out});
+  EXPECT_TRUE(check_output_types(tx, hf_version));
+  tx.vout.clear();
+
+  tx.type = transaction_type::AUDIT;
+
+  out.asset_type = "SAL1";
+  tx.vout.push_back(tx_out {0, out});
+  EXPECT_FALSE(check_output_types(tx, hf_version));
   tx.vout.clear();
 }
