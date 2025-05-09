@@ -29,7 +29,7 @@
 #pragma once
 
 //local headers
-#include "carrot_impl/carrot_tx_builder_types.h"
+#include "carrot_impl/tx_proposal_utils.h"
 #include "wallet2.h"
 
 //third party headers
