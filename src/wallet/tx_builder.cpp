@@ -249,7 +249,7 @@ carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_tra
     const rct::xmr_amount ignore_below,
     const wallet2::unique_index_container& subtract_fee_from_outputs,
     const std::uint64_t top_block_index,
-    const cryptonote::account_base &acb)
+    const cryptonote::account_keys &acc_keys)
 {
     // build payment proposals and subtractable info
     std::vector<carrot::CarrotPaymentProposalV1> normal_payment_proposals;
@@ -286,7 +286,7 @@ carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_tra
         selected_transfer_indices);
 
     //! @TODO: handle HW devices
-    carrot::view_incoming_key_ram_borrowed_device k_view_incoming_dev(acb.get_keys().m_view_secret_key);
+    carrot::view_incoming_key_ram_borrowed_device k_view_incoming_dev(acc_keys.m_view_secret_key);
 
     carrot::CarrotTransactionProposalV1 tx_proposal;
     if (subtract_fee_from_outputs.size())
@@ -299,7 +299,7 @@ carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_tra
             std::move(select_inputs),
             /*s_view_balance_dev=*/nullptr, //! @TODO: handle carrot
             &k_view_incoming_dev,
-            acb.get_keys().m_account_address.m_spend_public_key,
+            acc_keys.m_account_address.m_spend_public_key,
             subtractable_normal_payment_proposals,
             subtractable_selfsend_payment_proposals,
             tx_proposal);
@@ -314,7 +314,7 @@ carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_tra
             std::move(select_inputs),
             /*s_view_balance_dev=*/nullptr, //! @TODO: handle carrot
             &k_view_incoming_dev,
-            acb.get_keys().m_account_address.m_spend_public_key,
+            acc_keys.m_account_address.m_spend_public_key,
             tx_proposal);
     }
 
@@ -368,7 +368,7 @@ carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_tra
     const rct::xmr_amount ignore_above,
     const rct::xmr_amount ignore_below,
     const std::uint64_t top_block_index,
-    const cryptonote::account_base &acb)
+    const cryptonote::account_keys &acc_keys)
 {
     return make_carrot_transaction_proposal_wallet2_transfer_subtractable(
         transfers,
@@ -382,7 +382,7 @@ carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_tra
         ignore_below,
         /*subtract_fee_from_outputs=*/{},
         top_block_index,
-        acb);
+        acc_keys);
 }
 //-------------------------------------------------------------------------------------------------------------------
 carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_transfer(
@@ -429,7 +429,7 @@ carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_swe
     const rct::xmr_amount fee_per_weight,
     const std::vector<uint8_t>& extra,
     const std::uint64_t top_block_index,
-    const cryptonote::account_base &acb)
+    const cryptonote::account_keys &acc_keys)
 {
     CHECK_AND_ASSERT_THROW_MES(!input_key_images.empty(),
         "make carrot transaction proposal wallet2 sweep: no key images provided");
@@ -478,7 +478,7 @@ carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_swe
     }
 
     //! @TODO: handle HW devices
-    carrot::view_incoming_key_ram_borrowed_device k_view_incoming_dev(acb.get_keys().m_view_secret_key);
+    carrot::view_incoming_key_ram_borrowed_device k_view_incoming_dev(acc_keys.m_view_secret_key);
 
     carrot::CarrotTransactionProposalV1 tx_proposal;
     carrot::make_carrot_transaction_proposal_v1_sweep(normal_payment_proposals,
@@ -488,7 +488,7 @@ carrot::CarrotTransactionProposalV1 make_carrot_transaction_proposal_wallet2_swe
         std::move(selected_inputs),
         /*s_view_balance_dev=*/nullptr, //! @TODO: handle carrot
         &k_view_incoming_dev,
-        acb.get_keys().m_account_address.m_spend_public_key,
+        acc_keys.m_account_address.m_spend_public_key,
         tx_proposal);
 
     return tx_proposal;
