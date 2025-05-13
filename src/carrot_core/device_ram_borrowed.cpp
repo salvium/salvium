@@ -86,6 +86,13 @@ void view_balance_secret_ram_borrowed_device::make_internal_sender_receiver_secr
         s_sender_receiver_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
+void view_balance_secret_ram_borrowed_device::make_internal_return_privkey(const input_context_t &input_context,
+    const crypto::public_key &onetime_address,
+    crypto::secret_key &return_privkey_out) const
+{
+    make_sparc_return_privkey(to_bytes(m_s_view_balance), input_context, onetime_address, return_privkey_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
 void generate_address_secret_ram_borrowed_device::make_index_extension_generator(
     const std::uint32_t major_index,
     const std::uint32_t minor_index,

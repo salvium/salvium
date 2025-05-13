@@ -96,6 +96,13 @@ struct input_context_t final
     unsigned char bytes[INPUT_CONTEXT_BYTES];
 };
 
+// SPARC encrypted return public key
+constexpr std::size_t ENCRYPTED_RETURN_PUBKEY_BYTES{32};
+struct encrypted_return_pubkey_t final
+{
+    unsigned char bytes[ENCRYPTED_RETURN_PUBKEY_BYTES];
+};
+
 /// overloaded operators: address tag
 bool operator==(const janus_anchor_t &a, const janus_anchor_t &b);
 static inline bool operator!=(const janus_anchor_t &a, const janus_anchor_t &b) { return !(a == b); }
@@ -118,6 +125,11 @@ static inline bool operator!=(const input_context_t &a, const input_context_t &b
 /// overloaded operators: view tag
 bool operator==(const view_tag_t &a, const view_tag_t &b);
 static inline bool operator!=(const view_tag_t &a, const view_tag_t &b) { return !(a == b); }
+
+/// overloaded operators: encrypted return pubkey
+bool operator==(const encrypted_return_pubkey_t &a, const encrypted_return_pubkey_t &b);
+static inline bool operator!=(const encrypted_return_pubkey_t &a, const encrypted_return_pubkey_t &b) { return !(a == b); }
+encrypted_return_pubkey_t operator^(const encrypted_return_pubkey_t &a, const encrypted_return_pubkey_t &b);
 
 /// generate a random janus anchor
 janus_anchor_t gen_janus_anchor();

@@ -71,4 +71,9 @@ static constexpr const unsigned int CARROT_MIN_TX_OUTPUTS = 2;
 static constexpr const unsigned int CARROT_MAX_TX_OUTPUTS = 8;
 static constexpr const unsigned int CARROT_MIN_TX_INPUTS = 1;
 static constexpr const unsigned int CARROT_MAX_TX_INPUTS = 8;
+
+// SPARC addressing protocol domain separators
+static constexpr const unsigned char SPARC_DOMAIN_SEP_RETURN_PUBKEY_ENCRYPTION_MASK[] = "SPARC return pubkey encryption mask";
+static constexpr const unsigned char SPARC_DOMAIN_SEP_RETURN_ADDRESS_SCALAR[] = "SPARC return address scalar";
+ 
 } //namespace carrot
