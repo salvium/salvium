@@ -56,8 +56,6 @@ set(performance_tests_headers
   performance_tests.h
   performance_utils.h
   single_tx_test_base.h
-  torsion_ops.h
-  zero_commit.h
   view_scan.h)
 
 monero_add_minimal_executable(performance_tests

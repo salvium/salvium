@@ -119,7 +119,7 @@ TEST(account, derive_output_key)
     hw::device *hw = &hw::get_device("default");
 
     ASSERT_TRUE(hw->generate_key_derivation(txkey.first, secret_view_key, derivation));
-    ASSERT_TRUE(is_out_to_acc_precomp(subaddresses, txkey.second, derivation, {}, 0, *hw, boost::none));
+    ASSERT_TRUE(is_out_to_acc_precomp(subaddresses, txkey.second, derivation, std::vector<crypto::key_derivation>(), 0, *hw, boost::none));
     i++;
   }
 

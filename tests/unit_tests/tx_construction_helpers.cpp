@@ -120,7 +120,7 @@ bool construct_miner_tx_fake_reward_1out(const size_t height,
                 crypto::derive_view_tag(derivation, local_output_index, view_tag);
 
             cryptonote::tx_out out;
-            cryptonote::set_tx_out(reward, out_eph_public_key, use_view_tags, view_tag, out);
+            cryptonote::set_tx_out(reward, "SAL", 0, out_eph_public_key, use_view_tags, view_tag, out);
 
             tx.vout.push_back(out);
         }
@@ -171,7 +171,7 @@ cryptonote::tx_source_entry gen_tx_source_entry_fake_members(
             continue;
         used_indices.insert(global_output_index);
         const rct::ctkey output_pair{rct::pkGen(),
-            in.is_rct ? rct::pkGen() : rct::zeroCommitVartime(in.amount)};
+            in.is_rct ? rct::pkGen() : rct::zeroCommit(in.amount)};
         res.outputs.push_back({global_output_index, output_pair});
     }
     // sort by index
@@ -214,29 +214,6 @@ cryptonote::transaction construct_pre_carrot_tx_with_fake_inputs(
     switch (hf_version)
     {
         case 1:
-        case 2:
-        case 3:
-        case HF_VERSION_DYNAMIC_FEE:
-        case 5:
-        case HF_VERSION_MIN_MIXIN_4:
-        case 7:
-            rct_config = { rct::RangeProofBorromean, 0 };
-            break;
-        case HF_VERSION_PER_BYTE_FEE:
-        case 9:
-            rct_config = { rct::RangeProofPaddedBulletproof, 1 };
-            break;
-        case HF_VERSION_SMALLER_BP:
-        case 11:
-        case HF_VERSION_MIN_2_OUTPUTS:
-            rct_config = { rct::RangeProofPaddedBulletproof, 2 };
-            break;
-        case HF_VERSION_CLSAG:
-        case 14:
-            rct_config = { rct::RangeProofPaddedBulletproof, 3 };
-            break;
-        case HF_VERSION_BULLETPROOF_PLUS:
-        case 16:
             rct_config = { rct::RangeProofPaddedBulletproof, 4 };
             break;
         default:
@@ -334,18 +311,23 @@ cryptonote::transaction construct_pre_carrot_tx_with_fake_inputs(
             "failed to add nonce to tx_extra");
     }
 
-    fcmp_pp::ProofParams dummy_fcmp_params;
+    // fcmp_pp::ProofParams dummy_fcmp_params;
     const bool r = cryptonote::construct_tx_and_get_tx_key(
         sender_account_keys,
         sender_subaddress_map,
         sources,
         destinations,
+        1,
+        "SAL",
+        "SAL",
+        cryptonote::transaction_type::TRANSFER,
         change_addr,
         extra,
         tx,
+        0,
         main_tx_privkey_out,
         additional_tx_privkeys_out,
-        dummy_fcmp_params,
+        // dummy_fcmp_params,
         rct,
         rct_config, 
         use_view_tags);

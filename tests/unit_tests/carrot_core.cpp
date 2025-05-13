@@ -1559,7 +1559,7 @@ static void get_coinbase_output_proposal_janus_attack_v1(const JanusAttackPropos
         s_sender_receiver);
 
     // 8. C_a = G + a H
-    const rct::key amount_commitment = rct::zeroCommitVartime(proposal.normal.amount);
+    const rct::key amount_commitment = rct::zeroCommit(proposal.normal.amount);
 
     // 9. Ko = K^i_s + K^o_ext = K^i_s + (k^o_g G + k^o_t T)
     make_carrot_onetime_address(proposal.readjusted_opening_subaddress_spend_pubkey,

@@ -34,6 +34,9 @@
 
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/merge_mining.h"
+#include "string_tools.h"
+#include "ringct/rctOps.h"
+#include "ringct/rctTypes.h"
 
 namespace
 {

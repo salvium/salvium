@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2022, The Monero Project
+// Copyright (c) 2014-2024, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -51,6 +51,7 @@
 #include "generate_keypair.h"
 #include "signature.h"
 #include "is_out_to_acc.h"
+#include "is_valid_decomposed_amount.h"
 #include "out_can_be_to_acc.h"
 #include "subaddress_expand.h"
 #include "sc_reduce32.h"
@@ -65,9 +66,9 @@
 #include "multiexp.h"
 #include "sig_mlsag.h"
 #include "sig_clsag.h"
-#include "torsion_ops.h"
+// #include "torsion_ops.h"
 #include "view_scan.h"
-#include "zero_commit.h"
+// #include "zero_commit.h"
 
 namespace po = boost::program_options;
 
@@ -104,12 +105,14 @@ int main(int argc, char** argv)
 
   const std::string filter = tools::glob_to_regex(command_line::get_arg(vm, arg_filter));
   const std::string timings_database = command_line::get_arg(vm, arg_timings_database);
-  Params p;
+  Params core_params;
   if (!timings_database.empty())
-    p.td = TimingsDatabase(timings_database);
-  p.verbose = command_line::get_arg(vm, arg_verbose);
-  p.stats = command_line::get_arg(vm, arg_stats);
-  p.loop_multiplier = command_line::get_arg(vm, arg_loop_multiplier);
+    core_params.td = TimingsDatabase(timings_database);
+  core_params.verbose = command_line::get_arg(vm, arg_verbose);
+  core_params.stats = command_line::get_arg(vm, arg_stats);
+  core_params.loop_multiplier = command_line::get_arg(vm, arg_loop_multiplier);
+
+  ParamsShuttle p{core_params};
 
   performance_timer timer;
   timer.start();
@@ -171,23 +174,14 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE4(filter, p, test_check_tx_signature, 2, 10, true, rct::RangeProofBorromean);
 
   TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 2, 2, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 2, 2, true, rct::RangeProofMultiOutputBulletproof, 2);
   TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 10, 2, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 10, 2, true, rct::RangeProofMultiOutputBulletproof, 2);
   TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 100, 2, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 100, 2, true, rct::RangeProofMultiOutputBulletproof, 2);
   TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 2, 10, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 2, 10, true, rct::RangeProofMultiOutputBulletproof, 2);
 
   TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 2, 2, 64);
   TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 10, 2, 64);
   TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 100, 2, 64);
   TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 2, 10, 64);
-
-  TEST_PERFORMANCE4(filter, p, test_check_tx_signature_aggregated_bulletproofs, 2, 2, 62, 4);
-  TEST_PERFORMANCE4(filter, p, test_check_tx_signature_aggregated_bulletproofs, 10, 2, 62, 4);
-  TEST_PERFORMANCE4(filter, p, test_check_tx_signature_aggregated_bulletproofs, 2, 2, 56, 16);
-  TEST_PERFORMANCE4(filter, p, test_check_tx_signature_aggregated_bulletproofs, 10, 2, 56, 16);
 
   TEST_PERFORMANCE4(filter, p, test_check_hash, 0, 1, 0, 1);
   TEST_PERFORMANCE4(filter, p, test_check_hash, 0, 0xffffffffffffffff, 0, 0xffffffffffffffff);
@@ -219,6 +213,10 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE0(filter, p, test_generate_key_image);
   TEST_PERFORMANCE0(filter, p, test_derive_public_key);
   TEST_PERFORMANCE0(filter, p, test_derive_secret_key);
+  // TEST_PERFORMANCE1(filter, p, test_fe_batch_invert, true); // batched
+  // TEST_PERFORMANCE1(filter, p, test_fe_batch_invert, false); // individual inversions
+  // TEST_PERFORMANCE1(filter, p, test_torsion_ops, true); // check for torsion
+  // TEST_PERFORMANCE1(filter, p, test_torsion_ops, false); // clear torsion
   TEST_PERFORMANCE0(filter, p, test_ge_frombytes_vartime);
   TEST_PERFORMANCE0(filter, p, test_ge_tobytes);
   TEST_PERFORMANCE0(filter, p, test_generate_keypair);
@@ -229,6 +227,8 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE0(filter, p, test_derive_view_tag);
 
   TEST_PERFORMANCE2(filter, p, test_wallet2_expand_subaddresses, 50, 200);
+
+  TEST_PERFORMANCE0(filter, p, test_is_valid_decomposed_amount);
 
   TEST_PERFORMANCE1(filter, p, test_cn_slow_hash, 0);
   TEST_PERFORMANCE1(filter, p, test_cn_slow_hash, 1);
@@ -612,6 +612,9 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE3(filter, p, test_multiexp, multiexp_pippenger, 4096, 8);
   TEST_PERFORMANCE3(filter, p, test_multiexp, multiexp_pippenger, 4096, 9);
 #endif
+
+  // TEST_PERFORMANCE1(filter, p, test_zero_commit, true); // fast
+  // TEST_PERFORMANCE1(filter, p, test_zero_commit, false);
 
   std::cout << "Tests finished. Elapsed time: " << timer.elapsed_ms() / 1000 << " sec" << std::endl;
 
