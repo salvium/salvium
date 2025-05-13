@@ -48,7 +48,7 @@ extern "C" {
 }
 #include "crypto/crypto.h"
 
-//#include "cryptonote_basic/cryptonote_basic.h"
+#include "cryptonote_basic/cryptonote_basic.h"
 //#include "cryptonote_protocol/enums.h"
 
 #include "rctTypes.h"
@@ -185,6 +185,7 @@ namespace rct {
     xmr_amount decodeRctSimple(const rctSig & rv, const key & sk, unsigned int i, key & mask, hw::device &hwdev);
     xmr_amount decodeRctSimple(const rctSig & rv, const key & sk, unsigned int i, hw::device &hwdev);
     key get_pre_mlsag_hash(const rctSig &rv, hw::device &hwdev);
+    bool getCommitment(const cryptonote::transaction &tx, const std::size_t output_idx, rct::key &c_out);
 }
 #endif  /* RCTSIGS_H */
 

@@ -113,6 +113,26 @@ static crypto::hash calc_tx_mixring_hash(const transaction& tx, const rct::ctkey
 namespace cryptonote
 {
 
+bool collect_pubkeys_and_commitments(const transaction& tx, std::vector<rct::key> &pubkeys_and_commitments_inout)
+{
+    for (std::size_t i = 0; i < tx.vout.size(); ++i)
+    {
+        crypto::public_key output_pubkey;
+        if (!cryptonote::get_output_public_key(tx.vout[i], output_pubkey))
+            return false;
+        rct::key pubkey = rct::pk2rct(output_pubkey);
+
+        rct::key commitment;
+        if (!rct::getCommitment(tx, i, commitment))
+            return false;
+
+        pubkeys_and_commitments_inout.emplace_back(pubkey);
+        pubkeys_and_commitments_inout.emplace_back(commitment);
+    }
+
+    return true;
+}
+
 uint64_t get_transaction_weight_limit(const uint8_t hf_version)
 {
     // from v2, limit a tx to 50% of the minimum block weight
