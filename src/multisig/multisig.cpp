@@ -101,7 +101,7 @@ namespace multisig
     // - later, we add in the components held by other participants
     cryptonote::keypair in_ephemeral;
 
-    if (!cryptonote::generate_key_image_helper(keys, subaddresses, out_key, tx_public_key, additional_tx_public_keys, real_output_index, in_ephemeral, ki, keys.get_device()))
+    if (!cryptonote::generate_key_image_helper(keys, subaddresses, out_key, tx_public_key, additional_tx_public_keys, real_output_index, in_ephemeral, ki, keys.get_device(), use_origin_data, origin_tx_data, sid))
       return false;
     std::unordered_set<crypto::key_image> used;
 

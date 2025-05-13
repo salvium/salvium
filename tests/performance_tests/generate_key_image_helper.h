@@ -51,6 +51,6 @@ public:
     crypto::public_key out_key = boost::get<cryptonote::txout_to_key>(m_tx.vout[0].target).key;
     cryptonote::origin_data od{3,crypto::null_pkey,0};
     rct::salvium_input_data_t sid;
-    return cryptonote::generate_key_image_helper(m_bob.get_keys(), subaddresses, out_key, m_tx_pub_key, m_additional_tx_pub_keys, 0, in_ephemeral, ki, hw::get_device("default"));
+    return cryptonote::generate_key_image_helper(m_bob.get_keys(), subaddresses, out_key, m_tx_pub_key, m_additional_tx_pub_keys, 0, in_ephemeral, ki, hw::get_device("default"), false, od, sid);
   }
 };

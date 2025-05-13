@@ -94,13 +94,11 @@ namespace boost
   }
 
   template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txout_to_carrot_v1 &x, const boost::serialization::version_type ver)
+  inline void serialize(Archive &a, cryptonote::txout_to_script &x, const boost::serialization::version_type ver)
   {
-    a & x.key;
-    a & x.view_tag;
-    a & x.encrypted_janus_anchor;
+    a & x.keys;
+    a & x.script;
   }
-
 
   template <class Archive>
   inline void serialize(Archive &a, cryptonote::txout_to_key &x, const boost::serialization::version_type ver)
@@ -108,6 +106,16 @@ namespace boost
     a & x.key;
     a & x.asset_type;
     a & x.unlock_time;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::txout_to_carrot_v1 &x, const boost::serialization::version_type ver)
+  {
+    a & x.key;
+    a & x.asset_type;
+    a & x.unlock_time;
+    a & x.view_tag;
+    a & x.encrypted_janus_anchor;
   }
 
   template <class Archive>
