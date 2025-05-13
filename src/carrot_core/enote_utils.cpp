@@ -190,6 +190,26 @@ void make_carrot_view_tag(const unsigned char s_sender_receiver_unctx[32],
     derive_bytes_3(transcript.data(), transcript.size(), s_sender_receiver_unctx, &view_tag_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
+void make_sparc_return_privkey(const unsigned char s_sender_receiver_unctx[32],
+    const input_context_t &input_context,
+    const crypto::public_key &onetime_address,
+    crypto::secret_key &return_privkey_out)
+{
+    // k_return = H_32(s_sr || input_context || Ko)
+    const auto transcript = sp::make_fixed_transcript<SPARC_DOMAIN_SEP_RETURN_ADDRESS_SCALAR>(input_context, onetime_address);
+    derive_scalar(transcript.data(), transcript.size(), s_sender_receiver_unctx, &return_privkey_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
+void make_sparc_return_pubkey_encryption_mask(const unsigned char s_sender_receiver_unctx[32],
+    const input_context_t &input_context,
+    const crypto::public_key &onetime_address,
+    encrypted_return_pubkey_t &return_pubkey_mask_out)
+{
+    // m_return = H_32(s_sr || input_context || Ko)
+    const auto transcript = sp::make_fixed_transcript<SPARC_DOMAIN_SEP_RETURN_PUBKEY_ENCRYPTION_MASK>(input_context, onetime_address);
+    derive_bytes_32(transcript.data(), transcript.size(), s_sender_receiver_unctx, &return_pubkey_mask_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
 input_context_t make_carrot_input_context_coinbase(const std::uint64_t block_index)
 {
     // input_context = "C" || IntToBytes256(block_index)

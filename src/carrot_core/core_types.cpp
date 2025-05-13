@@ -82,6 +82,16 @@ encrypted_amount_t operator^(const encrypted_amount_t &a, const encrypted_amount
     return xor_bytes(a, b);
 }
 //-------------------------------------------------------------------------------------------------------------------
+bool operator==(const encrypted_return_pubkey_t &a, const encrypted_return_pubkey_t &b)
+{
+    return memcmp(&a, &b, sizeof(encrypted_return_pubkey_t)) == 0;
+}
+//-------------------------------------------------------------------------------------------------------------------
+encrypted_return_pubkey_t operator^(const encrypted_return_pubkey_t &a, const encrypted_return_pubkey_t &b)
+{
+    return xor_bytes(a, b);
+}
+//-------------------------------------------------------------------------------------------------------------------
 bool operator==(const payment_id_t &a, const payment_id_t &b)
 {
     return memcmp(&a, &b, sizeof(payment_id_t)) == 0;

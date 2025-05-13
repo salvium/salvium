@@ -78,6 +78,10 @@ public:
         const input_context_t &input_context,
         crypto::hash &s_sender_receiver_out) const override;
 
+    void make_internal_return_privkey(const input_context_t &input_context,
+        const crypto::public_key &onetime_address,
+        crypto::secret_key &return_privkey_out) const override;
+
 protected:
     const crypto::secret_key &m_s_view_balance;
 };
