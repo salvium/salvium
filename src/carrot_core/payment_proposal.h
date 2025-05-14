@@ -93,7 +93,7 @@ struct RCTOutputEnoteProposal
 
 /// equality operators
 bool operator==(const CarrotPaymentProposalV1 &a, const CarrotPaymentProposalV1 &b);
-/// equality operators
+  /// equality operators
 bool operator==(const CarrotPaymentProposalSelfSendV1 &a, const CarrotPaymentProposalSelfSendV1 &b);
 
 /**
@@ -134,7 +134,19 @@ void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
     RCTOutputEnoteProposal &output_enote_out,
     encrypted_payment_id_t &encrypted_payment_id_out);
 /**
-* brief: get_output_proposal_v1 - convert the carrot proposal to an output proposal (external selfsend)
+* brief: get_output_proposal_return_v1 - convert the carrot proposal to an output proposal
+* param: proposal -
+* param: tx_first_key_image -
+* param: k_view_dev -
+* outparam: output_enote_out -
+* outparam: encrypted_payment_id_out - pid_enc
+*/
+void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,
+                                   const crypto::key_image &tx_first_key_image,
+                                   RCTOutputEnoteProposal &output_enote_out,
+                                   encrypted_payment_id_t &encrypted_payment_id_out);
+/**
+* brief: get_output_proposal_special_v1 - convert the carrot proposal to an output proposal (external selfsend)
 * param: proposal -
 * param: k_view_dev -
 * param: tx_first_key_image -

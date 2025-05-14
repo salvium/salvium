@@ -138,7 +138,7 @@ void make_sparc_return_privkey(const unsigned char s_sender_receiver_unctx[32],
     crypto::secret_key &return_privkey_out);
 /**
 * brief: make_sparc_return_pubkey_encryption_mask - used for hiding return pubkey
-*    vt = H_32(s_sr || input_context || Ko)
+*    m_return = H_32(s_sr || input_context || Ko)
 * param: s_sender_receiver_unctx - s_sr
 * param: input_context - input_context
 * param: onetime_address - Ko
