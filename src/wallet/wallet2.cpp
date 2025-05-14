@@ -2630,6 +2630,9 @@ void wallet2::process_new_scanned_transaction(
     output_tracker_cache[std::make_pair(tx.vout.at(td.m_internal_output_index).amount, td.m_global_output_index)] =
       m_transfers.size() - 1;
 
+    // update m_transfer_indices
+    m_transfers_indices[enote_scan_info->asset_type].insert(m_transfers.size()-1);
+
     // update multisig info
     if (m_multisig)
     {

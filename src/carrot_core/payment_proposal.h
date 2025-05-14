@@ -59,6 +59,8 @@ struct CarrotPaymentProposalV1 final
     CarrotDestinationV1 destination;
     /// b
     rct::xmr_amount amount;
+    /// asset type
+    std::string asset_type;
     /// anchor_norm: secret 16-byte randomness for Janus anchor
     janus_anchor_t randomness;
 };

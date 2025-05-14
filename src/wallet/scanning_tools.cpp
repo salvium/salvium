@@ -102,6 +102,9 @@ static bool try_load_pre_carrot_enote(const bool is_coinbase,
     CHECK_AND_ASSERT_MES(cryptonote::get_output_public_key(o, enote_out.onetime_address),
         false,
         "make_pre_carrot_enote: missing output public key");
+    CHECK_AND_ASSERT_MES(cryptonote::get_output_asset_type(o, enote_out.asset_type),
+        false,
+        "make_pre_carrot_enote: missing output asset type");
     enote_out.view_tag = cryptonote::get_output_view_tag(o);
 
     enote_out.local_output_index = local_output_index;
@@ -240,6 +243,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
         .payment_id = payment_id,
         .subaddr_index = subaddr_index,
         .amount = amount,
+        .asset_type = enote.asset_type,
         .amount_blinding_factor = amount_blinding_factor,
         .main_tx_pubkey_index = main_deriv_idx
     };
@@ -264,6 +268,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
     res.payment_id = crypto::null_hash;
     res.subaddr_index = carrot::subaddress_index_extended{{0, 0}};
     res.amount = enote.amount;
+    res.asset_type = enote.asset_type;
     res.amount_blinding_factor = rct::I;
     res.main_tx_pubkey_index = 0;
 
@@ -309,6 +314,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         res.subaddr_index.reset();
         res.amount_blinding_factor = rct::sk2rct(amount_blinding_factor_sk);
         res.main_tx_pubkey_index = 0;
+        res.asset_type = enote.asset_type;
 
         return res;
     }
@@ -358,6 +364,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
     res.subaddr_index = subaddr_index;
     res.amount_blinding_factor = rct::sk2rct(amount_blinding_factor_sk);
     res.main_tx_pubkey_index = 0;
+    res.asset_type = enote.asset_type;
 
     return res;
 }

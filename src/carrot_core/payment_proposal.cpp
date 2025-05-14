@@ -282,8 +282,9 @@ void get_coinbase_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
         s_sender_receiver,
         output_enote_out.onetime_address);
 
-    // 6. save the amount and block index
+    // 6. save the amount and block index and asset type
     output_enote_out.amount = proposal.amount;
+    output_enote_out.asset_type = proposal.asset_type;
     output_enote_out.block_index = block_index;
 }
 //-------------------------------------------------------------------------------------------------------------------

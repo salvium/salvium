@@ -360,6 +360,7 @@ cryptonote::transaction store_carrot_to_coinbase_transaction_v1(
     const std::uint64_t block_index = enotes.at(0).block_index;
 
     cryptonote::transaction tx;
+    tx.type = cryptonote::transaction_type::MINER;
     tx.pruned = false;
     tx.version = 2;
     tx.unlock_time = block_index + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
@@ -379,6 +380,7 @@ cryptonote::transaction store_carrot_to_coinbase_transaction_v1(
             cryptonote::txout_to_carrot_v1{
                 .key = enote.onetime_address,
                 .view_tag = enote.view_tag,
+                .asset_type = enote.asset_type,
                 .encrypted_janus_anchor = enote.anchor_enc
             }
         });
@@ -411,6 +413,7 @@ cryptonote::transaction make_single_enote_carrot_coinbase_transaction_v1(const C
     const CarrotPaymentProposalV1 payment_proposal{
         .destination = destination,
         .amount = block_reward,
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -442,6 +445,9 @@ bool try_load_carrot_coinbase_enote_from_transaction_v1(const cryptonote::transa
 
     const cryptonote::txout_to_carrot_v1 * const c = boost::strict_get<cryptonote::txout_to_carrot_v1>(&o.target);
     CHECK_AND_ASSERT_MES(c, false, "try_load_carrot_coinbase_enote_from_transaction_v1: wrong output type");
+
+    // asset type
+    enote_out.asset_type = c->asset_type;
 
     //K_o
     enote_out.onetime_address = c->key;

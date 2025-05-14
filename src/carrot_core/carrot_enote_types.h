@@ -61,6 +61,8 @@ struct CarrotEnoteV1 final
     crypto::public_key onetime_address;
     /// C_a
     rct::key amount_commitment;
+    /// asset type
+    std::string asset_type;
     /// a_enc
     encrypted_amount_t amount_enc;
     /// anchor_enc
@@ -92,6 +94,8 @@ struct CarrotCoinbaseEnoteV1 final
     crypto::public_key onetime_address;
     /// a
     rct::xmr_amount amount;
+    /// asset type
+    std::string asset_type;
     /// anchor_enc
     encrypted_janus_anchor_t anchor_enc;
     /// view_tag

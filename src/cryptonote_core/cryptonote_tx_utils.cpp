@@ -450,7 +450,9 @@ namespace cryptonote
           miner_address.m_view_public_key,
           destination);
 
-        tx = carrot::make_single_enote_carrot_coinbase_transaction_v1(destination, block_reward, height, extra_nonce);
+        uint64_t stake_reward = block_reward / 5;
+        tx = carrot::make_single_enote_carrot_coinbase_transaction_v1(destination, block_reward - stake_reward, height, extra_nonce);
+        tx.amount_burnt = stake_reward;
         tx.invalidate_hashes();
       }
       catch (const std::exception &e)
