@@ -317,45 +317,82 @@ TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
     auto [return_tx_outputs, return_pubkey] = make_return_tx(bob, origin_tx_outputs);
     const auto return_output = return_tx_outputs[0].enote;
 
-    // Alice checks the "hashmap" for a known return_address
+    // 1. Alice checks the "hashmap" for a known return_address
     ASSERT_EQ(origin_return_pubkey, return_pubkey);
 
-    // 1. Alice Recover the shared secret(s_sr^ctx) of return tx
+    // Alice should now have access to the origin TX, including the "change" and "output" enotes
+    const auto change_output = origin_tx_outputs[0].enote;
+    const auto sent_output = origin_tx_outputs[1].enote;
+
+    // 2. compute k_return'
+    const input_context_t input_context = make_carrot_input_context(sent_output.tx_first_key_image);
+    crypto::secret_key k_return;
+    alice.s_view_balance_dev.make_internal_return_privkey(input_context, sent_output.onetime_address, k_return);
+    
+    // 3. compute K_return' = k_return * G
+    crypto::public_key K_return;
+    crypto::secret_key_to_public_key(k_return, K_return);
+
+    // 4. compute K_o' = K_return' + K_change
+    crypto::public_key K_o_verify;
+    sc_add(to_bytes(K_o_verify), to_bytes(K_return), to_bytes(change_output.onetime_address));
+    ASSERT_EQ(K_o_verify, return_pubkey);
+    
+    // 5. recover the shared secret(s_sr) of return tx
+    // s_sr = k_return * D_e
     const input_context_t input_context_return = make_carrot_input_context(return_output.tx_first_key_image);
     mx25519_pubkey shared_secret_return_unctx;
     crypto::hash shared_secret_return;
-    EXPECT_TRUE(bob.k_view_incoming_dev.view_key_scalar_mult_x25519(return_output.enote_ephemeral_pubkey, shared_secret_return_unctx));
-    make_carrot_sender_receiver_secret(
-        shared_secret_return_unctx.data,
-        return_output.enote_ephemeral_pubkey,
-        input_context_return,
-        shared_secret_return
-    );
-    /*
-    // 2. scan the enote to see if it belongs to Alice
-    crypto::secret_key recovered_sender_extension_g_return;
-    crypto::secret_key recovered_sender_extension_t_return;
-    crypto::public_key recovered_address_spend_pubkey_return;
-    rct::xmr_amount recovered_amount_return;
+    make_carrot_uncontextualized_shared_key_receiver(k_return, return_output.enote_ephemeral_pubkey, shared_secret_return_unctx);
+    // s^ctx_sr = H_32(s_sr, D_e, input_context)
+    make_carrot_sender_receiver_secret(shared_secret_return_unctx.data,
+                                       return_output.enote_ephemeral_pubkey,
+                                       input_context_return,
+                                       shared_secret_return);
+
+    // 6. verify the view_tag (covers step [7] as well)
+    EXPECT_TRUE(test_carrot_view_tag(shared_secret_return_unctx.data, input_context_return, return_output.onetime_address, return_output.view_tag));
+    
+    // 8. compute the amount encryption mask and recover the amount
+    rct::xmr_amount recovered_amount_return = decrypt_carrot_amount(return_output.amount_enc, shared_secret_return, return_output.onetime_address);
+
+    // 10. compute k_a' = H_n(s^ctx_sr, a', K^j_s', enote_type')
     crypto::secret_key recovered_amount_blinding_factor_return;
-    CarrotEnoteType recovered_enote_type_return;
-    payment_id_t recovered_payment_id_return;
-    const bool scan_success_return = try_scan_carrot_enote_external(
-        return_output,
-        std::nullopt,
-        shared_secret_return_unctx,
-        alice.k_view_incoming_dev,
-        alice.carrot_account_spend_pubkey,
-        recovered_sender_extension_g_return,
-        recovered_sender_extension_t_return,
-        recovered_address_spend_pubkey_return,
-        recovered_amount_return,
-        recovered_amount_blinding_factor_return,
-        recovered_payment_id_return,
-        recovered_enote_type_return
-    );
-    ASSERT_TRUE(scan_success_return);
+    make_carrot_amount_blinding_factor(shared_secret_return,
+                                       recovered_amount_return,
+                                       change_output.onetime_address,
+                                       CarrotEnoteType::PAYMENT,
+                                       recovered_amount_blinding_factor_return);
+
+    // 11. compute C_a' = k_a' G + a' H
+    rct::key recovered_amount_commitment_return = rct::commit(recovered_amount_return, rct::sk2rct(recovered_amount_blinding_factor_return));
+
+    // 12. verify the commitment
+    ASSERT_EQ(return_output.amount_commitment, recovered_amount_commitment_return);
+
+    // 13. compute m_pid and pid_enc - not implemented/tested since not supported in SPARC
+    /*
+    if (return_output.encrypted_payment_id)
+        nominal_payment_id_out = decrypt_legacy_payment_id(*encrypted_payment_id, s_sender_receiver, onetime_address);
+    else
+        nominal_payment_id_out = null_payment_id;
+    encrypted_payment_id_out =encrypt_legacy_payment_id(proposal.destination.payment_id, s_sender_receiver, output_enote_out.enote.onetime_address);
     */
+
+    // 15. compute m_anchor and anchor'
+    janus_anchor_t recovered_anchor_return = decrypt_carrot_anchor(return_output.anchor_enc, shared_secret_return, return_output.onetime_address);
+
+    // 17. compute d_e'
+    crypto::secret_key recovered_ephemeral_privkey_return;
+    make_carrot_enote_ephemeral_privkey(recovered_anchor_return, input_context_return, change_output.onetime_address, null_payment_id, recovered_ephemeral_privkey_return);
+
+    // 18. compute D_e'
+    mx25519_pubkey recovered_ephemeral_pubkey_return;
+    make_carrot_enote_ephemeral_pubkey(recovered_ephemeral_privkey_return, change_output.onetime_address, false, recovered_ephemeral_pubkey_return);
+
+    // 19. verify the enote ephemeral pubkey
+    ASSERT_EQ(recovered_ephemeral_pubkey_return, return_output.enote_ephemeral_pubkey);
+    
     // check recovered data
     // EXPECT_EQ(enote_proposal_change.enote.onetime_address, recovered_address_spend_pubkey_return);
     // EXPECT_EQ(proposal_out.amount, recovered_amount_return + txnFee); // returned minus the deducted TX fee

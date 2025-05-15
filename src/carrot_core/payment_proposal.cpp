@@ -440,18 +440,23 @@ void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,
                                        encrypted_payment_id_out,
                                        output_enote_out.enote.view_tag);
 
+    // 5. Override the values that change because of the enote onetime address (K_o) changing
+    //    i.e. {K_o, vt, m_a, a_enc, m_anchor, anchor_enc, m_pid, pid_enc}
+    
     // Override the onetime address
     sc_add(to_bytes(output_enote_out.enote.onetime_address), to_bytes(proposal.destination.address_spend_pubkey), to_bytes(proposal.destination.address_view_pubkey));
 
     // Recalculate the view tag : vt = H_3(s_sr || input_context || Ksra)
     make_carrot_view_tag(s_sender_receiver_unctx.data, input_context, output_enote_out.enote.onetime_address, output_enote_out.enote.view_tag);
 
-    // LAND AHOY!!!
+    // Recalculate a_enc = BytesToInt64(a) XOR m_a
+    output_enote_out.enote.amount_enc = encrypt_carrot_amount(proposal.amount, s_sender_receiver, output_enote_out.enote.onetime_address);
     
-    // 5. anchor_enc = anchor XOR m_anchor
-    output_enote_out.enote.anchor_enc = encrypt_carrot_anchor(proposal.randomness,
-        s_sender_receiver,
-        output_enote_out.enote.onetime_address);
+    // Recalculate anchor_enc = anchor XOR m_anchor
+    output_enote_out.enote.anchor_enc = encrypt_carrot_anchor(proposal.randomness, s_sender_receiver, output_enote_out.enote.onetime_address);
+
+    // Recalculate the pid_enc = pid XOR m_pid
+    encrypted_payment_id_out =encrypt_legacy_payment_id(proposal.destination.payment_id, s_sender_receiver, output_enote_out.enote.onetime_address);
 
     // 6. save the amount and first key image
     output_enote_out.amount                   = proposal.amount;
