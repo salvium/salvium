@@ -2756,6 +2756,8 @@ namespace boost
         tools::wallet2::tx_construction_data pre_carrot_construction_data;
         a & pre_carrot_construction_data;
         x.construction_data = pre_carrot_construction_data;
+        x.subaddr_account = pre_carrot_construction_data.subaddr_account;
+        x.subaddr_indices = pre_carrot_construction_data.subaddr_indices;
       }
       else // ver >= 4
       {

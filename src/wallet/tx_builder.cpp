@@ -33,6 +33,10 @@
 #include "carrot_core/config.h"
 #include "carrot_core/device_ram_borrowed.h"
 #include "carrot_core/enote_utils.h"
+#include "carrot_core/exceptions.h"
+#include "carrot_core/output_set_finalization.h"
+#include "carrot_core/scan.h"
+#include "carrot_impl/address_device_ram_borrowed.h"
 #include "carrot_impl/tx_builder_outputs.h"
 #include "carrot_impl/format_utils.h"
 #include "carrot_impl/input_selection.h"
@@ -295,8 +299,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const rct::xmr_amount ignore_above,
     const rct::xmr_amount ignore_below,
     wallet2::unique_index_container subtract_fee_from_outputs,
-    const std::uint64_t top_block_index,
-    const cryptonote::account_keys &acc_keys)
+    const std::uint64_t top_block_index)
 {
     wallet2::transfer_container unused_transfers(transfers);
 
@@ -408,8 +411,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         w.ignore_outputs_above(),
         w.ignore_outputs_below(),
         subtract_fee_from_outputs,
-        top_block_index,
-        w.get_account().get_keys());
+        top_block_index);
 }
 //-------------------------------------------------------------------------------------------------------------------
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep(
@@ -420,9 +422,8 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const bool is_subaddress,
     const size_t n_dests,
     const rct::xmr_amount fee_per_weight,
-    const std::vector<uint8_t>& extra,
-    const std::uint64_t top_block_index,
-    const cryptonote::account_keys &acc_keys)
+    const std::vector<uint8_t> &extra,
+    const std::uint64_t top_block_index)
 {
     const size_t n_inputs = input_key_images.size();
     CHECK_AND_ASSERT_THROW_MES(n_inputs,
@@ -567,8 +568,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         n_dests,
         fee_per_weight,
         extra,
-        top_block_index,
-        w.get_account().get_keys());
+        top_block_index);
 }
 //-------------------------------------------------------------------------------------------------------------------
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep_all(
@@ -582,8 +582,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const std::vector<uint8_t> &extra,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
-    const std::uint64_t top_block_index,
-    const cryptonote::account_keys &acc_keys)
+    const std::uint64_t top_block_index)
 {
     const std::unordered_map<crypto::key_image, size_t> unburned_transfers_by_key_image =
         collect_non_burned_transfers_by_key_image(transfers);
@@ -622,8 +621,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         n_dests,
         fee_per_weight,
         extra,
-        top_block_index,
-        acc_keys);
+        top_block_index);
 }
 //-------------------------------------------------------------------------------------------------------------------
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep_all(
@@ -658,18 +656,21 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         extra,
         subaddr_account,
         subaddr_indices,
-        top_block_index,
-        w.get_account().get_keys());
+        top_block_index);
 }
 //-------------------------------------------------------------------------------------------------------------------
 wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionProposalV1 &tx_proposal,
     const wallet2::transfer_container &transfers,
-    const cryptonote::account_keys &acc_keys)
+    const crypto::secret_key &k_view,
+    hw::device &hwdev)
 {
     const std::size_t n_inputs = tx_proposal.key_images_sorted.size();
     const std::size_t n_outputs = tx_proposal.normal_payment_proposals.size() +
         tx_proposal.selfsend_payment_proposals.size();
     const bool shared_ephemeral_pubkey = n_outputs == 2;
+
+    CARROT_CHECK_AND_THROW(n_inputs >= 1, carrot::too_few_inputs, "carrot tx proposal missing inputs");
+    CARROT_CHECK_AND_THROW(n_outputs >= 2, carrot::too_few_outputs, "carrot tx proposal missing outputs");
 
     const crypto::key_image &tx_first_key_image = tx_proposal.key_images_sorted.at(0);
 
@@ -694,7 +695,7 @@ wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionPropos
     }
 
     //! @TODO: HW device
-    carrot::view_incoming_key_ram_borrowed_device k_view_dev(acc_keys.m_view_secret_key);
+    carrot::view_incoming_key_ram_borrowed_device k_view_dev(k_view);
 
     // get order of payment proposals
     std::vector<carrot::RCTOutputEnoteProposal> output_enote_proposals;

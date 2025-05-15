@@ -67,8 +67,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const rct::xmr_amount ignore_above,
     const rct::xmr_amount ignore_below,
     wallet2::unique_index_container subtract_fee_from_outputs,
-    const std::uint64_t top_block_index,
-    const cryptonote::account_keys &acc_keys);
+    const std::uint64_t top_block_index);
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_transfer(
     wallet2 &w,
     const std::vector<cryptonote::tx_destination_entry> &dsts,
@@ -86,9 +85,8 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const bool is_subaddress,
     const size_t n_dests,
     const rct::xmr_amount fee_per_weight,
-    const std::vector<uint8_t>& extra,
-    const std::uint64_t top_block_index,
-    const cryptonote::account_keys &acc_keys);
+    const std::vector<uint8_t> &extra,
+    const std::uint64_t top_block_index);
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep(
     wallet2 &w,
     const std::vector<crypto::key_image> &input_key_images,
@@ -109,8 +107,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const std::vector<uint8_t> &extra,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
-    const std::uint64_t top_block_index,
-    const cryptonote::account_keys &acc_keys);
+    const std::uint64_t top_block_index);
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep_all(
     wallet2 &w,
     const rct::xmr_amount only_below,
@@ -123,6 +120,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const std::set<uint32_t> &subaddr_indices);
 wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionProposalV1 &tx_proposal,
     const wallet2::transfer_container &transfers,
-    const cryptonote::account_keys &acc_keys);
+    const crypto::secret_key &k_view,
+    hw::device &hwdev);
 } //namespace wallet
 } //namespace tools
