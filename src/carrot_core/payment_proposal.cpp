@@ -444,7 +444,7 @@ void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,
     //    i.e. {K_o, vt, m_a, a_enc, m_anchor, anchor_enc, m_pid, pid_enc}
     
     // Override the onetime address
-    sc_add(to_bytes(output_enote_out.enote.onetime_address), to_bytes(proposal.destination.address_spend_pubkey), to_bytes(proposal.destination.address_view_pubkey));
+    output_enote_out.enote.onetime_address = rct::rct2pk(rct::addKeys(rct::pk2rct(proposal.destination.address_spend_pubkey), rct::pk2rct(proposal.destination.address_view_pubkey)));
 
     // Recalculate the view tag : vt = H_3(s_sr || input_context || Ksra)
     make_carrot_view_tag(s_sender_receiver_unctx.data, input_context, output_enote_out.enote.onetime_address, output_enote_out.enote.view_tag);

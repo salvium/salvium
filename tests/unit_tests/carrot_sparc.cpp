@@ -46,71 +46,6 @@
 using namespace carrot;
 
 //----------------------------------------------------------------------------------------------------------------------
-//----------------------------------------------------------------------------------------------------------------------
-struct mock_carrot_keys
-{
-    crypto::secret_key s_master;
-    crypto::secret_key k_prove_spend;
-    crypto::secret_key s_view_balance;
-    crypto::secret_key k_generate_image;
-    crypto::secret_key k_view;
-    crypto::secret_key s_generate_address;
-    crypto::public_key account_spend_pubkey;
-    crypto::public_key account_view_pubkey;
-    crypto::public_key main_address_view_pubkey;
-
-    view_incoming_key_ram_borrowed_device k_view_dev;
-    view_balance_secret_ram_borrowed_device s_view_balance_dev;
-
-    mock_carrot_keys(): k_view_dev(k_view), s_view_balance_dev(s_view_balance)
-    {}
-
-    static mock_carrot_keys generate()
-    {
-        mock_carrot_keys k;
-        crypto::generate_random_bytes_thread_safe(sizeof(crypto::secret_key), to_bytes(k.s_master));
-        make_carrot_provespend_key(k.s_master, k.k_prove_spend);
-        make_carrot_viewbalance_secret(k.s_master, k.s_view_balance);
-        make_carrot_generateimage_key(k.s_view_balance, k.k_generate_image);
-        make_carrot_viewincoming_key(k.s_view_balance, k.k_view);
-        make_carrot_generateaddress_secret(k.s_view_balance, k.s_generate_address);
-        make_carrot_spend_pubkey(k.k_generate_image, k.k_prove_spend, k.account_spend_pubkey);
-        k.account_view_pubkey = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(k.account_spend_pubkey),
-            rct::sk2rct(k.k_view)));
-        k.main_address_view_pubkey = rct::rct2pk(rct::scalarmultBase(rct::sk2rct(k.k_view)));
-        return k;
-    }
-};
-//----------------------------------------------------------------------------------------------------------------------
-//----------------------------------------------------------------------------------------------------------------------
-static bool can_open_fcmp_onetime_address(const crypto::secret_key &k_prove_spend,
-    const crypto::secret_key &k_generate_image,
-    const crypto::secret_key &subaddr_scalar,
-    const crypto::secret_key &sender_extension_g,
-    const crypto::secret_key &sender_extension_t,
-    const crypto::public_key &onetime_address)
-{
-    // K_s = k_gi G + k_ps T
-    // K^j_s = k^j_subscal * K_s
-    // Ko = K^j_s + k^o_g G + k^o_t T
-    //    = (k^o_g + k^j_subscal * k_gi) G + (k^o_t + k^j_subscal * k_ps) T
-
-    // combined_g = k^o_g + k^j_subscal * k_gi
-    rct::key combined_g;
-    sc_muladd(combined_g.bytes, to_bytes(subaddr_scalar), to_bytes(k_generate_image), to_bytes(sender_extension_g));
-
-    // combined_t = k^o_t + k^j_subscal * k_ps
-    rct::key combined_t;
-    sc_muladd(combined_t.bytes, to_bytes(subaddr_scalar), to_bytes(k_prove_spend), to_bytes(sender_extension_t));
-
-    // Ko' = combined_g G + combined_t T
-    rct::key recomputed_onetime_address;
-    rct::addKeys2(recomputed_onetime_address, combined_g, combined_t, rct::pk2rct(crypto::get_T()));
-
-    // Ko' ?= Ko
-    return recomputed_onetime_address == onetime_address;
-}
-//----------------------------------------------------------------------------------------------------------------------
 template <typename T>
 static auto auto_wiper(T &obj)
 {
@@ -178,8 +113,7 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_origin_
     memcpy(K_return.bytes, return_pub.data, sizeof(encrypted_return_pubkey_t));
 
     // compute K_o = K_change + K_return
-    crypto::public_key K_o;
-    sc_add(to_bytes(K_o), to_bytes(enote_proposal_change.enote.onetime_address), K_return.bytes);
+    crypto::public_key K_o = rct::rct2pk(rct::addKeys(rct::pk2rct(return_pub), rct::pk2rct(enote_proposal_change.enote.onetime_address)));
 
     // calculate the shared secret
     mx25519_pubkey shared_secret_unctx;
@@ -247,14 +181,10 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_return_
     EXPECT_TRUE(scan_success);
 
     // check we can spend it
-    EXPECT_TRUE(can_open_fcmp_onetime_address(
-        bob.k_prove_spend,
-        bob.k_generate_image,
-        rct::rct2sk(rct::I),
-        recovered_sender_extension_g,
-        recovered_sender_extension_t,
-        received_output.onetime_address
-    ));
+    EXPECT_TRUE(bob.can_open_fcmp_onetime_address(bob.carrot_account_spend_pubkey,
+                                                  recovered_sender_extension_g,
+                                                  recovered_sender_extension_t,
+                                                  received_output.onetime_address));
 
     // spend the received output for a return tx
     const crypto::key_image tx_return_first_key_image = bob.derive_key_image(
@@ -334,10 +264,9 @@ TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
     crypto::secret_key_to_public_key(k_return, K_return);
 
     // 4. compute K_o' = K_return' + K_change
-    crypto::public_key K_o_verify;
-    sc_add(to_bytes(K_o_verify), to_bytes(K_return), to_bytes(change_output.onetime_address));
+    crypto::public_key K_o_verify = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(change_output.onetime_address)));
     ASSERT_EQ(K_o_verify, return_pubkey);
-    
+
     // 5. recover the shared secret(s_sr) of return tx
     // s_sr = k_return * D_e
     const input_context_t input_context_return = make_carrot_input_context(return_output.tx_first_key_image);
@@ -350,7 +279,7 @@ TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
                                        input_context_return,
                                        shared_secret_return);
 
-    // 6. verify the view_tag (covers step [7] as well)
+    // 6. verify the view_tag
     EXPECT_TRUE(test_carrot_view_tag(shared_secret_return_unctx.data, input_context_return, return_output.onetime_address, return_output.view_tag));
     
     // 8. compute the amount encryption mask and recover the amount
@@ -392,25 +321,40 @@ TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
 
     // 19. verify the enote ephemeral pubkey
     ASSERT_EQ(recovered_ephemeral_pubkey_return, return_output.enote_ephemeral_pubkey);
+
+    // Scan the change output 
+    crypto::secret_key recovered_sender_extension_g_change;
+    crypto::secret_key recovered_sender_extension_t_change;
+    crypto::public_key recovered_address_spend_pubkey_change;
+    rct::xmr_amount recovered_amount_change;
+    crypto::secret_key recovered_amount_blinding_factor_change;
+    CarrotEnoteType recovered_enote_type_change;
+    janus_anchor_t recovered_internal_message_out_change;
+    const bool scan_success_change = try_scan_carrot_enote_internal_receiver(change_output,
+                                                                             alice.s_view_balance_dev,
+                                                                             recovered_sender_extension_g_change,
+                                                                             recovered_sender_extension_t_change,
+                                                                             recovered_address_spend_pubkey_change,
+                                                                             recovered_amount_change,
+                                                                             recovered_amount_blinding_factor_change,
+                                                                             recovered_enote_type_change,
+                                                                             recovered_internal_message_out_change);
     
-    // check recovered data
-    // EXPECT_EQ(enote_proposal_change.enote.onetime_address, recovered_address_spend_pubkey_return);
-    // EXPECT_EQ(proposal_out.amount, recovered_amount_return + txnFee); // returned minus the deducted TX fee
-    // EXPECT_EQ(enote_proposal_return.amount_blinding_factor, recovered_amount_blinding_factor_return);
-    // EXPECT_EQ(null_payment_id, recovered_payment_id_return);
-    // EXPECT_EQ(CarrotEnoteType::PAYMENT, recovered_enote_type_return);
+    ASSERT_TRUE(scan_success_change);
+
+    // check spendability of the change output
+    EXPECT_TRUE(alice.can_open_fcmp_onetime_address(alice.carrot_account_spend_pubkey,
+                                                    recovered_sender_extension_g_change,
+                                                    recovered_sender_extension_t_change,
+                                                    change_output.onetime_address));
 
     // check spendability of the return_payment
-    // rct::key combined_extension_g;
-    // sc_add(combined_extension_g.bytes, to_bytes(recovered_sender_extension_g_change), to_bytes(recovered_sender_extension_g_return));
-    // rct::key combined_extension_t;
-    // sc_add(combined_extension_t.bytes, to_bytes(recovered_sender_extension_t_change), to_bytes(recovered_sender_extension_t_return));
-    // EXPECT_TRUE(can_open_fcmp_onetime_address(alice.k_prove_spend,
-    //                                           alice.k_generate_image,
-    //                                           rct::rct2sk(rct::I),
-    //                                           rct::rct2sk(combined_extension_g),
-    //                                           rct::rct2sk(combined_extension_t),
-    //                                           enote_proposal_return.enote.onetime_address));
+    crypto::secret_key sum_g;
+    sc_add(to_bytes(sum_g), to_bytes(recovered_sender_extension_g_change), to_bytes(k_return));
+    ASSERT_TRUE(alice.can_open_fcmp_onetime_address(alice.carrot_account_spend_pubkey,
+                                                    sum_g,
+                                                    recovered_sender_extension_t_change,
+                                                    return_output.onetime_address));
 }
 //----------------------------------------------------------------------------------------------------------------------
 TEST(carrot_sparc, get_spend_authority_proof_completeness)
