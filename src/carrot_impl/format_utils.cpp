@@ -379,8 +379,8 @@ cryptonote::transaction store_carrot_to_coinbase_transaction_v1(
         tx.vout.push_back(cryptonote::tx_out{enote.amount,
             cryptonote::txout_to_carrot_v1{
                 .key = enote.onetime_address,
-                .view_tag = enote.view_tag,
                 .asset_type = enote.asset_type,
+                .view_tag = enote.view_tag,
                 .encrypted_janus_anchor = enote.anchor_enc
             }
         });

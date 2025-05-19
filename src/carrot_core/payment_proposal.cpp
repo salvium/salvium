@@ -457,7 +457,7 @@ void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,
     output_enote_out.enote.anchor_enc = encrypt_carrot_anchor(proposal.randomness, s_sender_receiver, output_enote_out.enote.onetime_address);
 
     // Recalculate the pid_enc = pid XOR m_pid
-    encrypted_payment_id_out =encrypt_legacy_payment_id(proposal.destination.payment_id, s_sender_receiver, output_enote_out.enote.onetime_address);
+    encrypted_payment_id_out = encrypt_legacy_payment_id(proposal.destination.payment_id, s_sender_receiver, output_enote_out.enote.onetime_address);
 
     // 6. save the amount and first key image
     output_enote_out.amount                   = proposal.amount;

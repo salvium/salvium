@@ -67,16 +67,14 @@ struct CarrotEnoteV1 final
     encrypted_amount_t amount_enc;
     /// anchor_enc
     encrypted_janus_anchor_t anchor_enc;
+    /// return_enc
+    encrypted_return_pubkey_t return_enc;
     /// view_tag
     view_tag_t view_tag;
     /// D_e
     mx25519_pubkey enote_ephemeral_pubkey;
     /// L_0
     crypto::key_image tx_first_key_image;
-    /// return_enc
-    encrypted_return_pubkey_t return_enc;
-    /// asset_type
-    std::string asset_type;
 };
 
 /// equality operators
