@@ -78,7 +78,6 @@ namespace cryptonote
     BEGIN_SERIALIZE_OBJECT()
       FIELD(key)
       FIELD(asset_type)
-      VARINT_FIELD(unlock_time)
       FIELD(view_tag)
       FIELD(encrypted_janus_anchor)
     END_SERIALIZE()

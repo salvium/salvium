@@ -125,6 +125,30 @@ void make_carrot_view_tag(const unsigned char s_sender_receiver_unctx[32],
     const crypto::public_key &onetime_address,
     view_tag_t &view_tag_out);
 /**
+* brief: make_sparc_return_privkey - return private key, given non-secret data
+*    k_return = H_32(s_sr || input_context || Ko)
+* param: s_sender_receiver_unctx - s_sr
+* param: input_context - input_context
+* param: onetime_address - Ko
+* outparam: return_privkey_out - k_return
+*/
+void make_sparc_return_privkey(const unsigned char s_sender_receiver_unctx[32],
+    const input_context_t &input_context,
+    const crypto::public_key &onetime_address,
+    crypto::secret_key &return_privkey_out);
+/**
+* brief: make_sparc_return_pubkey_encryption_mask - used for hiding return pubkey
+*    m_return = H_32(s_sr || input_context || Ko)
+* param: s_sender_receiver_unctx - s_sr
+* param: input_context - input_context
+* param: onetime_address - Ko
+* outparam: return_pubkey_mask_out - m_return
+*/
+void make_sparc_return_pubkey_encryption_mask(const unsigned char s_sender_receiver_unctx[32],
+    const input_context_t &input_context,
+    const crypto::public_key &onetime_address,
+    encrypted_return_pubkey_t &return_pubkey_mask_out);
+/**
 * brief: make_carrot_input_context_coinbase - input context for a sender-receiver secret (coinbase txs)
 *    input_context = "C" || IntToBytes256(block_index)
 * param: block_index - block index of the coinbase tx

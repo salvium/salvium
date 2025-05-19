@@ -67,6 +67,8 @@ struct CarrotEnoteV1 final
     encrypted_amount_t amount_enc;
     /// anchor_enc
     encrypted_janus_anchor_t anchor_enc;
+    /// return_enc
+    encrypted_return_pubkey_t return_enc;
     /// view_tag
     view_tag_t view_tag;
     /// D_e

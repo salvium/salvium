@@ -243,8 +243,8 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
         .payment_id = payment_id,
         .subaddr_index = subaddr_index,
         .amount = amount,
-        .asset_type = enote.asset_type,
         .amount_blinding_factor = amount_blinding_factor,
+        .asset_type = enote.asset_type,
         .main_tx_pubkey_index = main_deriv_idx
     };
 }

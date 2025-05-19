@@ -160,6 +160,17 @@ struct view_balance_secret_device
     virtual void make_internal_sender_receiver_secret(const mx25519_pubkey &enote_ephemeral_pubkey,
         const input_context_t &input_context,
         crypto::hash &s_sender_receiver_out) const = 0;
+  
+    /**
+     * brief: make_internal_return_privkey - make internal return private key, given non-secret data
+     *   k_return = H_32(s_vb || input_context || Ko)
+     * param: input_context - input_context
+     * param: onetime_address - Ko
+     * outparam: return_privkey_out - k_return
+     */
+    virtual void make_internal_return_privkey(const input_context_t &input_context,
+        const crypto::public_key &onetime_address,
+        crypto::secret_key &return_privkey_out) const = 0;
 
     virtual ~view_balance_secret_device() = default;
 };

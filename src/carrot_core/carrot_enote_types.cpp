@@ -57,6 +57,8 @@ bool operator==(const CarrotEnoteV1 &a, const CarrotEnoteV1 &b)
            a.anchor_enc         == b.anchor_enc         &&
            a.view_tag           == b.view_tag           &&
            a.tx_first_key_image == b.tx_first_key_image &&
+           a.return_enc         == b.return_enc         &&
+           a.asset_type         == b.asset_type         &&
            memcmp(a.enote_ephemeral_pubkey.data, b.enote_ephemeral_pubkey.data, sizeof(mx25519_pubkey)) == 0;
 }
 //-------------------------------------------------------------------------------------------------------------------
