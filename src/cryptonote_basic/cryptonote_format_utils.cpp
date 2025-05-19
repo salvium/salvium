@@ -1308,6 +1308,8 @@ namespace cryptonote
       output_asset_type = boost::get< txout_to_key>(out.target).asset_type;
     else if (out.target.type() == typeid(txout_to_tagged_key))
       output_asset_type = boost::get< txout_to_tagged_key >(out.target).asset_type;
+    else if (out.target.type() == typeid(txout_to_carrot_v1))
+      output_asset_type = boost::get<txout_to_carrot_v1>(out.target).asset_type;
     else
     {
       LOG_ERROR("Unexpected output target type found: " << out.target.type().name() << " - cannot retrieve output_asset_type");
@@ -1325,6 +1327,8 @@ namespace cryptonote
       output_unlock_time = boost::get< txout_to_key>(out.target).unlock_time;
     else if (out.target.type() == typeid(txout_to_tagged_key))
       output_unlock_time = boost::get< txout_to_tagged_key >(out.target).unlock_time;
+    else if (out.target.type() == typeid(txout_to_carrot_v1))
+    output_unlock_time = boost::get<txout_to_carrot_v1>(out.target).unlock_time;
     else
     {
       LOG_ERROR("Unexpected output target type found: " << out.target.type().name() << " - cannot retrieve output_unlock_time");
@@ -1375,7 +1379,7 @@ namespace cryptonote
     {
       if (hf_version >= HF_VERSION_CARROT)
       {
-        // from v18, require outputs be carrot outputs
+        // from v11, require outputs be carrot outputs
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_carrot_v1), false, "wrong variant type: "
           << o.target.type().name() << ", expected txout_to_carrot_v1 in transaction id=" << get_transaction_hash(tx));
       } else {

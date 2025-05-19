@@ -1370,7 +1370,7 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, 
 
   CHECK_AND_ASSERT_MES(check_output_types(b.miner_tx, hf_version), false, "miner transaction has invalid output type(s) in block " << get_block_hash(b));
 
-  // from carrot or v18, require output pubkeys be sorted in strictly increasing lexicographical order
+  // from carrot or v11, require output pubkeys be sorted in strictly increasing lexicographical order
   const bool tx_is_carrot = !b.miner_tx.vout.empty() && b.miner_tx.vout.at(0).target.type() == typeid(txout_to_carrot_v1);
   const bool should_enforce_sorted_outputs = hf_version > HF_VERSION_CARROT || tx_is_carrot;
   if (should_enforce_sorted_outputs) {
@@ -1504,6 +1504,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_AUDIT2:
   case HF_VERSION_AUDIT2_PAUSE:
   case HF_VERSION_TREASURY_SAL1_MINT:
+  case HF_VERSION_CARROT:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
@@ -3698,7 +3699,7 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
     return false;
   }
 
-  // from carrot or v18, require output pubkeys be sorted in strictly increasing lexicographical order
+  // from carrot or v11, require output pubkeys be sorted in strictly increasing lexicographical order
   const bool tx_is_carrot = !tx.vout.empty() && tx.vout.at(0).target.type() == typeid(txout_to_carrot_v1);
   const bool should_enforce_sorted_outputs = hf_version > HF_VERSION_CARROT || tx_is_carrot;
   if (should_enforce_sorted_outputs) {

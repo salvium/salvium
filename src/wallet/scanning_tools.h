@@ -81,6 +81,9 @@ struct PreCarrotEnote
     crypto::public_key onetime_address;
     boost::optional<crypto::view_tag> view_tag;
 
+    // asset type
+    std::string asset_type;
+
     std::size_t local_output_index;
 
     bool encrypted_amount;
