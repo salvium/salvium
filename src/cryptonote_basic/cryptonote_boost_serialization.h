@@ -113,7 +113,6 @@ namespace boost
   {
     a & x.key;
     a & x.asset_type;
-    a & x.unlock_time;
     a & x.view_tag;
     a & x.encrypted_janus_anchor;
   }

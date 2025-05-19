@@ -626,7 +626,6 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
 
   INSERT_INTO_JSON_OBJECT(dest, key, txout.key);
   INSERT_INTO_JSON_OBJECT(dest, asset_type, txout.asset_type);
-  INSERT_INTO_JSON_OBJECT(dest, unlock_time, txout.unlock_time);
   INSERT_INTO_JSON_OBJECT(dest, view_tag, txout.view_tag);
   INSERT_INTO_JSON_OBJECT(dest, encrypted_janus_anchor, txout.encrypted_janus_anchor);
 
@@ -642,7 +641,6 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_to_carrot_v1& 
 
   GET_FROM_JSON_OBJECT(val, txout.key, key);
   GET_FROM_JSON_OBJECT(val, txout.asset_type, asset_type);
-  GET_FROM_JSON_OBJECT(val, txout.unlock_time, unlock_time);
   GET_FROM_JSON_OBJECT(val, txout.view_tag, view_tag);
   GET_FROM_JSON_OBJECT(val, txout.encrypted_janus_anchor, encrypted_janus_anchor);
 }

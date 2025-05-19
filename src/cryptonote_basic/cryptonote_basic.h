@@ -68,7 +68,6 @@ namespace cryptonote
   {
     crypto::public_key key;                                  // K_o
     std::string asset_type;
-    uint64_t unlock_time;
     carrot::view_tag_t view_tag;                             // vt
     carrot::encrypted_janus_anchor_t encrypted_janus_anchor; // anchor_enc
 

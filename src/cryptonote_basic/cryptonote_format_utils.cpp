@@ -1328,7 +1328,7 @@ namespace cryptonote
     else if (out.target.type() == typeid(txout_to_tagged_key))
       output_unlock_time = boost::get< txout_to_tagged_key >(out.target).unlock_time;
     else if (out.target.type() == typeid(txout_to_carrot_v1))
-    output_unlock_time = boost::get<txout_to_carrot_v1>(out.target).unlock_time;
+      output_unlock_time = 0;
     else
     {
       LOG_ERROR("Unexpected output target type found: " << out.target.type().name() << " - cannot retrieve output_unlock_time");
