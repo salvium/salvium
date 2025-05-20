@@ -289,6 +289,9 @@ bool try_load_carrot_enote_from_transaction_v1(const cryptonote::transaction &tx
     //K_o
     enote_out.onetime_address = c->key;
 
+    // asset_type
+    enote_out.asset_type = c->asset_type;
+
     //vt
     enote_out.view_tag = c->view_tag;
 

@@ -109,7 +109,7 @@ static bool try_load_pre_carrot_enote(const bool is_coinbase,
 
     enote_out.local_output_index = local_output_index;
 
-    enote_out.encrypted_amount = tx.version == 2 && !is_coinbase;
+    enote_out.encrypted_amount = tx.version >= 2 && !is_coinbase;
     enote_out.short_amount = rct::is_rct_short_amount(tx.rct_signatures.type);
 
     if (enote_out.encrypted_amount)
