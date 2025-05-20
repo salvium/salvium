@@ -264,7 +264,8 @@ namespace rct {
             case RCTTypeBulletproof2:
             case RCTTypeCLSAG:
             case RCTTypeBulletproofPlus:
-            case RCTTypeFcmpPlusPlus:
+            case RCTTypeFullProofs:
+            case RCTTypeSalviumOne:
                 return true;
             case RCTTypeNull:
             case RCTTypeFull:

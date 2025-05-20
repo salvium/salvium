@@ -46,7 +46,7 @@
 
 namespace carrot
 {
-static constexpr std::uint8_t carrot_v1_rct_type = rct::RCTTypeFcmpPlusPlus;
+static constexpr std::uint8_t carrot_v1_rct_type = rct::RCTTypeSalviumOne;
 
 template <typename T, typename U>
 static inline T raw_byte_convert(const U &u)

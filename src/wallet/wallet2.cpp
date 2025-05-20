@@ -2450,6 +2450,7 @@ void wallet2::process_new_transaction(
     epee::to_span(enote_scan_infos),
     epee::to_span(output_key_images),
     o_indices,
+    asset_type_o_indices,
     height,
     block_version,
     ts, 
@@ -2466,6 +2467,7 @@ void wallet2::process_new_scanned_transaction(
   const epee::span<const std::optional<wallet::enote_view_incoming_scan_info_t>> enote_scan_infos,
   const epee::span<const std::optional<crypto::key_image>> output_key_images,
   const std::vector<uint64_t> &o_indices,
+  const std::vector<uint64_t> &asset_type_o_indices,
   const uint64_t height,
   const uint8_t block_version,
   const uint64_t ts,
@@ -2597,9 +2599,11 @@ void wallet2::process_new_scanned_transaction(
     td.m_block_height = height;
     td.m_internal_output_index = local_output_index;
     td.m_global_output_index = o_indices.at(local_output_index);
+    td.m_asset_type_output_index = asset_type_o_indices.at(local_output_index);
     td.m_tx = tx;
     td.m_txid = txid;
     td.m_amount = enote_scan_info->amount;
+    td.asset_type = enote_scan_info->asset_type; 
     td.m_pk_index = enote_scan_info->main_tx_pubkey_index;
     td.m_subaddr_index = subaddr_index_cn;
     td.m_mask = enote_scan_info->amount_blinding_factor;
@@ -2937,26 +2941,51 @@ void wallet2::process_new_blockchain_entry(const cryptonote::block& b,
   //optimization: seeking only for blocks that are not older then the wallet creation time plus 1 day. 1 day is for possible user incorrect time setup
   if (!should_skip_block(b, height))
   {
+    // Miner_tx
     size_t n_outs_in_tx = b.miner_tx.vout.size();
     TIME_MEASURE_START(miner_tx_handle_time);
     if (m_refresh_type != RefreshNoCoinbase)
     {
       process_new_scanned_transaction(get_transaction_hash(b.miner_tx),
-        b.miner_tx,
-        {enote_scan_infos.data(), std::min(enote_scan_infos.size(), n_outs_in_tx)},
-        {output_key_images.data(), std::min(output_key_images.size(), n_outs_in_tx)},
-        parsed_block.o_indices.indices[0].indices,
-        height,
-        b.major_version,
-        b.timestamp,
-        /*miner_tx=*/true,
-        /*pool=*/false,
-        /*double_spend_seen=*/false,
-        output_tracker_cache);
+                                      b.miner_tx,
+                                      {enote_scan_infos.data(), std::min(enote_scan_infos.size(), n_outs_in_tx)},
+                                      {output_key_images.data(), std::min(output_key_images.size(), n_outs_in_tx)},
+                                      parsed_block.o_indices.indices[0].indices,
+                                      parsed_block.asset_type_output_indices.indices[0].indices,
+                                      height,
+                                      b.major_version,
+                                      b.timestamp,
+                                      /*miner_tx=*/true,
+                                      /*pool=*/false,
+                                      /*double_spend_seen=*/false,
+                                      output_tracker_cache);
     }
     enote_scan_infos.remove_prefix(n_outs_in_tx);
     output_key_images.remove_prefix(n_outs_in_tx);
     TIME_MEASURE_FINISH(miner_tx_handle_time);
+
+    // protocol_tx
+    n_outs_in_tx = b.protocol_tx.vout.size();
+    TIME_MEASURE_START(protocol_tx_handle_time);
+    if (m_refresh_type != RefreshNoCoinbase)
+    {
+      process_new_scanned_transaction(get_transaction_hash(b.protocol_tx),
+                                      b.protocol_tx,
+                                      {enote_scan_infos.data(), std::min(enote_scan_infos.size(), n_outs_in_tx)},
+                                      {output_key_images.data(), std::min(output_key_images.size(), n_outs_in_tx)},
+                                      parsed_block.o_indices.indices[1].indices,
+                                      parsed_block.asset_type_output_indices.indices[1].indices,
+                                      height,
+                                      b.major_version,
+                                      b.timestamp,
+                                      /*miner_tx=*/true,
+                                      /*pool=*/false,
+                                      /*double_spend_seen=*/false,
+                                      output_tracker_cache);
+    }
+    enote_scan_infos.remove_prefix(n_outs_in_tx);
+    output_key_images.remove_prefix(n_outs_in_tx);
+    TIME_MEASURE_FINISH(protocol_tx_handle_time);
 
     TIME_MEASURE_START(txs_handle_time);
     THROW_WALLET_EXCEPTION_IF(bche.txs.size() != b.tx_hashes.size(), error::wallet_internal_error, "Wrong amount of transactions for block");
@@ -2966,17 +2995,18 @@ void wallet2::process_new_blockchain_entry(const cryptonote::block& b,
       const cryptonote::transaction &tx = parsed_block.txes.at(idx);
       n_outs_in_tx = tx.vout.size();
       process_new_scanned_transaction(b.tx_hashes[idx],
-        tx,
-        {enote_scan_infos.data(), std::min(enote_scan_infos.size(), n_outs_in_tx)},
-        {output_key_images.data(), std::min(output_key_images.size(), n_outs_in_tx)},
-        parsed_block.o_indices.indices[idx+1].indices,
-        height,
-        b.major_version,
-        b.timestamp,
-        /*miner_tx=*/false,
-        /*pool=*/false,
-        /*double_spend_seen=*/false,
-        output_tracker_cache);
+                                      tx,
+                                      {enote_scan_infos.data(), std::min(enote_scan_infos.size(), n_outs_in_tx)},
+                                      {output_key_images.data(), std::min(output_key_images.size(), n_outs_in_tx)},
+                                      parsed_block.o_indices.indices[idx+2].indices,
+                                      parsed_block.asset_type_output_indices.indices[idx+2].indices,
+                                      height,
+                                      b.major_version,
+                                      b.timestamp,
+                                      /*miner_tx=*/false,
+                                      /*pool=*/false,
+                                      /*double_spend_seen=*/false,
+                                      output_tracker_cache);
       enote_scan_infos.remove_prefix(n_outs_in_tx);
       output_key_images.remove_prefix(n_outs_in_tx);
     }

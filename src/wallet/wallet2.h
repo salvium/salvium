@@ -1931,6 +1931,7 @@ private:
         const epee::span<const std::optional<wallet::enote_view_incoming_scan_info_t>> enote_scan_infos,
         const epee::span<const std::optional<crypto::key_image>> output_key_images,
         const std::vector<uint64_t> &o_indices,
+        const std::vector<uint64_t> &asset_type_o_indices,
         const uint64_t height,
         const uint8_t block_version,
         const uint64_t ts,
