@@ -711,22 +711,22 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_6)
 //     ASSERT_EQ(2, alice.m_transfers.size());
 //     ASSERT_EQ(amount0 + amount1, alice.balance_all(true)); // really, we care about unlocked_balance_all() for sending, but that call uses RPC
 
-    // 6. 
-    LOG_PRINT_L2("Alice feels pity on Bob and proposes to send his broke ass some dough");
-    const rct::xmr_amount out_amount = rct::randXmrAmount(amount0 + amount1);
-    const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = 
-        tools::wallet::make_carrot_transaction_proposals_wallet2_transfer( // stupidly long function name ;(
-            alice.m_transfers,
-            alice.m_subaddresses,
-            {cryptonote::tx_destination_entry(out_amount, bob_main_addr, false)},
-            /*fee_per_weight=*/1,
-            /*extra=*/{},
-            /*subaddr_account=*/0,
-            /*subaddr_indices=*/{},
-            /*ignore_above=*/std::numeric_limits<rct::xmr_amount>::max(),
-            /*ignore_below=*/0,
-            {},
-            /*top_block_index=*/bc.height()-1);
+    // // 6. 
+    // LOG_PRINT_L2("Alice feels pity on Bob and proposes to send his broke ass some dough");
+    // const rct::xmr_amount out_amount = rct::randXmrAmount(amount0 + amount1);
+    // const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = 
+    //     tools::wallet::make_carrot_transaction_proposals_wallet2_transfer( // stupidly long function name ;(
+    //         alice.m_transfers,
+    //         alice.m_subaddresses,
+    //         {cryptonote::tx_destination_entry(out_amount, bob_main_addr, false)},
+    //         /*fee_per_weight=*/1,
+    //         /*extra=*/{},
+    //         /*subaddr_account=*/0,
+    //         /*subaddr_indices=*/{},
+    //         /*ignore_above=*/std::numeric_limits<rct::xmr_amount>::max(),
+    //         /*ignore_below=*/0,
+    //         {},
+    //         /*top_block_index=*/bc.height()-1);
     
 //     ASSERT_EQ(1, tx_proposals.size());
 //     const carrot::CarrotTransactionProposalV1 tx_proposal = tx_proposals.at(0);

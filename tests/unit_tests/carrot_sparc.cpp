@@ -162,7 +162,7 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_return_
     crypto::public_key recovered_address_spend_pubkey;
     rct::xmr_amount recovered_amount;
     crypto::secret_key recovered_amount_blinding_factor;
-    encrypted_payment_id_t recovered_payment_id;
+    payment_id_t recovered_payment_id;
     CarrotEnoteType recovered_enote_type;
     const bool scan_success = try_scan_carrot_enote_external_receiver(
         received_output,
