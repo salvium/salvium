@@ -6673,8 +6673,8 @@ bool simple_wallet::process_ring_members(const std::vector<tools::wallet2::pendi
   for (size_t n = 0; n < ptx_vector.size(); ++n)
   {
     const cryptonote::transaction& tx = ptx_vector[n].tx;
-    if (tx.rct_signatures.type >= rct::RCTTypeFcmpPlusPlus)
-      continue;
+    // if (tx.rct_signatures.type >= rct::RCTTypeFcmpPlusPlus)
+    //   continue;
     const auto& construction_data = std::get<tools::wallet2::tx_construction_data>(ptx_vector[n].construction_data);
     if (verbose)
       ostr << boost::format(tr("\nTransaction %llu/%llu: txid=%s")) % (n + 1) % ptx_vector.size() % cryptonote::get_transaction_hash(tx);

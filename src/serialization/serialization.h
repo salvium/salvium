@@ -91,6 +91,16 @@ inline bool do_serialize(Archive &ar, bool &v)
   return true;
 }
 
+template <class Archive, class T, typename... Args>
+inline auto do_serialize(Archive &ar, T &v, Args&&... args)
+  -> decltype(do_serialize_object(ar, v, args...), true)
+{
+  ar.begin_object();
+  const bool r = do_serialize_object(ar, v, args...);
+  ar.end_object();
+  return r && ar.good();
+}
+
 /* the following add a trait to a set and define the serialization DSL*/
 
 /*! \macro BLOB_SERIALIZER
