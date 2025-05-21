@@ -10615,8 +10615,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
     const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts, priority, extra, subaddr_account, subaddr_indices, subtract_fee_from_outputs);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
-    for (const auto &tx_proposal : tx_proposals)
-      ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
+    // TODO: use CLSAGS here..
+    // for (const auto &tx_proposal : tx_proposals)
+    //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
     return ptx_vector;
   }
 
@@ -11451,8 +11452,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
     const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep_all(*this, below, address, is_subaddress, outputs, priority, extra, subaddr_account, subaddr_indices);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
-    for (const auto &tx_proposal : tx_proposals)
-      ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
+    // TODO: use CLSAGS here..
+    // for (const auto &tx_proposal : tx_proposals)
+    //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
     return ptx_vector;
   }
 
@@ -11541,8 +11543,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_single(const crypt
     const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(*this, {ki}, address, is_subaddress, outputs, priority, extra);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
-    for (const auto &tx_proposal : tx_proposals)
-      ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
+    // TODO: use CLSAGS here..
+    // for (const auto &tx_proposal : tx_proposals)
+    //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
     return ptx_vector;
   }
 
@@ -11715,8 +11718,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
     const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(*this, input_key_images, address, is_subaddress, outputs, priority, extra);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
-    for (const auto &tx_proposal : tx_proposals)
-      ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
+    // TODO: use CLSAGS here..
+    // for (const auto &tx_proposal : tx_proposals)
+    //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
     return ptx_vector;
   }
 
