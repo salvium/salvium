@@ -171,8 +171,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_transfer_1)
         /*ignore_above=*/MONEY_SUPPLY,
         /*ignore_below=*/0,
         {},
-        top_block_index,
-        alice.get_keys());
+        top_block_index);
 
     ASSERT_EQ(1, tx_proposals.size());
     const carrot::CarrotTransactionProposalV1 tx_proposal = tx_proposals.at(0);
@@ -235,8 +234,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_transfer_2)
         /*ignore_above=*/MONEY_SUPPLY,
         /*ignore_below=*/0,
         {},
-        top_block_index,
-        alice.legacy_acb.get_keys());
+        top_block_index);
 
     ASSERT_EQ(1, tx_proposals.size());
     const carrot::CarrotTransactionProposalV1 &tx_proposal = tx_proposals.at(0);
@@ -298,11 +296,10 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_1)
         {transfers.front().m_key_image},
         bob.get_keys().m_account_address,
         /*is_subaddress=*/false,
-        /*n_dests=*/1,
+        /*n_dests_per_tx=*/1,
         /*fee_per_weight=*/1,
         /*extra=*/{},
-        transfers.front().m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE,
-        alice.get_keys());
+        transfers.front().m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
     ASSERT_EQ(1, tx_proposals.size());
     const carrot::CarrotTransactionProposalV1 &tx_proposal = tx_proposals.at(0);
 
@@ -333,11 +330,10 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_2)
         {transfers.front().m_key_image},
         bob.get_keys().m_account_address,
         /*is_subaddress=*/false,
-        /*n_dests=*/FCMP_PLUS_PLUS_MAX_OUTPUTS - 1,
+        /*n_dests_per_tx=*/FCMP_PLUS_PLUS_MAX_OUTPUTS - 1,
         /*fee_per_weight=*/1,
         /*extra=*/{},
-        transfers.front().m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE,
-        alice.get_keys());
+        transfers.front().m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
     ASSERT_EQ(1, tx_proposals.size());
     const carrot::CarrotTransactionProposalV1 &tx_proposal = tx_proposals.at(0);
 
@@ -376,11 +372,10 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_3)
         {transfers.front().m_key_image},
         alice.get_keys().m_account_address,
         /*is_subaddress=*/false,
-        /*n_dests=*/FCMP_PLUS_PLUS_MAX_OUTPUTS,
+        /*n_dests_per_tx=*/FCMP_PLUS_PLUS_MAX_OUTPUTS,
         /*fee_per_weight=*/1,
         /*extra=*/{},
-        transfers.front().m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE,
-        alice.get_keys());
+        transfers.front().m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
     ASSERT_EQ(1, tx_proposals.size());
     const carrot::CarrotTransactionProposalV1 &tx_proposal = tx_proposals.at(0);
 
@@ -443,7 +438,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_4)
     ASSERT_EQ(n_selected_transfers, selected_key_images.size());
     ASSERT_EQ(n_selected_transfers, amounts_by_ki.size());
 
-    const size_t n_dests = 4;
+    const size_t n_dests_per_tx = 4;
 
     // make tx proposals
     const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(
@@ -452,20 +447,18 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_4)
         selected_key_images,
         bob.get_keys().m_account_address,
         /*is_subaddress=*/false,
-        /*n_dests=*/n_dests,
+        /*n_dests_per_tx=*/n_dests_per_tx,
         /*fee_per_weight=*/1,
         /*extra=*/{},
-        top_block_index,
-        alice.get_keys());
+        top_block_index);
     ASSERT_EQ(4, tx_proposals.size());
 
     std::set<crypto::key_image> actual_seen_kis;
     size_t n_actual_inputs = 0;
-    size_t n_actual_dests = 0;
     for (const carrot::CarrotTransactionProposalV1 &tx_proposal : tx_proposals)
     {
         ASSERT_LE(tx_proposal.key_images_sorted.size(), FCMP_PLUS_PLUS_MAX_INPUTS);
-        ASSERT_EQ(1, tx_proposal.normal_payment_proposals.size());
+        ASSERT_EQ(n_dests_per_tx, tx_proposal.normal_payment_proposals.size());
         ASSERT_EQ(1, tx_proposal.selfsend_payment_proposals.size());
         ASSERT_EQ(0, tx_proposal.selfsend_payment_proposals.at(0).proposal.amount);
         EXPECT_EQ(0, tx_proposal.extra.size());
@@ -478,15 +471,15 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_4)
             actual_seen_kis.insert(ki);
             tx_inputs_amount += amounts_by_ki.at(ki);
         }
-        const rct::xmr_amount tx_outputs_amount = tx_proposal.fee + tx_proposal.normal_payment_proposals.at(0).amount;
+        rct::xmr_amount tx_outputs_amount = tx_proposal.fee;
+        for (const carrot::CarrotPaymentProposalV1 &normal_payment_proposal : tx_proposal.normal_payment_proposals)
+            tx_outputs_amount += normal_payment_proposal.amount;
         ASSERT_EQ(tx_inputs_amount, tx_outputs_amount);
 
         n_actual_inputs += tx_proposal.key_images_sorted.size();
-        n_actual_dests += tx_proposal.normal_payment_proposals.size();
     }
 
     EXPECT_EQ(n_selected_transfers, n_actual_inputs);
-    EXPECT_EQ(n_dests, n_actual_dests);
 }
 //----------------------------------------------------------------------------------------------------------------------
 TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_5)
@@ -526,7 +519,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_5)
     ASSERT_EQ(n_selected_transfers, selected_key_images.size());
     ASSERT_EQ(n_selected_transfers, amounts_by_ki.size());
 
-    const size_t n_dests = 8;
+    const size_t n_dests_per_tx = 8;
 
     // make tx proposals
     const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(
@@ -535,22 +528,23 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_5)
         selected_key_images,
         alice.get_keys().m_account_address,
         /*is_subaddress=*/false,
-        /*n_dests=*/n_dests,
+        /*n_dests_per_tx=*/n_dests_per_tx,
         /*fee_per_weight=*/1,
         /*extra=*/{},
-        top_block_index,
-        alice.get_keys());
+        top_block_index);
     ASSERT_EQ(8, tx_proposals.size());
 
     std::set<crypto::key_image> actual_seen_kis;
     size_t n_actual_inputs = 0;
-    size_t n_actual_dests = 0;
     for (const carrot::CarrotTransactionProposalV1 &tx_proposal : tx_proposals)
     {
         ASSERT_LE(tx_proposal.key_images_sorted.size(), FCMP_PLUS_PLUS_MAX_INPUTS);
-        ASSERT_EQ(1, tx_proposal.normal_payment_proposals.size());
-        ASSERT_EQ(1, tx_proposal.selfsend_payment_proposals.size());
-        ASSERT_EQ(0, tx_proposal.normal_payment_proposals.at(0).amount);
+        ASSERT_EQ(n_dests_per_tx == 1 ? 1 : 0, tx_proposal.normal_payment_proposals.size());
+        ASSERT_EQ(n_dests_per_tx, tx_proposal.selfsend_payment_proposals.size());
+        if (!tx_proposal.normal_payment_proposals.empty())
+        {
+            ASSERT_EQ(0, tx_proposal.normal_payment_proposals.at(0).amount);
+        }
         EXPECT_EQ(0, tx_proposal.extra.size());
 
         rct::xmr_amount tx_inputs_amount = 0;
@@ -561,15 +555,15 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_5)
             actual_seen_kis.insert(ki);
             tx_inputs_amount += amounts_by_ki.at(ki);
         }
-        const rct::xmr_amount tx_outputs_amount = tx_proposal.fee + tx_proposal.selfsend_payment_proposals.at(0).proposal.amount;
+        rct::xmr_amount tx_outputs_amount = tx_proposal.fee;
+        for (const carrot::CarrotPaymentProposalVerifiableSelfSendV1 &selfsend_payment_proposal : tx_proposal.selfsend_payment_proposals)
+            tx_outputs_amount += selfsend_payment_proposal.proposal.amount;
         ASSERT_EQ(tx_inputs_amount, tx_outputs_amount);
 
         n_actual_inputs += tx_proposal.key_images_sorted.size();
-        n_actual_dests += tx_proposal.selfsend_payment_proposals.size();
     }
 
     EXPECT_EQ(n_selected_transfers, n_actual_inputs);
-    EXPECT_EQ(n_dests, n_actual_dests);
 }
 //----------------------------------------------------------------------------------------------------------------------
 TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_6)
@@ -609,7 +603,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_6)
     ASSERT_EQ(n_selected_transfers, selected_key_images.size());
     ASSERT_EQ(n_selected_transfers, amounts_by_ki.size());
 
-    const size_t n_dests = 2;
+    const size_t n_dests_per_tx = 2;
 
     // make tx proposals
     const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(
@@ -618,11 +612,10 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_6)
         selected_key_images,
         alice.get_keys().m_account_address,
         /*is_subaddress=*/false,
-        /*n_dests=*/n_dests,
+        /*n_dests_per_tx=*/n_dests_per_tx,
         /*fee_per_weight=*/1,
         /*extra=*/{},
-        top_block_index,
-        alice.get_keys());
+        top_block_index);
     ASSERT_EQ(1, tx_proposals.size());
     const carrot::CarrotTransactionProposalV1 &tx_proposal = tx_proposals.at(0);
 
@@ -718,23 +711,22 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_6)
 //     ASSERT_EQ(2, alice.m_transfers.size());
 //     ASSERT_EQ(amount0 + amount1, alice.balance_all(true)); // really, we care about unlocked_balance_all() for sending, but that call uses RPC
 
-//     // 6. 
-//     LOG_PRINT_L2("Alice feels pity on Bob and proposes to send his broke ass some dough");
-//     const rct::xmr_amount out_amount = rct::randXmrAmount(amount0 + amount1);
-//     const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = 
-//         tools::wallet::make_carrot_transaction_proposals_wallet2_transfer( // stupidly long function name ;(
-//             alice.m_transfers,
-//             alice.m_subaddresses,
-//             {cryptonote::tx_destination_entry(out_amount, bob_main_addr, false)},
-//             /*fee_per_weight=*/1,
-//             /*extra=*/{},
-//             /*subaddr_account=*/0,
-//             /*subaddr_indices=*/{},
-//             /*ignore_above=*/std::numeric_limits<rct::xmr_amount>::max(),
-//             /*ignore_below=*/0,
-//             {},
-//             /*top_block_index=*/bc.height()-1,
-//             alice_keys);
+    // 6. 
+    LOG_PRINT_L2("Alice feels pity on Bob and proposes to send his broke ass some dough");
+    const rct::xmr_amount out_amount = rct::randXmrAmount(amount0 + amount1);
+    const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = 
+        tools::wallet::make_carrot_transaction_proposals_wallet2_transfer( // stupidly long function name ;(
+            alice.m_transfers,
+            alice.m_subaddresses,
+            {cryptonote::tx_destination_entry(out_amount, bob_main_addr, false)},
+            /*fee_per_weight=*/1,
+            /*extra=*/{},
+            /*subaddr_account=*/0,
+            /*subaddr_indices=*/{},
+            /*ignore_above=*/std::numeric_limits<rct::xmr_amount>::max(),
+            /*ignore_below=*/0,
+            {},
+            /*top_block_index=*/bc.height()-1);
     
 //     ASSERT_EQ(1, tx_proposals.size());
 //     const carrot::CarrotTransactionProposalV1 tx_proposal = tx_proposals.at(0);

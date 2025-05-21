@@ -96,6 +96,7 @@ using namespace epee;
 #include "device_trezor/device_trezor.hpp"
 #include "net/socks_connect.h"
 #include "carrot_impl/format_utils.h"
+#include "tx_builder.h"
 
 extern "C"
 {
@@ -10608,6 +10609,18 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
   boost::unique_lock<hw::device> hwdev_lock (hwdev);
   hw::reset_mode rst(hwdev);  
 
+  const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
+  if (do_carrot_tx_construction)
+  {
+    const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts, priority, extra, subaddr_account, subaddr_indices, subtract_fee_from_outputs);
+    std::vector<pending_tx> ptx_vector;
+    ptx_vector.reserve(tx_proposals.size());
+    // TODO: use CLSAGS here..
+    // for (const auto &tx_proposal : tx_proposals)
+    //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
+    return ptx_vector;
+  }
+
   auto original_dsts = dsts;
 
   std::vector<std::pair<uint32_t, std::vector<size_t>>> unused_transfers_indices_per_subaddr;
@@ -11433,6 +11446,18 @@ bool wallet2::sanity_check(const std::vector<wallet2::pending_tx> &ptx_vector, c
 
 std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below, cryptonote::transaction_type tx_type, const std::string &asset_type, const cryptonote::account_public_address &address, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
 {
+  const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
+  if (do_carrot_tx_construction)
+  {
+    const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep_all(*this, below, address, is_subaddress, outputs, priority, extra, subaddr_account, subaddr_indices);
+    std::vector<pending_tx> ptx_vector;
+    ptx_vector.reserve(tx_proposals.size());
+    // TODO: use CLSAGS here..
+    // for (const auto &tx_proposal : tx_proposals)
+    //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
+    return ptx_vector;
+  }
+
   std::vector<size_t> unused_transfers_indices;
   std::vector<size_t> unused_dust_indices;
   const bool use_per_byte_fee = true;
@@ -11512,6 +11537,18 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
 
 std::vector<wallet2::pending_tx> wallet2::create_transactions_single(const crypto::key_image &ki, const cryptonote::account_public_address &address, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra)
 {
+  const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
+  if (do_carrot_tx_construction)
+  {
+    const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(*this, {ki}, address, is_subaddress, outputs, priority, extra);
+    std::vector<pending_tx> ptx_vector;
+    ptx_vector.reserve(tx_proposals.size());
+    // TODO: use CLSAGS here..
+    // for (const auto &tx_proposal : tx_proposals)
+    //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
+    return ptx_vector;
+  }
+
   std::vector<size_t> unused_transfers_indices;
   std::vector<size_t> unused_dust_indices;
   const bool use_rct = use_fork_rules(4, 0);
@@ -11667,6 +11704,26 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
 //----------------------------------------------------------------------------------------------------
 std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const cryptonote::account_public_address &address, const cryptonote::transaction_type tx_type, const std::string& asset_type, bool is_subaddress, const size_t outputs, std::vector<size_t> unused_transfers_indices, std::vector<size_t> unused_dust_indices, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra)
 {
+  const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
+  if (do_carrot_tx_construction)
+  {
+    // collect key images from provided transfer indices
+    std::vector<crypto::key_image> input_key_images;
+    input_key_images.reserve(unused_transfers_indices.size() + unused_dust_indices.size());
+    for (const size_t transfer_idx : unused_transfers_indices)
+      input_key_images.push_back(m_transfers.at(transfer_idx).m_key_image);
+    for (const size_t transfer_idx : unused_dust_indices)
+      input_key_images.push_back(m_transfers.at(transfer_idx).m_key_image);
+
+    const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(*this, input_key_images, address, is_subaddress, outputs, priority, extra);
+    std::vector<pending_tx> ptx_vector;
+    ptx_vector.reserve(tx_proposals.size());
+    // TODO: use CLSAGS here..
+    // for (const auto &tx_proposal : tx_proposals)
+    //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
+    return ptx_vector;
+  }
+
   //ensure device is let in NONE mode in any case
   hw::device &hwdev = m_account.get_device();
   boost::unique_lock<hw::device> hwdev_lock (hwdev);

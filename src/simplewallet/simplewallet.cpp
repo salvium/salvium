@@ -73,7 +73,6 @@
 #include "common/json_util.h"
 #include "ringct/rctSigs.h"
 #include "multisig/multisig.h"
-#include "wallet/tx_builder.h"
 #include "wallet/wallet_args.h"
 #include "version.h"
 #include <stdexcept>
