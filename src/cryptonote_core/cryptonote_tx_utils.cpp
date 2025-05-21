@@ -35,6 +35,7 @@
 #include "string_tools.h"
 using namespace epee;
 
+#include "carrot_core/payment_proposal.h"
 #include "carrot_impl/format_utils.h"
 #include "common/apply_permutation.h"
 #include "cryptonote_tx_utils.h"
@@ -368,7 +369,7 @@ namespace cryptonote
     const size_t height,
     transaction& tx,
     std::vector<protocol_data_entry>& protocol_data,
-    const uint8_t hf_version
+    const uint8_t hard_fork_version
   ) {
 
     // Clear the TX contents
@@ -377,6 +378,54 @@ namespace cryptonote
 
     // Force the TX type to 2
     tx.version = 2;
+
+    const bool do_carrot = hard_fork_version >= HF_VERSION_CARROT;
+    if (do_carrot)
+    {
+      try
+      {
+        // Create a vector of enotes
+        std::vector<carrot::CarrotCoinbaseEnoteV1> enotes;
+        enotes.reserve(protocol_data.size());
+
+        // Iterate over the protocol_data we received, creating an enote for each entry
+        for (auto const& entry: protocol_data) {
+          
+          carrot::CarrotDestinationV1 destination;
+          carrot::make_carrot_main_address_v1(entry.P_change,
+                                              entry.return_address,
+                                              destination);
+
+          CHECK_AND_ASSERT_THROW_MES(!destination.is_subaddress,
+                                     "construct_protocol_tx: subaddress are not allowed in miner transactions");
+          CHECK_AND_ASSERT_THROW_MES(destination.payment_id == carrot::null_payment_id,
+                                     "construct_protocol_tx: integrated addresses are not allowed in miner transactions");
+
+          LOG_PRINT_L2(((entry.type == cryptonote::transaction_type::STAKE) ? "Yield TX payout submitted " : "Audit TX payout submitted ") << entry.amount_burnt << entry.source_asset);
+
+          const carrot::CarrotPaymentProposalV1 payment_proposal{
+            .destination = destination,
+            .amount = entry.amount_burnt,
+            .asset_type = "SAL1",
+            .randomness = carrot::gen_janus_anchor()
+          };
+
+          // Build the proposal
+          get_coinbase_output_proposal_v1(payment_proposal, height, enotes.back());
+        }
+        
+        tx = store_carrot_to_coinbase_transaction_v1(enotes, std::string{}, cryptonote::transaction_type::PROTOCOL);
+        tx.amount_burnt = 0;
+        tx.invalidate_hashes();
+      }
+      catch (const std::exception &e)
+      {
+        MERROR("Failed to construct Carrot protocol transaction: " << e.what());
+        return false;
+      }
+
+      return true;
+    }
 
     keypair txkey = keypair::generate(hw::get_device("default"));
     add_tx_pub_key_to_extra(tx, txkey.pub);

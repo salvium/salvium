@@ -137,7 +137,8 @@ bool try_load_carrot_from_transaction_v1(const cryptonote::transaction &tx,
  */
 cryptonote::transaction store_carrot_to_coinbase_transaction_v1(
     const std::vector<CarrotCoinbaseEnoteV1> &enotes,
-    const cryptonote::blobdata &extra_nonce);
+    const cryptonote::blobdata &extra_nonce,
+    const cryptonote::transaction_type &tx_type);
 /**
  * brief: make_single_enote_carrot_coinbase_transaction_v1 - store one coinbase Carrot enote to a cryptonote::transaction
  * param: destination -

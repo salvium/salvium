@@ -74,6 +74,12 @@ inline void serialize(Archive &a, carrot::encrypted_payment_id_t &x, const boost
 }
 //---------------------------------------------------
 template <class Archive>
+inline void serialize(Archive &a, carrot::encrypted_return_pubkey_t &x, const boost::serialization::version_type ver)
+{
+    a & x.bytes;
+}
+//---------------------------------------------------
+template <class Archive>
 inline void serialize(Archive &a, carrot::CarrotDestinationV1 &x, const boost::serialization::version_type ver)
 {
     a & x.address_spend_pubkey;
@@ -87,6 +93,7 @@ inline void serialize(Archive &a, carrot::CarrotPaymentProposalV1 &x, const boos
 {
     a & x.destination;
     a & x.amount;
+    a & x.asset_type;
     a & x.randomness;
 }
 //---------------------------------------------------

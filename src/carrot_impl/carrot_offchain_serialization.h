@@ -54,6 +54,7 @@ END_SERIALIZE()
 BEGIN_SERIALIZE_OBJECT_FN(carrot::CarrotPaymentProposalV1)
     FIELD_F(destination)
     VARINT_FIELD_F(amount)
+    FIELD_F(asset_type)
     FIELD_F(randomness)
 END_SERIALIZE()
 

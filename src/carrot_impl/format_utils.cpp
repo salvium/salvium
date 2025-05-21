@@ -357,16 +357,18 @@ bool try_load_carrot_from_transaction_v1(const cryptonote::transaction &tx,
 //-------------------------------------------------------------------------------------------------------------------
 cryptonote::transaction store_carrot_to_coinbase_transaction_v1(
     const std::vector<CarrotCoinbaseEnoteV1> &enotes,
-    const cryptonote::blobdata &extra_nonce)
+    const cryptonote::blobdata &extra_nonce,
+    const cryptonote::transaction_type &tx_type)
 {
+    CARROT_CHECK_AND_THROW(tx_type == cryptonote::transaction_type::MINER || tx_type == cryptonote::transaction_type::PROTOCOL, invalid_tx_type, "invalid tx_type : is not MINER or PROTOCOL");
     const size_t nouts = enotes.size();
     const std::uint64_t block_index = enotes.at(0).block_index;
 
     cryptonote::transaction tx;
-    tx.type = cryptonote::transaction_type::MINER;
+    tx.type = tx_type;
     tx.pruned = false;
     tx.version = 2;
-    tx.unlock_time = block_index + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
+    tx.unlock_time = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
     tx.vin.reserve(1);
     tx.vout.reserve(nouts);
     tx.extra.reserve(MAX_TX_EXTRA_SIZE);
@@ -423,7 +425,7 @@ cryptonote::transaction make_single_enote_carrot_coinbase_transaction_v1(const C
     std::vector<CarrotCoinbaseEnoteV1> enotes(1);
     get_coinbase_output_proposal_v1(payment_proposal, block_index, enotes.front());
 
-    return store_carrot_to_coinbase_transaction_v1(enotes, extra_nonce);
+    return store_carrot_to_coinbase_transaction_v1(enotes, extra_nonce, cryptonote::transaction_type::MINER);
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_load_carrot_coinbase_enote_from_transaction_v1(const cryptonote::transaction &tx,
