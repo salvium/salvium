@@ -37,6 +37,7 @@
 #include "ringct/rctTypes.h"
 #include "ringct/rctSigs.h"
 #include "ringct/rctOps.h"
+#include "crypto/generators.h"
 #include "device/device.hpp"
 #include "string_tools.h"
 
@@ -297,6 +298,47 @@ TEST(ringct, CLSAG)
 
   // check it's still good, in case we failed to restore
   ASSERT_TRUE(rct::verRctCLSAGSimple(message,clsag,pubs,Cout));
+}
+
+TEST(ringct, CLSAG_CARROT)
+{
+  const size_t N = 16;
+  const size_t idx = 5;
+  ctkeyV pubs;
+  key x, y, t, t2, u;
+  const key message = identity();
+  ctkey backup;
+  clsagCarrot clsag;
+
+  for (size_t i = 0; i < N; ++i)
+  {
+    key sk;
+    ctkey tmp;
+
+    skpkGen(sk, tmp.dest);
+    skpkGen(sk, tmp.mask);
+
+    pubs.push_back(tmp);
+  }
+
+  // Set P[idx]
+  x = skGen();
+  y = skGen();
+  addKeys2(pubs[idx].dest, x, y, rct::pk2rct(crypto::get_T()));
+
+  // Set C[idx]
+  t = skGen();
+  u = skGen();
+  addKeys2(pubs[idx].mask,t,u,H);
+
+  // Set commitment offset
+  key Cout;
+  t2 = skGen();
+  addKeys2(Cout,t2,u,H);
+
+  // generate the signature
+  clsag = rct::proveRctCLSAGSSimpleCarrot(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+  ASSERT_TRUE(rct::verRctCLSAGSimpleCarrot(message, clsag, pubs, Cout));
 }
 
 TEST(ringct, range_proofs)

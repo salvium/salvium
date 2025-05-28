@@ -282,6 +282,8 @@ namespace hw {
         bool clsag_hash(const rct::keyV &data, rct::key &hash) override;
         bool clsag_sign(const rct::key &c, const rct::key &a, const rct::key &p, const rct::key &z, const rct::key &mu_P, const rct::key &mu_C, rct::key &s) override;
 
+        bool clsag_prepare_carrot(const rct::key &p, const rct::key &z, rct::key &I, rct::key &D, const rct::key &H, rct::key &a, rct::key &aG, rct::key &b, rct::key &bT, rct::key &aH) override;
+
 
         bool  close_tx(void) override;
 

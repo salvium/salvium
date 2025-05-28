@@ -2255,6 +2255,10 @@ namespace hw {
         return true;
     }
 
+    bool device_ledger::clsag_prepare_carrot(const rct::key &p, const rct::key &z, rct::key &I, rct::key &D, const rct::key &H, rct::key &a, rct::key &aG, rct::key &b, rct::key &bT, rct::key &aH) {
+      return true; // Not implemented for Ledger
+    }
+
     bool device_ledger::clsag_hash(const rct::keyV &data, rct::key &hash) {
         AUTO_LOCK_CMD();
 

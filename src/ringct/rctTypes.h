@@ -207,6 +207,24 @@ namespace rct {
         END_SERIALIZE()
     };
 
+    // CLSAG signature
+    struct clsagCarrot {
+        keyV sx; // x scalars(responses)
+        keyV sy; // y scalars(responses)
+        key c1;
+
+        key I; // signing key image
+        key D; // commitment key image
+
+        BEGIN_SERIALIZE_OBJECT()
+            FIELD(sx)
+            FIELD(sy)
+            FIELD(c1)
+            // FIELD(I) - not serialized, it can be reconstructed
+            FIELD(D)
+        END_SERIALIZE()
+    };
+
     //contains the data for an Borromean sig
     // also contains the "Ci" values such that
     // \sum Ci = C

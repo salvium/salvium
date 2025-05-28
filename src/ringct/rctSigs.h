@@ -85,6 +85,10 @@ namespace rct {
     clsag proveRctCLSAGSimple(const key &, const ctkeyV &, const ctkey &, const key &, const key &, unsigned int, hw::device &);
     bool verRctCLSAGSimple(const key &, const clsag &, const ctkeyV &, const key &);
 
+    clsagCarrot CLSAG_Gen_Carrot(const key &message, const keyV & P, const key & x, const key & y, const keyV & C, const key & z, const keyV & C_nonzero, const key & C_offset, const unsigned int l, hw::device &hwdev);
+    clsagCarrot proveRctCLSAGSSimpleCarrot(const key &message, const ctkeyV &pubs, const key &x, const key &y, const key &mask, const key &a, const key &Cout, unsigned int index, hw::device &hwdev);
+    bool verRctCLSAGSimpleCarrot(const key &message, const clsagCarrot &sig, const ctkeyV & pubs, const key & C_offset);
+
     zk_proof PRProof_Gen(const rct::key &difference);
     bool PRProof_Ver(const rct::key &C, const zk_proof &proof);
   
