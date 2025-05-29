@@ -309,6 +309,7 @@ TEST(ringct, CLSAG_CARROT)
   const key message = identity();
   ctkey backup;
   clsagCarrot clsag;
+  key backup_key;
 
   for (size_t i = 0; i < N; ++i)
   {
@@ -336,9 +337,151 @@ TEST(ringct, CLSAG_CARROT)
   t2 = skGen();
   addKeys2(Cout,t2,u,H);
 
+  // bad message
+  clsag = rct::proveRctCLSAGSimpleCarrot(zero(), pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+
+  // bad index at creation
+  try
+  {
+    clsag = rct::proveRctCLSAGSimpleCarrot(message, pubs, x, y, t, t2, Cout, (idx + 1) % N, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  }
+  catch (...) { /* either exception, or failure to verify above */ }
+
+  // bad C at creation
+  backup = pubs[idx];
+  pubs[idx].mask = scalarmultBase(skGen());
+  try
+  {
+    clsag = rct::proveRctCLSAGSimpleCarrot(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  }
+  catch (...) { /* either exception, or failure to verify above */ }
+  pubs[idx] = backup;
+
+  // bad x at creation
+  backup_key = x;
+  skGen(x);
+  try
+  {
+    clsag = rct::proveRctCLSAGSimpleCarrot(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  }
+  catch (...) { /* either exception, or failure to verify above */ }
+  x = backup_key;
+
+  // bad y at creation
+  backup_key = y;
+  skGen(y);
+  try
+  {
+    clsag = rct::proveRctCLSAGSimpleCarrot(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  }
+  catch (...) { /* either exception, or failure to verify above */ }
+  y = backup_key;
+
+  // bad P at creation
+  backup = pubs[idx];
+  pubs[idx].dest = scalarmultBase(skGen());
+  try
+  {
+    clsag = rct::proveRctCLSAGSimpleCarrot(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  }
+  catch (...) { /* either exception, or failure to verify above */ }
+  pubs[idx] = backup;
+
   // generate the signature
-  clsag = rct::proveRctCLSAGSSimpleCarrot(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
-  ASSERT_TRUE(rct::verRctCLSAGSimpleCarrot(message, clsag, pubs, Cout));
+  clsag = rct::proveRctCLSAGSimpleCarrot(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+  ASSERT_TRUE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+
+  // empty sx
+  auto sbackup = clsag.sx;
+  clsag.sx.clear();
+  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  clsag.sx = sbackup;
+
+  // too few sx elements
+  backup_key = clsag.sx.back();
+  clsag.sx.pop_back();
+  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  clsag.sx.push_back(backup_key);
+
+  // too many sx elements
+  clsag.sx.push_back(skGen());
+  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  clsag.sx.pop_back();
+
+  // bad sx in clsag at verification
+  for (auto &sx: clsag.sx)
+  {
+    backup_key = sx;
+    sx = skGen();
+    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+    sx = backup_key;
+  }
+
+  // empty sy
+  sbackup = clsag.sy;
+  clsag.sy.clear();
+  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  clsag.sy = sbackup;
+
+  // too few sy elements
+  backup_key = clsag.sy.back();
+  clsag.sy.pop_back();
+  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  clsag.sy.push_back(backup_key);
+
+  // too many sy elements
+  clsag.sy.push_back(skGen());
+  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  clsag.sy.pop_back();
+
+  // bad sy in clsag at verification
+  for (auto &sy: clsag.sy)
+  {
+    backup_key = sy;
+    sy = skGen();
+    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+    sy = backup_key;
+  }
+
+  // bad c1 in clsag at verification
+  backup_key = clsag.c1;
+  clsag.c1 = skGen();
+  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  clsag.c1 = backup_key;
+
+  // bad I in clsag at verification
+  backup_key = clsag.I;
+  clsag.I = scalarmultBase(skGen());
+  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  clsag.I = backup_key;
+
+  // bad D in clsag at verification
+  backup_key = clsag.D;
+  clsag.D = scalarmultBase(skGen());
+  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  clsag.D = backup_key;
+
+  // D not in main subgroup in clsag at verification
+  backup_key = clsag.D;
+  rct::key foo;
+  ASSERT_TRUE(epee::string_tools::hex_to_pod("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa", foo));
+  clsag.D = rct::addKeys(clsag.D, foo);
+  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  clsag.D = backup_key;
+
+  // swapped I and D in clsag at verification
+  std::swap(clsag.I, clsag.D);
+  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  std::swap(clsag.I, clsag.D);
+
+  // check it's still good, in case we failed to restore
+  ASSERT_TRUE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
 }
 
 TEST(ringct, range_proofs)

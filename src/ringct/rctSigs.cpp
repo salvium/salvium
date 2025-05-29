@@ -977,7 +977,7 @@ namespace rct {
         return result;
     }
 
-    clsagCarrot proveRctCLSAGSSimpleCarrot(const key &message, const ctkeyV &pubs, const key &x, const key &y, const key &mask, const key &a, const key &Cout, unsigned int index, hw::device &hwdev) {
+    clsagCarrot proveRctCLSAGSimpleCarrot(const key &message, const ctkeyV &pubs, const key &x, const key &y, const key &mask, const key &a, const key &Cout, unsigned int index, hw::device &hwdev) {
       //setup vars
       size_t rows = 1;
       size_t cols = pubs.size();
