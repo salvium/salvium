@@ -482,11 +482,12 @@ namespace rct {
         precomp(C_precomp.k, C[i]);
 
         // Compute L
-        addKeys_aGbBcC(L, sig.sx[i], c_p, P_precomp.k, c_c, C_precomp.k);
-        // add the T term
-        key rT = rct::scalarmultKey(b, rct::pk2rct(crypto::get_T()));
-        L = addKeys(L, rT);
-
+        key xGyT;
+        addKeys2(xGyT, sig.sx[i], sig.sy[i], rct::pk2rct(crypto::get_T()));
+        key temp_precomp;
+        addKeys3(temp_precomp, c_p, P_precomp.k, c_c, C_precomp.k);
+        L = addKeys(xGyT, temp_precomp);
+        
         // Compute R
         hash_to_p3(Hi_p3,P[i]);
         ge_dsm_precomp(H_precomp.k, &Hi_p3);
@@ -504,7 +505,7 @@ namespace rct {
 
       // Compute final scalars
       hwdev.clsag_sign(c, a, x, z, mu_P, mu_C, sig.sx[l]);
-      hwdev.clsag_sign(c, b, y, z, mu_P, mu_C, sig.sy[l]);
+      hwdev.clsag_sign_y(c, b, y, mu_P, sig.sy[l]);
       memwipe(&a, sizeof(key));
       memwipe(&b, sizeof(key));
 
@@ -1264,6 +1265,7 @@ namespace rct {
             }
             c_to_hash[2*n+1] = C_offset;
             c_to_hash[2*n+2] = message;
+
             key c_p; // = c[i]*mu_P
             key c_c; // = c[i]*mu_C
             key c_new;
@@ -1291,10 +1293,11 @@ namespace rct {
                 ge_dsm_precomp(C_precomp.k,&temp_p3);
 
                 // Compute L
-                addKeys_aGbBcC(L, sig.sx[i], c_p, P_precomp.k, c_c, C_precomp.k);
-                // add the T term
-                key rT = rct::scalarmultKey(sig.sy[i], rct::pk2rct(crypto::get_T()));
-                L = addKeys(L, rT);
+                key xGyT;
+                addKeys2(xGyT, sig.sx[i], sig.sy[i], rct::pk2rct(crypto::get_T()));
+                key temp_precomp;
+                addKeys3(temp_precomp, c_p, P_precomp.k, c_c, C_precomp.k);
+                L = addKeys(xGyT, temp_precomp);
 
                 // Compute R
                 hash_to_p3(hash8_p3,pubs[i].dest);

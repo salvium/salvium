@@ -237,6 +237,7 @@ namespace hw {
         virtual bool clsag_sign(const rct::key &c, const rct::key &a, const rct::key &p, const rct::key &z, const rct::key &mu_P, const rct::key &mu_C, rct::key &s) = 0;
 
         virtual bool clsag_prepare_carrot(const rct::key &p, const rct::key &z, rct::key &I, rct::key &D, const rct::key &H, rct::key &a, rct::key &aG, rct::key &b, rct::key &bT, rct::key &aH) = 0;
+        virtual bool clsag_sign_y(const rct::key &c, const rct::key &b, const rct::key &y, const rct::key &mu_P, rct::key &s) = 0;
 
         virtual bool  close_tx(void) = 0;
 

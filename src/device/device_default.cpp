@@ -433,7 +433,7 @@ namespace hw {
 
             // bT = b*T
             rct::skGen(b);
-            bT = rct::scalarmultKey(b, rct::pk2rct(crypto::get_T()));
+            bT = rct::scalarmultKey(rct::pk2rct(crypto::get_T()), b);
 
             return true;
         }
@@ -454,6 +454,17 @@ namespace hw {
             return true;
         }
 
+        // In device_default.cpp (implementation)
+        bool device_default::clsag_sign_y(const rct::key &c, const rct::key &b, const rct::key &y, const rct::key &mu_P, rct::key &s) {
+          rct::key y_mu_P;
+          sc_mul(y_mu_P.bytes, mu_P.bytes, y.bytes); // y_mu_P = y * mu_P
+          
+          // s = b - c * (y * mu_P)
+          // This is equivalent to: sc_sub(s.bytes, b.bytes, temp.bytes); where temp = c * y_mu_P
+          sc_mulsub(s.bytes, c.bytes, y_mu_P.bytes, b.bytes);
+          return true;
+        }
+      
         bool device_default::close_tx() {
             return true;
         }

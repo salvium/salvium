@@ -2350,6 +2350,9 @@ namespace hw {
         return true;
     }
 
+    bool device_ledger::clsag_sign_y(const rct::key &c, const rct::key &b, const rct::key &y, const rct::key &mu_P, rct::key &s) {
+      return true;
+    }
 
     bool device_ledger::close_tx() {
         AUTO_LOCK_CMD();
