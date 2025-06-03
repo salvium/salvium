@@ -34,6 +34,7 @@
 #include "account.h"
 #include "warnings.h"
 #include "crypto/crypto.h"
+#include "crypto/generators.h"
 extern "C"
 {
 #include "crypto/keccak.h"
@@ -41,6 +42,7 @@ extern "C"
 #include "cryptonote_basic_impl.h"
 #include "cryptonote_format_utils.h"
 #include "cryptonote_config.h"
+#include "ringct/rctOps.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "account"
@@ -126,7 +128,10 @@ DISABLE_VS_WARNINGS(4244 4345)
     encrypt_viewkey(key);
   }
   //-----------------------------------------------------------------
-  account_base::account_base()
+  account_base::account_base() :
+    k_view_incoming_dev(m_keys.m_view_secret_key),
+    s_view_balance_dev(m_keys.s_view_balance),
+    s_generate_address_dev(m_keys.s_generate_address)
   {
     set_null();
   }
@@ -281,4 +286,178 @@ DISABLE_VS_WARNINGS(4244 4345)
     return get_account_integrated_address_as_str(nettype, m_keys.m_account_address, payment_id);
   }
   //-----------------------------------------------------------------
+  carrot::AddressDeriveType account_base::resolve_derive_type(const carrot::AddressDeriveType derive_type) const
+  {
+    return derive_type == carrot::AddressDeriveType::Auto ? carrot::AddressDeriveType::Carrot : derive_type;
+  }
+  //----------------------------------------------------------------------------------------------------------------------
+  carrot::CarrotDestinationV1 account_base::cryptonote_address(const carrot::payment_id_t payment_id,
+                                                               const carrot::AddressDeriveType derive_type) const
+  {
+    carrot::CarrotDestinationV1 addr;
+    switch (resolve_derive_type(derive_type))
+      {
+      case carrot::AddressDeriveType::Carrot:
+        make_carrot_integrated_address_v1(m_keys.carrot_account_spend_pubkey,
+                                          m_keys.m_account_address.m_view_public_key,
+                                          payment_id,
+                                          addr);
+        break;
+      case carrot::AddressDeriveType::PreCarrot:
+        make_carrot_integrated_address_v1(m_keys.m_account_address.m_spend_public_key,
+                                          m_keys.m_account_address.m_view_public_key,
+                                          payment_id,
+                                          addr);
+        break;
+      default:
+        throw std::runtime_error("address derive type not recognized");
+      }
+    return addr;
+  }
+  //-------------------------------------------------------------------------------------------------------------------
+  carrot::CarrotDestinationV1 account_base::subaddress(const carrot::subaddress_index_extended &subaddress_index) const
+  {
+    if (!subaddress_index.index.is_subaddress())
+      return cryptonote_address(carrot::null_payment_id, subaddress_index.derive_type);
+    
+    const cryptonote::account_keys &lkeys = m_keys;
+    
+    carrot::CarrotDestinationV1 addr;
+    cryptonote::account_public_address cnaddr;
+    switch (resolve_derive_type(subaddress_index.derive_type))
+    {
+    case carrot::AddressDeriveType::Carrot:
+        make_carrot_subaddress_v1(m_keys.carrot_account_spend_pubkey,
+                                  m_keys.carrot_account_view_pubkey,
+                                  s_generate_address_dev,
+                                  subaddress_index.index.major,
+                                  subaddress_index.index.minor,
+                                  addr);
+        break;
+    case carrot::AddressDeriveType::PreCarrot:
+      cnaddr =
+        lkeys.m_device->get_subaddress(lkeys, {subaddress_index.index.major, subaddress_index.index.minor});
+      addr = carrot::CarrotDestinationV1{
+        .address_spend_pubkey = cnaddr.m_spend_public_key,
+        .address_view_pubkey = cnaddr.m_view_public_key,
+        .is_subaddress = true,
+        .payment_id = carrot::null_payment_id
+      };
+      break;
+    default:
+      throw std::runtime_error("address derive type not recognized");
+    }
+    return addr;
+  }
+  //-------------------------------------------------------------------------------------------------------------------
+  void account_base::opening_for_subaddress(
+                                            const carrot::subaddress_index_extended &subaddress_index,
+                                            crypto::secret_key &address_privkey_g_out,
+                                            crypto::secret_key &address_privkey_t_out,
+                                            crypto::public_key &address_spend_pubkey_out) const
+  {
+    const bool is_subaddress = subaddress_index.index.is_subaddress();
+    const uint32_t major_index = subaddress_index.index.major;
+    const uint32_t minor_index = subaddress_index.index.minor;
+
+    const cryptonote::account_keys &lkeys = m_keys;
+
+    crypto::secret_key address_index_generator;
+    crypto::secret_key subaddress_scalar;
+    crypto::secret_key subaddress_extension;
+    
+    switch (resolve_derive_type(subaddress_index.derive_type))
+    {
+    case carrot::AddressDeriveType::Carrot:
+      // s^j_gen = H_32[s_ga](j_major, j_minor)
+      carrot::make_carrot_index_extension_generator(lkeys.s_generate_address, major_index, minor_index, address_index_generator);
+      
+      if (is_subaddress)
+      {
+        // k^j_subscal = H_n(K_s, j_major, j_minor, s^j_gen)
+        carrot::make_carrot_subaddress_scalar(lkeys.carrot_account_spend_pubkey, address_index_generator, major_index, minor_index, subaddress_scalar);
+      }
+      else
+      {
+        // k^j_subscal = 1
+        sc_1(to_bytes(subaddress_scalar));
+      }
+      
+      // k^g_a = k_gi * k^j_subscal
+      sc_mul(to_bytes(address_privkey_g_out), to_bytes(lkeys.k_generate_image), to_bytes(subaddress_scalar));
+      
+      // k^t_a = k_ps * k^j_subscal
+      sc_mul(to_bytes(address_privkey_t_out), to_bytes(lkeys.k_prove_spend), to_bytes(subaddress_scalar));
+      break;
+    case carrot::AddressDeriveType::PreCarrot:
+      // m = Hn(k_v || j_major || j_minor) if subaddress else 0
+      subaddress_extension = is_subaddress
+        ? lkeys.get_device().get_subaddress_secret_key(lkeys.m_view_secret_key, {major_index, minor_index})
+        : crypto::null_skey;
+      
+      // k^g_a = k_s + m
+      sc_add(to_bytes(address_privkey_g_out), to_bytes(lkeys.m_spend_secret_key), to_bytes(subaddress_extension));
+      
+      // k^t_a = 0
+      memset(address_privkey_t_out.data, 0, sizeof(address_privkey_t_out));
+      break;
+    default:
+      throw std::runtime_error("address derive type not recognized");
+    }
+
+    // perform sanity check
+    const carrot::CarrotDestinationV1 addr = subaddress(subaddress_index);
+    rct::key recomputed_address_spend_pubkey;
+    rct::addKeys2(recomputed_address_spend_pubkey,
+                  rct::sk2rct(address_privkey_g_out),
+                  rct::sk2rct(address_privkey_t_out),
+                  rct::pk2rct(crypto::get_T()));
+    CHECK_AND_ASSERT_THROW_MES(rct::rct2pk(recomputed_address_spend_pubkey) == addr.address_spend_pubkey,
+                               "mock carrot or legacy keys: opening for subaddress: failed sanity check");
+    address_spend_pubkey_out = addr.address_spend_pubkey;
+  }
+  //-------------------------------------------------------------------------------------------------------------------
+  bool account_base::try_searching_for_opening_for_subaddress(
+                                                              const crypto::public_key &address_spend_pubkey,
+                                                              crypto::secret_key &address_privkey_g_out,
+                                                              crypto::secret_key &address_privkey_t_out) const
+  {
+    const auto it = subaddress_map.find(address_spend_pubkey);
+    if (it == subaddress_map.cend())
+      return false;
+    
+    crypto::public_key recomputed_address_spend_pubkey;
+    opening_for_subaddress(it->second,
+                           address_privkey_g_out,
+                           address_privkey_t_out,
+                           recomputed_address_spend_pubkey);
+    
+    return address_spend_pubkey == recomputed_address_spend_pubkey;
+  }
+  //-------------------------------------------------------------------------------------------------------------------
+  bool account_base::try_searching_for_opening_for_onetime_address(
+                                                                   const crypto::public_key &address_spend_pubkey,
+                                                                   const crypto::secret_key &sender_extension_g,
+                                                                   const crypto::secret_key &sender_extension_t,
+                                                                   crypto::secret_key &x_out,
+                                                                   crypto::secret_key &y_out) const
+  {
+    // k^{j,g}_addr, k^{j,t}_addr
+    crypto::secret_key address_privkey_g;
+    crypto::secret_key address_privkey_t;
+    if (!try_searching_for_opening_for_subaddress(address_spend_pubkey,
+                                                  address_privkey_g,
+                                                  address_privkey_t))
+      return false;
+    
+    // x = k^{j,g}_addr + k^g_o
+    sc_add(to_bytes(x_out), to_bytes(address_privkey_g), to_bytes(sender_extension_g));
+    
+    // y = k^{j,t}_addr + k^t_o
+    sc_add(to_bytes(y_out), to_bytes(address_privkey_t), to_bytes(sender_extension_t));
+    
+    return true;
+  }
 }
+//-------------------------------------------------------------------------------------------------------------------
+

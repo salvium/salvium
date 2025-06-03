@@ -29,6 +29,7 @@
 #pragma once
 
 //local headers
+#include "carrot_impl/subaddress_index.h"
 #include "carrot_impl/tx_proposal_utils.h"
 #include "wallet2.h"
 
@@ -142,5 +143,7 @@ wallet2::pending_tx finalize_all_proofs_from_transfer_details_as_pending_tx(
 wallet2::pending_tx finalize_all_proofs_from_transfer_details_as_pending_tx(
     const carrot::CarrotTransactionProposalV1 &tx_proposal,
     const wallet2 &w);
+
+carrot::AddressDeriveType resolve_derive_type(const carrot::AddressDeriveType derive_type);
 } //namespace wallet
 } //namespace tools
