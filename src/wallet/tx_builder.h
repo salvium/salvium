@@ -122,5 +122,25 @@ wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionPropos
     const wallet2::transfer_container &transfers,
     const crypto::secret_key &k_view,
     hw::device &hwdev);
+
+cryptonote::transaction finalize_all_proofs_from_transfer_details(
+    const carrot::CarrotTransactionProposalV1 &tx_proposal,
+    const std::vector<std::size_t> &selected_transfers,
+    const cryptonote::transaction_type tx_type,
+    const wallet2 &w);
+
+wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionProposalV1 &tx_proposal,
+    const wallet2::transfer_container &transfers,
+    const crypto::secret_key &k_view,
+    hw::device &hwdev);
+
+wallet2::pending_tx finalize_all_proofs_from_transfer_details_as_pending_tx(
+    const carrot::CarrotTransactionProposalV1 &tx_proposal,
+    const wallet2::transfer_container &transfers,
+    const wallet2 &w);
+
+wallet2::pending_tx finalize_all_proofs_from_transfer_details_as_pending_tx(
+    const carrot::CarrotTransactionProposalV1 &tx_proposal,
+    const wallet2 &w);
 } //namespace wallet
 } //namespace tools

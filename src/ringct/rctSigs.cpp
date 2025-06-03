@@ -1718,8 +1718,12 @@ namespace rct {
             {
                 if (hwdev.get_mode() == hw::device::TRANSACTION_CREATE_FAKE)
                     rv.p.CLSAGs[i] = make_dummy_clsag(rv.mixRing[i].size());
-                else
+                else {
+                  if (rv.type == RCTTypeSalviumOne)
+                    rv.p.CLSAGs[i] = proveRctCLSAGSimpleCarrot(full_message, rv.mixRing[i], inSk[i].x, inSk[i].y, inSk[i].dest, a[i], pseudoOuts[i], index[i], hwdev);
+                  else
                     rv.p.CLSAGs[i] = proveRctCLSAGSimple(full_message, rv.mixRing[i], inSk[i], a[i], pseudoOuts[i], index[i], hwdev);
+                }
             }
             else
             {

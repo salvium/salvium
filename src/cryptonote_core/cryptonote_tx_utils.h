@@ -89,9 +89,13 @@ namespace cryptonote
     uint64_t real_output_in_tx_index;   //index in transaction outputs vector
     uint64_t amount;                    //money
     bool rct;                           //true if the output is rct
+    bool carrot;                        //true if the output is a carrot output
     rct::key mask;                      //ringct amount mask
     rct::multisig_kLRki multisig_kLRki; //multisig info
     std::string asset_type;
+    crypto::key_image first_rct_key_image;
+    rct::key amount_commitment;
+    crypto::public_key output_key;
     origin_data origin_tx_data;
 
     void push_output(uint64_t idx, const crypto::public_key &k, uint64_t amount) { outputs.push_back(std::make_pair(idx, rct::ctkey({rct::pk2rct(k), rct::zeroCommit(amount)}))); }

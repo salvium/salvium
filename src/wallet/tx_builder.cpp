@@ -36,11 +36,15 @@
 #include "carrot_core/exceptions.h"
 #include "carrot_core/output_set_finalization.h"
 #include "carrot_core/scan.h"
+#include "carrot_core/scan_unsafe.cpp"
+#include "carrot_core/address_utils.h"
+#include "carrot_core/core_types.h"
 #include "carrot_impl/address_device_ram_borrowed.h"
 #include "carrot_impl/tx_builder_outputs.h"
 #include "carrot_impl/format_utils.h"
 #include "carrot_impl/input_selection.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "wallet/scanning_tools.cpp"
 #include "common/container_helpers.h"
 
 //third party headers
@@ -70,7 +74,7 @@ static bool is_transfer_usable_for_input_selection(const wallet2::transfer_detai
     const rct::xmr_amount ignore_above,
     const rct::xmr_amount ignore_below,
     const uint64_t top_block_index)
-{   
+{
     /** 
      * This additional check appears to be for fcmp++. 
     const uint64_t last_locked_block_index = cryptonote::get_last_locked_block_index(
@@ -189,7 +193,7 @@ std::unordered_map<crypto::key_image, size_t> collect_non_burned_transfers_by_ke
         if (it == best_transfer_index_by_ki.end())
         {
             best_transfer_index_by_ki.insert({td.m_key_image, i});
-            break;
+            continue;
         }
         const wallet2::transfer_details &other_td = transfers.at(it->second);
         if (td.amount() < other_td.amount())
@@ -222,7 +226,7 @@ carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
     input_candidates_transfer_indices.reserve(transfers.size());
     for (size_t i = 0; i < transfers.size(); ++i)
     {
-        const wallet2::transfer_details& td = transfers.at(i);
+        const wallet2::transfer_details &td = transfers.at(i);
         if (is_transfer_usable_for_input_selection(td,
             from_account,
             from_subaddresses,
@@ -394,6 +398,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         "make_carrot_transaction_proposals_wallet2_transfer: not using per-byte base fee");
 
     const rct::xmr_amount fee_per_weight = w.get_base_fee(priority);
+    MDEBUG("fee_per_weight = " << fee_per_weight << ", from priority = " << priority);
 
     const std::uint64_t current_chain_height = w.get_blockchain_current_height();
     CHECK_AND_ASSERT_THROW_MES(current_chain_height > 0,
@@ -623,6 +628,504 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         subaddr_indices,
         top_block_index);
 }
+std::vector<cryptonote::tx_source_entry> get_sources(
+    const wallet2::transfer_container &transfers,
+    const std::vector<std::size_t> &selected_transfers,
+    const std::string &source_asset,
+    const wallet2 &w
+) {
+    // get decoys
+    const size_t fake_outputs_count = 15;
+    std::vector<std::vector<tools::wallet2::get_outs_entry>> outs;
+    std::unordered_set<crypto::public_key> valid_public_keys_cache;
+    w.get_outs(outs, selected_transfers, fake_outputs_count, true, valid_public_keys_cache); // may throw
+
+    LOG_PRINT_L2("preparing outputs");
+    size_t i = 0, out_index = 0;
+    std::vector<cryptonote::tx_source_entry> sources;
+    for(size_t idx: selected_transfers)
+    {
+        sources.resize(sources.size()+1);
+        cryptonote::tx_source_entry& src = sources.back();
+        const wallet2::transfer_details& td = transfers[idx];
+
+        // Sanity check the asset_type for this TD is correct
+        THROW_WALLET_EXCEPTION_IF(td.asset_type != source_asset, error::wallet_internal_error, "Input has wrong asset_type - expected " + source_asset + " but found " + td.asset_type);
+
+        src.amount = td.amount();
+        src.rct = td.is_rct();
+        src.carrot = td.is_carrot();
+        src.asset_type = td.asset_type;
+
+        // Create the origin TX data
+        if (td.m_td_origin_idx != (uint64_t)-1) {
+            THROW_WALLET_EXCEPTION_IF(td.m_td_origin_idx >= w.get_num_transfer_details(), error::wallet_internal_error, "cannot locate return_payment origin index in m_transfers");
+            const wallet2::transfer_details& td_origin = w.get_transfer_details(td.m_td_origin_idx);
+            src.origin_tx_data.tx_type    = td_origin.m_tx.type;
+            src.origin_tx_data.tx_pub_key   = cryptonote::get_tx_pub_key_from_extra(td_origin.m_tx);
+            src.origin_tx_data.output_index = td_origin.m_internal_output_index;
+        }
+        
+        //paste mixin transaction
+
+        THROW_WALLET_EXCEPTION_IF(outs.size() < out_index + 1 ,  error::wallet_internal_error, "outs.size() < out_index + 1"); 
+        THROW_WALLET_EXCEPTION_IF(outs[out_index].size() < fake_outputs_count ,  error::wallet_internal_error, "fake_outputs_count > random outputs found");
+        
+        typedef cryptonote::tx_source_entry::output_entry tx_output_entry;
+        for (size_t n = 0; n < fake_outputs_count + 1; ++n)
+        {
+            tx_output_entry oe;
+            oe.first = std::get<0>(outs[out_index][n]);
+            oe.second.dest = rct::pk2rct(std::get<1>(outs[out_index][n]));
+            oe.second.mask = std::get<2>(outs[out_index][n]);
+            src.outputs.push_back(oe);
+        }
+        ++i;
+
+        //paste real transaction to the random index
+        auto it_to_replace = std::find_if(src.outputs.begin(), src.outputs.end(), [&](const tx_output_entry& a)
+        {
+            // HERE BE DRAGONS!!!
+            // SRCG: ring tweak to indexed per asset_type - DO NOT COMMIT UNTIL IT IS ALL WORKING
+            //return a.first == td.m_global_output_index;
+            return a.first == td.m_asset_type_output_index;
+            // LAND AHOY!!!
+        });
+        THROW_WALLET_EXCEPTION_IF(it_to_replace == src.outputs.end(), error::wallet_internal_error,
+            "real output not found");
+
+        tx_output_entry real_oe;
+        // HERE BE DRAGONS!!!
+        // SRCG: ring tweak to indexed per asset_type - DO NOT COMMIT UNTIL IT IS ALL WORKING
+        //real_oe.first = td.m_global_output_index;
+        real_oe.first = td.m_asset_type_output_index;
+        // LAND AHOY!!!
+        real_oe.second.dest = rct::pk2rct(td.get_public_key());
+        real_oe.second.mask = rct::commit(td.amount(), td.m_mask);
+        *it_to_replace = real_oe;
+        src.real_out_tx_key = get_tx_pub_key_from_extra(td.m_tx, td.m_pk_index);
+        src.real_out_additional_tx_keys = get_additional_tx_pub_keys_from_extra(td.m_tx);
+        src.real_output = it_to_replace - src.outputs.begin();
+        src.real_output_in_tx_index = td.m_internal_output_index;
+        src.first_rct_key_image = boost::get<cryptonote::txin_to_key>(td.m_tx.vin[0]).k_image;
+        src.mask = td.m_mask;
+        src.output_key = td.get_public_key();
+        src.amount_commitment = td.amount_commitment;
+        if (false) // w.m_multisig
+            // note: multisig_kLRki is a legacy struct, currently only used as a key image shuttle into the multisig tx builder
+            src.multisig_kLRki = {.k = {}, .L = {}, .R = {}, .ki = rct::ki2rct(td.m_key_image)};
+        else
+            src.multisig_kLRki = rct::multisig_kLRki({rct::zero(), rct::zero(), rct::zero(), rct::zero()});
+        detail::print_source_entry(src);
+        ++out_index;
+    }
+    LOG_PRINT_L2("outputs prepared");
+
+    return sources;
+}
+//----------------------------------------------------------------------------------------------------------------------
+carrot::CarrotDestinationV1 cryptonote_address(const carrot::payment_id_t payment_id,
+    const carrot::AddressDeriveType derive_type)
+{
+    carrot::CarrotDestinationV1 addr;
+    switch (resolve_derive_type(derive_type))
+    {
+    case carrot::AddressDeriveType::Carrot:
+        make_carrot_integrated_address_v1(carrot_account_spend_pubkey,
+            legacy_acb.get_keys().m_account_address.m_view_public_key,
+            payment_id,
+            addr);
+        break;
+    case carrot::AddressDeriveType::PreCarrot:
+        make_carrot_integrated_address_v1(legacy_acb.get_keys().m_account_address.m_spend_public_key,
+            legacy_acb.get_keys().m_account_address.m_view_public_key,
+            payment_id,
+            addr);
+        break;
+    default:
+        throw std::runtime_error("address derive type not recognized");
+    }
+    return addr;
+}
+//-------------------------------------------------------------------------------------------------------------------
+carrot::CarrotDestinationV1 subaddress(const carrot::subaddress_index_extended &subaddress_index)
+{
+    if (!subaddress_index.index.is_subaddress())
+        return cryptonote_address(carrot::null_payment_id, subaddress_index.derive_type);
+
+    const cryptonote::account_keys &lkeys = legacy_acb.get_keys();
+
+    carrot::CarrotDestinationV1 addr;
+    cryptonote::account_public_address cnaddr;
+    switch (resolve_derive_type(subaddress_index.derive_type))
+    {
+    case carrot::AddressDeriveType::Carrot:
+        make_carrot_subaddress_v1(carrot_account_spend_pubkey,
+            carrot_account_view_pubkey,
+            s_generate_address_dev,
+            subaddress_index.index.major,
+            subaddress_index.index.minor,
+            addr);
+        break;
+    case carrot::AddressDeriveType::PreCarrot:
+        cnaddr =
+            lkeys.m_device->get_subaddress(lkeys, {subaddress_index.index.major, subaddress_index.index.minor});
+        addr = carrot::CarrotDestinationV1{
+            .address_spend_pubkey = cnaddr.m_spend_public_key,
+            .address_view_pubkey = cnaddr.m_view_public_key,
+            .is_subaddress = true,
+            .payment_id = carrot::null_payment_id
+        };
+        break;
+    default:
+        throw std::runtime_error("address derive type not recognized");
+    }
+    return addr;
+}
+//-------------------------------------------------------------------------------------------------------------------
+carrot::AddressDeriveType resolve_derive_type(const carrot::AddressDeriveType derive_type)
+{
+    return derive_type == carrot::AddressDeriveType::Auto ? carrot::AddressDeriveType::Carrot : derive_type;
+}
+//-------------------------------------------------------------------------------------------------------------------
+void opening_for_subaddress(
+    const carrot::subaddress_index_extended &subaddress_index,
+    crypto::secret_key &address_privkey_g_out,
+    crypto::secret_key &address_privkey_t_out,
+    crypto::public_key &address_spend_pubkey_out,
+    const cryptonote::account_keys &lkeys)
+{
+    const bool is_subaddress = subaddress_index.index.is_subaddress();
+    const uint32_t major_index = subaddress_index.index.major;
+    const uint32_t minor_index = subaddress_index.index.minor;
+
+    crypto::secret_key address_index_generator;
+    crypto::secret_key subaddress_scalar;
+    crypto::secret_key subaddress_extension;
+
+    switch (resolve_derive_type(subaddress_index.derive_type))
+    {
+    case carrot::AddressDeriveType::Carrot:
+        // s^j_gen = H_32[s_ga](j_major, j_minor)
+        carrot::make_carrot_index_extension_generator(s_generate_address, major_index, minor_index, address_index_generator);
+
+        if (is_subaddress)
+        {
+            // k^j_subscal = H_n(K_s, j_major, j_minor, s^j_gen)
+            carrot::make_carrot_subaddress_scalar(carrot_account_spend_pubkey, address_index_generator, major_index, minor_index, subaddress_scalar);
+        }
+        else
+        {
+            // k^j_subscal = 1
+            sc_1(to_bytes(subaddress_scalar));
+        }
+
+        // k^g_a = k_gi * k^j_subscal
+        sc_mul(to_bytes(address_privkey_g_out), to_bytes(k_generate_image), to_bytes(subaddress_scalar));
+
+        // k^t_a = k_ps * k^j_subscal
+        sc_mul(to_bytes(address_privkey_t_out), to_bytes(k_prove_spend), to_bytes(subaddress_scalar));
+        break;
+    case carrot::AddressDeriveType::PreCarrot:
+        // m = Hn(k_v || j_major || j_minor) if subaddress else 0
+        subaddress_extension = is_subaddress
+            ? lkeys.get_device().get_subaddress_secret_key(lkeys.m_view_secret_key, {major_index, minor_index})
+            : crypto::null_skey;
+
+        // k^g_a = k_s + m
+        sc_add(to_bytes(address_privkey_g_out), to_bytes(lkeys.m_spend_secret_key), to_bytes(subaddress_extension));
+
+        // k^t_a = 0
+        memset(address_privkey_t_out.data, 0, sizeof(address_privkey_t_out));
+        break;
+    default:
+        throw std::runtime_error("address derive type not recognized");
+    }
+
+    // perform sanity check
+    const carrot::CarrotDestinationV1 addr = subaddress(subaddress_index);
+    rct::key recomputed_address_spend_pubkey;
+    rct::addKeys2(recomputed_address_spend_pubkey,
+        rct::sk2rct(address_privkey_g_out),
+        rct::sk2rct(address_privkey_t_out),
+        rct::pk2rct(crypto::get_T()));
+    CHECK_AND_ASSERT_THROW_MES(rct::rct2pk(recomputed_address_spend_pubkey) == addr.address_spend_pubkey,
+        "mock carrot or legacy keys: opening for subaddress: failed sanity check");
+    address_spend_pubkey_out = addr.address_spend_pubkey;
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool try_searching_for_opening_for_subaddress(
+    const crypto::public_key &address_spend_pubkey,
+    crypto::secret_key &address_privkey_g_out,
+    crypto::secret_key &address_privkey_t_out)
+{
+    const auto it = subaddress_map.find(address_spend_pubkey);
+    if (it == subaddress_map.cend())
+        return false;
+
+    crypto::public_key recomputed_address_spend_pubkey;
+    opening_for_subaddress(it->second,
+        address_privkey_g_out,
+        address_privkey_t_out,
+        recomputed_address_spend_pubkey);
+
+    return address_spend_pubkey == recomputed_address_spend_pubkey;
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool try_searching_for_opening_for_onetime_address(
+    const crypto::public_key &address_spend_pubkey,
+    const crypto::secret_key &sender_extension_g,
+    const crypto::secret_key &sender_extension_t,
+    crypto::secret_key &x_out,
+    crypto::secret_key &y_out)
+{
+    // k^{j,g}_addr, k^{j,t}_addr
+    crypto::secret_key address_privkey_g;
+    crypto::secret_key address_privkey_t;
+    if (!try_searching_for_opening_for_subaddress(address_spend_pubkey,
+            address_privkey_g,
+            address_privkey_t))
+        return false;
+
+    // x = k^{j,g}_addr + k^g_o
+    sc_add(to_bytes(x_out), to_bytes(address_privkey_g), to_bytes(sender_extension_g));
+
+    // y = k^{j,t}_addr + k^t_o
+    sc_add(to_bytes(y_out), to_bytes(address_privkey_t), to_bytes(sender_extension_t));
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
+cryptonote::transaction finalize_all_proofs_from_transfer_details(
+    const carrot::CarrotTransactionProposalV1 &tx_proposal,
+    const std::vector<std::size_t> &selected_transfers,
+    const cryptonote::transaction_type tx_type,
+    const wallet2 &w)
+{
+    const size_t n_inputs = tx_proposal.key_images_sorted.size();
+    const size_t n_outputs = tx_proposal.normal_payment_proposals.size()
+        + tx_proposal.selfsend_payment_proposals.size();
+    CHECK_AND_ASSERT_THROW_MES(n_inputs, "finalize_all_proofs_from_transfer_details: no inputs");
+
+    LOG_PRINT_L2("finalize_all_proofs_from_transfer_details: make all proofs for transaction proposal: "
+        << n_inputs << "-in " << n_outputs << "-out, with "
+        << tx_proposal.normal_payment_proposals.size() << " normal payment proposals, "
+        << tx_proposal.selfsend_payment_proposals.size() << " self-send payment proposals, and a fee of "
+        << tx_proposal.fee << " pXMR");
+
+    wallet2::transfer_container transfers;
+    w.get_transfers(transfers);
+    cryptonote::account_keys acc_keys = w.get_account().get_keys();
+
+    // collect core selfsend proposals
+    std::vector<carrot::CarrotPaymentProposalSelfSendV1> selfsend_payment_proposal_cores;
+    selfsend_payment_proposal_cores.reserve(tx_proposal.selfsend_payment_proposals.size());
+    for (const auto &selfsend_payment_proposal : tx_proposal.selfsend_payment_proposals)
+        selfsend_payment_proposal_cores.push_back(selfsend_payment_proposal.proposal);
+
+    //! @TODO: HW device
+    carrot::cryptonote_hierarchy_address_device_ram_borrowed addr_dev(
+        acc_keys.m_account_address.m_spend_public_key,
+        acc_keys.m_view_secret_key);
+
+    // finalize enotes
+    LOG_PRINT_L3("Getting output enote proposals");
+    std::vector<carrot::RCTOutputEnoteProposal> output_enote_proposals;
+    carrot::encrypted_payment_id_t encrypted_payment_id;
+    carrot::get_output_enote_proposals(tx_proposal.normal_payment_proposals,
+        selfsend_payment_proposal_cores,
+        tx_proposal.dummy_encrypted_payment_id,
+        /*s_view_balance_dev=*/nullptr, //! @TODO: internal
+        &addr_dev,
+        tx_proposal.key_images_sorted.at(0),
+        output_enote_proposals,
+        encrypted_payment_id);
+    CHECK_AND_ASSERT_THROW_MES(output_enote_proposals.size() == n_outputs,
+        "finalize_all_proofs_from_transfer_details: unexpected number of output enote proposals");
+
+    // collect all non-burned inputs owned by wallet
+    const std::unordered_map<crypto::key_image, size_t> unburned_transfers_by_key_image =
+        collect_non_burned_transfers_by_key_image(transfers);
+    LOG_PRINT_L3("Did a burning bug pass, eliminated "
+        << (transfers.size() - unburned_transfers_by_key_image.size())
+        << " eligible transfers");
+
+    // collect output amount blinding factors
+    std::vector<rct::key> output_amount_blinding_factors;
+    output_amount_blinding_factors.reserve(output_enote_proposals.size());
+    for (const carrot::RCTOutputEnoteProposal &output_enote_proposal : output_enote_proposals)
+        output_amount_blinding_factors.push_back(rct::sk2rct(output_enote_proposal.amount_blinding_factor));
+
+
+    // collect enotes
+    std::vector<carrot::CarrotEnoteV1> enotes(output_enote_proposals.size());
+    for (size_t i = 0; i < enotes.size(); ++i)
+        enotes[i] = output_enote_proposals.at(i).enote;
+
+    // serialize transaction
+    cryptonote::transaction tx = carrot::store_carrot_to_transaction_v1(enotes,
+        tx_proposal.key_images_sorted,
+        tx_proposal.fee,
+        encrypted_payment_id);
+
+    // collect input key images and amounts
+    hw::device &hwdev = acc_keys.get_device();
+    std::vector<cryptonote::tx_source_entry> sources = get_sources(transfers, selected_transfers, "SAL1", w);
+
+    uint64_t amount_in = 0, amount_out = 0;
+    rct::carrot_ctkeyV inSk;
+    inSk.reserve(sources.size());
+    // mixRing indexing is done the other way round for simple
+    rct::ctkeyM mixRing(sources.size());
+    rct::keyV destinations;
+    std::vector<uint64_t> inamounts, outamounts;
+    std::vector<std::string> destination_asset_types;
+    std::vector<unsigned int> index;
+    for (size_t i = 0; i < sources.size(); ++i)
+    {
+        amount_in += sources[i].amount;
+        inamounts.push_back(sources[i].amount);
+        index.push_back(sources[i].real_output);
+
+        // inSk: (x, y, mask)
+        rct::carrot_ctkey ctkey;
+        ctkey.mask = sources[i].mask;
+        if (sources[i].carrot) {
+
+            const epee::span<const crypto::public_key> main_tx_ephemeral_pubkeys = 
+                epee::to_span(std::vector<crypto::public_key>{sources[i].real_out_tx_key});
+            const epee::span<const crypto::public_key> additional_tx_ephemeral_pubkeys = 
+                epee::to_span(sources[i].real_out_additional_tx_keys);
+
+            // 2. perform ECDH derivations
+            std::vector<crypto::key_derivation> main_derivations;
+            std::vector<crypto::key_derivation> additional_derivations;
+            wallet::perform_ecdh_derivations(
+                main_tx_ephemeral_pubkeys,
+                additional_tx_ephemeral_pubkeys,
+                acc_keys.m_view_secret_key,
+                hwdev,
+                carrot::is_carrot_transaction_v1(tx),
+                main_derivations,
+                additional_derivations
+            );
+
+            crypto::hash s_sender_receiver;
+            const crypto::key_derivation &kd = main_derivations.size()
+                ? main_derivations[0]
+                : additional_derivations[sources[i].real_output_in_tx_index];
+            const mx25519_pubkey s_sender_receiver_unctx = carrot::raw_byte_convert<mx25519_pubkey>(kd);
+
+            // ephemeral pubkeys
+            const epee::span<const crypto::public_key> enote_ephemeral_pubkeys_pk = 
+                main_tx_ephemeral_pubkeys.empty() ? additional_tx_ephemeral_pubkeys : main_tx_ephemeral_pubkeys;
+            const epee::span<const mx25519_pubkey> enote_ephemeral_pubkeys = {
+                reinterpret_cast<const mx25519_pubkey*>(enote_ephemeral_pubkeys_pk.data()),
+                enote_ephemeral_pubkeys_pk.size()
+            };
+
+            const bool shared_ephemeral_pubkey = enote_ephemeral_pubkeys.size() == 1;
+            const size_t ephemeral_pubkey_index = shared_ephemeral_pubkey ? 0 : sources[i].real_output_in_tx_index;
+
+            // input_context
+            const carrot::input_context_t input_context = carrot::make_carrot_input_context(sources[i].first_rct_key_image);
+
+            // s^ctx_sr = H_32(s_sr, D_e, input_context)
+            make_carrot_sender_receiver_secret(s_sender_receiver_unctx.data,
+                enote_ephemeral_pubkeys[ephemeral_pubkey_index],
+                input_context,
+                s_sender_receiver);
+
+            // get the k_og and k_ot
+            crypto::secret_key sender_extension_g_out;
+            crypto::secret_key sender_extension_t_out;
+            crypto::public_key address_spend_pubkey_out;
+            carrot::payment_id_t nominal_payment_id_out;
+            carrot::janus_anchor_t nominal_janus_anchor_out;
+            carrot::encrypted_janus_anchor_t encrypted_janus_anchor;
+            carrot::encrypted_payment_id_t encrypted_payment_id;
+            carrot::scan_carrot_dest_info(
+                sources[i].output_key,
+                sources[i].amount_commitment,
+                encrypted_janus_anchor,
+                encrypted_payment_id,
+                s_sender_receiver,
+                sender_extension_g_out,
+                sender_extension_t_out,
+                address_spend_pubkey_out,
+                nominal_payment_id_out,
+                nominal_janus_anchor_out
+            );
+
+            crypto::public_key address_spend_pubkey;
+            crypto::secret_key x, y;
+            bool r = try_searching_for_opening_for_onetime_address(address_spend_pubkey, sender_extension_g_out, sender_extension_t_out, x, y);
+            THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error,
+                "Failed to search for opening for onetime address");
+            ctkey.x = rct::sk2rct(x);
+            ctkey.y = rct::sk2rct(y);
+        } else {
+            // generate the secret key
+            cryptonote::keypair in_ephemeral;
+            crypto::key_image img;
+            rct::salvium_input_data_t sid;
+            const auto& out_key = reinterpret_cast<const crypto::public_key&>(sources[i].outputs[sources[i].real_output].second.dest);
+            bool use_origin_data = (sources[i].origin_tx_data.tx_type != cryptonote::transaction_type::UNSET);
+            sid.origin_tx_type = sources[i].origin_tx_data.tx_type;
+            bool r = cryptonote::generate_key_image_helper(
+                w.get_account().get_keys(),
+                w.get_subaddress_map_ref(),
+                out_key,
+                sources[i].real_out_tx_key,
+                sources[i].real_out_additional_tx_keys,
+                sources[i].real_output_in_tx_index,
+                in_ephemeral,
+                img,
+                hwdev,
+                use_origin_data,
+                sources[i].origin_tx_data, sid
+            );
+            THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to generate key image helper");
+
+            ctkey.x = rct::sk2rct(in_ephemeral.sec);
+            ctkey.y = rct::zero(); // not used in non-carrot txes
+        }
+
+        inSk.push_back(ctkey);
+        memwipe(&ctkey, sizeof(rct::carrot_ctkey));
+        // inPk: (public key, commitment)
+        // will be done when filling in mixRing
+    }
+
+    // store proofs
+    crypto::hash tx_prefix_hash;
+    get_transaction_prefix_hash(tx, tx_prefix_hash, hwdev);
+    rct::ctkeyV outSk;
+    tx.rct_signatures = rct::genRctSimple(
+        rct::hash2rct(tx_prefix_hash),
+        inSk, 
+        destinations,
+        tx_type,
+        "SAL1",
+        destination_asset_types,
+        inamounts,
+        outamounts,
+        fee,
+        mixRing,
+        amount_keys,
+        index,
+        outSk,
+        rct_config,
+        hwdev,
+        salvium_data,
+        rct::sk2rct(x_change),
+        change_index,
+        key_yF
+    );
+
+    tx.pruned = false;
+    return tx;
+}
 //-------------------------------------------------------------------------------------------------------------------
 wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionProposalV1 &tx_proposal,
     const wallet2::transfer_container &transfers,
@@ -751,6 +1254,40 @@ wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionPropos
     ptx.subaddr_indices = std::move(subaddr_indices);
     ptx.construction_data = tx_proposal;
     return ptx;
+}
+//-------------------------------------------------------------------------------------------------------------------
+wallet2::pending_tx finalize_all_proofs_from_transfer_details_as_pending_tx(
+    const carrot::CarrotTransactionProposalV1 &tx_proposal,
+    const wallet2::transfer_container &transfers,
+    const wallet2 &w)
+{
+    const auto acc_keys =  w.get_account().get_keys();
+    wallet2::pending_tx ptx = make_pending_carrot_tx(tx_proposal,
+        transfers,
+        acc_keys.m_view_secret_key,
+        acc_keys.get_device());
+
+    ptx.tx = finalize_all_proofs_from_transfer_details(
+        tx_proposal,
+        ptx.selected_transfers,
+        cryptonote::transaction_type::TRANSFER, // TODO:
+        w
+    );
+
+    return ptx;
+}
+//-------------------------------------------------------------------------------------------------------------------
+wallet2::pending_tx finalize_all_proofs_from_transfer_details_as_pending_tx(
+    const carrot::CarrotTransactionProposalV1 &tx_proposal,
+    const wallet2 &w)
+{
+    wallet2::transfer_container transfers;
+    w.get_transfers(transfers);
+
+    return finalize_all_proofs_from_transfer_details_as_pending_tx(
+        tx_proposal,
+        transfers,
+        w);
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace wallet

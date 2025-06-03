@@ -2624,6 +2624,7 @@ void wallet2::process_new_scanned_transaction(
     td.m_pk_index = enote_scan_info->main_tx_pubkey_index;
     td.m_subaddr_index = subaddr_index_cn;
     td.m_mask = enote_scan_info->amount_blinding_factor;
+    td.amount_commitment = tx.rct_signatures.outPk[local_output_index].mask;
     td.m_rct = tx.version >= 2;
     td.m_frozen = false;
     set_unspent(m_transfers.size() - 1);
@@ -10615,9 +10616,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
     const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts, priority, extra, subaddr_account, subaddr_indices, subtract_fee_from_outputs);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
-    // TODO: use CLSAGS here..
-    // for (const auto &tx_proposal : tx_proposals)
-    //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
+    for (const auto &tx_proposal : tx_proposals)
+      ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
     return ptx_vector;
   }
 

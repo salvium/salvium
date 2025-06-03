@@ -123,6 +123,22 @@ namespace rct {
     typedef std::vector<ctkey> ctkeyV;
     typedef std::vector<ctkeyV> ctkeyM;
 
+    struct carrot_ctkey {
+      key x;
+      key y;
+      key mask; //C here if public
+
+      bool operator==(const carrot_ctkey &other) const {
+        return (x == other.x) && (y == other.y) && (mask == other.mask);
+      }
+
+      bool operator!=(const carrot_ctkey &other) const {
+        return !(*this == other);
+      }
+    };
+    typedef std::vector<carrot_ctkey> carrot_ctkeyV;
+    typedef std::vector<carrot_ctkey> carrot_ctkeyM;
+
     //used for multisig data
     struct multisig_kLRki {
         key k;

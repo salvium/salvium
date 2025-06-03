@@ -377,6 +377,7 @@ private:
       std::vector<multisig_info> m_multisig_info; // one per other participant
       std::vector<std::pair<uint64_t, crypto::hash>> m_uses;
       std::string asset_type;
+      rct::key amount_commitment;
 
       bool is_rct() const { return m_rct; }
       uint64_t amount() const { return m_amount; }
@@ -388,6 +389,17 @@ private:
           error::wallet_internal_error, "Unable to get output public key from output");
         return output_public_key;
       };
+
+      bool is_carrot() const
+      {
+        THROW_WALLET_EXCEPTION_IF(m_tx.vout.size() <= m_internal_output_index,
+          error::wallet_internal_error, "Too few outputs, outputs may be corrupted");
+        if (m_tx.vout[m_internal_output_index].target.type() == typeid(cryptonote::txout_to_carrot_v1)) {
+          return true;
+        }
+
+        return false;
+      }
 
       BEGIN_SERIALIZE_OBJECT()
         FIELD(m_block_height)
