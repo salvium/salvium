@@ -121,46 +121,6 @@ namespace cryptonote
     void encrypt_viewkey(const crypto::chacha_key &key) { m_keys.encrypt_viewkey(key); }
     void decrypt_viewkey(const crypto::chacha_key &key) { m_keys.decrypt_viewkey(key); }
 
-    carrot::AddressDeriveType resolve_derive_type(const carrot::AddressDeriveType derive_type) const;
-
-    carrot::CarrotDestinationV1 cryptonote_address(const carrot::payment_id_t payment_id = carrot::null_payment_id,
-        const carrot::AddressDeriveType derive_type = carrot::AddressDeriveType::Auto) const;
-
-    carrot::CarrotDestinationV1 subaddress(const carrot::subaddress_index_extended &subaddress_index) const;
-
-    std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddress_map_cn() const;
-
-    // brief: opening_for_subaddress - return (k^g_a, k^t_a) for j s.t. K^j_s = (k^g_a * G + k^t_a * T)
-    void opening_for_subaddress(const carrot::subaddress_index_extended &subaddress_index,
-        crypto::secret_key &address_privkey_g_out,
-        crypto::secret_key &address_privkey_t_out,
-        crypto::public_key &address_spend_pubkey_out) const;
-
-    bool try_searching_for_opening_for_subaddress(const crypto::public_key &address_spend_pubkey,
-        crypto::secret_key &address_privkey_g_out,
-        crypto::secret_key &address_privkey_t_out) const;
-
-    bool try_searching_for_opening_for_onetime_address(const crypto::public_key &address_spend_pubkey,
-        const crypto::secret_key &sender_extension_g,
-        const crypto::secret_key &sender_extension_t,
-        crypto::secret_key &x_out,
-        crypto::secret_key &y_out) const;
-    /*
-    bool can_open_fcmp_onetime_address(const crypto::public_key &address_spend_pubkey,
-        const crypto::secret_key &sender_extension_g,
-        const crypto::secret_key &sender_extension_t,
-        const crypto::public_key &onetime_address) const;
-
-    crypto::key_image derive_key_image(const crypto::public_key &address_spend_pubkey,
-        const crypto::secret_key &sender_extension_g,
-        const crypto::secret_key &sender_extension_t,
-        const crypto::public_key &onetime_address) const;
-
-    void generate_subaddress_map();
-
-    void generate(const carrot::AddressDeriveType default_derive_type = carrot::AddressDeriveType::Carrot);
-    */
-    
     template <class t_archive>
     inline void serialize(t_archive &a, const unsigned int /*ver*/)
     {
@@ -177,11 +137,5 @@ namespace cryptonote
     void set_null();
     account_keys m_keys;
     uint64_t m_creation_timestamp;
-
-    std::unordered_map<crypto::public_key, carrot::subaddress_index_extended> subaddress_map;
-
-    carrot::view_incoming_key_ram_borrowed_device k_view_incoming_dev;
-    carrot::view_balance_secret_ram_borrowed_device s_view_balance_dev;
-    carrot::generate_address_secret_ram_borrowed_device s_generate_address_dev;
   };
 }
