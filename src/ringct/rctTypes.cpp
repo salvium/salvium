@@ -198,6 +198,7 @@ namespace rct {
             case RCTTypeCLSAG:
             case RCTTypeBulletproofPlus:
             case RCTTypeFullProofs:
+            case RCTTypeSalviumZero:
             case RCTTypeSalviumOne:
                 return true;
             default:
@@ -224,6 +225,7 @@ namespace rct {
         {
             case RCTTypeBulletproofPlus:
             case RCTTypeFullProofs:
+            case RCTTypeSalviumZero:
             case RCTTypeSalviumOne:
                 return true;
             default:
@@ -250,6 +252,18 @@ namespace rct {
             case RCTTypeCLSAG:
             case RCTTypeBulletproofPlus:
             case RCTTypeFullProofs:
+            case RCTTypeSalviumZero:
+                return true;
+            case RCTTypeSalviumOne:
+            default:
+                return false;
+        }
+    }
+
+    bool is_rct_tclsag(int type)
+    {
+        switch (type)
+        {
             case RCTTypeSalviumOne:
                 return true;
             default:
@@ -265,6 +279,7 @@ namespace rct {
             case RCTTypeCLSAG:
             case RCTTypeBulletproofPlus:
             case RCTTypeFullProofs:
+            case RCTTypeSalviumZero:
             case RCTTypeSalviumOne:
                 return true;
             case RCTTypeNull:

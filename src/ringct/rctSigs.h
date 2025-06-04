@@ -85,14 +85,14 @@ namespace rct {
     clsag proveRctCLSAGSimple(const key &, const ctkeyV &, const ctkey &, const key &, const key &, unsigned int, hw::device &);
     bool verRctCLSAGSimple(const key &, const clsag &, const ctkeyV &, const key &);
 
-    clsagCarrot CLSAG_Gen_Carrot(const key &message, const keyV & P, const key & x, const key & y, const keyV & C, const key & z, const keyV & C_nonzero, const key & C_offset, const unsigned int l, hw::device &hwdev);
-    clsagCarrot proveRctCLSAGSimpleCarrot(const key &message, const ctkeyV &pubs, const key &x, const key &y, const key &mask, const key &a, const key &Cout, unsigned int index, hw::device &hwdev);
-    bool verRctCLSAGSimpleCarrot(const key &message, const clsagCarrot &sig, const ctkeyV & pubs, const key & C_offset);
+    tclsag TCLSAG_Gen(const key &message, const keyV & P, const key & x, const key & y, const keyV & C, const key & z, const keyV & C_nonzero, const key & C_offset, const unsigned int l, hw::device &hwdev);
+    tclsag proveRctTCLSAGSimple(const key &message, const ctkeyV &pubs, const key &x, const key &y, const key &mask, const key &a, const key &Cout, unsigned int index, hw::device &hwdev);
+    bool verRctTCLSAGSimple(const key &message, const tclsag &sig, const ctkeyV & pubs, const key & C_offset);
 
     zk_proof PRProof_Gen(const rct::key &difference);
     bool PRProof_Ver(const rct::key &C, const zk_proof &proof);
   
-    zk_proof SAProof_Gen(const key &P, const key &x_change, const key &key_yF);
+    zk_proof SAProof_Gen(const key &P, const key &x_change, const key &y_change, const key &key_yF);
     bool SAProof_Ver(const zk_proof &proof, const key &P, const key &key_yF);
   
     //proveRange and verRange
@@ -138,6 +138,27 @@ namespace rct {
     //   must know the destination private key to find the correct amount, else will return a random number
     rctSig genRct(const key &message, const ctkeyV & inSk, const keyV & destinations, const std::vector<xmr_amount> & amounts, const ctkeyM &mixRing, const keyV &amount_keys, unsigned int index, ctkeyV &outSk, const RCTConfig &rct_config, hw::device &hwdev);
     rctSig genRct(const key &message, const ctkeyV & inSk, const ctkeyV  & inPk, const keyV & destinations, const std::vector<xmr_amount> & amounts, const keyV &amount_keys, const int mixin, const RCTConfig &rct_config, hw::device &hwdev);
+    rctSig genRctSimpleCarrot(
+        const key & message,
+        const carrot_ctkeyV & inSk,
+        const ctkeyV & inPk,
+        const keyV & destinations,
+        const cryptonote::transaction_type tx_type,
+        const std::string& in_asset_type,
+        const std::vector<std::string> & destination_asset_types,
+        const std::vector<xmr_amount> & inamounts,
+        const std::vector<xmr_amount> & outamounts,
+        const keyV &amount_keys,
+        xmr_amount txnFee,
+        unsigned int mixin,
+        const RCTConfig &rct_config,
+        hw::device &hwdev,
+        const rct::salvium_data_t &salvium_data,
+        const key &x_change = rct::zero(),
+        const key &y_change = rct::zero(),
+        const size_t change_index = 0,
+        const key &key_yF = rct::zero()
+    );
     rctSig genRctSimple(
         const key & message,
         const ctkeyV & inSk,

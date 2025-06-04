@@ -223,8 +223,8 @@ namespace rct {
         END_SERIALIZE()
     };
 
-    // CLSAG signature
-    struct clsagCarrot {
+    // TCLSAG signature
+    struct tclsag {
         keyV sx; // x scalars(responses)
         keyV sy; // y scalars(responses)
         key c1;
@@ -352,7 +352,8 @@ namespace rct {
       RCTTypeCLSAG = 5,
       RCTTypeBulletproofPlus = 6,
       RCTTypeFullProofs = 7,
-      RCTTypeSalviumOne = 8
+      RCTTypeSalviumZero = 8,
+      RCTTypeSalviumOne = 9
     };
     enum RangeProofType { RangeProofBorromean, RangeProofBulletproof, RangeProofMultiOutputBulletproof, RangeProofPaddedBulletproof };
     struct RCTConfig {
@@ -366,7 +367,7 @@ namespace rct {
       END_SERIALIZE()
     };
 
-    enum SalviumDataType { SalviumNormal=0, SalviumAudit=1 };
+    enum SalviumDataType { SalviumZero=0, SalviumZeroAudit=1, SalviumOne=2 };
     struct salvium_input_data_t {
       crypto::key_derivation aR;
       xmr_amount amount;
@@ -400,7 +401,7 @@ namespace rct {
         VARINT_FIELD(salvium_data_type)
         FIELD(pr_proof)
         FIELD(sa_proof)
-        if (salvium_data_type == SalviumAudit)
+        if (salvium_data_type == SalviumZeroAudit)
         {
           FIELD(cz_proof)
           FIELD(input_verification_data)
@@ -431,27 +432,12 @@ namespace rct {
           FIELD(type)
           if (type == RCTTypeNull)
             return ar.good();
-          if (type != RCTTypeFull && type != RCTTypeSimple && type != RCTTypeBulletproof && type != RCTTypeBulletproof2 && type != RCTTypeCLSAG && type != RCTTypeBulletproofPlus && type != RCTTypeFullProofs && type != RCTTypeSalviumOne)
+          if (type != RCTTypeBulletproofPlus && type != RCTTypeFullProofs && type != RCTTypeSalviumZero && type != RCTTypeSalviumOne)
             return false;
           VARINT_FIELD(txnFee)
           // inputs/outputs not saved, only here for serialization help
           // FIELD(message) - not serialized, it can be reconstructed
           // FIELD(mixRing) - not serialized, it can be reconstructed
-          if (type == RCTTypeSimple) // moved to prunable with bulletproofs
-          {
-            ar.tag("pseudoOuts");
-            ar.begin_array();
-            PREPARE_CUSTOM_VECTOR_SERIALIZATION(inputs, pseudoOuts);
-            if (pseudoOuts.size() != inputs)
-              return false;
-            for (size_t i = 0; i < inputs; ++i)
-            {
-              FIELDS(pseudoOuts[i])
-              if (inputs - i > 1)
-                ar.delimit_array();
-            }
-            ar.end_array();
-          }
 
           ar.tag("ecdhInfo");
           ar.begin_array();
@@ -460,7 +446,7 @@ namespace rct {
             return false;
           for (size_t i = 0; i < outputs; ++i)
           {
-            if (type == RCTTypeBulletproof2 || type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumOne)
+            if (type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumZero)
             {
               // Since RCTTypeBulletproof2 enote types, we don't serialize the blinding factor, and only serialize the
               // first 8 bytes of ecdhInfo[i].amount
@@ -497,7 +483,7 @@ namespace rct {
           }
           ar.end_array();
           FIELD(p_r)
-          if (type == RCTTypeSalviumOne)
+          if (type == RCTTypeSalviumZero)
           {
             FIELD(salvium_data)
           }
@@ -518,7 +504,7 @@ namespace rct {
           FIELD(outPk)
           VARINT_FIELD(txnFee)
           FIELD(p_r)
-          if (type == RCTTypeSalviumOne)
+          if (type == RCTTypeSalviumZero)
           {
             FIELD(salvium_data)
           }
@@ -535,6 +521,7 @@ namespace rct {
         std::vector<BulletproofPlus> bulletproofs_plus;
         std::vector<mgSig> MGs; // simple rct has N, full has 1
         std::vector<clsag> CLSAGs;
+        std::vector<tclsag> TCLSAGs;
         keyV pseudoOuts; //C - for simple rct
 
         // when changing this function, update cryptonote::get_pruned_transaction_weight
@@ -549,9 +536,8 @@ namespace rct {
             return false;
           if (type == RCTTypeNull)
             return ar.good();
-          if (type != RCTTypeFull && type != RCTTypeSimple && type != RCTTypeBulletproof && type != RCTTypeBulletproof2 && type != RCTTypeCLSAG && type != RCTTypeBulletproofPlus && type != RCTTypeFullProofs && type != RCTTypeSalviumOne)
+          if (type != RCTTypeBulletproofPlus && type != RCTTypeFullProofs && type != RCTTypeSalviumZero && type != RCTTypeSalviumOne)
             return false;
-          if (type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumOne)
           {
             uint32_t nbp = bulletproofs_plus.size();
             VARINT_FIELD(nbp)
@@ -570,45 +556,61 @@ namespace rct {
               return false;
             ar.end_array();
           }
-          else if (type == RCTTypeBulletproof || type == RCTTypeBulletproof2 || type == RCTTypeCLSAG)
+
+          if (type == RCTTypeSalviumOne)
           {
-            uint32_t nbp = bulletproofs.size();
-            if (type == RCTTypeBulletproof2 || type == RCTTypeCLSAG)
-              VARINT_FIELD(nbp)
-            else
-              FIELD(nbp)
-            ar.tag("bp");
+            ar.tag("TCLSAGs");
             ar.begin_array();
-            if (nbp > outputs)
+            PREPARE_CUSTOM_VECTOR_SERIALIZATION(inputs, TCLSAGs);
+            if (TCLSAGs.size() != inputs)
               return false;
-            PREPARE_CUSTOM_VECTOR_SERIALIZATION(nbp, bulletproofs);
-            for (size_t i = 0; i < nbp; ++i)
+            for (size_t i = 0; i < inputs; ++i)
             {
-              FIELDS(bulletproofs[i])
-              if (nbp - i > 1)
-                ar.delimit_array();
+              // we save the TCLSAGs contents directly, because we want it to save its
+              // arrays without the size prefixes, and the load can't know what size
+              // to expect if it's not in the data
+              ar.begin_object();
+              ar.tag("sx");
+              ar.begin_array();
+              PREPARE_CUSTOM_VECTOR_SERIALIZATION(mixin + 1, TCLSAGs[i].sx);
+              if (TCLSAGs[i].sx.size() != mixin + 1)
+                return false;
+              for (size_t j = 0; j <= mixin; ++j)
+              {
+                FIELDS(TCLSAGs[i].sx[j])
+                if (mixin + 1 - j > 1)
+                  ar.delimit_array();
+              }
+              ar.end_array();
+              
+              ar.tag("sy");
+              ar.begin_array();
+              PREPARE_CUSTOM_VECTOR_SERIALIZATION(mixin + 1, TCLSAGs[i].sy);
+              if (TCLSAGs[i].sy.size() != mixin + 1)
+                return false;
+              for (size_t j = 0; j <= mixin; ++j)
+              {
+                FIELDS(TCLSAGs[i].sy[j])
+                if (mixin + 1 - j > 1)
+                  ar.delimit_array();
+              }
+              ar.end_array();
+
+              ar.tag("c1");
+              FIELDS(CLSAGs[i].c1)
+
+              // CLSAGs[i].I not saved, it can be reconstructed
+              ar.tag("D");
+              FIELDS(CLSAGs[i].D)
+              ar.end_object();
+
+              if (inputs - i > 1)
+                 ar.delimit_array();
             }
-            if (n_bulletproof_max_amounts(bulletproofs) < outputs)
-              return false;
+
             ar.end_array();
           }
           else
-          {
-            ar.tag("rangeSigs");
-            ar.begin_array();
-            PREPARE_CUSTOM_VECTOR_SERIALIZATION(outputs, rangeSigs);
-            if (rangeSigs.size() != outputs)
-              return false;
-            for (size_t i = 0; i < outputs; ++i)
-            {
-              FIELDS(rangeSigs[i])
-              if (outputs - i > 1)
-                ar.delimit_array();
-            }
-            ar.end_array();
-          }
-
-          if (type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumOne)
           {
             ar.tag("CLSAGs");
             ar.begin_array();
@@ -648,58 +650,6 @@ namespace rct {
 
             ar.end_array();
           }
-          else
-          {
-            ar.tag("MGs");
-            ar.begin_array();
-            // we keep a byte for size of MGs, because we don't know whether this is
-            // a simple or full rct signature, and it's starting to annoy the hell out of me
-            size_t mg_elements = (type == RCTTypeSimple || type == RCTTypeBulletproof || type == RCTTypeBulletproof2) ? inputs : 1;
-            PREPARE_CUSTOM_VECTOR_SERIALIZATION(mg_elements, MGs);
-            if (MGs.size() != mg_elements)
-              return false;
-            for (size_t i = 0; i < mg_elements; ++i)
-            {
-              // we save the MGs contents directly, because we want it to save its
-              // arrays and matrices without the size prefixes, and the load can't
-              // know what size to expect if it's not in the data
-              ar.begin_object();
-              ar.tag("ss");
-              ar.begin_array();
-              PREPARE_CUSTOM_VECTOR_SERIALIZATION(mixin + 1, MGs[i].ss);
-              if (MGs[i].ss.size() != mixin + 1)
-                return false;
-              for (size_t j = 0; j < mixin + 1; ++j)
-              {
-                ar.begin_array();
-                size_t mg_ss2_elements = ((type == RCTTypeSimple || type == RCTTypeBulletproof || type == RCTTypeBulletproof2) ? 1 : inputs) + 1;
-                PREPARE_CUSTOM_VECTOR_SERIALIZATION(mg_ss2_elements, MGs[i].ss[j]);
-                if (MGs[i].ss[j].size() != mg_ss2_elements)
-                  return false;
-                for (size_t k = 0; k < mg_ss2_elements; ++k)
-                {
-                  FIELDS(MGs[i].ss[j][k])
-                  if (mg_ss2_elements - k > 1)
-                    ar.delimit_array();
-                }
-                ar.end_array();
-  
-                if (mixin + 1 - j > 1)
-                  ar.delimit_array();
-              }
-              ar.end_array();
-
-              ar.tag("cc");
-              FIELDS(MGs[i].cc)
-              // MGs[i].II not saved, it can be reconstructed
-              ar.end_object();
-
-              if (mg_elements - i > 1)
-                 ar.delimit_array();
-            }
-            ar.end_array();
-          }
-          if (type == RCTTypeBulletproof || type == RCTTypeBulletproof2 || type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumOne)
           {
             ar.tag("pseudoOuts");
             ar.begin_array();
@@ -731,12 +681,12 @@ namespace rct {
 
         keyV& get_pseudo_outs()
         {
-          return type == RCTTypeBulletproof || type == RCTTypeBulletproof2 || type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumOne ? p.pseudoOuts : pseudoOuts;
+          return type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumZero || type == RCTTypeSalviumOne ? p.pseudoOuts : pseudoOuts;
         }
 
         keyV const& get_pseudo_outs() const
         {
-          return type == RCTTypeBulletproof || type == RCTTypeBulletproof2 || type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumOne ? p.pseudoOuts : pseudoOuts;
+          return type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumZero || type == RCTTypeSalviumOne ? p.pseudoOuts : pseudoOuts;
         }
 
         BEGIN_SERIALIZE_OBJECT()
@@ -851,6 +801,7 @@ namespace rct {
     bool is_rct_bulletproof_plus(int type);
     bool is_rct_borromean(int type);
     bool is_rct_clsag(int type);
+    bool is_rct_tclsag(int type);
     bool is_rct_short_amount(int type);
 
     static inline const rct::key &pk2rct(const crypto::public_key &pk) { return (const rct::key&)pk; }
@@ -908,6 +859,7 @@ VARIANT_TAG(debug_archive, rct::Bulletproof, "rct::bulletproof");
 VARIANT_TAG(debug_archive, rct::multisig_kLRki, "rct::multisig_kLRki");
 VARIANT_TAG(debug_archive, rct::multisig_out, "rct::multisig_out");
 VARIANT_TAG(debug_archive, rct::clsag, "rct::clsag");
+VARIANT_TAG(debug_archive, rct::tclsag, "rct::tclsag");
 VARIANT_TAG(debug_archive, rct::BulletproofPlus, "rct::bulletproof_plus");
 VARIANT_TAG(debug_archive, rct::zk_proof, "rct::zk_proof");
 VARIANT_TAG(debug_archive, rct::salvium_input_data_t, "rct::salvium_input_data");
@@ -933,6 +885,7 @@ VARIANT_TAG(binary_archive, rct::BulletproofPlus, 0xa0);
 VARIANT_TAG(binary_archive, rct::zk_proof, 0xa1);
 VARIANT_TAG(binary_archive, rct::salvium_input_data_t, 0xa2);
 VARIANT_TAG(binary_archive, rct::salvium_data_t, 0xa3);
+VARIANT_TAG(binary_archive, rct::tclsag, 0xa4);
 
 VARIANT_TAG(json_archive, rct::key, "rct_key");
 VARIANT_TAG(json_archive, rct::key64, "rct_key64");
@@ -950,6 +903,7 @@ VARIANT_TAG(json_archive, rct::Bulletproof, "rct_bulletproof");
 VARIANT_TAG(json_archive, rct::multisig_kLRki, "rct_multisig_kLR");
 VARIANT_TAG(json_archive, rct::multisig_out, "rct_multisig_out");
 VARIANT_TAG(json_archive, rct::clsag, "rct_clsag");
+VARIANT_TAG(json_archive, rct::tclsag, "rct_tclsag");
 VARIANT_TAG(json_archive, rct::BulletproofPlus, "rct_bulletproof_plus");
 VARIANT_TAG(json_archive, rct::zk_proof, "rct_zk_proof");
 VARIANT_TAG(json_archive, rct::salvium_input_data_t, "rct_salvium_input_data");

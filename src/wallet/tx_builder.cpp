@@ -969,7 +969,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     crypto::hash tx_prefix_hash;
     get_transaction_prefix_hash(tx, tx_prefix_hash, hwdev);
     rct::ctkeyV outSk;
-    tx.rct_signatures = rct::genRctSimple(
+    tx.rct_signatures = rct::genRctSimpleCarrot(
         rct::hash2rct(tx_prefix_hash),
         inSk, 
         destinations,
@@ -986,6 +986,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         hwdev,
         salvium_data,
         rct::sk2rct(x_change),
+        rct::sk2rct(y_change),
         change_index,
         key_yF
     );

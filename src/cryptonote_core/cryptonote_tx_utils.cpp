@@ -834,12 +834,12 @@ namespace cryptonote
       salvium_data.enc_view_privkey_str = encrypt_pvk(sender_account_keys.m_view_secret_key, PK);
 
       // And now the rest of the structure
-      salvium_data.salvium_data_type = rct::SalviumAudit;
+      salvium_data.salvium_data_type = rct::SalviumZeroAudit;
       salvium_data.input_verification_data.reserve(sources.size());
       salvium_data.spend_pubkey = sender_account_keys.m_account_address.m_spend_public_key;
       
     } else {
-      salvium_data.salvium_data_type = rct::SalviumNormal;
+      salvium_data.salvium_data_type = rct::SalviumZero;
     }
     uint64_t summary_inputs_money = 0;
     //fill inputs

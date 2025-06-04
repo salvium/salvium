@@ -119,6 +119,13 @@ namespace
         const size_t n_scalars = ring_size;
         return rct::clsag{rct::keyV(n_scalars, I), I, I, I};
     }
+
+    rct::tclsag make_dummy_tclsag(size_t ring_size)
+    {
+        const rct::key I = rct::identity();
+        const size_t n_scalars = ring_size;
+        return rct::tclsag{rct::keyV(n_scalars, I), rct::keyV(n_scalars, I), I, I, I};
+    }
 }
 
 namespace rct {
@@ -365,7 +372,7 @@ namespace rct {
         return sig;
     }
 
-    clsagCarrot CLSAG_Gen_Carrot(
+    tclsag TCLSAG_Gen(
       const key &message,
       const keyV & P,
       const key & x, // x term of P
@@ -377,7 +384,7 @@ namespace rct {
       const unsigned int l,
       hw::device &hwdev) 
     {
-      clsagCarrot sig;
+      tclsag sig;
       size_t n = P.size(); // ring size
       CHECK_AND_ASSERT_THROW_MES(n == C.size(), "Signing and commitment key vector sizes must match!");
       CHECK_AND_ASSERT_THROW_MES(n == C_nonzero.size(), "Signing and commitment key vector sizes must match!");
@@ -803,7 +810,7 @@ namespace rct {
       hashes.push_back(hash2rct(h));
 
       keyV kv;
-      if (rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG)
+      if (is_rct_bulletproof(rv.type))
       {
         kv.reserve((6*2+9) * rv.p.bulletproofs.size());
         for (const auto &p: rv.p.bulletproofs)
@@ -825,7 +832,7 @@ namespace rct {
           kv.push_back(p.t);
         }
       }
-      else if (rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne)
+      else if (is_rct_bulletproof_plus(rv.type))
       {
         kv.reserve((6*2+6) * rv.p.bulletproofs_plus.size());
         for (const auto &p: rv.p.bulletproofs_plus)
@@ -977,7 +984,7 @@ namespace rct {
         return result;
     }
 
-    clsagCarrot proveRctCLSAGSimpleCarrot(const key &message, const ctkeyV &pubs, const key &x, const key &y, const key &mask, const key &a, const key &Cout, unsigned int index, hw::device &hwdev) {
+    tclsag proveRctTCLSAGSimple(const key &message, const ctkeyV &pubs, const key &x, const key &y, const key &mask, const key &a, const key &Cout, unsigned int index, hw::device &hwdev) {
       //setup vars
       size_t rows = 1;
       size_t cols = pubs.size();
@@ -1000,7 +1007,7 @@ namespace rct {
 
       key sk;
       sc_sub(sk.bytes, mask.bytes, a.bytes);  // private key of the output commitment
-      clsagCarrot result = CLSAG_Gen_Carrot(message, P, x, y, C, sk, C_nonzero, Cout, index, hwdev);
+      tclsag result = TCLSAG_Gen(message, P, x, y, C, sk, C_nonzero, Cout, index, hwdev);
       memwipe(&sk, sizeof(key));
       return result;
     }
@@ -1197,7 +1204,7 @@ namespace rct {
         catch (...) { return false; }
     }
 
-    bool verRctCLSAGSimpleCarrot(const key &message, const clsagCarrot &sig, const ctkeyV & pubs, const key & C_offset) {
+    bool verRctTCLSAGSimple(const key &message, const tclsag &sig, const ctkeyV & pubs, const key & C_offset) {
         try
         {
             PERF_TIMER(verRctCLSAGSimpleCarrot);
@@ -1366,55 +1373,60 @@ namespace rct {
         }
         return index;
     }
+  
+    zk_proof SAProof_Gen(const key &P, const key &x_change, const key &y_change, const key &key_yF) {
 
-  zk_proof SAProof_Gen(const key &P, const key &x_change, const key &key_yF) {
-
-    // Sanity checks for inputs
-    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::zero()), "SAProof_Gen() failed - invalid public key provided");
-    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(x_change, rct::zero()), "SAProof_Gen() failed - invalid x_change key provided");
-    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(key_yF, rct::zero()), "SAProof_Gen() failed - invalid shared secret key provided");
-    
-    // Declare a return structure
-    zk_proof proof{};
-    proof.z2 = rct::zero();
-
-    // Calculate a random r value and calculate a commitment R for it
-    rct::key r = rct::skGen();
-    proof.R = rct::scalarmultBase(r);
-
-    // Calculate the challenge hash from the commitment plus the pubkey plus the shared secret
-    keyV challenge_keys{proof.R, P, key_yF};
-    rct::key c = rct::hash_to_scalar(challenge_keys);
-
-    rct::key z_x;
-    sc_muladd(z_x.bytes, x_change.bytes, c.bytes, r.bytes);
-    proof.z1 = z_x;
-
-    // Return the proof to the caller
-    return proof;
-  }
-
-  bool SAProof_Ver(const zk_proof &proof, const key &P, const key &key_yF) {
-    
-    // Sanity checks for inputs
-    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::zero()), "SAProof_Ver() failed - invalid public key provided");
-    CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(key_yF, rct::zero()), "SAProof_Ver() failed - invalid shared secret key provided");
-
-    // Recompute the challenge hash
-    keyV challenge_keys{proof.R, P, key_yF};
-    rct::key c = rct::hash_to_scalar(challenge_keys);
-
-    // Recalculate the expected commitment using the formula: z_x * G = R + c * P
-    rct::key expected_commitment = rct::addKeys(proof.R, rct::scalarmultKey(P, c));
-
-    // Verify z_x * G matches the expected commitment
-    if (!rct::equalKeys(rct::scalarmultBase(proof.z1), expected_commitment)) {
-        return false; // Verification failed
+        // Sanity checks for inputs
+        CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::zero()), "SAProof_Gen() failed - invalid public key provided");
+        CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(x_change, rct::zero()), "SAProof_Gen() failed - invalid x_change key provided");
+        CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(y_change, rct::zero()), "SAProof_Gen() failed - invalid y_change key provided");
+        CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(key_yF, rct::zero()), "SAProof_Gen() failed - invalid shared secret key provided");
+        
+        // Declare a return structure
+        zk_proof proof{};
+        
+        // Calculate a random r_x and r_y values and calculate a commitment R for it
+        rct::key r_x = rct::skGen();
+        rct::key r_y = rct::skGen();
+        rct::addKeys2(proof.R, r_x, r_y, rct::pk2rct(crypto::get_T()));
+        
+        // Calculate the challenge hash from the commitment plus the pubkey plus the shared secret
+        keyV challenge_keys{proof.R, P, key_yF};
+        rct::key c = rct::hash_to_scalar(challenge_keys);
+        
+        rct::key z_x,z_y;
+        sc_muladd(z_x.bytes, x_change.bytes, c.bytes, r_x.bytes);
+        sc_muladd(z_y.bytes, y_change.bytes, c.bytes, r_y.bytes);
+        proof.z1 = z_x;
+        proof.z2 = z_y;
+        
+        // Return the proof to the caller
+        return proof;
     }
 
-    // All checks passed
-    return true;
-  }
+    bool SAProof_Ver(const zk_proof &proof, const key &P, const key &key_yF) {
+    
+        // Sanity checks for inputs
+        CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::zero()), "SAProof_Ver() failed - invalid public key provided");
+        CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(key_yF, rct::zero()), "SAProof_Ver() failed - invalid shared secret key provided");
+        
+        // Recompute the challenge hash
+        keyV challenge_keys{proof.R, P, key_yF};
+        rct::key c = rct::hash_to_scalar(challenge_keys);
+        
+        // Recalculate the expected commitment using the formula: R + c * P
+        rct::key expected_result = rct::addKeys(proof.R, rct::scalarmultKey(P, c));
+        
+        // Verify z_x * G + z_y * T matches the expected commitment
+        rct::key actual_result;
+        rct::addKeys2(actual_result, proof.z1, proof.z2, rct::pk2rct(crypto::get_T()));
+        if (!rct::equalKeys(actual_result, expected_result)) {
+            return false; // Verification failed
+        }
+        
+        // All checks passed
+        return true;
+    }
   
     //RingCT protocol
     //genRct: 
@@ -1458,7 +1470,7 @@ namespace rct {
             //mask amount and mask
             rv.ecdhInfo[i].mask = copy(outSk[i].mask);
             rv.ecdhInfo[i].amount = d2h(amounts[i]);
-            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne);
+            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], is_rct_bulletproof_plus(rv.type));
         }
 
         //set txn fee
@@ -1485,6 +1497,172 @@ namespace rct {
         return genRct(message, inSk, destinations, amounts, mixRing, amount_keys, index, outSk, rct_config, hwdev);
     }
     
+    //RCT simple    
+    //for post-rct only
+    rctSig genRctSimpleCarrot(
+                        const key &message,
+                        const carrot_ctkeyV & inSk,
+                        const keyV & destinations,
+                        const cryptonote::transaction_type tx_type,
+                        const std::string& in_asset_type,
+                        const std::vector<std::string> & destination_asset_types,
+                        const std::vector<xmr_amount> &inamounts,
+                        const std::vector<xmr_amount> &outamounts,
+                        xmr_amount txnFee,
+                        const ctkeyM & mixRing,
+                        const keyV &amount_keys,
+                        const std::vector<unsigned int> & index,
+                        ctkeyV &outSk,
+                        const RCTConfig &rct_config,
+                        hw::device &hwdev,
+                        const rct::salvium_data_t &salvium_data,
+                        const key &x_change,
+                        const key &y_change,
+                        const size_t change_index,
+                        const key &key_yF
+                        )
+    {
+        CHECK_AND_ASSERT_THROW_MES(rct_config.range_proof_type == RangeProofPaddedBulletproof, "Borromean range proofs no longer supported");
+        CHECK_AND_ASSERT_THROW_MES(destination_asset_types.size() == destinations.size(), "Different number of amount_keys/destinations");
+        CHECK_AND_ASSERT_THROW_MES(inamounts.size() > 0, "Empty inamounts");
+        CHECK_AND_ASSERT_THROW_MES(inamounts.size() == inSk.size(), "Different number of inamounts/inSk");
+        CHECK_AND_ASSERT_THROW_MES(outamounts.size() == destinations.size(), "Different number of amounts/destinations");
+        CHECK_AND_ASSERT_THROW_MES(amount_keys.size() == destinations.size(), "Different number of amount_keys/destinations");
+        CHECK_AND_ASSERT_THROW_MES(index.size() == inSk.size(), "Different number of index/inSk");
+        CHECK_AND_ASSERT_THROW_MES(mixRing.size() == inSk.size(), "Different number of mixRing/inSk");
+        for (size_t n = 0; n < mixRing.size(); ++n) {
+          CHECK_AND_ASSERT_THROW_MES(index[n] < mixRing[n].size(), "Bad index into mixRing");
+        }
+
+        rctSig rv;
+        switch (rct_config.bp_version)
+        {
+        case 0:
+        case 6:
+            rv.type = RCTTypeSalviumOne;
+            break;
+        default:
+            ASSERT_MES_AND_THROW("Unsupported BP version: " << rct_config.bp_version);
+        }
+
+        rv.message = message;
+        rv.outPk.resize(destinations.size());
+        rv.ecdhInfo.resize(destinations.size());
+
+        size_t i;
+        keyV masks(destinations.size()); //sk mask..
+        outSk.resize(destinations.size());
+        for (i = 0; i < destinations.size(); i++) {
+
+            //add destination to sig
+            rv.outPk[i].dest = copy(destinations[i]);
+        }
+
+        rv.p.bulletproofs.clear();
+        rv.p.bulletproofs_plus.clear();
+        CHECK_AND_ASSERT_THROW_MES(rct_config.range_proof_type == rct::RangeProofPaddedBulletproof,
+                                   "Unsupported range proof type: " << rct_config.range_proof_type);
+        {
+          rct::keyV C, masks;
+          if (hwdev.get_mode() == hw::device::TRANSACTION_CREATE_FAKE)
+          {
+            // use a fake bulletproof for speed
+            rv.p.bulletproofs_plus.push_back(make_dummy_bulletproof_plus(outamounts, C, masks));
+          }
+          else
+          {
+            const epee::span<const key> keys{&amount_keys[0], amount_keys.size()};
+            rv.p.bulletproofs_plus.push_back(proveRangeBulletproofPlus(C, masks, outamounts, keys, hwdev));
+            
+#ifdef DBG
+            CHECK_AND_ASSERT_THROW_MES(verBulletproofPlus(rv.p.bulletproofs_plus.back()), "verBulletproofPlus failed on newly created proof");
+#endif
+          }
+          for (i = 0; i < outamounts.size(); ++i)
+          {
+            rv.outPk[i].mask = rct::scalarmult8(C[i]);
+            outSk[i].mask = masks[i];
+          }
+        }
+
+        key sumout = zero();
+        for (i = 0; i < outSk.size(); ++i)
+        {
+            sc_add(sumout.bytes, outSk[i].mask.bytes, sumout.bytes);
+
+            //mask amount and mask
+            rv.ecdhInfo[i].mask = copy(outSk[i].mask);
+            rv.ecdhInfo[i].amount = d2h(outamounts[i]);
+            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], is_rct_bulletproof_plus(rv.type));
+        }
+            
+        //set txn fee
+        rv.txnFee = txnFee;
+//        TODO: unused ??
+//        key txnFeeKey = scalarmultH(d2h(rv.txnFee));
+        rv.mixRing = mixRing;
+        keyV &pseudoOuts = is_rct_bulletproof_plus(rv.type) ? rv.p.pseudoOuts : rv.pseudoOuts;
+        pseudoOuts.resize(inamounts.size());
+        if (is_rct_tclsag(rv.type))
+            rv.p.TCLSAGs.resize(inamounts.size());
+        else if (is_rct_clsag(rv.type))
+            rv.p.CLSAGs.resize(inamounts.size());
+        else
+            rv.p.MGs.resize(inamounts.size());
+        key sumpouts = zero(); //sum pseudoOut masks
+        keyV a(inamounts.size());
+        bool audit = (tx_type == cryptonote::transaction_type::AUDIT && rv.type == RCTTypeSalviumZero && salvium_data.salvium_data_type == rct::SalviumZeroAudit);
+        for (i = 0 ; i < inamounts.size(); i++) {
+          if (audit)
+            a[i] = rct::zero();
+          else
+            skGen(a[i]);
+          sc_add(sumpouts.bytes, a[i].bytes, sumpouts.bytes);
+          genC(pseudoOuts[i], a[i], inamounts[i]);
+        }
+        key difference;
+        sc_sub(difference.bytes, sumpouts.bytes, sumout.bytes);
+        genC(rv.p_r, difference, 0);
+        DP(rv.p_r);
+        if (rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumZero || rv.type == RCTTypeSalviumOne) {
+          rv.salvium_data.pr_proof = PRProof_Gen(difference);
+#ifdef DBG
+          CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.p_r, rv.salvium_data.pr_proof), "PRProof_Ver() failed on recently created proof");
+#endif
+          rv.salvium_data.salvium_data_type = salvium_data.salvium_data_type;
+          if (audit) {
+            // SRCG: populate the audit proof here
+            rv.salvium_data.input_verification_data = salvium_data.input_verification_data;
+            rv.salvium_data.spend_pubkey = salvium_data.spend_pubkey;
+            rv.salvium_data.enc_view_privkey_str = salvium_data.enc_view_privkey_str;
+            rv.salvium_data.cz_proof = PRProof_Gen(outSk[0].mask);
+#ifdef DBG
+            CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.outPk[0].mask, rv.salvium_data.cz_proof), "PRProof_Ver() failed on recently created change proof");
+#endif
+          }
+        }
+        
+        // Check if spend authority proof is needed (only for TRANSFER TXs)
+        if (tx_type == cryptonote::transaction_type::TRANSFER && rv.type == rct::RCTTypeSalviumOne) {
+          rv.salvium_data.sa_proof = SAProof_Gen(destinations[change_index], x_change, y_change, key_yF);
+#ifdef DBG
+          CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.salvium_data.sa_proof, destinations[change_index], key_yF), "SAProof_Ver() failed on recently created proof");
+#endif
+        }
+        
+        key full_message = get_pre_mlsag_hash(rv,hwdev);
+
+        for (i = 0 ; i < inamounts.size(); i++)
+        {
+          if (hwdev.get_mode() == hw::device::TRANSACTION_CREATE_FAKE)
+            rv.p.TCLSAGs[i] = make_dummy_tclsag(rv.mixRing[i].size());
+          else
+            rv.p.TCLSAGs[i] = proveRctTCLSAGSimple(full_message, rv.mixRing[i], inSk[i].x, inSk[i].y, inSk[i].mask, a[i], pseudoOuts[i], index[i], hwdev);
+        }
+
+        return rv;
+    }
+
     //RCT simple    
     //for post-rct only
     rctSig genRctSimple(
@@ -1534,7 +1712,7 @@ namespace rct {
               rv.type = RCTTypeFullProofs;
               break;
             case 6:
-              rv.type = RCTTypeSalviumOne;
+              rv.type = RCTTypeSalviumZero;
               break;
             default:
               ASSERT_MES_AND_THROW("Unsupported BP version: " << rct_config.bp_version);
@@ -1653,7 +1831,7 @@ namespace rct {
             //mask amount and mask
             rv.ecdhInfo[i].mask = copy(outSk[i].mask);
             rv.ecdhInfo[i].amount = d2h(outamounts[i]);
-            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne);
+            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumZero);
         }
             
         //set txn fee
@@ -1669,7 +1847,7 @@ namespace rct {
             rv.p.MGs.resize(inamounts.size());
         key sumpouts = zero(); //sum pseudoOut masks
         keyV a(inamounts.size());
-        bool audit = (tx_type == cryptonote::transaction_type::AUDIT && rv.type == RCTTypeSalviumOne && salvium_data.salvium_data_type == rct::SalviumAudit);
+        bool audit = (tx_type == cryptonote::transaction_type::AUDIT && rv.type == RCTTypeSalviumZero && salvium_data.salvium_data_type == rct::SalviumZeroAudit);
         for (i = 0 ; i < inamounts.size(); i++) {
           if (audit)
             a[i] = rct::zero();
@@ -1682,7 +1860,7 @@ namespace rct {
         sc_sub(difference.bytes, sumpouts.bytes, sumout.bytes);
         genC(rv.p_r, difference, 0);
         DP(rv.p_r);
-        if (rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne) {
+        if (rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumZero) {
           rv.salvium_data.pr_proof = PRProof_Gen(difference);
 #ifdef DBG
           CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.p_r, rv.salvium_data.pr_proof), "PRProof_Ver() failed on recently created proof");
@@ -1700,16 +1878,6 @@ namespace rct {
           }
         }
         
-        /*
-        // Check if spend authority proof is needed (only for TRANSFER TXs)
-        if (tx_type == cryptonote::transaction_type::TRANSFER && rv.type == rct::RCTTypeSalviumOne) {
-          rv.salvium_data.sa_proof = SAProof_Gen(destinations[change_index], x_change, key_yF);
-#ifdef DBG
-          CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.salvium_data.sa_proof, destinations[change_index], key_yF), "SAProof_Ver() failed on recently created proof");
-#endif
-        }
-        */
-        
         key full_message = get_pre_mlsag_hash(rv,hwdev);
 
         for (i = 0 ; i < inamounts.size(); i++)
@@ -1719,9 +1887,6 @@ namespace rct {
                 if (hwdev.get_mode() == hw::device::TRANSACTION_CREATE_FAKE)
                     rv.p.CLSAGs[i] = make_dummy_clsag(rv.mixRing[i].size());
                 else {
-                  if (rv.type == RCTTypeSalviumOne)
-                    rv.p.CLSAGs[i] = proveRctCLSAGSimpleCarrot(full_message, rv.mixRing[i], inSk[i].x, inSk[i].y, inSk[i].dest, a[i], pseudoOuts[i], index[i], hwdev);
-                  else
                     rv.p.CLSAGs[i] = proveRctCLSAGSimple(full_message, rv.mixRing[i], inSk[i], a[i], pseudoOuts[i], index[i], hwdev);
                 }
             }
@@ -1852,9 +2017,9 @@ namespace rct {
         std::vector<const BulletproofPlus*> bpp_proofs;
         size_t max_non_bp_proofs = 0, offset = 0;
 
-        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne,
+        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumZero || rv.type == RCTTypeSalviumOne,
                              false, "verRctSemanticsSimple called on non simple rctSig");
-        if (rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne)
+        if (rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumZero || rv.type == RCTTypeSalviumOne)
           CHECK_AND_ASSERT_MES(PRProof_Ver(rv.p_r, rv.salvium_data.pr_proof), false, "Invalid p_r commitment to difference");
           
         const bool bulletproof = is_rct_bulletproof(rv.type);
@@ -1865,8 +2030,15 @@ namespace rct {
             CHECK_AND_ASSERT_MES(rv.outPk.size() == n_bulletproof_plus_amounts(rv.p.bulletproofs_plus), false, "Mismatched sizes of outPk and bulletproofs_plus");
           else
             CHECK_AND_ASSERT_MES(rv.outPk.size() == n_bulletproof_amounts(rv.p.bulletproofs), false, "Mismatched sizes of outPk and bulletproofs");
-          if (is_rct_clsag(rv.type))
+          if (is_rct_tclsag(rv.type))
           {
+            CHECK_AND_ASSERT_MES(rv.p.CLSAGs.empty(), false, "CLSAGs are not empty for TCLSAG");
+            CHECK_AND_ASSERT_MES(rv.p.MGs.empty(), false, "MGs are not empty for TCLSAG");
+            CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.size() == rv.p.TCLSAGs.size(), false, "Mismatched sizes of rv.p.pseudoOuts and rv.p.TCLSAGs");
+          }
+          else if (is_rct_clsag(rv.type))
+          {
+            CHECK_AND_ASSERT_MES(rv.p.TCLSAGs.empty(), false, "TCLSAGs are not empty for CLSAG");
             CHECK_AND_ASSERT_MES(rv.p.MGs.empty(), false, "MGs are not empty for CLSAG");
             CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.size() == rv.p.CLSAGs.size(), false, "Mismatched sizes of rv.p.pseudoOuts and rv.p.CLSAGs");
           }
@@ -1979,7 +2151,7 @@ namespace rct {
       {
         PERF_TIMER(verRctNonSemanticsSimple);
 
-        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne,
+        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumZero || rv.type == RCTTypeSalviumOne,
             false, "verRctNonSemanticsSimple called on non simple rctSig");
         const bool bulletproof = is_rct_bulletproof(rv.type);
         const bool bulletproof_plus = is_rct_bulletproof_plus(rv.type);
@@ -2003,7 +2175,9 @@ namespace rct {
         results.resize(rv.mixRing.size());
         for (size_t i = 0 ; i < rv.mixRing.size() ; i++) {
           tpool.submit(&waiter, [&, i] {
-              if (is_rct_clsag(rv.type))
+              if (is_rct_tclsag(rv.type))
+                  results[i] = verRctTCLSAGSimple(message, rv.p.TCLSAGs[i], rv.mixRing[i], pseudoOuts[i]);
+              else if (is_rct_clsag(rv.type))
                   results[i] = verRctCLSAGSimple(message, rv.p.CLSAGs[i], rv.mixRing[i], pseudoOuts[i]);
               else
                   results[i] = verRctMGSimple(message, rv.p.MGs[i], rv.mixRing[i], pseudoOuts[i]);
@@ -2019,7 +2193,7 @@ namespace rct {
           }
         }
 
-        bool audit = (rv.type == RCTTypeSalviumOne && rv.salvium_data.salvium_data_type == rct::SalviumAudit);
+        bool audit = (rv.type == RCTTypeSalviumZero && rv.salvium_data.salvium_data_type == rct::SalviumZeroAudit);
         if (audit) {
           // Validate the Salvium audit data
           CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.outPk[0].mask, rv.salvium_data.cz_proof), "PRProof_Ver() failed on change proof");
@@ -2087,7 +2261,7 @@ namespace rct {
 
         //mask amount and mask
         ecdhTuple ecdh_info = rv.ecdhInfo[i];
-        hwdev.ecdhDecode(ecdh_info, sk, rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne);
+        hwdev.ecdhDecode(ecdh_info, sk, is_rct_bulletproof_plus(rv.type));
         mask = ecdh_info.mask;
         key amount = ecdh_info.amount;
         key C = rv.outPk[i].mask;
@@ -2111,14 +2285,14 @@ namespace rct {
     }
 
     xmr_amount decodeRctSimple(const rctSig & rv, const key & sk, unsigned int i, key &mask, hw::device &hwdev) {
-        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne,
+        CHECK_AND_ASSERT_MES(is_rct_bulletproof_plus(rv.type),
             false, "decodeRct called on non simple rctSig");
         CHECK_AND_ASSERT_THROW_MES(i < rv.ecdhInfo.size(), "Bad index");
         CHECK_AND_ASSERT_THROW_MES(rv.outPk.size() == rv.ecdhInfo.size(), "Mismatched sizes of rv.outPk and rv.ecdhInfo");
 
         //mask amount and mask
         ecdhTuple ecdh_info = rv.ecdhInfo[i];
-        hwdev.ecdhDecode(ecdh_info, sk, rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus || rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumOne);
+        hwdev.ecdhDecode(ecdh_info, sk, is_rct_bulletproof_plus(rv.type));
         mask = ecdh_info.mask;
         key amount = ecdh_info.amount;
         key C = rv.outPk[i].mask;

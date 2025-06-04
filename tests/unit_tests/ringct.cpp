@@ -300,7 +300,7 @@ TEST(ringct, CLSAG)
   ASSERT_TRUE(rct::verRctCLSAGSimple(message,clsag,pubs,Cout));
 }
 
-TEST(ringct, CLSAG_CARROT)
+TEST(ringct, TCLSAG)
 {
   const size_t N = 16;
   const size_t idx = 5;
@@ -308,7 +308,7 @@ TEST(ringct, CLSAG_CARROT)
   key x, y, t, t2, u;
   const key message = identity();
   ctkey backup;
-  clsagCarrot clsag;
+  tclsag tclsag;
   key backup_key;
 
   for (size_t i = 0; i < N; ++i)
@@ -338,14 +338,14 @@ TEST(ringct, CLSAG_CARROT)
   addKeys2(Cout,t2,u,H);
 
   // bad message
-  clsag = rct::proveRctCLSAGSimpleCarrot(zero(), pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
-  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  tclsag = rct::proveRctTCLSAGSimple(zero(), pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
 
   // bad index at creation
   try
   {
-    clsag = rct::proveRctCLSAGSimpleCarrot(message, pubs, x, y, t, t2, Cout, (idx + 1) % N, hw::get_device("default"));
-    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+    tclsag = rct::proveRctTCLSAGSimple(message, pubs, x, y, t, t2, Cout, (idx + 1) % N, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
   }
   catch (...) { /* either exception, or failure to verify above */ }
 
@@ -354,8 +354,8 @@ TEST(ringct, CLSAG_CARROT)
   pubs[idx].mask = scalarmultBase(skGen());
   try
   {
-    clsag = rct::proveRctCLSAGSimpleCarrot(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
-    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+    tclsag = rct::proveRctTCLSAGSimple(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
   }
   catch (...) { /* either exception, or failure to verify above */ }
   pubs[idx] = backup;
@@ -365,8 +365,8 @@ TEST(ringct, CLSAG_CARROT)
   skGen(x);
   try
   {
-    clsag = rct::proveRctCLSAGSimpleCarrot(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
-    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+    tclsag = rct::proveRctTCLSAGSimple(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
   }
   catch (...) { /* either exception, or failure to verify above */ }
   x = backup_key;
@@ -376,8 +376,8 @@ TEST(ringct, CLSAG_CARROT)
   skGen(y);
   try
   {
-    clsag = rct::proveRctCLSAGSimpleCarrot(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
-    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+    tclsag = rct::proveRctTCLSAGSimple(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
   }
   catch (...) { /* either exception, or failure to verify above */ }
   y = backup_key;
@@ -387,101 +387,101 @@ TEST(ringct, CLSAG_CARROT)
   pubs[idx].dest = scalarmultBase(skGen());
   try
   {
-    clsag = rct::proveRctCLSAGSimpleCarrot(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
-    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+    tclsag = rct::proveRctTCLSAGSimple(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
   }
   catch (...) { /* either exception, or failure to verify above */ }
   pubs[idx] = backup;
 
   // generate the signature
-  clsag = rct::proveRctCLSAGSimpleCarrot(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
-  ASSERT_TRUE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  tclsag = rct::proveRctTCLSAGSimple(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+  ASSERT_TRUE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
 
   // empty sx
-  auto sbackup = clsag.sx;
-  clsag.sx.clear();
-  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
-  clsag.sx = sbackup;
+  auto sbackup = tclsag.sx;
+  tclsag.sx.clear();
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.sx = sbackup;
 
   // too few sx elements
-  backup_key = clsag.sx.back();
-  clsag.sx.pop_back();
-  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
-  clsag.sx.push_back(backup_key);
+  backup_key = tclsag.sx.back();
+  tclsag.sx.pop_back();
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.sx.push_back(backup_key);
 
   // too many sx elements
-  clsag.sx.push_back(skGen());
-  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
-  clsag.sx.pop_back();
+  tclsag.sx.push_back(skGen());
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.sx.pop_back();
 
-  // bad sx in clsag at verification
-  for (auto &sx: clsag.sx)
+  // bad sx in tclsag at verification
+  for (auto &sx: tclsag.sx)
   {
     backup_key = sx;
     sx = skGen();
-    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
     sx = backup_key;
   }
 
   // empty sy
-  sbackup = clsag.sy;
-  clsag.sy.clear();
-  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
-  clsag.sy = sbackup;
+  sbackup = tclsag.sy;
+  tclsag.sy.clear();
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.sy = sbackup;
 
   // too few sy elements
-  backup_key = clsag.sy.back();
-  clsag.sy.pop_back();
-  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
-  clsag.sy.push_back(backup_key);
+  backup_key = tclsag.sy.back();
+  tclsag.sy.pop_back();
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.sy.push_back(backup_key);
 
   // too many sy elements
-  clsag.sy.push_back(skGen());
-  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
-  clsag.sy.pop_back();
+  tclsag.sy.push_back(skGen());
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.sy.pop_back();
 
-  // bad sy in clsag at verification
-  for (auto &sy: clsag.sy)
+  // bad sy in tclsag at verification
+  for (auto &sy: tclsag.sy)
   {
     backup_key = sy;
     sy = skGen();
-    ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
     sy = backup_key;
   }
 
-  // bad c1 in clsag at verification
-  backup_key = clsag.c1;
-  clsag.c1 = skGen();
-  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
-  clsag.c1 = backup_key;
+  // bad c1 in tclsag at verification
+  backup_key = tclsag.c1;
+  tclsag.c1 = skGen();
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.c1 = backup_key;
 
-  // bad I in clsag at verification
-  backup_key = clsag.I;
-  clsag.I = scalarmultBase(skGen());
-  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
-  clsag.I = backup_key;
+  // bad I in tclsag at verification
+  backup_key = tclsag.I;
+  tclsag.I = scalarmultBase(skGen());
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.I = backup_key;
 
-  // bad D in clsag at verification
-  backup_key = clsag.D;
-  clsag.D = scalarmultBase(skGen());
-  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
-  clsag.D = backup_key;
+  // bad D in tclsag at verification
+  backup_key = tclsag.D;
+  tclsag.D = scalarmultBase(skGen());
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.D = backup_key;
 
-  // D not in main subgroup in clsag at verification
-  backup_key = clsag.D;
+  // D not in main subgroup in tclsag at verification
+  backup_key = tclsag.D;
   rct::key foo;
   ASSERT_TRUE(epee::string_tools::hex_to_pod("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa", foo));
-  clsag.D = rct::addKeys(clsag.D, foo);
-  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
-  clsag.D = backup_key;
+  tclsag.D = rct::addKeys(tclsag.D, foo);
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.D = backup_key;
 
-  // swapped I and D in clsag at verification
-  std::swap(clsag.I, clsag.D);
-  ASSERT_FALSE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
-  std::swap(clsag.I, clsag.D);
+  // swapped I and D in tclsag at verification
+  std::swap(tclsag.I, tclsag.D);
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  std::swap(tclsag.I, tclsag.D);
 
   // check it's still good, in case we failed to restore
-  ASSERT_TRUE(rct::verRctCLSAGSimpleCarrot(message,clsag,pubs,Cout));
+  ASSERT_TRUE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
 }
 
 TEST(ringct, range_proofs)

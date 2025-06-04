@@ -310,6 +310,9 @@ void fromJsonValue(const rapidjson::Value& val, rct::mgSig& sig);
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::clsag& sig);
 void fromJsonValue(const rapidjson::Value& val, rct::clsag& sig);
 
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::tclsag& sig);
+void fromJsonValue(const rapidjson::Value& val, rct::tclsag& sig);
+
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::zk_proof& p);
 void fromJsonValue(const rapidjson::Value& val, rct::zk_proof& p);
 

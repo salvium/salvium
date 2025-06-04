@@ -1220,6 +1220,7 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::rctSig& 
     INSERT_INTO_JSON_OBJECT(dest, bulletproofs_plus, sig.p.bulletproofs_plus);
     INSERT_INTO_JSON_OBJECT(dest, mlsags, sig.p.MGs);
     INSERT_INTO_JSON_OBJECT(dest, clsags, sig.p.CLSAGs);
+    INSERT_INTO_JSON_OBJECT(dest, tclsags, sig.p.TCLSAGs);
     INSERT_INTO_JSON_OBJECT(dest, pseudo_outs, sig.get_pseudo_outs());
 
     dest.EndObject();
@@ -1263,6 +1264,7 @@ void fromJsonValue(const rapidjson::Value& val, rct::rctSig& sig)
     GET_FROM_JSON_OBJECT(prunable->value, sig.p.bulletproofs_plus, bulletproofs_plus);
     GET_FROM_JSON_OBJECT(prunable->value, sig.p.MGs, mlsags);
     GET_FROM_JSON_OBJECT(prunable->value, sig.p.CLSAGs, clsags);
+    GET_FROM_JSON_OBJECT(prunable->value, sig.p.TCLSAGs, tclsags);
     GET_FROM_JSON_OBJECT(prunable->value, pseudo_outs, pseudo_outs);
 
     sig.get_pseudo_outs() = std::move(pseudo_outs);
@@ -1274,6 +1276,7 @@ void fromJsonValue(const rapidjson::Value& val, rct::rctSig& sig)
     sig.p.bulletproofs_plus.clear();
     sig.p.MGs.clear();
     sig.p.CLSAGs.clear();
+    sig.p.TCLSAGs.clear();
     sig.get_pseudo_outs().clear();
   }
 }
@@ -1505,6 +1508,31 @@ void fromJsonValue(const rapidjson::Value& val, rct::clsag& sig)
   GET_FROM_JSON_OBJECT(val, sig.D, D);
 }
 
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::tclsag& sig)
+{
+  dest.StartObject();
+
+  INSERT_INTO_JSON_OBJECT(dest, sx, sig.sx);
+  INSERT_INTO_JSON_OBJECT(dest, sy, sig.sy);
+  INSERT_INTO_JSON_OBJECT(dest, c1, sig.c1);
+  INSERT_INTO_JSON_OBJECT(dest, D, sig.D);
+
+  dest.EndObject();
+}
+
+void fromJsonValue(const rapidjson::Value& val, rct::tclsag& sig)
+{
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("key64 (rct::key[64])");
+  }
+
+  GET_FROM_JSON_OBJECT(val, sig.sx, sx);
+  GET_FROM_JSON_OBJECT(val, sig.sy, sy);
+  GET_FROM_JSON_OBJECT(val, sig.c1, c1);
+  GET_FROM_JSON_OBJECT(val, sig.D, D);
+}
+
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::zk_proof& proof)
 {
   dest.StartObject();
@@ -1567,7 +1595,7 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::salvium_
   INSERT_INTO_JSON_OBJECT(dest, salvium_data_type, salvium_data.salvium_data_type);
   INSERT_INTO_JSON_OBJECT(dest, pr_proof, salvium_data.pr_proof);
   INSERT_INTO_JSON_OBJECT(dest, sa_proof, salvium_data.sa_proof);
-  if (salvium_data.salvium_data_type == rct::SalviumAudit) {
+  if (salvium_data.salvium_data_type == rct::SalviumZeroAudit) {
     INSERT_INTO_JSON_OBJECT(dest, cz_proof, salvium_data.cz_proof);
     INSERT_INTO_JSON_OBJECT(dest, input_verification_data, salvium_data.input_verification_data);
     INSERT_INTO_JSON_OBJECT(dest, spend_pubkey, salvium_data.spend_pubkey);
@@ -1587,7 +1615,7 @@ void fromJsonValue(const rapidjson::Value& val, rct::salvium_data_t& salvium_dat
   GET_FROM_JSON_OBJECT(val, salvium_data.salvium_data_type, salvium_data_type);
   GET_FROM_JSON_OBJECT(val, salvium_data.pr_proof, pr_proof);
   GET_FROM_JSON_OBJECT(val, salvium_data.sa_proof, sa_proof);
-  if (salvium_data.salvium_data_type == rct::SalviumAudit) {
+  if (salvium_data.salvium_data_type == rct::SalviumZeroAudit) {
     GET_FROM_JSON_OBJECT(val, salvium_data.cz_proof, cz_proof);
     GET_FROM_JSON_OBJECT(val, salvium_data.input_verification_data, input_verification_data);
     GET_FROM_JSON_OBJECT(val, salvium_data.spend_pubkey, spend_pubkey);
