@@ -44,6 +44,7 @@
 #include "carrot_impl/format_utils.h"
 #include "carrot_impl/input_selection.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "ringct/bulletproofs_plus.h"
 #include "wallet/scanning_tools.cpp"
 #include "common/container_helpers.h"
 
@@ -709,9 +710,8 @@ std::vector<cryptonote::tx_source_entry> get_sources(
         src.real_output_in_tx_index = td.m_internal_output_index;
         src.first_rct_key_image = boost::get<cryptonote::txin_to_key>(td.m_tx.vin[0]).k_image;
         src.mask = td.m_mask;
-        src.output_key = td.get_public_key();
-        src.amount_commitment = td.amount_commitment;
-        if (false) // w.m_multisig
+        src.address_spend_pubkey = td.m_recovered_spend_pubkey;
+        if (false) // w.m_multisig // TODO:
             // note: multisig_kLRki is a legacy struct, currently only used as a key image shuttle into the multisig tx builder
             src.multisig_kLRki = {.k = {}, .L = {}, .R = {}, .ki = rct::ki2rct(td.m_key_image)};
         else
@@ -799,15 +799,12 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     // collect input key images and amounts
     hw::device &hwdev = acc_keys.get_device();
     std::vector<cryptonote::tx_source_entry> sources = get_sources(transfers, selected_transfers, "SAL1", w);
-
-    uint64_t amount_in = 0, amount_out = 0;
+    
+    // inputs
+    uint64_t amount_in = 0;
     rct::carrot_ctkeyV inSk;
     inSk.reserve(sources.size());
-    // mixRing indexing is done the other way round for simple
-    rct::ctkeyM mixRing(sources.size());
-    rct::keyV destinations;
-    std::vector<uint64_t> inamounts, outamounts;
-    std::vector<std::string> destination_asset_types;
+    std::vector<uint64_t> inamounts;
     std::vector<unsigned int> index;
     for (size_t i = 0; i < sources.size(); ++i)
     {
@@ -873,8 +870,8 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
             carrot::encrypted_janus_anchor_t encrypted_janus_anchor;
             carrot::encrypted_payment_id_t encrypted_payment_id;
             carrot::scan_carrot_dest_info(
-                sources[i].output_key,
-                sources[i].amount_commitment,
+                rct::rct2pk(sources[i].outputs[sources[i].real_output].second.dest),
+                sources[i].outputs[sources[i].real_output].second.mask,
                 encrypted_janus_anchor,
                 encrypted_payment_id,
                 s_sender_receiver,
@@ -885,9 +882,14 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
                 nominal_janus_anchor_out
             );
 
-            crypto::public_key address_spend_pubkey;
             crypto::secret_key x, y;
-            bool r = try_searching_for_opening_for_onetime_address(address_spend_pubkey, sender_extension_g_out, sender_extension_t_out, x, y);
+            bool r = w.get_account().try_searching_for_opening_for_onetime_address(
+                sources[i].address_spend_pubkey,
+                sender_extension_g_out,
+                sender_extension_t_out,
+                x,
+                y
+            );
             THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error,
                 "Failed to search for opening for onetime address");
             ctkey.x = rct::sk2rct(x);
@@ -925,6 +927,44 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         // will be done when filling in mixRing
     }
 
+    // outputs
+    uint64_t amount_out = 0;
+    std::vector<uint64_t> outamounts;
+    rct::keyV destinations;
+    std::vector<std::string> destination_asset_types;
+    for (size_t i = 0; i < tx.vout.size(); ++i)
+    {
+        crypto::public_key output_public_key;
+        bool ok = get_output_public_key(tx.vout[i], output_public_key);
+        THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error,
+            "Failed to get output public key for tx.vout[" + std::to_string(i) + "]");
+        std::string output_asset_type;
+        ok = cryptonote::get_output_asset_type(tx.vout[i], output_asset_type);
+        THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error,
+            "Failed to get output asset type for tx.vout[" + std::to_string(i) + "]");
+        destinations.push_back(rct::pk2rct(output_public_key));
+        destination_asset_types.push_back(output_asset_type);
+        outamounts.push_back(tx.vout[i].amount);
+        amount_out += tx.vout[i].amount;
+    }
+
+    // mixRing indexing is done the other way round for simple
+    rct::ctkeyM mixRing(sources.size());
+    for (size_t i = 0; i < sources.size(); ++i)
+    {
+        mixRing[i].resize(sources[i].outputs.size());
+        for (size_t n = 0; n < sources[i].outputs.size(); ++n)
+        {
+            mixRing[i][n] = sources[i].outputs[n].second;
+        }
+    }
+
+    // fee
+    uint64_t fee = amount_in - amount_out - tx.amount_burnt;
+
+    rct::BulletproofPlus bpp;
+    bpp = rct::bulletproof_plus_PROVE(outamounts, output_amount_blinding_factors);
+
     // store proofs
     crypto::hash tx_prefix_hash;
     get_transaction_prefix_hash(tx, tx_prefix_hash, hwdev);
@@ -940,7 +980,6 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         outamounts,
         fee,
         mixRing,
-        amount_keys,
         index,
         outSk,
         rct_config,
@@ -1098,7 +1137,7 @@ wallet2::pending_tx finalize_all_proofs_from_transfer_details_as_pending_tx(
     ptx.tx = finalize_all_proofs_from_transfer_details(
         tx_proposal,
         ptx.selected_transfers,
-        cryptonote::transaction_type::TRANSFER, // TODO:
+        cryptonote::transaction_type::TRANSFER, // TODO:take this as a parameter
         w
     );
 

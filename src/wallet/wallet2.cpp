@@ -2624,7 +2624,7 @@ void wallet2::process_new_scanned_transaction(
     td.m_pk_index = enote_scan_info->main_tx_pubkey_index;
     td.m_subaddr_index = subaddr_index_cn;
     td.m_mask = enote_scan_info->amount_blinding_factor;
-    td.amount_commitment = tx.rct_signatures.outPk[local_output_index].mask;
+    td.m_recovered_spend_pubkey = enote_scan_info->address_spend_pubkey;
     td.m_rct = tx.version >= 2;
     td.m_frozen = false;
     set_unspent(m_transfers.size() - 1);

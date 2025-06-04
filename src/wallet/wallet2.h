@@ -377,7 +377,7 @@ private:
       std::vector<multisig_info> m_multisig_info; // one per other participant
       std::vector<std::pair<uint64_t, crypto::hash>> m_uses;
       std::string asset_type;
-      rct::key amount_commitment;
+      crypto::public_key m_recovered_spend_pubkey; // spend pubkey recovered from the output 
 
       bool is_rct() const { return m_rct; }
       uint64_t amount() const { return m_amount; }
