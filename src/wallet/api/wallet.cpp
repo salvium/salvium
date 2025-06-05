@@ -121,7 +121,7 @@ namespace {
         }
 
         const multisig::multisig_account_status ms_status{wallet->get_multisig_status()};
-        if (!ms_status.is_active) {
+        if (!ms_status.multisig_is_active) {
             throw runtime_error("Wallet is not multisig");
         }
 
@@ -139,7 +139,7 @@ namespace {
         }
 
         const multisig::multisig_account_status ms_status{wallet->get_multisig_status()};
-        if (!ms_status.is_active) {
+        if (!ms_status.multisig_is_active) {
             throw runtime_error("Wallet is not multisig");
         }
 
