@@ -769,6 +769,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         tx_proposal.key_images_sorted.at(0),
         output_enote_proposals,
         encrypted_payment_id,
+        nullptr,
         change_index);
     CHECK_AND_ASSERT_THROW_MES(output_enote_proposals.size() == n_outputs,
         "finalize_all_proofs_from_transfer_details: unexpected number of output enote proposals");

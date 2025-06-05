@@ -160,8 +160,8 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     const crypto::key_image &tx_first_key_image,
     std::vector<RCTOutputEnoteProposal> &output_enote_proposals_out,
     encrypted_payment_id_t &encrypted_payment_id_out,
-    size_t change_index_out,
-    std::vector<std::pair<bool, std::size_t>> *payment_proposal_order_out)
+    std::vector<std::pair<bool, std::size_t>> *payment_proposal_order_out,
+    size_t change_index_out)
 {
     output_enote_proposals_out.clear();
     encrypted_payment_id_out = {{0}};

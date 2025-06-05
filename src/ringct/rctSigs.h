@@ -150,7 +150,7 @@ namespace rct {
         xmr_amount txnFee,
         const ctkeyM & mixRing,
         const std::vector<unsigned int> & index,
-        ctkeyV &outSk,
+        const ctkeyV &outSk,
         const RCTConfig &rct_config,
         hw::device &hwdev,
         const rct::salvium_data_t &salvium_data,

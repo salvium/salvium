@@ -1374,13 +1374,12 @@ namespace rct {
         return index;
     }
   
-    zk_proof SAProof_Gen(const key &P, const key &x_change, const key &y_change, const key &key_yF) {
+    zk_proof SAProof_Gen(const key &P, const key &x_change, const key &y_change) {
 
         // Sanity checks for inputs
         CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::zero()), "SAProof_Gen() failed - invalid public key provided");
         CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(x_change, rct::zero()), "SAProof_Gen() failed - invalid x_change key provided");
         CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(y_change, rct::zero()), "SAProof_Gen() failed - invalid y_change key provided");
-        CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(key_yF, rct::zero()), "SAProof_Gen() failed - invalid shared secret key provided");
         
         // Declare a return structure
         zk_proof proof{};
@@ -1389,9 +1388,14 @@ namespace rct {
         rct::key r_x = rct::skGen();
         rct::key r_y = rct::skGen();
         rct::addKeys2(proof.R, r_x, r_y, rct::pk2rct(crypto::get_T()));
+
+        // Make the domain separator into a key
+        rct::key sa_proof_domain_sep;
+        sc_0(sa_proof_domain_sep.bytes);
+        memcpy(sa_proof_domain_sep.bytes,config::HASH_KEY_SA_PROOF,sizeof(config::HASH_KEY_SA_PROOF)-1);
         
         // Calculate the challenge hash from the commitment plus the pubkey plus the shared secret
-        keyV challenge_keys{proof.R, P, key_yF};
+        keyV challenge_keys{sa_proof_domain_sep, proof.R, P};
         rct::key c = rct::hash_to_scalar(challenge_keys);
         
         rct::key z_x,z_y;
@@ -1404,14 +1408,18 @@ namespace rct {
         return proof;
     }
 
-    bool SAProof_Ver(const zk_proof &proof, const key &P, const key &key_yF) {
+    bool SAProof_Ver(const zk_proof &proof, const key &P) {
     
         // Sanity checks for inputs
         CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::zero()), "SAProof_Ver() failed - invalid public key provided");
-        CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(key_yF, rct::zero()), "SAProof_Ver() failed - invalid shared secret key provided");
+        
+        // Make the domain separator into a key
+        rct::key sa_proof_domain_sep;
+        sc_0(sa_proof_domain_sep.bytes);
+        memcpy(sa_proof_domain_sep.bytes,config::HASH_KEY_SA_PROOF,sizeof(config::HASH_KEY_SA_PROOF)-1);
         
         // Recompute the challenge hash
-        keyV challenge_keys{proof.R, P, key_yF};
+        keyV challenge_keys{sa_proof_domain_sep, proof.R, P};
         rct::key c = rct::hash_to_scalar(challenge_keys);
         
         // Recalculate the expected commitment using the formula: R + c * P
@@ -1511,7 +1519,7 @@ namespace rct {
                               xmr_amount txnFee,
                               const ctkeyM & mixRing,
                               const std::vector<unsigned int> & index,
-                              ctkeyV &outSk,
+                              const ctkeyV &outSk,
                               const RCTConfig &rct_config,
                               hw::device &hwdev,
                               const rct::salvium_data_t &salvium_data,
@@ -1592,9 +1600,9 @@ namespace rct {
 
       // Check if spend authority proof is needed (only for TRANSFER TXs)
       if (tx_type == cryptonote::transaction_type::TRANSFER && rv.type == rct::RCTTypeSalviumOne) {
-        rv.salvium_data.sa_proof = SAProof_Gen(destinations[change_index], x_change, y_change, key_yF);
+        rv.salvium_data.sa_proof = SAProof_Gen(destinations[change_index], x_change, y_change);
 #ifdef DBG
-        CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.salvium_data.sa_proof, destinations[change_index], key_yF), "SAProof_Ver() failed on recently created proof");
+        CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.salvium_data.sa_proof, destinations[change_index]), "SAProof_Ver() failed on recently created proof");
 #endif
       }
 
