@@ -883,7 +883,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
             );
 
             crypto::secret_key x, y;
-            bool r = w.get_account().try_searching_for_opening_for_onetime_address(
+            bool r = w.get_carrot_account().try_searching_for_opening_for_onetime_address(
                 sources[i].address_spend_pubkey,
                 sender_extension_g_out,
                 sender_extension_t_out,
@@ -969,6 +969,8 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     crypto::hash tx_prefix_hash;
     get_transaction_prefix_hash(tx, tx_prefix_hash, hwdev);
     rct::ctkeyV outSk;
+    rct::salvium_data_t salvium_data;
+    salvium_data.salvium_data_type = rct::SalviumOne;
     tx.rct_signatures = rct::genRctSimpleCarrot(
         rct::hash2rct(tx_prefix_hash),
         inSk, 

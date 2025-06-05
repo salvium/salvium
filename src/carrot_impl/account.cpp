@@ -37,6 +37,7 @@ extern "C"
 {
 #include "crypto/keccak.h"
 }
+#include "cryptonote_basic/account.h"
 #include "cryptonote_config.h"
 #include "ringct/rctOps.h"
 
@@ -50,7 +51,7 @@ DISABLE_VS_WARNINGS(4244 4345)
 namespace carrot
 {
 //----------------------------------------------------------------------------------------------------------------------
-CarrotDestinationV1 carrot_and_legacy_keys::cryptonote_address(const payment_id_t payment_id,
+CarrotDestinationV1 carrot_and_legacy_account::cryptonote_address(const payment_id_t payment_id,
     const AddressDeriveType derive_type) const
 {
     CarrotDestinationV1 addr;
@@ -74,7 +75,7 @@ CarrotDestinationV1 carrot_and_legacy_keys::cryptonote_address(const payment_id_
     return addr;
 }
 //----------------------------------------------------------------------------------------------------------------------
-CarrotDestinationV1 carrot_and_legacy_keys::subaddress(const subaddress_index_extended &subaddress_index) const
+CarrotDestinationV1 carrot_and_legacy_account::subaddress(const subaddress_index_extended &subaddress_index) const
 {
     if (!subaddress_index.index.is_subaddress())
         return cryptonote_address(null_payment_id, subaddress_index.derive_type);
@@ -109,18 +110,18 @@ CarrotDestinationV1 carrot_and_legacy_keys::subaddress(const subaddress_index_ex
     return addr;
 }
 //----------------------------------------------------------------------------------------------------------------------
-std::unordered_map<crypto::public_key, cryptonote::subaddress_index> carrot_and_legacy_keys::subaddress_map_cn() const
+std::unordered_map<crypto::public_key, cryptonote::subaddress_index> carrot_and_legacy_account::subaddress_map_cn() const
 {
     std::unordered_map<crypto::public_key, cryptonote::subaddress_index> res;
     for (const auto &p : subaddress_map)
         if (p.second.derive_type == AddressDeriveType::PreCarrot)
             res.emplace(p.first, cryptonote::subaddress_index{p.second.index.major, p.second.index.minor});
     CHECK_AND_ASSERT_THROW_MES(!res.empty(),
-        "carrot_and_legacy_keys::subaddress_map_cn: subaddress map does not contain pre-carrot subaddresses");
+        "carrot_and_legacy_account::subaddress_map_cn: subaddress map does not contain pre-carrot subaddresses");
     return res;
 }
 //----------------------------------------------------------------------------------------------------------------------
-void carrot_and_legacy_keys::opening_for_subaddress(const subaddress_index_extended &subaddress_index,
+void carrot_and_legacy_account::opening_for_subaddress(const subaddress_index_extended &subaddress_index,
     crypto::secret_key &address_privkey_g_out,
     crypto::secret_key &address_privkey_t_out,
     crypto::public_key &address_spend_pubkey_out) const
@@ -182,11 +183,11 @@ void carrot_and_legacy_keys::opening_for_subaddress(const subaddress_index_exten
         rct::sk2rct(address_privkey_t_out),
         rct::pk2rct(crypto::get_T()));
     CHECK_AND_ASSERT_THROW_MES(rct::rct2pk(recomputed_address_spend_pubkey) == addr.address_spend_pubkey,
-        "mock carrot or legacy keys: opening for subaddress: failed sanity check");
+        "carrot and legacy account: opening for subaddress: failed sanity check");
     address_spend_pubkey_out = addr.address_spend_pubkey;
 }
 //----------------------------------------------------------------------------------------------------------------------
-bool carrot_and_legacy_keys::try_searching_for_opening_for_subaddress(const crypto::public_key &address_spend_pubkey,
+bool carrot_and_legacy_account::try_searching_for_opening_for_subaddress(const crypto::public_key &address_spend_pubkey,
     crypto::secret_key &address_privkey_g_out,
     crypto::secret_key &address_privkey_t_out) const
 {
@@ -202,7 +203,7 @@ bool carrot_and_legacy_keys::try_searching_for_opening_for_subaddress(const cryp
 
     return address_spend_pubkey == recomputed_address_spend_pubkey;
 }
-bool carrot_and_legacy_keys::try_searching_for_opening_for_onetime_address(const crypto::public_key &address_spend_pubkey,
+bool carrot_and_legacy_account::try_searching_for_opening_for_onetime_address(const crypto::public_key &address_spend_pubkey,
     const crypto::secret_key &sender_extension_g,
     const crypto::secret_key &sender_extension_t,
     crypto::secret_key &x_out,
@@ -225,7 +226,7 @@ bool carrot_and_legacy_keys::try_searching_for_opening_for_onetime_address(const
     return true;
 }
 //----------------------------------------------------------------------------------------------------------------------
-bool carrot_and_legacy_keys::can_open_fcmp_onetime_address(const crypto::public_key &address_spend_pubkey,
+bool carrot_and_legacy_account::can_open_fcmp_onetime_address(const crypto::public_key &address_spend_pubkey,
     const crypto::secret_key &sender_extension_g,
     const crypto::secret_key &sender_extension_t,
     const crypto::public_key &onetime_address) const
@@ -249,7 +250,7 @@ bool carrot_and_legacy_keys::can_open_fcmp_onetime_address(const crypto::public_
     return 0 == memcmp(&recomputed_onetime_address, &onetime_address, sizeof(rct::key));
 }
 //----------------------------------------------------------------------------------------------------------------------
-crypto::key_image carrot_and_legacy_keys::derive_key_image(const crypto::public_key &address_spend_pubkey,
+crypto::key_image carrot_and_legacy_account::derive_key_image(const crypto::public_key &address_spend_pubkey,
     const crypto::secret_key &sender_extension_g,
     const crypto::secret_key &sender_extension_t,
     const crypto::public_key &onetime_address) const
@@ -259,7 +260,7 @@ crypto::key_image carrot_and_legacy_keys::derive_key_image(const crypto::public_
             sender_extension_g,
             sender_extension_t,
             onetime_address),
-        "mock carrot and legacy keys: derive key image: cannot open onetime address");
+        "carrot and legacy account: derive key image: cannot open onetime address");
 
     crypto::secret_key x, y;
     try_searching_for_opening_for_onetime_address(address_spend_pubkey,
@@ -273,7 +274,7 @@ crypto::key_image carrot_and_legacy_keys::derive_key_image(const crypto::public_
     return L;
 }
 //----------------------------------------------------------------------------------------------------------------------
-void carrot_and_legacy_keys::generate_subaddress_map()
+void carrot_and_legacy_account::generate_subaddress_map()
 {
     const std::vector<AddressDeriveType> derive_types{AddressDeriveType::Carrot, AddressDeriveType::PreCarrot};
 
@@ -291,7 +292,7 @@ void carrot_and_legacy_keys::generate_subaddress_map()
     }
 }
 //----------------------------------------------------------------------------------------------------------------------
-void carrot_and_legacy_keys::generate(const AddressDeriveType default_derive_type)
+void carrot_and_legacy_account::generate(const AddressDeriveType default_derive_type)
 {
     legacy_acb.generate();
 
@@ -310,7 +311,7 @@ void carrot_and_legacy_keys::generate(const AddressDeriveType default_derive_typ
     generate_subaddress_map();
 }
 //----------------------------------------------------------------------------------------------------------------------
-AddressDeriveType carrot_and_legacy_keys::resolve_derive_type(const AddressDeriveType derive_type) const
+AddressDeriveType carrot_and_legacy_account::resolve_derive_type(const AddressDeriveType derive_type) const
 {
     return derive_type == AddressDeriveType::Auto ? default_derive_type : derive_type;
 }

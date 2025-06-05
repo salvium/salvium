@@ -1500,27 +1500,27 @@ namespace rct {
     //RCT simple    
     //for post-rct only
     rctSig genRctSimpleCarrot(
-                        const key &message,
-                        const carrot_ctkeyV & inSk,
-                        const keyV & destinations,
-                        const cryptonote::transaction_type tx_type,
-                        const std::string& in_asset_type,
-                        const std::vector<std::string> & destination_asset_types,
-                        const std::vector<xmr_amount> &inamounts,
-                        const std::vector<xmr_amount> &outamounts,
-                        xmr_amount txnFee,
-                        const ctkeyM & mixRing,
-                        const keyV &amount_keys,
-                        const std::vector<unsigned int> & index,
-                        ctkeyV &outSk,
-                        const RCTConfig &rct_config,
-                        hw::device &hwdev,
-                        const rct::salvium_data_t &salvium_data,
-                        const key &x_change,
-                        const key &y_change,
-                        const size_t change_index,
-                        const key &key_yF
-                        )
+                              const key & message,
+                              const carrot_ctkeyV & inSk,
+                              const keyV & destinations,
+                              const cryptonote::transaction_type tx_type,
+                              const std::string& in_asset_type,
+                              const std::vector<std::string> & destination_asset_types,
+                              const std::vector<xmr_amount> & inamounts,
+                              const std::vector<xmr_amount> & outamounts,
+                              xmr_amount txnFee,
+                              const ctkeyM & mixRing,
+                              const keyV &amount_keys,
+                              const std::vector<unsigned int> & index,
+                              ctkeyV &outSk,
+                              const RCTConfig &rct_config,
+                              hw::device &hwdev,
+                              const rct::salvium_data_t &salvium_data,
+                              const key &x_change,
+                              const key &y_change,
+                              const size_t change_index,
+                              const key &key_yF
+                              )
     {
         CHECK_AND_ASSERT_THROW_MES(rct_config.range_proof_type == RangeProofPaddedBulletproof, "Borromean range proofs no longer supported");
         CHECK_AND_ASSERT_THROW_MES(destination_asset_types.size() == destinations.size(), "Different number of amount_keys/destinations");
@@ -1601,14 +1601,9 @@ namespace rct {
 //        TODO: unused ??
 //        key txnFeeKey = scalarmultH(d2h(rv.txnFee));
         rv.mixRing = mixRing;
-        keyV &pseudoOuts = is_rct_bulletproof_plus(rv.type) ? rv.p.pseudoOuts : rv.pseudoOuts;
+        keyV &pseudoOuts = rv.p.pseudoOuts;
         pseudoOuts.resize(inamounts.size());
-        if (is_rct_tclsag(rv.type))
-            rv.p.TCLSAGs.resize(inamounts.size());
-        else if (is_rct_clsag(rv.type))
-            rv.p.CLSAGs.resize(inamounts.size());
-        else
-            rv.p.MGs.resize(inamounts.size());
+        rv.p.TCLSAGs.resize(inamounts.size());
         key sumpouts = zero(); //sum pseudoOut masks
         keyV a(inamounts.size());
         bool audit = (tx_type == cryptonote::transaction_type::AUDIT && rv.type == RCTTypeSalviumZero && salvium_data.salvium_data_type == rct::SalviumZeroAudit);

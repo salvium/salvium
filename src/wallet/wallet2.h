@@ -47,6 +47,7 @@
 #include <random>
 
 #include "include_base_utils.h"
+#include "carrot_impl/account.h"
 #include "carrot_impl/carrot_offchain_serialization.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/account_boost_serialization.h"
@@ -1121,6 +1122,9 @@ private:
     cryptonote::account_base& get_account(){return m_account;}
     const cryptonote::account_base& get_account()const{return m_account;}
 
+    carrot::carrot_and_legacy_account& get_carrot_account(){return m_carrot_account;}
+    const carrot::carrot_and_legacy_account& get_carrot_account()const{return m_carrot_account;}
+    
     bool is_key_encryption_enabled() const;
     void encrypt_keys(const crypto::chacha_key &key);
     void encrypt_keys(const epee::wipeable_string &password);
@@ -2092,6 +2096,7 @@ private:
     bool should_expand(const cryptonote::subaddress_index &index) const;
     bool spends_one_of_ours(const cryptonote::transaction &tx) const;
 
+    carrot::carrot_and_legacy_account m_carrot_account;
     cryptonote::account_base m_account;
     boost::optional<epee::net_utils::http::login> m_daemon_login;
     std::string m_daemon_address;

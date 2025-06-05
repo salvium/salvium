@@ -43,7 +43,7 @@ static constexpr std::uint32_t MAX_SUBADDRESS_MINOR_INDEX = 20;
 
 namespace carrot
 {
-  struct carrot_and_legacy_keys
+  struct carrot_and_legacy_account
   {
     cryptonote::account_base legacy_acb;
 
@@ -64,16 +64,16 @@ namespace carrot
 
     AddressDeriveType default_derive_type;
 
-    carrot_and_legacy_keys(): k_view_incoming_dev(legacy_acb.get_keys().m_view_secret_key),
+    carrot_and_legacy_account(): k_view_incoming_dev(legacy_acb.get_keys().m_view_secret_key),
         s_view_balance_dev(s_view_balance),
         s_generate_address_dev(s_generate_address)
     {}
 
-    carrot_and_legacy_keys(const carrot_and_legacy_keys &k) = delete;
-    carrot_and_legacy_keys(carrot_and_legacy_keys&&) = delete;
+    carrot_and_legacy_account(const carrot_and_legacy_account &k) = delete;
+    carrot_and_legacy_account(carrot_and_legacy_account&&) = delete;
 
-    carrot_and_legacy_keys& operator=(const carrot_and_legacy_keys&) = delete;
-    carrot_and_legacy_keys& operator=(carrot_and_legacy_keys&&) = delete;
+    carrot_and_legacy_account& operator=(const carrot_and_legacy_account&) = delete;
+    carrot_and_legacy_account& operator=(carrot_and_legacy_account&&) = delete;
 
     CarrotDestinationV1 cryptonote_address(const payment_id_t payment_id = null_payment_id,
         const AddressDeriveType derive_type = AddressDeriveType::Auto) const;
