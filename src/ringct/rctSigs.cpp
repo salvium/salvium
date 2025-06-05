@@ -1500,7 +1500,7 @@ namespace rct {
     //RCT simple    
     //for post-rct only
     rctSig genRctSimpleCarrot(
-                              const key & message,
+                              const key &message,
                               const carrot_ctkeyV & inSk,
                               const keyV & destinations,
                               const cryptonote::transaction_type tx_type,
@@ -1510,7 +1510,6 @@ namespace rct {
                               const std::vector<xmr_amount> & outamounts,
                               xmr_amount txnFee,
                               const ctkeyM & mixRing,
-                              const keyV &amount_keys,
                               const std::vector<unsigned int> & index,
                               ctkeyV &outSk,
                               const RCTConfig &rct_config,
@@ -1518,144 +1517,98 @@ namespace rct {
                               const rct::salvium_data_t &salvium_data,
                               const key &x_change,
                               const key &y_change,
-                              const size_t change_index,
-                              const key &key_yF
+                              const size_t change_index
                               )
     {
-        CHECK_AND_ASSERT_THROW_MES(rct_config.range_proof_type == RangeProofPaddedBulletproof, "Borromean range proofs no longer supported");
-        CHECK_AND_ASSERT_THROW_MES(destination_asset_types.size() == destinations.size(), "Different number of amount_keys/destinations");
-        CHECK_AND_ASSERT_THROW_MES(inamounts.size() > 0, "Empty inamounts");
-        CHECK_AND_ASSERT_THROW_MES(inamounts.size() == inSk.size(), "Different number of inamounts/inSk");
-        CHECK_AND_ASSERT_THROW_MES(outamounts.size() == destinations.size(), "Different number of amounts/destinations");
-        CHECK_AND_ASSERT_THROW_MES(amount_keys.size() == destinations.size(), "Different number of amount_keys/destinations");
-        CHECK_AND_ASSERT_THROW_MES(index.size() == inSk.size(), "Different number of index/inSk");
-        CHECK_AND_ASSERT_THROW_MES(mixRing.size() == inSk.size(), "Different number of mixRing/inSk");
-        for (size_t n = 0; n < mixRing.size(); ++n) {
-          CHECK_AND_ASSERT_THROW_MES(index[n] < mixRing[n].size(), "Bad index into mixRing");
-        }
+      CHECK_AND_ASSERT_THROW_MES(rct_config.range_proof_type == RangeProofPaddedBulletproof, "Borromean range proofs no longer supported");
+      CHECK_AND_ASSERT_THROW_MES(destination_asset_types.size() == destinations.size(), "Different number of amount_keys/destinations");
+      CHECK_AND_ASSERT_THROW_MES(inamounts.size() > 0, "Empty inamounts");
+      CHECK_AND_ASSERT_THROW_MES(inamounts.size() == inSk.size(), "Different number of inamounts/inSk");
+      CHECK_AND_ASSERT_THROW_MES(outamounts.size() == destinations.size(), "Different number of amounts/destinations");
+      CHECK_AND_ASSERT_THROW_MES(index.size() == inSk.size(), "Different number of index/inSk");
+      CHECK_AND_ASSERT_THROW_MES(mixRing.size() == inSk.size(), "Different number of mixRing/inSk");
+      for (size_t n = 0; n < mixRing.size(); ++n) {
+        CHECK_AND_ASSERT_THROW_MES(index[n] < mixRing[n].size(), "Bad index into mixRing");
+      }
 
-        rctSig rv;
-        switch (rct_config.bp_version)
-        {
-        case 0:
-        case 6:
-            rv.type = RCTTypeSalviumOne;
-            break;
-        default:
-            ASSERT_MES_AND_THROW("Unsupported BP version: " << rct_config.bp_version);
-        }
+      rctSig rv;
+      switch (rct_config.bp_version)
+      {
+      case 0:
+      case 6:
+          rv.type = RCTTypeSalviumOne;
+          break;
+      default:
+          ASSERT_MES_AND_THROW("Unsupported BP version: " << rct_config.bp_version);
+      }
 
-        rv.message = message;
-        rv.outPk.resize(destinations.size());
-        rv.ecdhInfo.resize(destinations.size());
+      rv.message = message;
+      rv.mixRing = mixRing;
+      keyV &pseudoOuts = rv.p.pseudoOuts;
+      pseudoOuts.resize(inamounts.size());
+      rv.p.TCLSAGs.resize(inamounts.size());
+      key sumpouts = zero(); //sum pseudoOut masks
+      keyV a(inamounts.size());
 
-        size_t i;
-        keyV masks(destinations.size()); //sk mask..
-        outSk.resize(destinations.size());
-        for (i = 0; i < destinations.size(); i++) {
+      key sumout = zero();
+      for (size_t i = 0; i < outSk.size(); ++i)
+      {
+        sc_add(sumout.bytes, outSk[i].mask.bytes, sumout.bytes);
+      }
 
-            //add destination to sig
-            rv.outPk[i].dest = copy(destinations[i]);
-        }
+      bool audit = (tx_type == cryptonote::transaction_type::AUDIT && rv.type == RCTTypeSalviumZero && salvium_data.salvium_data_type == rct::SalviumZeroAudit);
+      for (size_t i = 0 ; i < inamounts.size(); i++) {
+        if (audit)
+          a[i] = rct::zero();
+        else
+          skGen(a[i]);
+        sc_add(sumpouts.bytes, a[i].bytes, sumpouts.bytes);
+        genC(pseudoOuts[i], a[i], inamounts[i]);
+      }
 
-        rv.p.bulletproofs.clear();
-        rv.p.bulletproofs_plus.clear();
-        CHECK_AND_ASSERT_THROW_MES(rct_config.range_proof_type == rct::RangeProofPaddedBulletproof,
-                                   "Unsupported range proof type: " << rct_config.range_proof_type);
-        {
-          rct::keyV C, masks;
-          if (hwdev.get_mode() == hw::device::TRANSACTION_CREATE_FAKE)
-          {
-            // use a fake bulletproof for speed
-            rv.p.bulletproofs_plus.push_back(make_dummy_bulletproof_plus(outamounts, C, masks));
-          }
-          else
-          {
-            const epee::span<const key> keys{&amount_keys[0], amount_keys.size()};
-            rv.p.bulletproofs_plus.push_back(proveRangeBulletproofPlus(C, masks, outamounts, keys, hwdev));
-            
+      key difference;
+      sc_sub(difference.bytes, sumpouts.bytes, sumout.bytes);
+      genC(rv.p_r, difference, 0);
+      DP(rv.p_r);
+
+      // set salvium_data
+      if (rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumZero || rv.type == RCTTypeSalviumOne) {
+        rv.salvium_data.pr_proof = PRProof_Gen(difference);
 #ifdef DBG
-            CHECK_AND_ASSERT_THROW_MES(verBulletproofPlus(rv.p.bulletproofs_plus.back()), "verBulletproofPlus failed on newly created proof");
+        CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.p_r, rv.salvium_data.pr_proof), "PRProof_Ver() failed on recently created proof");
 #endif
-          }
-          for (i = 0; i < outamounts.size(); ++i)
-          {
-            rv.outPk[i].mask = rct::scalarmult8(C[i]);
-            outSk[i].mask = masks[i];
-          }
-        }
-
-        key sumout = zero();
-        for (i = 0; i < outSk.size(); ++i)
-        {
-            sc_add(sumout.bytes, outSk[i].mask.bytes, sumout.bytes);
-
-            //mask amount and mask
-            rv.ecdhInfo[i].mask = copy(outSk[i].mask);
-            rv.ecdhInfo[i].amount = d2h(outamounts[i]);
-            hwdev.ecdhEncode(rv.ecdhInfo[i], amount_keys[i], is_rct_bulletproof_plus(rv.type));
-        }
-            
-        //set txn fee
-        rv.txnFee = txnFee;
-//        TODO: unused ??
-//        key txnFeeKey = scalarmultH(d2h(rv.txnFee));
-        rv.mixRing = mixRing;
-        keyV &pseudoOuts = rv.p.pseudoOuts;
-        pseudoOuts.resize(inamounts.size());
-        rv.p.TCLSAGs.resize(inamounts.size());
-        key sumpouts = zero(); //sum pseudoOut masks
-        keyV a(inamounts.size());
-        bool audit = (tx_type == cryptonote::transaction_type::AUDIT && rv.type == RCTTypeSalviumZero && salvium_data.salvium_data_type == rct::SalviumZeroAudit);
-        for (i = 0 ; i < inamounts.size(); i++) {
-          if (audit)
-            a[i] = rct::zero();
-          else
-            skGen(a[i]);
-          sc_add(sumpouts.bytes, a[i].bytes, sumpouts.bytes);
-          genC(pseudoOuts[i], a[i], inamounts[i]);
-        }
-        key difference;
-        sc_sub(difference.bytes, sumpouts.bytes, sumout.bytes);
-        genC(rv.p_r, difference, 0);
-        DP(rv.p_r);
-        if (rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumZero || rv.type == RCTTypeSalviumOne) {
-          rv.salvium_data.pr_proof = PRProof_Gen(difference);
+        rv.salvium_data.salvium_data_type = salvium_data.salvium_data_type;
+        if (audit) {
+          // SRCG: populate the audit proof here
+          rv.salvium_data.input_verification_data = salvium_data.input_verification_data;
+          rv.salvium_data.spend_pubkey = salvium_data.spend_pubkey;
+          rv.salvium_data.enc_view_privkey_str = salvium_data.enc_view_privkey_str;
+          rv.salvium_data.cz_proof = PRProof_Gen(outSk[0].mask);
 #ifdef DBG
-          CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.p_r, rv.salvium_data.pr_proof), "PRProof_Ver() failed on recently created proof");
-#endif
-          rv.salvium_data.salvium_data_type = salvium_data.salvium_data_type;
-          if (audit) {
-            // SRCG: populate the audit proof here
-            rv.salvium_data.input_verification_data = salvium_data.input_verification_data;
-            rv.salvium_data.spend_pubkey = salvium_data.spend_pubkey;
-            rv.salvium_data.enc_view_privkey_str = salvium_data.enc_view_privkey_str;
-            rv.salvium_data.cz_proof = PRProof_Gen(outSk[0].mask);
-#ifdef DBG
-            CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.outPk[0].mask, rv.salvium_data.cz_proof), "PRProof_Ver() failed on recently created change proof");
-#endif
-          }
-        }
-        
-        // Check if spend authority proof is needed (only for TRANSFER TXs)
-        if (tx_type == cryptonote::transaction_type::TRANSFER && rv.type == rct::RCTTypeSalviumOne) {
-          rv.salvium_data.sa_proof = SAProof_Gen(destinations[change_index], x_change, y_change, key_yF);
-#ifdef DBG
-          CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.salvium_data.sa_proof, destinations[change_index], key_yF), "SAProof_Ver() failed on recently created proof");
+          CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.outPk[0].mask, rv.salvium_data.cz_proof), "PRProof_Ver() failed on recently created change proof");
 #endif
         }
-        
-        key full_message = get_pre_mlsag_hash(rv,hwdev);
+      }
 
-        for (i = 0 ; i < inamounts.size(); i++)
-        {
-          if (hwdev.get_mode() == hw::device::TRANSACTION_CREATE_FAKE)
-            rv.p.TCLSAGs[i] = make_dummy_tclsag(rv.mixRing[i].size());
-          else
-            rv.p.TCLSAGs[i] = proveRctTCLSAGSimple(full_message, rv.mixRing[i], inSk[i].x, inSk[i].y, inSk[i].mask, a[i], pseudoOuts[i], index[i], hwdev);
-        }
+      // Check if spend authority proof is needed (only for TRANSFER TXs)
+      if (tx_type == cryptonote::transaction_type::TRANSFER && rv.type == rct::RCTTypeSalviumOne) {
+        rv.salvium_data.sa_proof = SAProof_Gen(destinations[change_index], x_change, y_change, key_yF);
+#ifdef DBG
+        CHECK_AND_ASSERT_THROW_MES(SAProof_Ver(rv.salvium_data.sa_proof, destinations[change_index], key_yF), "SAProof_Ver() failed on recently created proof");
+#endif
+      }
 
-        return rv;
+      // gen tclsags
+      key full_message = get_pre_mlsag_hash(rv, hwdev);
+      for (size_t i = 0 ; i < inamounts.size(); i++)
+      {
+        if (hwdev.get_mode() == hw::device::TRANSACTION_CREATE_FAKE)
+          rv.p.TCLSAGs[i] = make_dummy_tclsag(rv.mixRing[i].size());
+        else
+          rv.p.TCLSAGs[i] = proveRctTCLSAGSimple(full_message, rv.mixRing[i], inSk[i].x, inSk[i].y, inSk[i].mask, a[i], pseudoOuts[i], index[i], hwdev);
+      }
+
+      return rv;
     }
 
     //RCT simple    

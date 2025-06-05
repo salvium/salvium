@@ -760,14 +760,16 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     LOG_PRINT_L3("Getting output enote proposals");
     std::vector<carrot::RCTOutputEnoteProposal> output_enote_proposals;
     carrot::encrypted_payment_id_t encrypted_payment_id;
+    size_t change_index;
     carrot::get_output_enote_proposals(tx_proposal.normal_payment_proposals,
         selfsend_payment_proposal_cores,
         tx_proposal.dummy_encrypted_payment_id,
-        /*s_view_balance_dev=*/nullptr, //! @TODO: internal
+        &w.get_carrot_account().s_view_balance_dev,
         &addr_dev,
         tx_proposal.key_images_sorted.at(0),
         output_enote_proposals,
-        encrypted_payment_id);
+        encrypted_payment_id,
+        change_index);
     CHECK_AND_ASSERT_THROW_MES(output_enote_proposals.size() == n_outputs,
         "finalize_all_proofs_from_transfer_details: unexpected number of output enote proposals");
 
@@ -932,21 +934,47 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     std::vector<uint64_t> outamounts;
     rct::keyV destinations;
     std::vector<std::string> destination_asset_types;
-    for (size_t i = 0; i < tx.vout.size(); ++i)
+    rct::ctkeyV outSk;
+    for (const auto &oep : output_enote_proposals)
     {
-        crypto::public_key output_public_key;
-        bool ok = get_output_public_key(tx.vout[i], output_public_key);
-        THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error,
-            "Failed to get output public key for tx.vout[" + std::to_string(i) + "]");
-        std::string output_asset_type;
-        ok = cryptonote::get_output_asset_type(tx.vout[i], output_asset_type);
-        THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error,
-            "Failed to get output asset type for tx.vout[" + std::to_string(i) + "]");
-        destinations.push_back(rct::pk2rct(output_public_key));
-        destination_asset_types.push_back(output_asset_type);
-        outamounts.push_back(tx.vout[i].amount);
-        amount_out += tx.vout[i].amount;
+        destinations.push_back(rct::pk2rct(oep.enote.onetime_address));
+        destination_asset_types.push_back(oep.enote.asset_type);
+        outamounts.push_back(oep.amount);
+        amount_out += oep.amount;
+
+        rct::ctkey key;
+        key.mask = rct::sk2rct(oep.amount_blinding_factor);
+        outSk.push_back(key);
     }
+
+    // change output x, y
+    crypto::public_key change_address_spend_pubkey;
+    for (const auto &p :selfsend_payment_proposal_cores) {
+        if (p.enote_type == carrot::CarrotEnoteType::CHANGE) {
+            change_address_spend_pubkey = p.destination_address_spend_pubkey;
+        }
+    }
+    const carrot::RCTOutputEnoteProposal &change_enote_proposal = output_enote_proposals.at(change_index);
+    const carrot::input_context_t input_context = carrot::make_carrot_input_context(tx_proposal.key_images_sorted.at(0));
+    crypto::hash s_sender_receiver;
+    w.get_carrot_account().s_view_balance_dev.make_internal_sender_receiver_secret(
+        change_enote_proposal.enote.enote_ephemeral_pubkey,
+        input_context,
+        s_sender_receiver);
+    crypto::secret_key sender_extension_g;
+    carrot::make_carrot_onetime_address_extension_g(s_sender_receiver, change_enote_proposal.enote.amount_commitment, sender_extension_g);
+    crypto::secret_key sender_extension_t;
+    carrot::make_carrot_onetime_address_extension_t(s_sender_receiver, change_enote_proposal.enote.amount_commitment, sender_extension_t);
+    crypto::secret_key change_x, change_y;
+    bool r = w.get_carrot_account().try_searching_for_opening_for_onetime_address(
+        change_address_spend_pubkey,
+        sender_extension_g,
+        sender_extension_t,
+        change_x,
+        change_y
+    );
+    THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error,
+        "Failed to search for opening for onetime address");
 
     // mixRing indexing is done the other way round for simple
     rct::ctkeyM mixRing(sources.size());
@@ -968,7 +996,6 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     // store proofs
     crypto::hash tx_prefix_hash;
     get_transaction_prefix_hash(tx, tx_prefix_hash, hwdev);
-    rct::ctkeyV outSk;
     rct::salvium_data_t salvium_data;
     salvium_data.salvium_data_type = rct::SalviumOne;
     tx.rct_signatures = rct::genRctSimpleCarrot(
@@ -984,13 +1011,15 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         mixRing,
         index,
         outSk,
-        rct_config,
+        rct::RCTConfig {
+            rct::RangeProofType::RangeProofPaddedBulletproof,
+            6,
+        },
         hwdev,
         salvium_data,
-        rct::sk2rct(x_change),
-        rct::sk2rct(y_change),
-        change_index,
-        key_yF
+        rct::sk2rct(change_x),
+        rct::sk2rct(change_y),
+        change_index
     );
 
     tx.pruned = false;

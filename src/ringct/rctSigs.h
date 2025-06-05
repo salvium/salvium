@@ -139,7 +139,7 @@ namespace rct {
     rctSig genRct(const key &message, const ctkeyV & inSk, const keyV & destinations, const std::vector<xmr_amount> & amounts, const ctkeyM &mixRing, const keyV &amount_keys, unsigned int index, ctkeyV &outSk, const RCTConfig &rct_config, hw::device &hwdev);
     rctSig genRct(const key &message, const ctkeyV & inSk, const ctkeyV  & inPk, const keyV & destinations, const std::vector<xmr_amount> & amounts, const keyV &amount_keys, const int mixin, const RCTConfig &rct_config, hw::device &hwdev);
     rctSig genRctSimpleCarrot(
-        const key & message,
+        const key &message,
         const carrot_ctkeyV & inSk,
         const keyV & destinations,
         const cryptonote::transaction_type tx_type,
@@ -149,16 +149,14 @@ namespace rct {
         const std::vector<xmr_amount> & outamounts,
         xmr_amount txnFee,
         const ctkeyM & mixRing,
-        const keyV &amount_keys,
         const std::vector<unsigned int> & index,
         ctkeyV &outSk,
         const RCTConfig &rct_config,
         hw::device &hwdev,
         const rct::salvium_data_t &salvium_data,
-        const key &x_change = rct::zero(),
-        const key &y_change = rct::zero(),
-        const size_t change_index = 0,
-        const key &key_yF = rct::zero()
+        const key &x_change,
+        const key &y_change,
+        const size_t change_index
     );
     rctSig genRctSimple(
         const key & message,

@@ -160,6 +160,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     const crypto::key_image &tx_first_key_image,
     std::vector<RCTOutputEnoteProposal> &output_enote_proposals_out,
     encrypted_payment_id_t &encrypted_payment_id_out,
+    size_t change_index_out,
     std::vector<std::pair<bool, std::size_t>> *payment_proposal_order_out)
 {
     output_enote_proposals_out.clear();
@@ -240,6 +241,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     }
 
     // construct selfsend enotes, preferring internal enotes over special enotes when possible
+    crypto::public_key change_address;
     for (size_t i = 0; i < num_selfsend_proposals; ++i)
     {
         const CarrotPaymentProposalSelfSendV1 &selfsend_payment_proposal = selfsend_payment_proposals.at(i);
@@ -267,12 +269,27 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
         {
             CARROT_THROW(std::invalid_argument, "neither a view-balance nor view-incoming device was provided");
         }
+
+        if (selfsend_payment_proposal.enote_type == CarrotEnoteType::CHANGE)
+        {
+            change_address = output_entry.first.enote.onetime_address;
+        }
     }
 
     // sort enotes by K_o
     const auto sort_output_enote_proposal = [](const auto &a, const auto &b) -> bool
         { return a.first.enote.onetime_address < b.first.enote.onetime_address; };
     std::sort(sortable_data.begin(), sortable_data.end(), sort_output_enote_proposal);
+
+    // get the change index
+    for (size_t i = 0; i < sortable_data.size(); ++i)
+    {
+        if (sortable_data[i].first.enote.onetime_address == change_address)
+        {
+            change_index_out = i;
+            break;
+        }
+    }
 
     // collect output_enote_proposals_out and payment_proposal_order_out
     output_enote_proposals_out.reserve(num_proposals);
