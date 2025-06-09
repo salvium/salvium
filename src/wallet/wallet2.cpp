@@ -2323,6 +2323,7 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
   // Return success to caller
   return true;
 }
+/*
 //----------------------------------------------------------------------------------------------------
 bool wallet2::verify_spend_authority_proof(const cryptonote::transaction &tx, const size_t i, const tx_scan_info_t &tx_scan_info)
 {
@@ -2394,6 +2395,7 @@ bool wallet2::verify_spend_authority_proof(const cryptonote::transaction &tx, co
   // Return success to caller
   return true;
 }
+*/
 //----------------------------------------------------------------------------------------------------
 void wallet2::scan_key_image(const wallet::enote_view_incoming_scan_info_t &enote_scan_info,
   const bool pool,
@@ -5300,6 +5302,13 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
     r = r && hwdev.verify_keys(keys.m_spend_secret_key, keys.m_account_address.m_spend_public_key);
   THROW_WALLET_EXCEPTION_IF(!r, error::wallet_files_doesnt_correspond, m_keys_file, m_wallet_file);
 
+  if (r)
+  {
+    // Generate the Carrot keys here
+    m_carrot_account.legacy_acb = m_account;
+    m_carrot_account.generate();
+  }
+  
   if (r)
   {
     if (!m_is_background_wallet)

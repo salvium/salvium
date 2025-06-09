@@ -639,7 +639,8 @@ std::vector<cryptonote::tx_source_entry> get_sources(
     const size_t fake_outputs_count = 15;
     std::vector<std::vector<tools::wallet2::get_outs_entry>> outs;
     std::unordered_set<crypto::public_key> valid_public_keys_cache;
-    w.get_outs(outs, selected_transfers, fake_outputs_count, true, valid_public_keys_cache); // may throw
+    wallet2 &w2 = const_cast<tools::wallet2 &>(w);
+    w2.get_outs(outs, selected_transfers, fake_outputs_count, true, valid_public_keys_cache); // may throw
 
     LOG_PRINT_L2("preparing outputs");
     size_t i = 0, out_index = 0;

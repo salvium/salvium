@@ -92,8 +92,8 @@ namespace rct {
     zk_proof PRProof_Gen(const rct::key &difference);
     bool PRProof_Ver(const rct::key &C, const zk_proof &proof);
   
-    zk_proof SAProof_Gen(const key &P, const key &x_change, const key &y_change, const key &key_yF);
-    bool SAProof_Ver(const zk_proof &proof, const key &P, const key &key_yF);
+    zk_proof SAProof_Gen(const key &P, const key &x_change, const key &y_change);
+    bool SAProof_Ver(const zk_proof &proof, const key &P);
   
     //proveRange and verRange
     //proveRange gives C, and mask such that \sumCi = C

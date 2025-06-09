@@ -294,9 +294,10 @@ void carrot_and_legacy_account::generate_subaddress_map()
 //----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::generate(const AddressDeriveType default_derive_type)
 {
-    legacy_acb.generate();
+    //legacy_acb.generate();
 
-    crypto::generate_random_bytes_thread_safe(sizeof(crypto::secret_key), to_bytes(s_master));
+    //crypto::generate_random_bytes_thread_safe(sizeof(crypto::secret_key), to_bytes(s_master));
+    s_master = legacy_acb.get_keys().m_spend_secret_key;
     make_carrot_provespend_key(s_master, k_prove_spend);
     make_carrot_viewbalance_secret(s_master, s_view_balance);
     make_carrot_generateimage_key(s_view_balance, k_generate_image);
