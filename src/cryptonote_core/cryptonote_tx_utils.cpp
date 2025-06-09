@@ -343,13 +343,13 @@ namespace cryptonote
     const std::vector<hardfork_t>& hardforks,
     const uint8_t hf_version
   ) {
-    if (hf_version >= HF_VERSION_TREASURY_SAL1_MINT) {
+    if (hf_version >= HF_VERSION_CARROT) {
       // find the hardfork height
       const auto& hf = std::find_if(hardforks.begin(), hardforks.end(), [](const hardfork_t& hf) {
-        return hf.version == HF_VERSION_TREASURY_SAL1_MINT;
+        return hf.version == HF_VERSION_CARROT;
       });
 
-      // since we are at least at the hard fork HF_VERSION_TREASURY_SAL1_MINT, we assume height >= hf->height
+      // since we are at least at the hard fork HF_VERSION_CARROT, we assume height >= hf->height
       const auto diff = height - hf->height;
       const auto mint_period = get_config(nettype).TREASURY_SAL1_MINT_PERIOD;
 
@@ -557,7 +557,7 @@ namespace cryptonote
       case HF_VERSION_AUDIT1_PAUSE:
       case HF_VERSION_AUDIT2:
       case HF_VERSION_AUDIT2_PAUSE:
-      case HF_VERSION_TREASURY_SAL1_MINT:
+      case HF_VERSION_CARROT:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;

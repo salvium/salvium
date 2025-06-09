@@ -1503,7 +1503,6 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_AUDIT1_PAUSE:
   case HF_VERSION_AUDIT2:
   case HF_VERSION_AUDIT2_PAUSE:
-  case HF_VERSION_TREASURY_SAL1_MINT:
   case HF_VERSION_CARROT:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
