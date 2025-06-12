@@ -35,6 +35,7 @@
 #include "carrot_core/payment_proposal.h"
 #include "common/container_helpers.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "cryptonote_core/cryptonote_tx_utils.h"
 #include "cryptonote_config.h"
 
 //third party headers
@@ -55,6 +56,9 @@ template <class EnoteContainer>
 static void store_carrot_ephemeral_pubkeys_to_extra(const EnoteContainer &enotes, std::vector<uint8_t> &extra_inout)
 {
     const size_t nouts = enotes.size();
+    if (nouts == 0)
+        return;
+
     const bool use_shared_ephemeral_pubkey = nouts == 2 && 0 == memcmp(
             &enotes.front().enote_ephemeral_pubkey,
             &enotes.back().enote_ephemeral_pubkey, 
@@ -189,11 +193,13 @@ bool try_load_carrot_extra_v1(
 //-------------------------------------------------------------------------------------------------------------------
 cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotEnoteV1> &enotes,
     const std::vector<crypto::key_image> &key_images,
+    const std::vector<cryptonote::tx_source_entry> &sources,
     const rct::xmr_amount fee,
     const encrypted_payment_id_t encrypted_payment_id)
 {
     const size_t nins = key_images.size();
     const size_t nouts = enotes.size();
+    CHECK_AND_ASSERT_THROW_MES(nins == sources.size(), "invalid inputs/sources size");
 
     cryptonote::transaction tx;
     tx.pruned = true;
@@ -208,13 +214,19 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
     tx.rct_signatures.outPk.reserve(nouts);
 
     //inputs
-    for (const crypto::key_image &ki : key_images)
+    for (size_t i = 0; i < nins; ++i)
     {
+        // collect key offsets
+        std::vector<uint64_t> key_offsets;
+        for(const auto &out_entry: sources[i].outputs)
+            key_offsets.push_back(out_entry.first);
+
         //L
         tx.vin.emplace_back(cryptonote::txin_to_key{ //@TODO: can save 2 bytes by using slim input type
             .amount = 0,
-            .key_offsets = {},
-            .k_image = ki
+            .key_offsets = cryptonote::absolute_output_offsets_to_relative(key_offsets),
+            .k_image = key_images.at(i),
+            .asset_type = "SAL1"
         });
     }
 
@@ -225,7 +237,8 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
         tx.vout.push_back(cryptonote::tx_out{0, cryptonote::txout_to_carrot_v1{
             .key = enote.onetime_address,
             .view_tag = enote.view_tag,
-            .encrypted_janus_anchor = enote.anchor_enc
+            .encrypted_janus_anchor = enote.anchor_enc,
+            .asset_type = enote.asset_type,
         }});
 
         //a_enc
@@ -358,11 +371,11 @@ bool try_load_carrot_from_transaction_v1(const cryptonote::transaction &tx,
 cryptonote::transaction store_carrot_to_coinbase_transaction_v1(
     const std::vector<CarrotCoinbaseEnoteV1> &enotes,
     const cryptonote::blobdata &extra_nonce,
-    const cryptonote::transaction_type &tx_type)
+    const cryptonote::transaction_type &tx_type,
+    const std::uint64_t block_index)
 {
     CARROT_CHECK_AND_THROW(tx_type == cryptonote::transaction_type::MINER || tx_type == cryptonote::transaction_type::PROTOCOL, invalid_tx_type, "invalid tx_type : is not MINER or PROTOCOL");
     const size_t nouts = enotes.size();
-    const std::uint64_t block_index = enotes.at(0).block_index;
 
     cryptonote::transaction tx;
     tx.type = tx_type;
@@ -425,7 +438,7 @@ cryptonote::transaction make_single_enote_carrot_coinbase_transaction_v1(const C
     std::vector<CarrotCoinbaseEnoteV1> enotes(1);
     get_coinbase_output_proposal_v1(payment_proposal, block_index, enotes.front());
 
-    return store_carrot_to_coinbase_transaction_v1(enotes, extra_nonce, cryptonote::transaction_type::MINER);
+    return store_carrot_to_coinbase_transaction_v1(enotes, extra_nonce, cryptonote::transaction_type::MINER, block_index);
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_load_carrot_coinbase_enote_from_transaction_v1(const cryptonote::transaction &tx,

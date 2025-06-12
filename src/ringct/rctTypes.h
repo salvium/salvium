@@ -483,7 +483,7 @@ namespace rct {
           }
           ar.end_array();
           FIELD(p_r)
-          if (type == RCTTypeSalviumZero)
+          if (type == RCTTypeSalviumZero || type == RCTTypeSalviumOne)
           {
             FIELD(salvium_data)
           }
@@ -597,11 +597,11 @@ namespace rct {
               ar.end_array();
 
               ar.tag("c1");
-              FIELDS(CLSAGs[i].c1)
+              FIELDS(TCLSAGs[i].c1)
 
               // CLSAGs[i].I not saved, it can be reconstructed
               ar.tag("D");
-              FIELDS(CLSAGs[i].D)
+              FIELDS(TCLSAGs[i].D)
               ar.end_object();
 
               if (inputs - i > 1)

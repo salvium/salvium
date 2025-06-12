@@ -59,7 +59,10 @@ static bool expand_tx_and_ver_rct_non_sem(transaction& tx, const rct::ctkeyM& mi
     VER_ASSERT(rv.mixRing == mix_ring, "Failed to check ringct signatures: mismatched pubkeys/mixRing");
 
     // Check CLSAG/MLSAG size against transaction input
-    const size_t n_sigs = rct::is_rct_clsag(rv.type) ? rv.p.CLSAGs.size() : rv.p.MGs.size();
+    const size_t n_sigs = rct::is_rct_tclsag(rv.type) ? rv.p.TCLSAGs.size() : 
+    (
+        rct::is_rct_clsag(rv.type) ? rv.p.CLSAGs.size() : rv.p.MGs.size()
+    );
     VER_ASSERT(n_sigs == tx.vin.size(), "Failed to check ringct signatures: mismatched input sigs/vin sizes");
 
     // For each input, check that the key images were copied into the expanded RCT sig correctly
@@ -67,7 +70,12 @@ static bool expand_tx_and_ver_rct_non_sem(transaction& tx, const rct::ctkeyM& mi
     {
         const crypto::key_image& nth_vin_image = boost::get<txin_to_key>(tx.vin[n]).k_image;
 
-        if (rct::is_rct_clsag(rv.type))
+        if (rct::is_rct_tclsag(rv.type))
+        {
+            const bool ki_match = 0 == memcmp(&nth_vin_image, &rv.p.TCLSAGs[n].I, 32);
+            VER_ASSERT(ki_match, "Failed to check ringct signatures: mismatched TCLSAG key image");
+        }
+        else if (rct::is_rct_clsag(rv.type))
         {
             const bool ki_match = 0 == memcmp(&nth_vin_image, &rv.p.CLSAGs[n].I, 32);
             VER_ASSERT(ki_match, "Failed to check ringct signatures: mismatched CLSAG key image");

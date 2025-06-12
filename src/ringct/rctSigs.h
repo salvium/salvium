@@ -138,7 +138,7 @@ namespace rct {
     //   must know the destination private key to find the correct amount, else will return a random number
     rctSig genRct(const key &message, const ctkeyV & inSk, const keyV & destinations, const std::vector<xmr_amount> & amounts, const ctkeyM &mixRing, const keyV &amount_keys, unsigned int index, ctkeyV &outSk, const RCTConfig &rct_config, hw::device &hwdev);
     rctSig genRct(const key &message, const ctkeyV & inSk, const ctkeyV  & inPk, const keyV & destinations, const std::vector<xmr_amount> & amounts, const keyV &amount_keys, const int mixin, const RCTConfig &rct_config, hw::device &hwdev);
-    rctSig genRctSimpleCarrot(
+    void genRctSimpleCarrot(
         const key &message,
         const carrot_ctkeyV & inSk,
         const keyV & destinations,
@@ -156,7 +156,8 @@ namespace rct {
         const rct::salvium_data_t &salvium_data,
         const key &x_change,
         const key &y_change,
-        const size_t change_index
+        const size_t change_index,
+        rctSig &rv
     );
     rctSig genRctSimple(
         const key & message,

@@ -115,6 +115,7 @@ std::uint64_t get_carrot_default_tx_extra_size(const std::size_t n_outputs)
 void make_carrot_transaction_proposal_v1(const std::vector<CarrotPaymentProposalV1> &normal_payment_proposals_in,
     const std::vector<CarrotPaymentProposalVerifiableSelfSendV1> &selfsend_payment_proposals_in,
     const rct::xmr_amount fee_per_weight,
+    const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
     select_inputs_func_t &&select_inputs,
     carve_fees_and_balance_func_t &&carve_fees_and_balance,
@@ -172,13 +173,7 @@ void make_carrot_transaction_proposal_v1(const std::vector<CarrotPaymentProposal
     std::map<size_t, rct::xmr_amount> fee_per_input_count;
     for (size_t num_ins = CARROT_MIN_TX_INPUTS; num_ins <= CARROT_MAX_TX_INPUTS; ++num_ins)
     {
-        const uint64_t tx_weight = get_fcmppp_tx_weight(num_ins, num_outs, tx_extra_size);
-        CHECK_AND_ASSERT_THROW_MES(tx_weight != std::numeric_limits<uint64_t>::max(),
-            "make_carrot_transaction_proposal_v1: invalid weight returned for ins=" << num_ins
-            << " outs=" << num_outs << " extra_size=" << tx_extra_size);
-        CHECK_AND_ASSERT_THROW_MES(std::numeric_limits<uint64_t>::max() / tx_weight > fee_per_weight,
-            "make_carrot_transaction_proposal_v1: overflow in fee calculation");
-        const rct::xmr_amount fee = tx_weight * fee_per_weight;
+        const rct::xmr_amount fee = estimate_fee_carrot(num_ins, 15, num_outs, tx_extra_size, true, true, true, true, fee_per_weight, fee_quantization_mask);
         fee_per_input_count.emplace(num_ins, fee);
     }
 
@@ -237,6 +232,7 @@ void make_carrot_transaction_proposal_v1_transfer(
     const std::vector<CarrotPaymentProposalV1> &normal_payment_proposals,
     const std::vector<CarrotPaymentProposalVerifiableSelfSendV1> &selfsend_payment_proposals_in,
     const rct::xmr_amount fee_per_weight,
+    const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
     select_inputs_func_t &&select_inputs,
     const crypto::public_key &change_address_spend_pubkey,
@@ -387,6 +383,7 @@ void make_carrot_transaction_proposal_v1_transfer(
     make_carrot_transaction_proposal_v1(normal_payment_proposals,
         selfsend_payment_proposals,
         fee_per_weight,
+        fee_quantization_mask,
         extra,
         std::forward<select_inputs_func_t>(select_inputs),
         std::move(carve_fees_and_balance),
@@ -399,6 +396,7 @@ void make_carrot_transaction_proposal_v1_sweep(
     const std::vector<CarrotPaymentProposalV1> &normal_payment_proposals,
     const std::vector<CarrotPaymentProposalVerifiableSelfSendV1> &selfsend_payment_proposals,
     const rct::xmr_amount fee_per_weight,
+    const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
     std::vector<CarrotSelectedInput> &&selected_inputs,
     const crypto::public_key &change_address_spend_pubkey,
@@ -477,6 +475,7 @@ void make_carrot_transaction_proposal_v1_sweep(
     make_carrot_transaction_proposal_v1(normal_payment_proposals,
         selfsend_payment_proposals,
         fee_per_weight,
+        fee_quantization_mask,
         extra,
         std::move(select_inputs),
         std::move(carve_fees_and_balance),

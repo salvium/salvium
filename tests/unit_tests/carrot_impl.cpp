@@ -203,6 +203,7 @@ static void subtest_multi_account_transfer_over_transaction(const unittest_trans
     // can be passed to a hardware device for deterministic verification of the signable tx hash
     std::vector<RCTOutputEnoteProposal> rederived_output_enote_proposals;
     encrypted_payment_id_t rederived_encrypted_payment_id;
+    size_t change_index;
     get_output_enote_proposals(tx_proposal.normal_payment_proposals,
         modified_selfsend_payment_proposals,
         *parsed_encrypted_payment_id,
@@ -210,7 +211,8 @@ static void subtest_multi_account_transfer_over_transaction(const unittest_trans
         &ss_keys.k_view_incoming_dev,
         parsed_key_images.at(0),
         rederived_output_enote_proposals,
-        rederived_encrypted_payment_id);
+        rederived_encrypted_payment_id,
+        change_index);
     EXPECT_EQ(*parsed_encrypted_payment_id, rederived_encrypted_payment_id);
     ASSERT_EQ(parsed_enotes.size(), rederived_output_enote_proposals.size());
     for (size_t enote_idx = 0; enote_idx < parsed_enotes.size(); ++enote_idx)

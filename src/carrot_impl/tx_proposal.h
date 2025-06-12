@@ -31,6 +31,7 @@
 //local headers
 #include "carrot_core/payment_proposal.h"
 #include "subaddress_index.h"
+#include "cryptonote_core/cryptonote_tx_utils.h"
 
 //third party headers
 
@@ -70,6 +71,8 @@ struct CarrotTransactionProposalV1
 {
     /// Key images sorted in std::greater order
     std::vector<crypto::key_image> key_images_sorted;
+    // sources in the same order as key_images_sorted.
+    std::vector<cryptonote::tx_source_entry> sources;
 
     /// Payment proposals to be converted into output enotes
     std::vector<CarrotPaymentProposalV1> normal_payment_proposals;

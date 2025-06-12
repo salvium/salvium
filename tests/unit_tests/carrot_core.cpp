@@ -710,6 +710,7 @@ static void subtest_2out_transfer_get_output_enote_proposals_completeness(const 
     // turn payment proposals into enotes, passing dummy pid_enc if bob isn't integrated
     std::vector<RCTOutputEnoteProposal> enote_proposals;
     encrypted_payment_id_t encrypted_payment_id;
+    size_t change_index;
     get_output_enote_proposals({bob_payment_proposal},
         {alice_payment_proposal},
         dummy_encrypted_pid,
@@ -717,7 +718,8 @@ static void subtest_2out_transfer_get_output_enote_proposals_completeness(const 
         &alice.k_view_incoming_dev,
         tx_first_key_image,
         enote_proposals,
-        encrypted_payment_id);
+        encrypted_payment_id,
+        change_index);
 
     ASSERT_EQ(2, enote_proposals.size()); // 2-out tx
 

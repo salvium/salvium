@@ -7326,8 +7326,8 @@ bool simple_wallet::transfer_main(
           float days = locked_blocks / 720.0f;
           prompt << boost::format(tr(".\nThis transaction (including %s change) will unlock in %llu blocks, approximately %s days (assuming 2 minutes per block)")) % cryptonote::print_money(change) % ((unsigned long long)unlock_block) % days;
         }
-        if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
-          return false;
+        // if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
+        //   return false;
         bool default_ring_size = true;
         for (const auto &ptx: ptx_vector)
         {
