@@ -46,7 +46,8 @@ set(common_sources
   updates.cpp
   aligned.c
   timings.cc
-  combinator.cpp)
+  combinator.cpp
+  keystore.cpp)
 
 if (STACK_TRACE)
   list(APPEND common_sources stack_trace.cpp)

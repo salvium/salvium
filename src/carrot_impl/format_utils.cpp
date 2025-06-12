@@ -114,8 +114,10 @@ static bool try_load_carrot_ephemeral_pubkeys_from_extra(const std::vector<crypt
 //-------------------------------------------------------------------------------------------------------------------
 bool is_carrot_transaction_v1(const cryptonote::transaction_prefix &tx_prefix)
 {
-    CARROT_CHECK_AND_THROW(tx_prefix.vout.size(), too_few_outputs, "transaction prefix contains no outputs");
-    return tx_prefix.vout.at(0).target.type() == typeid(cryptonote::txout_to_carrot_v1);
+  if (tx_prefix.type == cryptonote::transaction_type::PROTOCOL && tx_prefix.vout.size() == 0)
+    return false;
+  CARROT_CHECK_AND_THROW(tx_prefix.vout.size(), too_few_outputs, "transaction prefix contains no outputs");
+  return tx_prefix.vout.at(0).target.type() == typeid(cryptonote::txout_to_carrot_v1);
 }
 //-------------------------------------------------------------------------------------------------------------------
 input_context_t parse_carrot_input_context(const cryptonote::txin_gen &txin)
