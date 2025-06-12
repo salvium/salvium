@@ -374,6 +374,7 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
     LOG_PRINT_L1("Deriving enotes");
     std::vector<RCTOutputEnoteProposal> output_enote_proposals;
     encrypted_payment_id_t encrypted_payment_id;
+    size_t change_index;
     get_output_enote_proposals(tx_proposal.normal_payment_proposals,
         selfsend_payment_proposal_cores,
         tx_proposal.dummy_encrypted_payment_id,
@@ -382,7 +383,8 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
         alice.carrot_account_spend_pubkey,
         tx_proposal.key_images_sorted.at(0),
         output_enote_proposals,
-        encrypted_payment_id);
+        encrypted_payment_id,
+        change_index);
 
     // Collect balance info and enotes
     std::vector<crypto::public_key> input_onetime_addresses;
@@ -409,6 +411,7 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
     LOG_PRINT_L1("Storing carrot to transaction");
     cryptonote::transaction tx = store_carrot_to_transaction_v1(output_enotes,
         tx_proposal.key_images_sorted,
+        tx_proposal.sources,
         tx_proposal.fee,
         encrypted_payment_id);
 

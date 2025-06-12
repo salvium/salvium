@@ -332,6 +332,7 @@ void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
 
     // 6. save the amount and first key image
     output_enote_out.amount                   = proposal.amount;
+    output_enote_out.enote.asset_type         = proposal.asset_type;
     output_enote_out.enote.tx_first_key_image = tx_first_key_image;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -399,6 +400,7 @@ void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &propo
     // 8. save the enote ephemeral pubkey, first tx key image, and amount
     output_enote_out.enote.enote_ephemeral_pubkey = enote_ephemeral_pubkey;
     output_enote_out.enote.tx_first_key_image     = tx_first_key_image;
+    output_enote_out.enote.asset_type             = "SAL1";
     output_enote_out.amount                       = proposal.amount;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -526,6 +528,7 @@ void get_output_proposal_internal_v1(const CarrotPaymentProposalSelfSendV1 &prop
     // 9. save the enote ephemeral pubkey, first tx key image, and amount
     output_enote_out.enote.enote_ephemeral_pubkey = enote_ephemeral_pubkey;
     output_enote_out.enote.tx_first_key_image     = tx_first_key_image;
+    output_enote_out.enote.asset_type             = "SAL1";
     output_enote_out.amount                       = proposal.amount;
 }
 //-------------------------------------------------------------------------------------------------------------------

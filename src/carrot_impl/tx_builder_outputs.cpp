@@ -59,6 +59,7 @@ void get_output_enote_proposals_from_proposal_v1(const CarrotTransactionProposal
         selfsend_payment_proposal_cores.push_back(selfsend_payment_proposal.proposal);
 
     // derive enote proposals
+    size_t change_index;
     get_output_enote_proposals(tx_proposal.normal_payment_proposals,
         selfsend_payment_proposal_cores,
         tx_proposal.dummy_encrypted_payment_id,
@@ -67,6 +68,7 @@ void get_output_enote_proposals_from_proposal_v1(const CarrotTransactionProposal
         tx_proposal.key_images_sorted.at(0),
         output_enote_proposals_out,
         encrypted_payment_id_out,
+        change_index,
         payment_proposal_order_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -119,6 +121,7 @@ void make_pruned_transaction_from_proposal_v1(const CarrotTransactionProposalV1 
     // serialize tx
     pruned_tx_out = store_carrot_to_transaction_v1(enotes,
         tx_proposal.key_images_sorted,
+        tx_proposal.sources,
         tx_proposal.fee,
         encrypted_payment_id);
 

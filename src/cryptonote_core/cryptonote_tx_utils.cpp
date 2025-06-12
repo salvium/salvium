@@ -411,10 +411,12 @@ namespace cryptonote
           };
 
           // Build the proposal
-          get_coinbase_output_proposal_v1(payment_proposal, height, enotes.back());
+          carrot::CarrotCoinbaseEnoteV1 e;
+          get_coinbase_output_proposal_v1(payment_proposal, height, e);
+          enotes.push_back(e);
         }
-        
-        tx = store_carrot_to_coinbase_transaction_v1(enotes, std::string{}, cryptonote::transaction_type::PROTOCOL);
+
+        tx = store_carrot_to_coinbase_transaction_v1(enotes, std::string{}, cryptonote::transaction_type::PROTOCOL, height);
         tx.amount_burnt = 0;
         tx.invalidate_hashes();
       }

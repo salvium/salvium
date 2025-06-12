@@ -58,15 +58,13 @@ carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
     std::set<size_t> &selected_transfer_indices_out);
 
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_transfer(
-    const wallet2::transfer_container &transfers,
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
+    wallet2 &w,
     std::vector<cryptonote::tx_destination_entry> dsts,
     const rct::xmr_amount fee_per_weight,
+    const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
     const uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
-    const rct::xmr_amount ignore_above,
-    const rct::xmr_amount ignore_below,
     wallet2::unique_index_container subtract_fee_from_outputs,
     const std::uint64_t top_block_index);
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_transfer(
@@ -86,6 +84,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const bool is_subaddress,
     const size_t n_dests_per_tx,
     const rct::xmr_amount fee_per_weight,
+    const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
     const std::uint64_t top_block_index);
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep(
@@ -105,6 +104,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const bool is_subaddress,
     const size_t n_dests_per_tx,
     const rct::xmr_amount fee_per_weight,
+    const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
@@ -126,7 +126,6 @@ wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionPropos
 
 cryptonote::transaction finalize_all_proofs_from_transfer_details(
     const carrot::CarrotTransactionProposalV1 &tx_proposal,
-    const std::vector<std::size_t> &selected_transfers,
     const cryptonote::transaction_type tx_type,
     const wallet2 &w);
 

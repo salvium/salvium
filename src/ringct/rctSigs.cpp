@@ -1507,26 +1507,26 @@ namespace rct {
     
     //RCT simple    
     //for post-rct only
-    rctSig genRctSimpleCarrot(
-                              const key &message,
-                              const carrot_ctkeyV & inSk,
-                              const keyV & destinations,
-                              const cryptonote::transaction_type tx_type,
-                              const std::string& in_asset_type,
-                              const std::vector<std::string> & destination_asset_types,
-                              const std::vector<xmr_amount> & inamounts,
-                              const std::vector<xmr_amount> & outamounts,
-                              xmr_amount txnFee,
-                              const ctkeyM & mixRing,
-                              const std::vector<unsigned int> & index,
-                              const ctkeyV &outSk,
-                              const RCTConfig &rct_config,
-                              hw::device &hwdev,
-                              const rct::salvium_data_t &salvium_data,
-                              const key &x_change,
-                              const key &y_change,
-                              const size_t change_index
-                              )
+    void genRctSimpleCarrot(
+      const key &message,
+      const carrot_ctkeyV & inSk,
+      const keyV & destinations,
+      const cryptonote::transaction_type tx_type,
+      const std::string& in_asset_type,
+      const std::vector<std::string> & destination_asset_types,
+      const std::vector<xmr_amount> & inamounts,
+      const std::vector<xmr_amount> & outamounts,
+      xmr_amount txnFee,
+      const ctkeyM & mixRing,
+      const std::vector<unsigned int> & index,
+      const ctkeyV &outSk,
+      const RCTConfig &rct_config,
+      hw::device &hwdev,
+      const rct::salvium_data_t &salvium_data,
+      const key &x_change,
+      const key &y_change,
+      const size_t change_index,
+      rctSig &rv)
     {
       CHECK_AND_ASSERT_THROW_MES(rct_config.range_proof_type == RangeProofPaddedBulletproof, "Borromean range proofs no longer supported");
       CHECK_AND_ASSERT_THROW_MES(destination_asset_types.size() == destinations.size(), "Different number of amount_keys/destinations");
@@ -1539,7 +1539,6 @@ namespace rct {
         CHECK_AND_ASSERT_THROW_MES(index[n] < mixRing[n].size(), "Bad index into mixRing");
       }
 
-      rctSig rv;
       switch (rct_config.bp_version)
       {
       case 0:
@@ -1615,8 +1614,6 @@ namespace rct {
         else
           rv.p.TCLSAGs[i] = proveRctTCLSAGSimple(full_message, rv.mixRing[i], inSk[i].x, inSk[i].y, inSk[i].mask, a[i], pseudoOuts[i], index[i], hwdev);
       }
-
-      return rv;
     }
 
     //RCT simple    
@@ -2126,7 +2123,7 @@ namespace rct {
         const keyV &pseudoOuts = bulletproof || bulletproof_plus ? rv.p.pseudoOuts : rv.pseudoOuts;
 
         const key message = get_pre_mlsag_hash(rv, hw::get_device("default"));
-
+        
         results.clear();
         results.resize(rv.mixRing.size());
         for (size_t i = 0 ; i < rv.mixRing.size() ; i++) {

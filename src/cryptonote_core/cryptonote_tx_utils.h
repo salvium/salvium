@@ -90,11 +90,13 @@ namespace cryptonote
     uint64_t amount;                    //money
     bool rct;                           //true if the output is rct
     bool carrot;                        //true if the output is a carrot output
+    bool coinbase;                      //true if the output is a coinbase output
     rct::key mask;                      //ringct amount mask
     rct::multisig_kLRki multisig_kLRki; //multisig info
     std::string asset_type;
     crypto::key_image first_rct_key_image;
     crypto::public_key address_spend_pubkey; // the spend public key of the address that this source is for.
+    uint64_t block_index;
     origin_data origin_tx_data;
 
     void push_output(uint64_t idx, const crypto::public_key &k, uint64_t amount) { outputs.push_back(std::make_pair(idx, rct::ctkey({rct::pk2rct(k), rct::zeroCommit(amount)}))); }
