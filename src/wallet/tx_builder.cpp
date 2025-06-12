@@ -128,8 +128,8 @@ static bool build_payment_proposals(std::vector<carrot::CarrotPaymentProposalV1>
         normal_payment_proposals_inout.push_back(carrot::CarrotPaymentProposalV1{
             .destination = dest,
             .amount = tx_dest_entry.amount,
+            .asset_type = tx_dest_entry.asset_type,
             .randomness = carrot::gen_janus_anchor(),
-            .asset_type = tx_dest_entry.asset_type
         });
     }
 
