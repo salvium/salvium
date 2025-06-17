@@ -854,6 +854,31 @@ std::string simple_wallet::get_command_usage(const std::vector<std::string> &arg
   return ss.str();
 }
 
+bool simple_wallet::carrot_keys(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
+{
+  // don't log
+  PAUSE_READLINE();
+  if (m_wallet->key_on_device()) {
+    std::cout << "secret: On device. Not available" << std::endl;
+  } else {
+    SCOPED_WALLET_UNLOCK();
+    printf("master secret: ");
+    print_secret_key(m_wallet->get_carrot_account().s_master);
+    putchar('\n');
+    printf("view-received secret: ");
+    print_secret_key(m_wallet->get_account().get_keys().m_view_secret_key);
+    putchar('\n');
+    printf("view-all secret: ");
+    print_secret_key(m_wallet->get_carrot_account().s_view_balance);
+    putchar('\n');
+  }
+  // TODO: print the public wallet address for the different wallet tiers
+  //std::cout << "public: " << string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_account_address.m_view_public_key) << std::endl;
+
+  return true;
+}
+
+
 bool simple_wallet::viewkey(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
 {
   // don't log
@@ -3599,6 +3624,9 @@ simple_wallet::simple_wallet()
   m_cmd_binder.set_handler("save_watch_only",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::save_watch_only, _1),
                            tr("Save a watch-only keys file."));
+  m_cmd_binder.set_handler("carrot_keys",
+                           boost::bind(&simple_wallet::on_command, this, &simple_wallet::carrot_keys, _1),
+                           tr("Display the Carrot private keys."));
   m_cmd_binder.set_handler("viewkey",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::viewkey, _1),
                            tr("Display the private view key."));
