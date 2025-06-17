@@ -3620,8 +3620,7 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
         return false;
       }
     }
-    
-  else if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+  } else if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
     // for v5, force the audit and the new SalviumZero RCT data
     if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::AUDIT) {
       if (tx.rct_signatures.type != rct::RCTTypeSalviumZero) {

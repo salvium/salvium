@@ -5521,13 +5521,8 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
 
   if (r)
   {
-    // Generate the Carrot keys here
-    m_carrot_account.legacy_acb = m_account;
-    m_carrot_account.generate();
-  }
-  
-  if (r)
-  {
+    m_account.set_carrot_keys();
+
     if (!m_is_background_wallet)
       setup_keys(password);
     else
@@ -6915,9 +6910,10 @@ void wallet2::process_background_cache_on_open()
     background_w2->m_background_sync_type = m_background_sync_type;
     background_w2->m_custom_background_key = m_custom_background_key;
 
-    cryptonote::account_base account = m_account;
-    account.forget_spend_key();
-    background_w2->m_account = account;
+    // TODO: uncommet this block
+    // carrot::carrot_and_legacy_account account = m_account;
+    // account.forget_spend_key();
+    // background_w2->m_account = account;
 
     // Load background cache from file
     background_w2->clear();

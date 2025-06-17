@@ -725,7 +725,10 @@ void view_incoming_scan_transaction(
         "view_incoming_scan_transaction: enote scan span wrong length");
 
     //! @TODO: HW device
-    carrot::view_incoming_key_ram_borrowed_device k_view_dev(acc.m_view_secret_key);
+    const bool is_carrot = carrot::is_carrot_transaction_v1(tx);
+    carrot::view_incoming_key_ram_borrowed_device k_view_dev(
+        is_carrot ? acc.s_view_balance : acc.m_view_secret_key 
+    );
 
     // do view-incoming scan for each output enotes
     for (size_t local_output_index = 0; local_output_index < n_outputs; ++local_output_index)
@@ -738,7 +741,7 @@ void view_incoming_scan_transaction(
             tx_extra_nonce,
             main_derivations,
             additional_derivations,
-            acc.m_account_address,
+            is_carrot ? acc.m_carrot_account_address : acc.m_account_address,
             &k_view_dev,
             subaddress_keystore,
             acc.get_device());
@@ -769,11 +772,12 @@ void view_incoming_scan_transaction(
     // 2. perform ECDH derivations
     std::vector<crypto::key_derivation> main_derivations;
     std::vector<crypto::key_derivation> additional_derivations;
+    const bool is_carrot = carrot::is_carrot_transaction_v1(tx);
     perform_ecdh_derivations(epee::to_span(main_tx_ephemeral_pubkeys),
         epee::to_span(additional_tx_ephemeral_pubkeys),
-        acc.m_view_secret_key,
+        is_carrot ? acc.s_view_balance : acc.m_view_secret_key,
         acc.get_device(),
-        carrot::is_carrot_transaction_v1(tx),
+        is_carrot,
         main_derivations,
         additional_derivations);
 

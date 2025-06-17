@@ -863,13 +863,13 @@ bool simple_wallet::carrot_keys(const std::vector<std::string> &args/* = std::ve
   } else {
     SCOPED_WALLET_UNLOCK();
     printf("master secret: ");
-    print_secret_key(m_wallet->get_carrot_account().s_master);
+    print_secret_key(m_wallet->get_account().get_keys().s_master);
     putchar('\n');
     printf("view-received secret: ");
     print_secret_key(m_wallet->get_account().get_keys().m_view_secret_key);
     putchar('\n');
     printf("view-all secret: ");
-    print_secret_key(m_wallet->get_carrot_account().s_view_balance);
+    print_secret_key(m_wallet->get_account().get_keys().s_view_balance);
     putchar('\n');
   }
   // TODO: print the public wallet address for the different wallet tiers
@@ -5224,8 +5224,10 @@ boost::optional<epee::wipeable_string> simple_wallet::new_wallet(const boost::pr
   try
   {
     recovery_val = m_wallet->generate(m_wallet_file, std::move(rc.second).password(), recovery_key, recover, two_random, create_address_file);
-    message_writer(console_color_white, true) << tr("Generated new wallet: ")
+    message_writer(console_color_white, true) << tr("Generated new legacy wallet: ")
       << m_wallet->get_account().get_public_address_str(m_wallet->nettype());
+    message_writer(console_color_white, true) << tr("Generated new carrot wallet: ")
+      << cryptonote::get_account_address_as_str(m_wallet->nettype(), false, m_wallet->get_account().get_keys().m_carrot_account_address);
     PAUSE_READLINE();
     std::cout << tr("View key: ");
     print_secret_key(m_wallet->get_account().get_keys().m_view_secret_key);
@@ -5299,8 +5301,11 @@ boost::optional<epee::wipeable_string> simple_wallet::new_wallet(const boost::pr
     {
       m_wallet->generate(m_wallet_file, std::move(rc.second).password(), address, viewkey, create_address_file);
     }
-    message_writer(console_color_white, true) << tr("Generated new wallet: ")
+    message_writer(console_color_white, true) << tr("Generated new legacy wallet: ")
       << m_wallet->get_account().get_public_address_str(m_wallet->nettype());
+
+    message_writer(console_color_white, true) << tr("Generated new carrot wallet: ")
+      << cryptonote::get_account_address_as_str(m_wallet->nettype(), false, m_wallet->get_account().get_keys().m_carrot_account_address);
   }
   catch (const std::exception& e)
   {
@@ -5459,9 +5464,14 @@ boost::optional<epee::wipeable_string> simple_wallet::open_wallet(const boost::p
     else if (m_wallet->is_background_wallet())
       prefix = tr("Opened background wallet");
     else
-      prefix = tr("Opened wallet");
+      prefix = tr("Opened legacy wallet");
+      
     message_writer(console_color_white, true) <<
-      prefix << ": " << m_wallet->get_account().get_public_address_str(m_wallet->nettype());
+    prefix << ": " << m_wallet->get_account().get_public_address_str(m_wallet->nettype());
+
+    prefix = tr("Opened carrot wallet");
+    message_writer(console_color_white, true) <<
+    prefix << ": " << cryptonote::get_account_address_as_str(m_wallet->nettype(), false, m_wallet->get_account().get_keys().m_carrot_account_address);
     if (m_wallet->get_account().get_device()) {
        message_writer(console_color_white, true) << "Wallet is on device: " << m_wallet->get_account().get_device().get_name();
     }

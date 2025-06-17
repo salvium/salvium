@@ -43,30 +43,19 @@ static constexpr std::uint32_t MAX_SUBADDRESS_MINOR_INDEX = 20;
 
 namespace carrot
 {
-  struct carrot_and_legacy_account
+  class carrot_and_legacy_account : public cryptonote::account_base
   {
-    cryptonote::account_base legacy_acb;
-
-    crypto::secret_key s_master;
-    crypto::secret_key k_prove_spend;
-    crypto::secret_key s_view_balance;
-    crypto::secret_key k_generate_image;
-    crypto::secret_key s_generate_address;
-
-    crypto::public_key carrot_account_spend_pubkey;
-    crypto::public_key carrot_account_view_pubkey;
-
+    public:
     view_incoming_key_ram_borrowed_device k_view_incoming_dev;
     view_balance_secret_ram_borrowed_device s_view_balance_dev;
     generate_address_secret_ram_borrowed_device s_generate_address_dev;
 
     std::unordered_map<crypto::public_key, subaddress_index_extended> subaddress_map;
-
     AddressDeriveType default_derive_type;
 
-    carrot_and_legacy_account(): k_view_incoming_dev(legacy_acb.get_keys().m_view_secret_key),
-        s_view_balance_dev(s_view_balance),
-        s_generate_address_dev(s_generate_address)
+    carrot_and_legacy_account(): k_view_incoming_dev(get_keys().m_view_secret_key),
+        s_view_balance_dev(get_keys().s_view_balance),
+        s_generate_address_dev(get_keys().s_generate_address)
     {}
 
     carrot_and_legacy_account(const carrot_and_legacy_account &k) = delete;
@@ -110,7 +99,14 @@ namespace carrot
 
     void generate_subaddress_map();
 
-    void generate(const AddressDeriveType default_derive_type = AddressDeriveType::Carrot);
+    crypto::secret_key generate(
+        const crypto::secret_key& recovery_key = crypto::secret_key(),
+        bool recover = false,
+        bool two_random = false,
+        const AddressDeriveType default_derive_type = AddressDeriveType::Carrot
+    );
+
+    void set_carrot_keys();
 
     AddressDeriveType resolve_derive_type(const AddressDeriveType derive_type) const;
   };

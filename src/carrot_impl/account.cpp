@@ -58,14 +58,14 @@ CarrotDestinationV1 carrot_and_legacy_account::cryptonote_address(const payment_
     switch (resolve_derive_type(derive_type))
     {
     case AddressDeriveType::Carrot:
-        make_carrot_integrated_address_v1(carrot_account_spend_pubkey,
-            legacy_acb.get_keys().m_account_address.m_view_public_key,
+        make_carrot_integrated_address_v1(get_keys().m_carrot_account_address.m_spend_public_key,
+            get_keys().m_account_address.m_view_public_key,
             payment_id,
             addr);
         break;
     case AddressDeriveType::PreCarrot:
-        make_carrot_integrated_address_v1(legacy_acb.get_keys().m_account_address.m_spend_public_key,
-            legacy_acb.get_keys().m_account_address.m_view_public_key,
+        make_carrot_integrated_address_v1(get_keys().m_account_address.m_spend_public_key,
+            get_keys().m_account_address.m_view_public_key,
             payment_id,
             addr);
         break;
@@ -80,15 +80,15 @@ CarrotDestinationV1 carrot_and_legacy_account::subaddress(const subaddress_index
     if (!subaddress_index.index.is_subaddress())
         return cryptonote_address(null_payment_id, subaddress_index.derive_type);
 
-    const cryptonote::account_keys &lkeys = legacy_acb.get_keys();
+    const cryptonote::account_keys &keys = get_keys();
 
     CarrotDestinationV1 addr;
     cryptonote::account_public_address cnaddr;
     switch (resolve_derive_type(subaddress_index.derive_type))
     {
     case AddressDeriveType::Carrot:
-        make_carrot_subaddress_v1(carrot_account_spend_pubkey,
-            carrot_account_view_pubkey,
+        make_carrot_subaddress_v1(keys.m_carrot_account_address.m_spend_public_key,
+            keys.m_carrot_account_address.m_view_public_key,
             s_generate_address_dev,
             subaddress_index.index.major,
             subaddress_index.index.minor,
@@ -96,7 +96,7 @@ CarrotDestinationV1 carrot_and_legacy_account::subaddress(const subaddress_index
         break;
     case AddressDeriveType::PreCarrot:
         cnaddr =
-            lkeys.m_device->get_subaddress(lkeys, {subaddress_index.index.major, subaddress_index.index.minor});
+            keys.m_device->get_subaddress(keys, {subaddress_index.index.major, subaddress_index.index.minor});
         addr = CarrotDestinationV1{
             .address_spend_pubkey = cnaddr.m_spend_public_key,
             .address_view_pubkey = cnaddr.m_view_public_key,
@@ -130,7 +130,7 @@ void carrot_and_legacy_account::opening_for_subaddress(const subaddress_index_ex
     const uint32_t major_index = subaddress_index.index.major;
     const uint32_t minor_index = subaddress_index.index.minor;
 
-    const cryptonote::account_keys &lkeys = legacy_acb.get_keys();
+    const cryptonote::account_keys &keys = get_keys();
 
     crypto::secret_key address_index_generator;
     crypto::secret_key subaddress_scalar;
@@ -140,12 +140,12 @@ void carrot_and_legacy_account::opening_for_subaddress(const subaddress_index_ex
     {
     case AddressDeriveType::Carrot:
         // s^j_gen = H_32[s_ga](j_major, j_minor)
-        make_carrot_index_extension_generator(s_generate_address, major_index, minor_index, address_index_generator);
+        make_carrot_index_extension_generator(keys.s_generate_address, major_index, minor_index, address_index_generator);
 
         if (is_subaddress)
         {
             // k^j_subscal = H_n(K_s, j_major, j_minor, s^j_gen)
-            make_carrot_subaddress_scalar(carrot_account_spend_pubkey, address_index_generator, major_index, minor_index, subaddress_scalar);
+            make_carrot_subaddress_scalar(keys.m_carrot_account_address.m_spend_public_key, address_index_generator, major_index, minor_index, subaddress_scalar);
         }
         else
         {
@@ -154,19 +154,19 @@ void carrot_and_legacy_account::opening_for_subaddress(const subaddress_index_ex
         }
 
         // k^g_a = k_gi * k^j_subscal
-        sc_mul(to_bytes(address_privkey_g_out), to_bytes(k_generate_image), to_bytes(subaddress_scalar));
+        sc_mul(to_bytes(address_privkey_g_out), to_bytes(keys.k_generate_image), to_bytes(subaddress_scalar));
 
         // k^t_a = k_ps * k^j_subscal
-        sc_mul(to_bytes(address_privkey_t_out), to_bytes(k_prove_spend), to_bytes(subaddress_scalar));
+        sc_mul(to_bytes(address_privkey_t_out), to_bytes(keys.k_prove_spend), to_bytes(subaddress_scalar));
         break;
     case AddressDeriveType::PreCarrot:
         // m = Hn(k_v || j_major || j_minor) if subaddress else 0
         subaddress_extension = is_subaddress
-            ? lkeys.get_device().get_subaddress_secret_key(lkeys.m_view_secret_key, {major_index, minor_index})
+            ? keys.get_device().get_subaddress_secret_key(keys.m_view_secret_key, {major_index, minor_index})
             : crypto::null_skey;
 
         // k^g_a = k_s + m
-        sc_add(to_bytes(address_privkey_g_out), to_bytes(lkeys.m_spend_secret_key), to_bytes(subaddress_extension));
+        sc_add(to_bytes(address_privkey_g_out), to_bytes(keys.m_spend_secret_key), to_bytes(subaddress_extension));
 
         // k^t_a = 0
         memset(address_privkey_t_out.data, 0, sizeof(address_privkey_t_out));
@@ -292,23 +292,35 @@ void carrot_and_legacy_account::generate_subaddress_map()
     }
 }
 //----------------------------------------------------------------------------------------------------------------------
-void carrot_and_legacy_account::generate(const AddressDeriveType default_derive_type)
+crypto::secret_key carrot_and_legacy_account::generate(
+    const crypto::secret_key& recovery_key,
+    bool recover,
+    bool two_random,
+    const AddressDeriveType default_derive_type)
 {
-    //legacy_acb.generate();
+    // generate the legacy keys
+    crypto::secret_key retval = cryptonote::account_base::generate(recovery_key, recover, two_random);
 
-    //crypto::generate_random_bytes_thread_safe(sizeof(crypto::secret_key), to_bytes(s_master));
-    s_master = legacy_acb.get_keys().m_spend_secret_key;
-    make_carrot_provespend_key(s_master, k_prove_spend);
-    make_carrot_viewbalance_secret(s_master, s_view_balance);
-    make_carrot_generateimage_key(s_view_balance, k_generate_image);
-    make_carrot_generateaddress_secret(s_view_balance, s_generate_address);
+    // generate carrot keys
+    set_carrot_keys();
 
-    make_carrot_spend_pubkey(k_generate_image, k_prove_spend, carrot_account_spend_pubkey);
-    k_view_incoming_dev.view_key_scalar_mult_ed25519(carrot_account_spend_pubkey,
-        carrot_account_view_pubkey);
+    return retval;
+}
+//----------------------------------------------------------------------------------------------------------------------
+void carrot_and_legacy_account::set_carrot_keys()
+{
+    m_keys.s_master = m_keys.m_spend_secret_key;
+    make_carrot_provespend_key(m_keys.s_master, m_keys.k_prove_spend);
+    make_carrot_viewbalance_secret(m_keys.s_master, m_keys.s_view_balance);
+    make_carrot_generateimage_key(m_keys.s_view_balance, m_keys.k_generate_image);
+    make_carrot_generateaddress_secret(m_keys.s_view_balance, m_keys.s_generate_address);
+    make_carrot_spend_pubkey(m_keys.k_generate_image, m_keys.k_prove_spend, m_keys.m_carrot_account_address.m_spend_public_key);
+    k_view_incoming_dev.view_key_scalar_mult_ed25519(
+        m_keys.m_carrot_account_address.m_spend_public_key,
+        m_keys.m_carrot_account_address.m_view_public_key
+    );
 
     this->default_derive_type = default_derive_type;
-
     generate_subaddress_map();
 }
 //----------------------------------------------------------------------------------------------------------------------

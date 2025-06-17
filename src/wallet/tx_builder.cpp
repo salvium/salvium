@@ -918,7 +918,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
             );
 
             crypto::secret_key x, y;
-            bool r = w.get_carrot_account().try_searching_for_opening_for_onetime_address(
+            bool r = w.get_account().try_searching_for_opening_for_onetime_address(
                 sources[i].address_spend_pubkey,
                 sender_extension_g_out,
                 sender_extension_t_out,
@@ -990,7 +990,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     const carrot::RCTOutputEnoteProposal &change_enote_proposal = output_enote_proposals.at(change_index);
     const carrot::input_context_t input_context = carrot::make_carrot_input_context(tx_proposal.key_images_sorted.at(0));
     crypto::hash s_sender_receiver;
-    w.get_carrot_account().s_view_balance_dev.make_internal_sender_receiver_secret(
+    w.get_account().s_view_balance_dev.make_internal_sender_receiver_secret(
         change_enote_proposal.enote.enote_ephemeral_pubkey,
         input_context,
         s_sender_receiver);
@@ -999,7 +999,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     crypto::secret_key sender_extension_t;
     carrot::make_carrot_onetime_address_extension_t(s_sender_receiver, change_enote_proposal.enote.amount_commitment, sender_extension_t);
     crypto::secret_key change_x, change_y;
-    bool r = w.get_carrot_account().try_searching_for_opening_for_onetime_address(
+    bool r = w.get_account().try_searching_for_opening_for_onetime_address(
         change_address_spend_pubkey,
         sender_extension_g,
         sender_extension_t,

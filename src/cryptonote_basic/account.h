@@ -61,8 +61,8 @@ namespace cryptonote
     crypto::secret_key s_generate_address;
 
     // carrot public keys (minus K^0_v, which is shared with legacy K^0_v)
-    crypto::public_key carrot_account_spend_pubkey;
-    crypto::public_key carrot_account_view_pubkey;
+    account_public_address m_carrot_account_address;
+
     
     BEGIN_KV_SERIALIZE_MAP()
       KV_SERIALIZE(m_account_address)
@@ -135,7 +135,8 @@ namespace cryptonote
 
   private:
     void set_null();
-    account_keys m_keys;
+  protected:
     uint64_t m_creation_timestamp;
+    account_keys m_keys;
   };
 }

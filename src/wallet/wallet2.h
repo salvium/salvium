@@ -1119,11 +1119,8 @@ private:
      */
     bool verify_password(const epee::wipeable_string& password) {crypto::secret_key key = crypto::null_skey; return verify_password(password, key);};
     bool verify_password(const epee::wipeable_string& password, crypto::secret_key &spend_key_out);
-    cryptonote::account_base& get_account(){return m_account;}
-    const cryptonote::account_base& get_account()const{return m_account;}
-
-    carrot::carrot_and_legacy_account& get_carrot_account(){return m_carrot_account;}
-    const carrot::carrot_and_legacy_account& get_carrot_account()const{return m_carrot_account;}
+    carrot::carrot_and_legacy_account& get_account(){return m_account;}
+    const carrot::carrot_and_legacy_account& get_account()const{return m_account;}
     
     bool is_key_encryption_enabled() const;
     void encrypt_keys(const crypto::chacha_key &key);
@@ -2098,8 +2095,7 @@ private:
     bool should_expand(const cryptonote::subaddress_index &index) const;
     bool spends_one_of_ours(const cryptonote::transaction &tx) const;
 
-    carrot::carrot_and_legacy_account m_carrot_account;
-    cryptonote::account_base m_account;
+    carrot::carrot_and_legacy_account m_account;
     boost::optional<epee::net_utils::http::login> m_daemon_login;
     std::string m_daemon_address;
     std::string m_proxy;
