@@ -1201,7 +1201,7 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::rctSig& 
     INSERT_INTO_JSON_OBJECT(dest, commitments, transform(sig.outPk, just_mask));
     INSERT_INTO_JSON_OBJECT(dest, fee, sig.txnFee);
     INSERT_INTO_JSON_OBJECT(dest, p_r, sig.p_r);
-    if (sig.type == rct::RCTTypeSalviumOne) {
+    if (sig.type == rct::RCTTypeSalviumZero || sig.type == rct::RCTTypeSalviumOne) {
       INSERT_INTO_JSON_OBJECT(dest, salvium_data, sig.salvium_data);
     } else if (sig.type == rct::RCTTypeFullProofs) {
       INSERT_INTO_JSON_OBJECT(dest, pr_proof, sig.salvium_data.pr_proof);
@@ -1245,7 +1245,7 @@ void fromJsonValue(const rapidjson::Value& val, rct::rctSig& sig)
     GET_FROM_JSON_OBJECT(val, sig.outPk, commitments);
     GET_FROM_JSON_OBJECT(val, sig.txnFee, fee);
     GET_FROM_JSON_OBJECT(val, sig.p_r, p_r);
-    if (sig.type == rct::RCTTypeSalviumOne) {
+    if (sig.type == rct::RCTTypeSalviumZero || sig.type == rct::RCTTypeSalviumOne) {
       GET_FROM_JSON_OBJECT(val, sig.salvium_data, salvium_data);
     } else if (sig.type == rct::RCTTypeFullProofs) {
       GET_FROM_JSON_OBJECT(val, sig.salvium_data.pr_proof, pr_proof);

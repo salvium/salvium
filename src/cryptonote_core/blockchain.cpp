@@ -3605,10 +3605,26 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
   }
   */
 
-  if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
-    // for v5, force the audit and the new SalviumOne RCT data
+  if (hf_version >= HF_VERSION_CARROT) {
+    // from v11, force the new SalviumOne RCT data
     if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::AUDIT) {
       if (tx.rct_signatures.type != rct::RCTTypeSalviumOne) {
+        MERROR_VER("SalviumOne data required after v" + std::to_string(HF_VERSION_CARROT));
+        tvc.m_invalid_output = true;
+        return false;
+      }
+    } else {
+      if (tx.rct_signatures.type != rct::RCTTypeNull) {
+        MERROR_VER("NULL RCT required for coinbase TXs after v" + std::to_string(HF_VERSION_CARROT));
+        tvc.m_invalid_output = true;
+        return false;
+      }
+    }
+    
+  else if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+    // for v5, force the audit and the new SalviumZero RCT data
+    if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::AUDIT) {
+      if (tx.rct_signatures.type != rct::RCTTypeSalviumZero) {
         MERROR_VER("FullProofs plus Audit data required after v" + std::to_string(HF_VERSION_SALVIUM_ONE_PROOFS));
         tvc.m_invalid_output = true;
         return false;
@@ -3748,7 +3764,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
       }
     }
   }
-  else if (rv.type == rct::RCTTypeSimple || rv.type == rct::RCTTypeBulletproof || rv.type == rct::RCTTypeBulletproof2 || rv.type == rct::RCTTypeCLSAG || rv.type == rct::RCTTypeBulletproofPlus || rv.type == rct::RCTTypeFullProofs || rv.type == rct::RCTTypeSalviumOne)
+  else if (rv.type == rct::RCTTypeSimple || rv.type == rct::RCTTypeBulletproof || rv.type == rct::RCTTypeBulletproof2 || rv.type == rct::RCTTypeCLSAG || rv.type == rct::RCTTypeBulletproofPlus || rv.type == rct::RCTTypeFullProofs || rv.type == rct::RCTTypeSalviumZero || rv.type == rct::RCTTypeSalviumOne)
   {
     CHECK_AND_ASSERT_MES(!pubkeys.empty() && !pubkeys[0].empty(), false, "empty pubkeys");
     rv.mixRing.resize(pubkeys.size());
@@ -4098,8 +4114,13 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     const rct::rctSig &rv = tx.rct_signatures;
     
     // Check that after full proofs are enabled, the RCT version is set to enforce full proofs
-    if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+    if (hf_version >= HF_VERSION_CARROT) {
       if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeSalviumOne) {
+        MERROR_VER("Unsupported rct type (Salvium One / SPARC proofs are required): " << rv.type);
+        return false;
+      }
+    } else if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+      if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeSalviumZero) {
         MERROR_VER("Unsupported rct type (full proofs (with audit data) are required): " << rv.type);
         return false;
       }
@@ -4123,6 +4144,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     case rct::RCTTypeCLSAG:
     case rct::RCTTypeBulletproofPlus:
     case rct::RCTTypeFullProofs:
+    case rct::RCTTypeSalviumZero:
     case rct::RCTTypeSalviumOne:
     {
       if (!ver_rct_non_semantics_simple_cached(tx, pubkeys, m_rct_ver_cache, RCT_CACHE_TYPE, hf_version))

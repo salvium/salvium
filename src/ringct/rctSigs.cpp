@@ -1579,7 +1579,7 @@ namespace rct {
       DP(rv.p_r);
 
       // set salvium_data
-      if (rv.type == RCTTypeFullProofs || rv.type == RCTTypeSalviumZero || rv.type == RCTTypeSalviumOne) {
+      if (rv.type == RCTTypeSalviumOne) {
         rv.salvium_data.pr_proof = PRProof_Gen(difference);
 #ifdef DBG
         CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.p_r, rv.salvium_data.pr_proof), "PRProof_Ver() failed on recently created proof");
