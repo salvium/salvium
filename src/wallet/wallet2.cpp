@@ -2855,7 +2855,7 @@ void wallet2::process_new_scanned_transaction(
       crypto::public_key P_change = crypto::null_pkey;
       THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[0], P_change), error::wallet_internal_error, "Failed to get change output public key");
       m_subaddresses[P_change] = subaddr_index_cn;//tx_scan_info[o].received->index;//{0,0};
-      if (block_version >= HF_VERSION_ENABLE_N_OUTS)
+      if (tx.version >= TRANSACTION_VERSION_N_OUTS)
         m_salvium_txs.insert({tx.return_address_list[local_output_index], m_transfers.size()-1});
       else
         m_salvium_txs.insert({tx.return_address, m_transfers.size()-1});
