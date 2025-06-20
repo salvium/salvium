@@ -59,10 +59,10 @@ static void store_carrot_ephemeral_pubkeys_to_extra(const EnoteContainer &enotes
     if (nouts == 0)
         return;
 
-    const bool use_shared_ephemeral_pubkey = nouts == 2 && 0 == memcmp(
+    const bool use_shared_ephemeral_pubkey = nouts == 1 || (nouts == 2 && 0 == memcmp(
             &enotes.front().enote_ephemeral_pubkey,
             &enotes.back().enote_ephemeral_pubkey, 
-            sizeof(mx25519_pubkey));
+            sizeof(mx25519_pubkey)));
     bool success = true;
     if (use_shared_ephemeral_pubkey)
     {

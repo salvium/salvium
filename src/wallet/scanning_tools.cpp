@@ -727,7 +727,7 @@ void view_incoming_scan_transaction(
     //! @TODO: HW device
     const bool is_carrot = carrot::is_carrot_transaction_v1(tx);
     carrot::view_incoming_key_ram_borrowed_device k_view_dev(
-        is_carrot ? acc.s_view_balance : acc.m_view_secret_key 
+        is_carrot ? acc.k_view_incoming : acc.m_view_secret_key 
     );
 
     // do view-incoming scan for each output enotes
@@ -775,7 +775,7 @@ void view_incoming_scan_transaction(
     const bool is_carrot = carrot::is_carrot_transaction_v1(tx);
     perform_ecdh_derivations(epee::to_span(main_tx_ephemeral_pubkeys),
         epee::to_span(additional_tx_ephemeral_pubkeys),
-        is_carrot ? acc.s_view_balance : acc.m_view_secret_key,
+        is_carrot ? acc.k_view_incoming : acc.m_view_secret_key,
         acc.get_device(),
         is_carrot,
         main_derivations,
@@ -799,8 +799,13 @@ std::vector<std::optional<enote_view_incoming_scan_info_t>> view_incoming_scan_t
     //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
     tools::keystore &subaddress_keystore)
 {
-    std::vector<std::optional<enote_view_incoming_scan_info_t>> res(tx.vout.size());
-    view_incoming_scan_transaction(tx, acc, subaddress_keystore, epee::to_mut_span(res));
+    const auto n_outputs = tx.vout.size();
+    std::vector<std::optional<enote_view_incoming_scan_info_t>> res(n_outputs);
+    if (n_outputs > 0)
+    {
+        view_incoming_scan_transaction(tx, acc, subaddress_keystore, epee::to_mut_span(res));
+    }
+
     return res;
 }
 //-------------------------------------------------------------------------------------------------------------------

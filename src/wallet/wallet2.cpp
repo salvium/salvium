@@ -3480,12 +3480,19 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
   auto tx_scan_job = [this, &enote_scan_infos, &output_key_images, &password_failure, &keystore]
     (const cryptonote::transaction &tx, size_t tx_output_idx)
   {
+    if (tx.vout.empty())
+    {
+      MWARNING("Skipping tx without any outputs: " << get_transaction_hash(tx) << ", height: " << m_blockchain.size());
+      return;
+    }
+
     const size_t output_span_end = tx_output_idx + tx.vout.size();
     if (output_span_end > enote_scan_infos.size() || output_span_end > output_key_images.size())
     {
       LOG_ERROR("BUG: tx scan worker output index out of bounds, skipping...");
       return;
     }
+
     wallet::view_incoming_scan_transaction(tx,
       this->m_account.get_keys(),
       keystore,
@@ -3505,31 +3512,44 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
   size_t i = 0;
   size_t tx_output_idx = 0;
   while (i < blocks.size()) {
-    tools::threadpool::waiter scan_blocks_waiter(tpool);
-    for (size_t j = 0; j < 10; ++j)
+    const parsed_block &par_blk = parsed_blocks.at(i);
+    const std::uint64_t height = start_height + i;
+    const bool skip_scan_for_this_block = should_skip_block(par_blk.block, height);
+    if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
+      tx_scan_job(par_blk.block.miner_tx, tx_output_idx);
+    tx_output_idx += par_blk.block.miner_tx.vout.size();
+    if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
+      tx_scan_job(par_blk.block.protocol_tx, tx_output_idx);
+    tx_output_idx += par_blk.block.protocol_tx.vout.size();
+    for (const cryptonote::transaction &tx : par_blk.txes)
     {
-      const parsed_block &par_blk = parsed_blocks.at(i);
-      const std::uint64_t height = start_height + i;
-      const bool skip_scan_for_this_block = should_skip_block(par_blk.block, height);
-      if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
-        tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(par_blk.block.miner_tx), tx_output_idx));
-      tx_output_idx += par_blk.block.miner_tx.vout.size();
-      if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
-        tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(par_blk.block.protocol_tx), tx_output_idx));
-      tx_output_idx += par_blk.block.protocol_tx.vout.size();
-      for (const cryptonote::transaction &tx : par_blk.txes)
-      {
-        if (!skip_scan_for_this_block)
-          tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(tx), tx_output_idx));
-        tx_output_idx += tx.vout.size();
-      }
-      if (++i >= blocks.size()) break;
+      if (!skip_scan_for_this_block)
+        tx_scan_job(tx, tx_output_idx);
+      tx_output_idx += tx.vout.size();
     }
-    if (!scan_blocks_waiter.wait())
-    {
-      THROW_WALLET_EXCEPTION_IF(password_failure, error::password_needed);
-      THROW_WALLET_EXCEPTION(error::wallet_internal_error, "Unrecognized exception in enote scanning threadpool");
-    }
+    // tools::threadpool::waiter scan_blocks_waiter(tpool);
+    // for (size_t j = 0; j < 10; ++j)
+    // {
+    //   if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
+    //     tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(par_blk.block.miner_tx), tx_output_idx));
+    //   tx_output_idx += par_blk.block.miner_tx.vout.size();
+    //   if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
+    //     tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(par_blk.block.protocol_tx), tx_output_idx));
+    //   tx_output_idx += par_blk.block.protocol_tx.vout.size();
+    //   for (const cryptonote::transaction &tx : par_blk.txes)
+    //   {
+    //     if (!skip_scan_for_this_block)
+    //       tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(tx), tx_output_idx));
+    //     tx_output_idx += tx.vout.size();
+    //   }
+    //   if (++i >= blocks.size()) break;
+    // }
+    // if (!scan_blocks_waiter.wait())
+    // {
+    //   THROW_WALLET_EXCEPTION_IF(password_failure, error::password_needed);
+    //   THROW_WALLET_EXCEPTION(error::wallet_internal_error, "Unrecognized exception in enote scanning threadpool");
+    // }
+    i++;
   }
 
   // Start processing blockchain entries with scanned outputs

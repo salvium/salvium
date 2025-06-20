@@ -57,6 +57,7 @@ namespace cryptonote
     crypto::secret_key s_master;
     crypto::secret_key k_prove_spend;
     crypto::secret_key s_view_balance;
+    crypto::secret_key k_view_incoming;
     crypto::secret_key k_generate_image;
     crypto::secret_key s_generate_address;
 

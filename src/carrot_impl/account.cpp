@@ -308,12 +308,18 @@ crypto::secret_key carrot_and_legacy_account::generate(
 }
 //----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::set_carrot_keys()
-{
+{   
+    // top level keys
     m_keys.s_master = m_keys.m_spend_secret_key;
     make_carrot_provespend_key(m_keys.s_master, m_keys.k_prove_spend);
     make_carrot_viewbalance_secret(m_keys.s_master, m_keys.s_view_balance);
+
+    // view balance keys
+    make_carrot_viewincoming_key(m_keys.s_view_balance, m_keys.k_view_incoming);
     make_carrot_generateimage_key(m_keys.s_view_balance, m_keys.k_generate_image);
     make_carrot_generateaddress_secret(m_keys.s_view_balance, m_keys.s_generate_address);
+
+    // carrot account address
     make_carrot_spend_pubkey(m_keys.k_generate_image, m_keys.k_prove_spend, m_keys.m_carrot_account_address.m_spend_public_key);
     k_view_incoming_dev.view_key_scalar_mult_ed25519(
         m_keys.m_carrot_account_address.m_spend_public_key,
