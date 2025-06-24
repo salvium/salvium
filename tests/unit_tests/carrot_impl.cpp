@@ -158,6 +158,7 @@ static void subtest_multi_account_transfer_over_transaction(const unittest_trans
     make_carrot_transaction_proposal_v1_transfer(normal_payment_proposals,
         selfsend_payment_proposals,
         tx_preproposal.fee_per_weight,
+        5,
         tx_preproposal.extra_extra,
         make_fake_input_selection_callback(),
         ss_keys.carrot_account_spend_pubkey,

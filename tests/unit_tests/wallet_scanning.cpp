@@ -159,9 +159,11 @@ TEST(wallet_scanning, view_scan_long_payment_id)
         // call view_incoming_scan_transaction with no meaningful key nor subaddresses maps,
         // just with the proper ECDH
         std::vector<std::optional<tools::wallet::enote_view_incoming_scan_info_t>> enote_scan_infos(tx.vout.size());
+        tools::keystore keystore;
         tools::wallet::view_incoming_scan_transaction(tx,
             bob.get_keys(),
-            {{bob_main_spend_pubkey, {}}}, // use a fake subaddress map with just the provided address in it
+            // {{bob_main_spend_pubkey, {}}},  use a fake subaddress map with just the provided address in it
+            keystore,
             epee::to_mut_span(enote_scan_infos));
 
         bool matched = false;
@@ -236,9 +238,11 @@ TEST(wallet_scanning, view_scan_short_payment_id)
         // call view_incoming_scan_transaction with no meaningful key nor subaddresses maps,
         // just with the proper ECDH
         std::vector<std::optional<tools::wallet::enote_view_incoming_scan_info_t>> enote_scan_infos(tx.vout.size());
+        tools::keystore keystore;
         tools::wallet::view_incoming_scan_transaction(tx,
             bob.get_keys(),
-            {{bob_main_spend_pubkey, {}}}, // use a fake subaddress map with just the provided address in it
+            // {{bob_main_spend_pubkey, {}}}, // use a fake subaddress map with just the provided address in it
+            keystore,
             epee::to_mut_span(enote_scan_infos));
 
         bool matched = false;

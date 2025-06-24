@@ -160,16 +160,15 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_transfer_1)
     const uint64_t top_block_index = std::max(transfers.front().m_block_height, transfers.back().m_block_height)
         + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE;
 
+    tools::wallet2 w;
     const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(
-        transfers,
-        {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        w,
         dsts,
         /*fee_per_weight=*/1,
+        5,
         /*extra=*/{},
         /*subaddr_account=*/0,
         /*subaddr_indices=*/{},
-        /*ignore_above=*/MONEY_SUPPLY,
-        /*ignore_below=*/0,
         {},
         top_block_index);
 
@@ -223,16 +222,15 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_transfer_2)
         carrot::mock::convert_destination_v1(bob.cryptonote_address(), out_amount)
     };
 
+    tools::wallet2 w;
     const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(
-        transfers,
-        alice.subaddress_map_cn(),
+        w,
         dsts,
         /*fee_per_weight=*/1,
+        5,
         /*extra=*/{},
         /*subaddr_account=*/spending_subaddr_account,
         /*subaddr_indices=*/{},
-        /*ignore_above=*/MONEY_SUPPLY,
-        /*ignore_below=*/0,
         {},
         top_block_index);
 
@@ -298,6 +296,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_1)
         /*is_subaddress=*/false,
         /*n_dests_per_tx=*/1,
         /*fee_per_weight=*/1,
+        5,
         /*extra=*/{},
         transfers.front().m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
     ASSERT_EQ(1, tx_proposals.size());
@@ -332,6 +331,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_2)
         /*is_subaddress=*/false,
         /*n_dests_per_tx=*/FCMP_PLUS_PLUS_MAX_OUTPUTS - 1,
         /*fee_per_weight=*/1,
+        5,
         /*extra=*/{},
         transfers.front().m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
     ASSERT_EQ(1, tx_proposals.size());
@@ -374,6 +374,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_3)
         /*is_subaddress=*/false,
         /*n_dests_per_tx=*/FCMP_PLUS_PLUS_MAX_OUTPUTS,
         /*fee_per_weight=*/1,
+        5,
         /*extra=*/{},
         transfers.front().m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
     ASSERT_EQ(1, tx_proposals.size());
@@ -449,6 +450,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_4)
         /*is_subaddress=*/false,
         /*n_dests_per_tx=*/n_dests_per_tx,
         /*fee_per_weight=*/1,
+        5,
         /*extra=*/{},
         top_block_index);
     ASSERT_EQ(4, tx_proposals.size());
@@ -530,6 +532,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_5)
         /*is_subaddress=*/false,
         /*n_dests_per_tx=*/n_dests_per_tx,
         /*fee_per_weight=*/1,
+        5,
         /*extra=*/{},
         top_block_index);
     ASSERT_EQ(8, tx_proposals.size());
@@ -614,6 +617,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_6)
         /*is_subaddress=*/false,
         /*n_dests_per_tx=*/n_dests_per_tx,
         /*fee_per_weight=*/1,
+        5,
         /*extra=*/{},
         top_block_index);
     ASSERT_EQ(1, tx_proposals.size());
