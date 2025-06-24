@@ -53,7 +53,7 @@ namespace carrot
     std::unordered_map<crypto::public_key, subaddress_index_extended> subaddress_map;
     AddressDeriveType default_derive_type;
 
-    carrot_and_legacy_account(): k_view_incoming_dev(get_keys().k_view_incoming),
+    carrot_and_legacy_account(): k_view_incoming_dev(get_keys().m_view_secret_key),
         s_view_balance_dev(get_keys().s_view_balance),
         s_generate_address_dev(get_keys().s_generate_address)
     {}
@@ -106,7 +106,7 @@ namespace carrot
         const AddressDeriveType default_derive_type = AddressDeriveType::Carrot
     );
 
-    void set_carrot_keys();
+    void set_carrot_keys(const AddressDeriveType default_derive_type = AddressDeriveType::Carrot);
 
     AddressDeriveType resolve_derive_type(const AddressDeriveType derive_type) const;
   };

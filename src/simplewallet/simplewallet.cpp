@@ -79,6 +79,9 @@
 #include "wallet/message_store.h"
 #include "QrCode.hpp"
 
+#include "carrot_impl/subaddress_index.h"
+#include "carrot_core/core_types.h"
+
 #ifdef WIN32
 #include <boost/locale.hpp>
 #include <boost/filesystem.hpp>
@@ -5226,8 +5229,14 @@ boost::optional<epee::wipeable_string> simple_wallet::new_wallet(const boost::pr
     recovery_val = m_wallet->generate(m_wallet_file, std::move(rc.second).password(), recovery_key, recover, two_random, create_address_file);
     message_writer(console_color_white, true) << tr("Generated new legacy wallet: ")
       << m_wallet->get_account().get_public_address_str(m_wallet->nettype());
+
+    const auto addr = m_wallet->get_account().cryptonote_address(carrot::null_payment_id, carrot::AddressDeriveType::Carrot);
+    cryptonote::account_public_address carrot_address {
+      .m_spend_public_key = addr.address_spend_pubkey,
+      .m_view_public_key = addr.address_view_pubkey
+    };
     message_writer(console_color_white, true) << tr("Generated new carrot wallet: ")
-      << cryptonote::get_account_address_as_str(m_wallet->nettype(), false, m_wallet->get_account().get_keys().m_carrot_account_address);
+      << cryptonote::get_account_address_as_str(m_wallet->nettype(), false, carrot_address);
     PAUSE_READLINE();
     std::cout << tr("View key: ");
     print_secret_key(m_wallet->get_account().get_keys().m_view_secret_key);
@@ -5469,9 +5478,14 @@ boost::optional<epee::wipeable_string> simple_wallet::open_wallet(const boost::p
     message_writer(console_color_white, true) <<
     prefix << ": " << m_wallet->get_account().get_public_address_str(m_wallet->nettype());
 
+    const auto addr = m_wallet->get_account().cryptonote_address(carrot::null_payment_id, carrot::AddressDeriveType::Carrot);
+    cryptonote::account_public_address carrot_address {
+      .m_spend_public_key = addr.address_spend_pubkey,
+      .m_view_public_key = addr.address_view_pubkey
+    };
     prefix = tr("Opened carrot wallet");
     message_writer(console_color_white, true) <<
-    prefix << ": " << cryptonote::get_account_address_as_str(m_wallet->nettype(), false, m_wallet->get_account().get_keys().m_carrot_account_address);
+    prefix << ": " << cryptonote::get_account_address_as_str(m_wallet->nettype(), false, carrot_address);
     if (m_wallet->get_account().get_device()) {
        message_writer(console_color_white, true) << "Wallet is on device: " << m_wallet->get_account().get_device().get_name();
     }

@@ -302,12 +302,12 @@ crypto::secret_key carrot_and_legacy_account::generate(
     crypto::secret_key retval = cryptonote::account_base::generate(recovery_key, recover, two_random);
 
     // generate carrot keys
-    set_carrot_keys();
+    set_carrot_keys(default_derive_type);
 
     return retval;
 }
 //----------------------------------------------------------------------------------------------------------------------
-void carrot_and_legacy_account::set_carrot_keys()
+void carrot_and_legacy_account::set_carrot_keys(const AddressDeriveType default_derive_type)
 {   
     // top level keys
     m_keys.s_master = m_keys.m_spend_secret_key;
@@ -315,7 +315,6 @@ void carrot_and_legacy_account::set_carrot_keys()
     make_carrot_viewbalance_secret(m_keys.s_master, m_keys.s_view_balance);
 
     // view balance keys
-    make_carrot_viewincoming_key(m_keys.s_view_balance, m_keys.k_view_incoming);
     make_carrot_generateimage_key(m_keys.s_view_balance, m_keys.k_generate_image);
     make_carrot_generateaddress_secret(m_keys.s_view_balance, m_keys.s_generate_address);
 

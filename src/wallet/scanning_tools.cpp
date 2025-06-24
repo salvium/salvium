@@ -726,9 +726,7 @@ void view_incoming_scan_transaction(
 
     //! @TODO: HW device
     const bool is_carrot = carrot::is_carrot_transaction_v1(tx);
-    carrot::view_incoming_key_ram_borrowed_device k_view_dev(
-        is_carrot ? acc.k_view_incoming : acc.m_view_secret_key 
-    );
+    carrot::view_incoming_key_ram_borrowed_device k_view_dev(acc.m_view_secret_key);
 
     // do view-incoming scan for each output enotes
     for (size_t local_output_index = 0; local_output_index < n_outputs; ++local_output_index)
@@ -775,7 +773,7 @@ void view_incoming_scan_transaction(
     const bool is_carrot = carrot::is_carrot_transaction_v1(tx);
     perform_ecdh_derivations(epee::to_span(main_tx_ephemeral_pubkeys),
         epee::to_span(additional_tx_ephemeral_pubkeys),
-        is_carrot ? acc.k_view_incoming : acc.m_view_secret_key,
+        acc.m_view_secret_key,
         acc.get_device(),
         is_carrot,
         main_derivations,
