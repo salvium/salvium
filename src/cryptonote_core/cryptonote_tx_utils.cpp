@@ -476,7 +476,8 @@ namespace cryptonote
     tx.type = cryptonote::transaction_type::MINER;
 
     // check for treasury payouts
-    auto[treasury_payout_exist, treasury_payout_index] = check_treasury_payout(nettype, height, hardforks, hard_fork_version);
+    const auto treasury_payout_data = get_config(nettype).TREASURY_SAL1_MINT_OUTPUT_DATA;
+    const bool treasury_payout_exists = (treasury_payout_data.count(height) == 1);
 
     uint64_t block_reward;
     if(!get_block_reward(median_weight, current_block_weight, already_generated_coins, block_reward, hard_fork_version))
@@ -496,13 +497,61 @@ namespace cryptonote
     {
       try
       {
+        // Build the miner payout
         carrot::CarrotDestinationV1 destination;
         carrot::make_carrot_main_address_v1(miner_address.m_spend_public_key,
           miner_address.m_view_public_key,
           destination);
 
+        CHECK_AND_ASSERT_THROW_MES(!destination.is_subaddress,
+                                   "make_single_enote_carrot_coinbase_transaction_v1: subaddress are not allowed in miner transactions");
+        CHECK_AND_ASSERT_THROW_MES(destination.payment_id == carrot::null_payment_id,
+                                   "make_single_enote_carrot_coinbase_transaction_v1: integrated addresses are not allowed in miner transactions");
+
         uint64_t stake_reward = block_reward / 5;
-        tx = carrot::make_single_enote_carrot_coinbase_transaction_v1(destination, block_reward - stake_reward, height, extra_nonce);
+
+        const carrot::CarrotPaymentProposalV1 payment_proposal{
+          .destination = destination,
+          .amount = block_reward - stake_reward,
+          .asset_type = "SAL1",
+          .randomness = carrot::gen_janus_anchor()
+        };
+
+        std::vector<carrot::CarrotCoinbaseEnoteV1> enotes(treasury_payout_exists ? 2 : 1);
+        carrot::get_coinbase_output_proposal_v1(payment_proposal, height, enotes.front());
+
+        // Check to see if there needs to be a treasury payout
+        if (treasury_payout_exists) {
+
+          // Convert the strings into meaningful data
+          const auto [tx_public_key_str, onetime_address_str, anchor_enc_str, view_tag_str] = treasury_payout_data.at(height);
+          mx25519_pubkey tx_public_key;
+          CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(tx_public_key_str, tx_public_key), "fail to deserialize treasury tx public key");
+          crypto::public_key onetime_address;
+          CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(onetime_address_str, onetime_address), "fail to deserialize treasury tx onetime address");
+          carrot::encrypted_janus_anchor_t anchor_enc;
+          CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(anchor_enc_str, anchor_enc), "fail to deserialize treasury tx anchor_enc");
+          carrot::view_tag_t view_tag;
+          CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(view_tag_str, view_tag), "fail to deserialize treasury tx view_tag");
+          
+          // Manually produce an enote for the treasury payout using the hardcoded keys
+          carrot::CarrotCoinbaseEnoteV1 &treasury_enote = enotes.back();
+          treasury_enote.onetime_address = onetime_address;
+          treasury_enote.amount = TREASURY_SAL1_MINT_AMOUNT;
+          treasury_enote.asset_type = "SAL1";
+          treasury_enote.anchor_enc = anchor_enc;
+          treasury_enote.view_tag = view_tag;
+          treasury_enote.enote_ephemeral_pubkey = tx_public_key;
+          treasury_enote.block_index = height;
+        
+          // sort enotes by K_o
+          if (enotes[0].onetime_address > enotes[1].onetime_address) {
+            std::swap(enotes[0], enotes[1]);
+          }
+        }
+
+        tx = carrot::store_carrot_to_coinbase_transaction_v1(enotes, extra_nonce, cryptonote::transaction_type::MINER, height);
+
         tx.amount_burnt = stake_reward;
         tx.invalidate_hashes();
       }
@@ -573,7 +622,7 @@ namespace cryptonote
       std::string asset_type = "SAL";
       if (hard_fork_version >= HF_VERSION_SALVIUM_ONE_PROOFS)
         asset_type = "SAL1";
-      cryptonote::set_tx_out(amount, asset_type, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, !treasury_payout_exist, view_tag, out);    
+      cryptonote::set_tx_out(amount, asset_type, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);    
       tx.vout.push_back(out);
 
     } else {
@@ -585,7 +634,7 @@ namespace cryptonote
     }
 
     CHECK_AND_ASSERT_MES(summary_amounts == block_reward, false, "Failed to construct miner tx, summary_amounts = " << summary_amounts << " not equal block_reward = " << block_reward);
-
+    /*
     // add the treasury payout if needed
     if (treasury_payout_exist) {
       std::vector<crypto::public_key> additional_tx_public_keys = {txkey.pub};
@@ -606,7 +655,7 @@ namespace cryptonote
       additional_tx_public_keys.push_back(tx_key);
       add_additional_tx_pub_keys_to_extra(tx.extra, additional_tx_public_keys);
     }
-
+    */
     tx.version = 2;
     tx.vin.push_back(in);
     tx.invalidate_hashes();

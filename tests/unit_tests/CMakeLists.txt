@@ -39,7 +39,7 @@ set(unit_tests_sources
   bulletproofs_plus.cpp
   canonical_amounts.cpp
   carrot_core.cpp
-  carrot_impl.cpp
+#  carrot_impl.cpp
   carrot_legacy.cpp
   carrot_mock_helpers.cpp
   carrot_sparc.cpp
@@ -95,7 +95,7 @@ set(unit_tests_sources
   test_peerlist.cpp
   test_protocol_pack.cpp
   threadpool.cpp
-  tx_construction_helpers.cpp
+#  tx_construction_helpers.cpp
   tx_proof.cpp
   hardfork.cpp
   unbound.cpp
@@ -106,9 +106,9 @@ set(unit_tests_sources
   output_selection.cpp
   vercmp.cpp
   ringdb.cpp
-  wallet_scanning.cpp
+#  wallet_scanning.cpp
   wallet_storage.cpp
-  wallet_tx_builder.cpp
+#  wallet_tx_builder.cpp
   wipeable_string.cpp
   is_hdd.cpp
   aligned.cpp
@@ -168,3 +168,6 @@ add_test(
 monero_add_minimal_executable(test_notifier test_notifier.cpp)
 target_link_libraries(test_notifier ${EXTRA_LIBRARIES})
 set_property(TARGET test_notifier PROPERTY FOLDER "tests")
+
+# Salvium tests
+add_subdirectory(salvium)

@@ -31,6 +31,7 @@
 //local headers
 #include "carrot_core/carrot_enote_types.h"
 #include "carrot_core/device.h"
+#include "carrot_impl/account.h"
 #include "carrot_impl/subaddress_index.h"
 #include "crypto/crypto.h"
 #include "cryptonote_basic/account.h"
@@ -75,6 +76,8 @@ struct enote_view_incoming_scan_info_t
 
     // the cold signing code used to have a bug which added multiple main tx pubkeys to extra
     std::size_t main_tx_pubkey_index;
+
+  bool is_carrot;
 };
 
 struct PreCarrotEnote
@@ -141,6 +144,6 @@ bool is_long_payment_id(const crypto::hash &pid);
 
 std::optional<crypto::key_image> try_derive_enote_key_image(
     const enote_view_incoming_scan_info_t &enote_scan_info,
-    const cryptonote::account_keys &acc);
+    const carrot::carrot_and_legacy_account &acc);
 } //namespace wallet
 } //namespace tools

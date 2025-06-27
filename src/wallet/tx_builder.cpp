@@ -91,6 +91,7 @@ static bool is_transfer_usable_for_input_selection(const wallet2::transfer_detai
         && (from_subaddresses.empty() || from_subaddresses.count(td.m_subaddr_index.minor) == 1)
         && td.amount() >= ignore_below
         && td.amount() <= ignore_above
+        && td.asset_type == "SAL1"
     ;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -173,11 +174,17 @@ static crypto::public_key find_change_address_spend_pubkey(
     CHECK_AND_ASSERT_THROW_MES(change_it != subaddress_map.cend(),
         "find_change_address_spend_pubkey: missing change address (index "
         << subaddr_account << ",0) in subaddress map");
+    // HERE BE DRAGONS!!!
+    // SRCG: Disabling the following check is necessary to allow return_payments to work...
+    //       ...but if we can find an alternative to using the subaddress_map, we should! 
+    /*
     const auto change_it_2 = std::find_if(std::next(change_it), subaddress_map.cend(),
         [subaddr_account](const auto &p) { return p.second.major == subaddr_account && p.second.minor == 0; });
     CHECK_AND_ASSERT_THROW_MES(change_it_2 == subaddress_map.cend(),
         "find_change_address_spend_pubkey: provided subaddress map is malformed!!! At least two spend pubkeys map to "
         "index " << subaddr_account << ",0 in the subaddress map!");
+    */
+    // LAND AHOY!!!
     return change_it->first;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -410,14 +417,14 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const auto subaddress_map = w.get_subaddress_map_ref();
 
     std::vector<carrot::CarrotTransactionProposalV1> tx_proposals;
-    tx_proposals.reserve(dsts.size() / (FCMP_PLUS_PLUS_MAX_OUTPUTS - 1) + 1);
+    tx_proposals.reserve(dsts.size() / (carrot::CARROT_MAX_TX_OUTPUTS - 1) + 1);
 
     const crypto::public_key change_address_spend_pubkey
         = find_change_address_spend_pubkey(subaddress_map, subaddr_account);
 
     while (!dsts.empty())
     {
-        const std::size_t num_dsts_to_complete = std::min<std::size_t>(dsts.size(), FCMP_PLUS_PLUS_MAX_OUTPUTS - 1);
+        const std::size_t num_dsts_to_complete = std::min<std::size_t>(dsts.size(), carrot::CARROT_MAX_TX_OUTPUTS - 1);
 
         // build payment proposals and subtractable info from last `num_dsts_to_complete` dsts
         std::vector<carrot::CarrotPaymentProposalV1> normal_payment_proposals;
@@ -847,10 +854,11 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         ctkey.mask = sources[i].mask;
         if (sources[i].carrot) {
 
+            const std::vector<crypto::public_key> v_pubkeys{sources[i].real_out_tx_key};
             const epee::span<const crypto::public_key> main_tx_ephemeral_pubkeys = 
-                epee::to_span(std::vector<crypto::public_key>{sources[i].real_out_tx_key});
+              epee::to_span(v_pubkeys);
             const epee::span<const crypto::public_key> additional_tx_ephemeral_pubkeys = 
-                epee::to_span(sources[i].real_out_additional_tx_keys);
+              epee::to_span(sources[i].real_out_additional_tx_keys);
 
             // 2. perform ECDH derivations
             std::vector<crypto::key_derivation> main_derivations;
@@ -917,8 +925,28 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
                 nominal_janus_anchor_out
             );
 
+            /*
+            LOG_ERROR("tx_builder values:" << std::endl <<
+                      "    Ko         : " << epee::string_tools::pod_to_hex(sources[i].outputs[sources[i].real_output].second.dest) << std::endl <<
+                      "    C_a        : " << epee::string_tools::pod_to_hex(sources[i].outputs[sources[i].real_output].second.mask) << std::endl <<
+                      "    D_e        : " << epee::string_tools::pod_to_hex(sources[i].real_out_tx_key) << std::endl <<
+                      "    s_sr       : " << epee::string_tools::pod_to_hex(s_sender_receiver_unctx.data) << std::endl <<
+                      "    s^ctx_sr   : " << epee::string_tools::pod_to_hex(s_sender_receiver.data) << std::endl <<
+                      "    k^o_g      : " << epee::string_tools::pod_to_hex(sender_extension_g_out.data) << std::endl <<
+                      "    k^o_t      : " << epee::string_tools::pod_to_hex(sender_extension_t_out.data) << std::endl <<
+                      "    K^j_s      : " << epee::string_tools::pod_to_hex(sources[i].address_spend_pubkey) << std::endl);
+            */
+            
+            bool r = w.get_account().can_open_fcmp_onetime_address(
+                sources[i].address_spend_pubkey,
+                sender_extension_g_out,
+                sender_extension_t_out,
+                rct::rct2pk(sources[i].outputs[sources[i].real_output].second.dest)
+            );
+            THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error,
+                "Failed to open onetime address");
             crypto::secret_key x, y;
-            bool r = w.get_account().try_searching_for_opening_for_onetime_address(
+            r = w.get_account().try_searching_for_opening_for_onetime_address(
                 sources[i].address_spend_pubkey,
                 sender_extension_g_out,
                 sender_extension_t_out,
@@ -926,7 +954,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
                 y
             );
             THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error,
-                "Failed to search for opening for onetime address");
+                "Failed to obtain openings for onetime address");
             ctkey.x = rct::sk2rct(x);
             ctkey.y = rct::sk2rct(y);
         } else {

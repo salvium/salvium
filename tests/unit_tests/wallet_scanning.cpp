@@ -123,6 +123,9 @@ TEST(wallet_scanning, view_scan_long_payment_id)
 
     const crypto::hash payment_id = crypto::rand<crypto::hash>();
 
+    // Create a keystore with a largely empty subaddress map
+    tools::keystore keystore({{bob_main_spend_pubkey, {}}}); // use a fake subaddress map with just the provided address in it
+    
     for (uint8_t hf_version = 1; hf_version < HF_VERSION_CARROT; ++hf_version)
     {
         MDEBUG("view_scan_as_sender_mainaddr: hf_version=" << static_cast<int>(hf_version));
@@ -161,10 +164,9 @@ TEST(wallet_scanning, view_scan_long_payment_id)
         std::vector<std::optional<tools::wallet::enote_view_incoming_scan_info_t>> enote_scan_infos(tx.vout.size());
         tools::keystore keystore;
         tools::wallet::view_incoming_scan_transaction(tx,
-            bob.get_keys(),
-            // {{bob_main_spend_pubkey, {}}},  use a fake subaddress map with just the provided address in it
-            keystore,
-            epee::to_mut_span(enote_scan_infos));
+                                                      bob.get_keys(),
+                                                      keystore,
+                                                      epee::to_mut_span(enote_scan_infos));
 
         bool matched = false;
         for (const auto &enote_scan_info : enote_scan_infos)
@@ -200,6 +202,9 @@ TEST(wallet_scanning, view_scan_short_payment_id)
     crypto::hash payment_id = crypto::null_hash;
     memcpy(&payment_id, &pid_8, sizeof(pid_8));
 
+    // Create a keystore with a largely empty subaddress map
+    tools::keystore keystore({{bob_main_spend_pubkey, {}}}); // use a fake subaddress map with just the provided address in it
+    
     ASSERT_FALSE(tools::wallet::is_long_payment_id(payment_id));
     ASSERT_NE(crypto::null_hash, payment_id);
 
@@ -240,10 +245,16 @@ TEST(wallet_scanning, view_scan_short_payment_id)
         std::vector<std::optional<tools::wallet::enote_view_incoming_scan_info_t>> enote_scan_infos(tx.vout.size());
         tools::keystore keystore;
         tools::wallet::view_incoming_scan_transaction(tx,
+<<<<<<< Updated upstream
             bob.get_keys(),
             // {{bob_main_spend_pubkey, {}}}, // use a fake subaddress map with just the provided address in it
             keystore,
             epee::to_mut_span(enote_scan_infos));
+=======
+                                                      bob.get_keys(),
+                                                      keystore,
+                                                      epee::to_mut_span(enote_scan_infos));
+>>>>>>> Stashed changes
 
         bool matched = false;
         for (const auto &enote_scan_info : enote_scan_infos)

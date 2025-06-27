@@ -1611,8 +1611,12 @@ namespace rct {
       {
         if (hwdev.get_mode() == hw::device::TRANSACTION_CREATE_FAKE)
           rv.p.TCLSAGs[i] = make_dummy_tclsag(rv.mixRing[i].size());
-        else
+        else {
           rv.p.TCLSAGs[i] = proveRctTCLSAGSimple(full_message, rv.mixRing[i], inSk[i].x, inSk[i].y, inSk[i].mask, a[i], pseudoOuts[i], index[i], hwdev);
+#ifdef DBG
+          CHECK_AND_ASSERT_THROW_MES(verRctTCLSAGSimple(full_message, rv.p.TCLSAGs[i], rv.mixRing[i], pseudoOuts[i]), "T-CLSAG verification failed");
+#endif
+        }
       }
     }
 

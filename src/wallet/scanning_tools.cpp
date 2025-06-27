@@ -252,7 +252,8 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
         .amount = amount,
         .amount_blinding_factor = amount_blinding_factor,
         .asset_type = enote.asset_type,
-        .main_tx_pubkey_index = main_deriv_idx
+        .main_tx_pubkey_index = main_deriv_idx,
+        .is_carrot = false
     };
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -278,7 +279,19 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
     res.asset_type = enote.asset_type;
     res.amount_blinding_factor = rct::I;
     res.main_tx_pubkey_index = 0;
+    res.is_carrot = true;
 
+    /*
+    LOG_ERROR("wallet scanning values:" << std::endl <<
+              "    height     : " << std::to_string(enote.block_index) << std::endl <<
+              "    Ko         : " << epee::string_tools::pod_to_hex(enote.onetime_address) << std::endl <<
+              "    C_a        : " << epee::string_tools::pod_to_hex(rct::commit(res.amount, res.amount_blinding_factor)) << std::endl <<
+              "    D_e        : " << epee::string_tools::pod_to_hex(enote.enote_ephemeral_pubkey) << std::endl <<
+              "    s_sr       : " << epee::string_tools::pod_to_hex(s_sender_receiver_unctx.data) << std::endl <<
+              "    k^o_g      : " << epee::string_tools::pod_to_hex(res.sender_extension_g.data) << std::endl <<
+              "    k^o_t      : " << epee::string_tools::pod_to_hex(res.sender_extension_t.data) << std::endl <<
+              "    K^j_s      : " << epee::string_tools::pod_to_hex(res.address_spend_pubkey) << std::endl);
+    */        
     return res;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -322,6 +335,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         res.amount_blinding_factor = rct::sk2rct(amount_blinding_factor_sk);
         res.main_tx_pubkey_index = 0;
         res.asset_type = enote.asset_type;
+        res.is_carrot = true;
 
         return res;
     }
@@ -375,6 +389,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
     res.amount_blinding_factor = rct::sk2rct(amount_blinding_factor_sk);
     res.main_tx_pubkey_index = 0;
     res.asset_type = enote.asset_type;
+    res.is_carrot = true;
 
     return res;
 }
@@ -864,7 +879,7 @@ bool is_long_payment_id(const crypto::hash &pid)
 //-------------------------------------------------------------------------------------------------------------------
 std::optional<crypto::key_image> try_derive_enote_key_image(
     const enote_view_incoming_scan_info_t &enote_scan_info,
-    const cryptonote::account_keys &acc)
+    const carrot::carrot_and_legacy_account &acc)
 {
     if (!enote_scan_info.subaddr_index)
         return std::nullopt;
@@ -872,20 +887,19 @@ std::optional<crypto::key_image> try_derive_enote_key_image(
     // k^j_subext
     rct::key subaddress_extension;
     if (enote_scan_info.subaddr_index->index.is_subaddress())
-    {
+      {
         const cryptonote::subaddress_index subaddr_index_cn{enote_scan_info.subaddr_index->index.major,
-            enote_scan_info.subaddr_index->index.minor};
-        subaddress_extension = rct::sk2rct(
-            acc.get_device().get_subaddress_secret_key(acc.m_view_secret_key, subaddr_index_cn));
-    }
+                                                            enote_scan_info.subaddr_index->index.minor};
+        subaddress_extension = rct::sk2rct(acc.get_keys().get_device().get_subaddress_secret_key(acc.get_keys().m_view_secret_key, subaddr_index_cn));
+      }
     else // !subaddr_index_cn.is_zero()
-    {
+      {
         subaddress_extension = rct::Z;
-    }
+      }
 
     // O = K^j_s + k^g_o G + k^t_o T
     rct::key onetime_address = rct::scalarmultKey(rct::pk2rct(crypto::get_T()),
-        rct::sk2rct(enote_scan_info.sender_extension_t));
+                                                  rct::sk2rct(enote_scan_info.sender_extension_t));
     rct::addKeys1(onetime_address, rct::sk2rct(enote_scan_info.sender_extension_g), onetime_address);
     rct::addKeys(onetime_address, onetime_address, rct::pk2rct(enote_scan_info.address_spend_pubkey));
 
@@ -896,11 +910,19 @@ std::optional<crypto::key_image> try_derive_enote_key_image(
     //! @TODO: HW devices
     // x = k_s + k^j_subext + k^g_o
     rct::key x;
-    sc_add(x.bytes,
-        to_bytes(acc.m_spend_secret_key),
-        to_bytes(enote_scan_info.sender_extension_g));
-    sc_add(x.bytes, x.bytes, subaddress_extension.bytes);
+    if (enote_scan_info.is_carrot) {
 
+      return acc.derive_key_image(enote_scan_info.address_spend_pubkey,
+                                  enote_scan_info.sender_extension_g,
+                                  enote_scan_info.sender_extension_t,
+                                  rct::rct2pk(onetime_address));
+    } else {
+      sc_add(x.bytes,
+             to_bytes(acc.get_keys().m_spend_secret_key),
+             to_bytes(enote_scan_info.sender_extension_g));
+      sc_add(x.bytes, x.bytes, subaddress_extension.bytes);
+    }
+    
     // L = x I = (k_s + k^j_subext + k^g_o) Hp(O)
     return rct::rct2ki(rct::scalarmultKey(rct::pt2rct(ki_generator), x));
 }

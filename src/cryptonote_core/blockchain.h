@@ -1500,7 +1500,7 @@ namespace cryptonote
      * 
      * @return bool indicating payout valid, and the index of the output within miner transaction outputs.
      */
-    std::tuple<bool, size_t> validate_treasury_payout(const transaction& tx, const uint64_t payout_index, uint8_t hf_version) const;
+    std::tuple<bool, size_t> validate_treasury_payout(const transaction& tx, const std::tuple<std::string, std::string, std::string, std::string>& treasury_data, uint8_t hf_version) const;
 
     /**
      * @brief sanity checks a miner transaction before validating an entire block
@@ -1546,7 +1546,7 @@ namespace cryptonote
      *
      * @return false if anything is found wrong with the miner transaction, otherwise true
      */
-    bool validate_miner_transaction(const block& b, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version);
+    bool validate_miner_transaction(const block& b, const uint64_t height, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version);
 
     /**
      * @brief validates a protocol (coinbase) transaction

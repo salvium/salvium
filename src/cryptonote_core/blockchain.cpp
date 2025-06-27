@@ -1423,21 +1423,20 @@ bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t heigh
   return true;
 }
 //------------------------------------------------------------------
-std::tuple<bool, size_t> Blockchain::validate_treasury_payout(const transaction& tx, const uint64_t payout_index, uint8_t hf_version) const {
+std::tuple<bool, size_t> Blockchain::validate_treasury_payout(const transaction& tx, const std::tuple<std::string, std::string, std::string, std::string>& treasury_data, uint8_t hf_version) const {
+
   // find the treasury output
-  const auto treasury_output_keys = get_config(m_nettype).TREASURY_SAL1_MINT_OUTPUT_KEYS;
-  const auto expected_output_key = treasury_output_keys[payout_index].second;
-  const auto &output = std::find_if(tx.vout.begin(), tx.vout.end(), [&expected_output_key](const tx_out &o) {
+  const auto [tx_key, onetime_address, anchor_enc, viewtag] = treasury_data;
+  //const auto expected_output_key = std::get<1>(treasury_output_data);
+  const auto &output = std::find_if(tx.vout.begin(), tx.vout.end(), [&onetime_address](const tx_out &o) {
     std::string output_key;
-    if (o.target.type() == typeid(txout_to_key)) {
-      output_key = epee::string_tools::pod_to_hex(boost::get<txout_to_key>(o.target).key);
-    } else if (o.target.type() == typeid(txout_to_tagged_key)) {
-      output_key = epee::string_tools::pod_to_hex(boost::get<txout_to_tagged_key>(o.target).key);
+    if (o.target.type() == typeid(txout_to_carrot_v1)) {
+      output_key = epee::string_tools::pod_to_hex(boost::get<txout_to_carrot_v1>(o.target).key);
     } else {
       return false;
     }
 
-    return output_key == expected_output_key; 
+    return output_key == onetime_address; 
   });
 
   if (output == tx.vout.end()) {
@@ -1450,30 +1449,39 @@ std::tuple<bool, size_t> Blockchain::validate_treasury_payout(const transaction&
     return {false, 0};
   }
 
-  if (output->target.type() != typeid(txout_to_key)) {
+  if (output->target.type() != typeid(txout_to_carrot_v1)) {
     MERROR_VER("Miner transaction contains treasury output with invalid target type");
     return {false, 0};
   }
 
-  if (boost::get<txout_to_key>(output->target).unlock_time != CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW) {
+  const cryptonote::txout_to_carrot_v1 target = boost::get<txout_to_carrot_v1>(output->target);
+  if (target.asset_type != "SAL1") {
+    MERROR_VER("Miner transaction contains treasury output with invalid asset_type");
+    return {false, 0};
+  }
+
+  /*
+  if (target.unlock_time != CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW) {
     MERROR_VER("Miner transaction contains treasury output with invalid target key");
     return {false, 0};
   }
+  */
 
   return {true, output - tx.vout.begin()};
 }
 //------------------------------------------------------------------
 // This function validates the miner transaction reward
-bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version)
+bool Blockchain::validate_miner_transaction(const block& b, const uint64_t height, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
 
-  // validate treasury payout
-  size_t treasury_index_in_tx_outputs;
-  auto [treasury_payout_exist, treasury_payout_index] = check_treasury_payout(m_nettype, boost::get<txin_gen>(b.miner_tx.vin[0]).height, m_hardfork->get_hardforks(), version);
-  if (treasury_payout_exist) {
+  // check for treasury payouts
+  const auto treasury_payout_data = get_config(m_nettype).TREASURY_SAL1_MINT_OUTPUT_DATA;
+  const bool treasury_payout_exists = (treasury_payout_data.count(height) == 1);
+  size_t treasury_index_in_tx_outputs = 0;
+  if (treasury_payout_exists) {
     // check the treasury payout
-    auto [valid, index_in_tx_outputs] = validate_treasury_payout(b.miner_tx, treasury_payout_index, version);
+    auto [valid, index_in_tx_outputs] = validate_treasury_payout(b.miner_tx, treasury_payout_data.at(height), version);
     if (!valid) {
       MERROR_VER("Miner transaction treasury output was invalid");
       return false;
@@ -1486,7 +1494,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   for(size_t i = 0; i < b.miner_tx.vout.size(); i++)
   {
     // skip the treasury output
-    if (treasury_payout_exist && (i == treasury_index_in_tx_outputs)) {
+    if (treasury_payout_exists && (i == treasury_index_in_tx_outputs)) {
       continue;
     }
     money_in_use += b.miner_tx.vout[i].amount;
@@ -5149,7 +5157,7 @@ leave:
   TIME_MEASURE_START(vmt);
   uint64_t base_reward = 0;
   uint64_t already_generated_coins = blockchain_height ? m_db->get_block_already_generated_coins(blockchain_height - 1) : 0;
-  if(!validate_miner_transaction(bl, cumulative_block_weight, fee_summary, base_reward, already_generated_coins, bvc.m_partial_block_reward, m_hardfork->get_current_version()))
+  if(!validate_miner_transaction(bl, blockchain_height, cumulative_block_weight, fee_summary, base_reward, already_generated_coins, bvc.m_partial_block_reward, m_hardfork->get_current_version()))
   {
     MERROR_VER("Block with id: " << id << " has incorrect miner transaction");
     bvc.m_verifivation_failed = true;

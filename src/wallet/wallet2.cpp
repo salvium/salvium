@@ -2426,7 +2426,7 @@ void wallet2::scan_key_image(const wallet::enote_view_incoming_scan_info_t &enot
     }
   }
 
-  ki_out = wallet::try_derive_enote_key_image(enote_scan_info, m_account.get_keys());
+  ki_out = wallet::try_derive_enote_key_image(enote_scan_info, m_account);
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::process_new_transaction(

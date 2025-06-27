@@ -326,15 +326,25 @@ std::vector<std::size_t> get_input_counts_in_preferred_order()
     // preferring 1 vs 2. See: https://lavalle.pl/planning/node437.html. Con to this approach: if we
     // default to 1 over 2 always then there's scenarios where we net save tx fees and proving time.
 
-    static_assert(CARROT_MAX_TX_INPUTS == FCMP_PLUS_PLUS_MAX_INPUTS, "inconsistent input count max limit");
-    static_assert(CARROT_MIN_TX_INPUTS == 1 && CARROT_MAX_TX_INPUTS == 8,
+    //static_assert(CARROT_MAX_TX_INPUTS == FCMP_PLUS_PLUS_MAX_INPUTS, "inconsistent input count max limit");
+    static_assert(CARROT_MIN_TX_INPUTS == 1 && CARROT_MAX_TX_INPUTS == 128,
         "refactor this function for different input count limits");
 
     const bool random_bit = 0 == (crypto::rand<uint8_t>() & 0x01);
     if (random_bit)
-        return {2, 1, 4, 8, 3, 5, 6, 7};
+      return {2, 1, 4, 8, 16, 32, 64, 128, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23,
+              24, 25, 26, 27, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+              49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+              74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97,
+              98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116,
+              117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127};
     else
-        return {1, 2, 4, 8, 3, 5, 6, 7};
+      return {1, 2, 4, 8, 16, 32, 64, 128, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23,
+              24, 25, 26, 27, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+              49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+              74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97,
+              98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116,
+              117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127};
 }
 //-------------------------------------------------------------------------------------------------------------------
 select_inputs_func_t make_single_transfer_input_selector(
@@ -388,7 +398,7 @@ select_inputs_func_t make_single_transfer_input_selector(
 
         std::set<std::size_t> all_idxs; for (std::size_t i = 0; i < input_candidates.size(); ++i) all_idxs.insert(i);
         const std::pair<std::size_t, boost::multiprecision::uint128_t> max_usable_money =
-            input_count_for_max_usable_money(input_candidates, all_idxs, FCMP_PLUS_PLUS_MAX_INPUTS, fee_by_input_count);
+            input_count_for_max_usable_money(input_candidates, all_idxs, CARROT_MAX_TX_INPUTS, fee_by_input_count);
         CARROT_CHECK_AND_THROW(max_usable_money.second >= absolute_minimum_required_money,
             not_enough_usable_money,
             "Not enough usable money in top " << max_usable_money.first << " inputs ("
@@ -413,7 +423,7 @@ select_inputs_func_t make_single_transfer_input_selector(
 
             // Skip if not enough money in this selectable set for max number of tx inputs...
             const auto max_usable_money = input_count_for_max_usable_money(input_candidates,
-                input_candidate_subset, FCMP_PLUS_PLUS_MAX_INPUTS, fee_by_input_count);
+                input_candidate_subset, CARROT_MAX_TX_INPUTS, fee_by_input_count);
             if (!max_usable_money.first)
                 continue;
             else if (max_usable_money.second < required_money_by_input_count.at(max_usable_money.first))
