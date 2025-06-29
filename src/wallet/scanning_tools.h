@@ -77,7 +77,8 @@ struct enote_view_incoming_scan_info_t
     // the cold signing code used to have a bug which added multiple main tx pubkeys to extra
     std::size_t main_tx_pubkey_index;
 
-  bool is_carrot;
+    // whether this output is to a carrot address or not
+    bool is_carrot;
 };
 
 struct PreCarrotEnote

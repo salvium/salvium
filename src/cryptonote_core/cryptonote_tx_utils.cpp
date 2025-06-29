@@ -337,34 +337,6 @@ namespace cryptonote
   }
   */
   //---------------------------------------------------------------
-  std::tuple<bool, uint64_t> check_treasury_payout(
-    network_type nettype,
-    uint64_t height,
-    const std::vector<hardfork_t>& hardforks,
-    const uint8_t hf_version
-  ) {
-    if (hf_version >= HF_VERSION_CARROT) {
-      // find the hardfork height
-      const auto& hf = std::find_if(hardforks.begin(), hardforks.end(), [](const hardfork_t& hf) {
-        return hf.version == HF_VERSION_CARROT;
-      });
-
-      // since we are at least at the hard fork HF_VERSION_CARROT, we assume height >= hf->height
-      const auto diff = height - hf->height;
-      const auto mint_period = get_config(nettype).TREASURY_SAL1_MINT_PERIOD;
-
-      // pay per period
-      if (diff % mint_period == 0) {
-        const auto payout_index = diff / mint_period;
-        if (payout_index < TREASURY_SAL1_MINT_COUNT) {
-          return {true, payout_index};
-        }
-      }
-    }
-
-    return {false, 0};
-  }
-  //---------------------------------------------------------------
   bool construct_protocol_tx(
     const size_t height,
     transaction& tx,
@@ -634,28 +606,7 @@ namespace cryptonote
     }
 
     CHECK_AND_ASSERT_MES(summary_amounts == block_reward, false, "Failed to construct miner tx, summary_amounts = " << summary_amounts << " not equal block_reward = " << block_reward);
-    /*
-    // add the treasury payout if needed
-    if (treasury_payout_exist) {
-      std::vector<crypto::public_key> additional_tx_public_keys = {txkey.pub};
-      const auto output_keys = get_config(nettype).TREASURY_SAL1_MINT_OUTPUT_KEYS;
-      const auto keys = output_keys[treasury_payout_index];
 
-      crypto::public_key tx_key;
-      CHECK_AND_ASSERT_MES(epee::string_tools::hex_to_pod(keys.first, tx_key), false, "fail to deserialize treasury tx key");
-      crypto::public_key output_key;
-      CHECK_AND_ASSERT_MES(epee::string_tools::hex_to_pod(keys.second, output_key), false, "fail to deserialize treasury output key");
-
-      // Create the TX output for this payout
-      tx_out out;
-      cryptonote::set_tx_out(TREASURY_SAL1_MINT_AMOUNT, "SAL1", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, output_key, false, crypto::view_tag{}, out);
-      tx.vout.push_back(out);
-
-      // add tx pub key to tx extra
-      additional_tx_public_keys.push_back(tx_key);
-      add_additional_tx_pub_keys_to_extra(tx.extra, additional_tx_public_keys);
-    }
-    */
     tx.version = 2;
     tx.vin.push_back(in);
     tx.invalidate_hashes();

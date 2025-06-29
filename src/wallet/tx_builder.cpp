@@ -755,6 +755,95 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         top_block_index);
 }
 //-------------------------------------------------------------------------------------------------------------------
+bool get_address_openings_x_y(
+    const cryptonote::transaction &tx,
+    const cryptonote::tx_source_entry &src,
+    const wallet2 &w,
+    crypto::secret_key &x_out,
+    crypto::secret_key &y_out)
+{
+    const std::vector<crypto::public_key> v_pubkeys{src.real_out_tx_key};
+    const epee::span<const crypto::public_key> main_tx_ephemeral_pubkeys = 
+        epee::to_span(v_pubkeys);
+    const epee::span<const crypto::public_key> additional_tx_ephemeral_pubkeys = 
+        epee::to_span(src.real_out_additional_tx_keys);
+
+    // 2. perform ECDH derivations
+    std::vector<crypto::key_derivation> main_derivations;
+    std::vector<crypto::key_derivation> additional_derivations;
+    wallet::perform_ecdh_derivations(
+        main_tx_ephemeral_pubkeys,
+        additional_tx_ephemeral_pubkeys,
+        w.get_account().get_keys().m_view_secret_key,
+        w.get_account().get_keys().get_device(),
+        carrot::is_carrot_transaction_v1(tx),
+        main_derivations,
+        additional_derivations
+    );
+
+    crypto::hash s_sender_receiver;
+    const crypto::key_derivation &kd = main_derivations.size()
+        ? main_derivations[0]
+        : additional_derivations[src.real_output_in_tx_index];
+    const mx25519_pubkey s_sender_receiver_unctx = carrot::raw_byte_convert<mx25519_pubkey>(kd);
+
+    // ephemeral pubkeys
+    const epee::span<const crypto::public_key> enote_ephemeral_pubkeys_pk = 
+        main_tx_ephemeral_pubkeys.empty() ? additional_tx_ephemeral_pubkeys : main_tx_ephemeral_pubkeys;
+    const epee::span<const mx25519_pubkey> enote_ephemeral_pubkeys = {
+        reinterpret_cast<const mx25519_pubkey*>(enote_ephemeral_pubkeys_pk.data()),
+        enote_ephemeral_pubkeys_pk.size()
+    };
+
+    const bool shared_ephemeral_pubkey = enote_ephemeral_pubkeys.size() == 1;
+    const size_t ephemeral_pubkey_index = shared_ephemeral_pubkey ? 0 : src.real_output_in_tx_index;
+
+    // input_context
+    carrot::input_context_t input_context;
+    if (src.coinbase) {
+        input_context = carrot::make_carrot_input_context_coinbase(src.block_index);
+    } else {
+        input_context = carrot::make_carrot_input_context(src.first_rct_key_image);
+    }
+
+    // s^ctx_sr = H_32(s_sr, D_e, input_context)
+    make_carrot_sender_receiver_secret(s_sender_receiver_unctx.data,
+        enote_ephemeral_pubkeys[ephemeral_pubkey_index],
+        input_context,
+        s_sender_receiver);
+
+    // get the k_og and k_ot
+    crypto::secret_key sender_extension_g_out;
+    crypto::secret_key sender_extension_t_out;
+    crypto::public_key address_spend_pubkey_out;
+    carrot::payment_id_t nominal_payment_id_out;
+    carrot::janus_anchor_t nominal_janus_anchor_out;
+    carrot::encrypted_janus_anchor_t encrypted_janus_anchor;
+    carrot::encrypted_payment_id_t encrypted_payment_id;
+    carrot::scan_carrot_dest_info(
+        rct::rct2pk(src.outputs[src.real_output].second.dest),
+        src.outputs[src.real_output].second.mask,
+        encrypted_janus_anchor,
+        encrypted_payment_id,
+        s_sender_receiver,
+        sender_extension_g_out,
+        sender_extension_t_out,
+        address_spend_pubkey_out,
+        nominal_payment_id_out,
+        nominal_janus_anchor_out
+    );
+    bool r = w.get_account().try_searching_for_opening_for_onetime_address(
+        src.address_spend_pubkey,
+        sender_extension_g_out,
+        sender_extension_t_out,
+        x_out,
+        y_out
+    );
+    CHECK_AND_ASSERT_THROW_MES(r, "Failed to obtain openings for onetime address");
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
 cryptonote::transaction finalize_all_proofs_from_transfer_details(
     const carrot::CarrotTransactionProposalV1 &tx_proposal,
     const cryptonote::transaction_type tx_type,
@@ -843,118 +932,21 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     inSk.reserve(sources.size());
     std::vector<uint64_t> inamounts;
     std::vector<unsigned int> index;
-    for (size_t i = 0; i < sources.size(); ++i)
+    for (const auto& src: sources)
     {
-        amount_in += sources[i].amount;
-        inamounts.push_back(sources[i].amount);
-        index.push_back(sources[i].real_output);
+        amount_in += src.amount;
+        inamounts.push_back(src.amount);
+        index.push_back(src.real_output);
 
         // inSk: (x, y, mask)
         rct::carrot_ctkey ctkey;
-        ctkey.mask = sources[i].mask;
-        if (sources[i].carrot) {
+        ctkey.mask = src.mask;
+        if (src.carrot) {
 
-            const std::vector<crypto::public_key> v_pubkeys{sources[i].real_out_tx_key};
-            const epee::span<const crypto::public_key> main_tx_ephemeral_pubkeys = 
-              epee::to_span(v_pubkeys);
-            const epee::span<const crypto::public_key> additional_tx_ephemeral_pubkeys = 
-              epee::to_span(sources[i].real_out_additional_tx_keys);
-
-            // 2. perform ECDH derivations
-            std::vector<crypto::key_derivation> main_derivations;
-            std::vector<crypto::key_derivation> additional_derivations;
-            wallet::perform_ecdh_derivations(
-                main_tx_ephemeral_pubkeys,
-                additional_tx_ephemeral_pubkeys,
-                acc_keys.m_view_secret_key,
-                hwdev,
-                carrot::is_carrot_transaction_v1(tx),
-                main_derivations,
-                additional_derivations
-            );
-
-            crypto::hash s_sender_receiver;
-            const crypto::key_derivation &kd = main_derivations.size()
-                ? main_derivations[0]
-                : additional_derivations[sources[i].real_output_in_tx_index];
-            const mx25519_pubkey s_sender_receiver_unctx = carrot::raw_byte_convert<mx25519_pubkey>(kd);
-
-            // ephemeral pubkeys
-            const epee::span<const crypto::public_key> enote_ephemeral_pubkeys_pk = 
-                main_tx_ephemeral_pubkeys.empty() ? additional_tx_ephemeral_pubkeys : main_tx_ephemeral_pubkeys;
-            const epee::span<const mx25519_pubkey> enote_ephemeral_pubkeys = {
-                reinterpret_cast<const mx25519_pubkey*>(enote_ephemeral_pubkeys_pk.data()),
-                enote_ephemeral_pubkeys_pk.size()
-            };
-
-            const bool shared_ephemeral_pubkey = enote_ephemeral_pubkeys.size() == 1;
-            const size_t ephemeral_pubkey_index = shared_ephemeral_pubkey ? 0 : sources[i].real_output_in_tx_index;
-
-            // input_context
-            carrot::input_context_t input_context;
-            if (sources[i].coinbase) {
-                input_context = carrot::make_carrot_input_context_coinbase(sources[i].block_index);
-            } else {
-                input_context = carrot::make_carrot_input_context(sources[i].first_rct_key_image);
-            }
-
-            // s^ctx_sr = H_32(s_sr, D_e, input_context)
-            make_carrot_sender_receiver_secret(s_sender_receiver_unctx.data,
-                enote_ephemeral_pubkeys[ephemeral_pubkey_index],
-                input_context,
-                s_sender_receiver);
-
-            // get the k_og and k_ot
-            crypto::secret_key sender_extension_g_out;
-            crypto::secret_key sender_extension_t_out;
-            crypto::public_key address_spend_pubkey_out;
-            carrot::payment_id_t nominal_payment_id_out;
-            carrot::janus_anchor_t nominal_janus_anchor_out;
-            carrot::encrypted_janus_anchor_t encrypted_janus_anchor;
-            carrot::encrypted_payment_id_t encrypted_payment_id;
-            carrot::scan_carrot_dest_info(
-                rct::rct2pk(sources[i].outputs[sources[i].real_output].second.dest),
-                sources[i].outputs[sources[i].real_output].second.mask,
-                encrypted_janus_anchor,
-                encrypted_payment_id,
-                s_sender_receiver,
-                sender_extension_g_out,
-                sender_extension_t_out,
-                address_spend_pubkey_out,
-                nominal_payment_id_out,
-                nominal_janus_anchor_out
-            );
-
-            /*
-            LOG_ERROR("tx_builder values:" << std::endl <<
-                      "    Ko         : " << epee::string_tools::pod_to_hex(sources[i].outputs[sources[i].real_output].second.dest) << std::endl <<
-                      "    C_a        : " << epee::string_tools::pod_to_hex(sources[i].outputs[sources[i].real_output].second.mask) << std::endl <<
-                      "    D_e        : " << epee::string_tools::pod_to_hex(sources[i].real_out_tx_key) << std::endl <<
-                      "    s_sr       : " << epee::string_tools::pod_to_hex(s_sender_receiver_unctx.data) << std::endl <<
-                      "    s^ctx_sr   : " << epee::string_tools::pod_to_hex(s_sender_receiver.data) << std::endl <<
-                      "    k^o_g      : " << epee::string_tools::pod_to_hex(sender_extension_g_out.data) << std::endl <<
-                      "    k^o_t      : " << epee::string_tools::pod_to_hex(sender_extension_t_out.data) << std::endl <<
-                      "    K^j_s      : " << epee::string_tools::pod_to_hex(sources[i].address_spend_pubkey) << std::endl);
-            */
-            
-            bool r = w.get_account().can_open_fcmp_onetime_address(
-                sources[i].address_spend_pubkey,
-                sender_extension_g_out,
-                sender_extension_t_out,
-                rct::rct2pk(sources[i].outputs[sources[i].real_output].second.dest)
-            );
-            THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error,
-                "Failed to open onetime address");
             crypto::secret_key x, y;
-            r = w.get_account().try_searching_for_opening_for_onetime_address(
-                sources[i].address_spend_pubkey,
-                sender_extension_g_out,
-                sender_extension_t_out,
-                x,
-                y
-            );
-            THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error,
-                "Failed to obtain openings for onetime address");
+            THROW_WALLET_EXCEPTION_IF(!get_address_openings_x_y(tx, src, w, x, y),
+                error::wallet_internal_error, "Failed to get x and y for input");
+
             ctkey.x = rct::sk2rct(x);
             ctkey.y = rct::sk2rct(y);
         } else {
@@ -962,21 +954,21 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
             cryptonote::keypair in_ephemeral;
             crypto::key_image img;
             rct::salvium_input_data_t sid;
-            const auto& out_key = reinterpret_cast<const crypto::public_key&>(sources[i].outputs[sources[i].real_output].second.dest);
-            bool use_origin_data = (sources[i].origin_tx_data.tx_type != cryptonote::transaction_type::UNSET);
-            sid.origin_tx_type = sources[i].origin_tx_data.tx_type;
+            const auto& out_key = reinterpret_cast<const crypto::public_key&>(src.outputs[src.real_output].second.dest);
+            bool use_origin_data = (src.origin_tx_data.tx_type != cryptonote::transaction_type::UNSET);
+            sid.origin_tx_type = src.origin_tx_data.tx_type;
             bool r = cryptonote::generate_key_image_helper(
                 w.get_account().get_keys(),
                 w.get_subaddress_map_ref(),
                 out_key,
-                sources[i].real_out_tx_key,
-                sources[i].real_out_additional_tx_keys,
-                sources[i].real_output_in_tx_index,
+                src.real_out_tx_key,
+                src.real_out_additional_tx_keys,
+                src.real_output_in_tx_index,
                 in_ephemeral,
                 img,
                 hwdev,
                 use_origin_data,
-                sources[i].origin_tx_data, sid
+                src.origin_tx_data, sid
             );
             THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to generate key image helper");
 
@@ -1035,7 +1027,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         change_y
     );
     THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error,
-        "Failed to search for opening for onetime address");
+        "Failed to obtain opening for onetime change address");
 
     // mixRing indexing is done the other way round for simple
     rct::ctkeyM mixRing(sources.size());

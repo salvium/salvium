@@ -37,8 +37,6 @@
 #include "misc_log_ex.h"
 #include "ringct/rctOps.h"
 
-#include "string_tools.h"
-
 //third party headers
 
 //standard headers
@@ -119,15 +117,6 @@ static void get_normal_proposal_ecdh_parts(const CarrotPaymentProposalV1 &propos
     make_carrot_uncontextualized_shared_key_sender(enote_ephemeral_privkey,
         proposal.destination.address_view_pubkey,
         s_sender_receiver_unctx_out);
-
-    /*
-    std::cerr << "Random:" << epee::string_tools::pod_to_hex(proposal.randomness) << std::endl;
-    std::cerr << "K_s:   " << proposal.destination.address_spend_pubkey << std::endl;
-    std::cerr << "K_v:   " << proposal.destination.address_view_pubkey << std::endl;
-    std::cerr << "d_e:   " << epee::string_tools::pod_to_hex(unwrap(unwrap(enote_ephemeral_privkey))) << std::endl;        
-    std::cerr << "D_e:   " << epee::string_tools::pod_to_hex(enote_ephemeral_pubkey_out) << std::endl;
-    std::cerr << "s_sr:  " << epee::string_tools::pod_to_hex(s_sender_receiver_unctx_out) << std::endl;
-    */
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------

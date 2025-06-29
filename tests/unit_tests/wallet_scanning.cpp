@@ -245,16 +245,9 @@ TEST(wallet_scanning, view_scan_short_payment_id)
         std::vector<std::optional<tools::wallet::enote_view_incoming_scan_info_t>> enote_scan_infos(tx.vout.size());
         tools::keystore keystore;
         tools::wallet::view_incoming_scan_transaction(tx,
-<<<<<<< Updated upstream
-            bob.get_keys(),
-            // {{bob_main_spend_pubkey, {}}}, // use a fake subaddress map with just the provided address in it
-            keystore,
-            epee::to_mut_span(enote_scan_infos));
-=======
                                                       bob.get_keys(),
                                                       keystore,
                                                       epee::to_mut_span(enote_scan_infos));
->>>>>>> Stashed changes
 
         bool matched = false;
         for (const auto &enote_scan_info : enote_scan_infos)

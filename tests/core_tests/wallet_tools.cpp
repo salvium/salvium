@@ -13,7 +13,7 @@ using namespace cryptonote;
 void wallet_accessor_test::set_account(tools::wallet2 * wallet, cryptonote::account_base& account)
 {
   wallet->clear();
-  wallet->m_account = reinterpret_cast<carrot::carrot_and_legacy_account&>(account);
+  // wallet->m_account = reinterpret_cast<carrot::carrot_and_legacy_account&>(account);
 
   wallet->m_key_device_type = account.get_device().get_type();
   wallet->m_account_public_address = account.get_keys().m_account_address;
