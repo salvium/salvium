@@ -42,13 +42,13 @@
 //----------------------------------------------------------------------------------------------------------------------
 TEST(wallet_scanning, view_scan_as_sender_mainaddr)
 {
-    cryptonote::account_base aether;
-    aether.generate();
+  carrot::carrot_and_legacy_account aether;
+  aether.generate();
 
-    cryptonote::account_base bob;
-    bob.generate();
-    const cryptonote::account_public_address bob_main_addr = bob.get_keys().m_account_address;
-    const crypto::public_key bob_main_spend_pubkey = bob_main_addr.m_spend_public_key;
+  carrot::carrot_and_legacy_account bob;
+  bob.generate();
+  const cryptonote::account_public_address bob_main_addr = bob.get_keys().m_account_address;
+  const crypto::public_key bob_main_spend_pubkey = bob_main_addr.m_spend_public_key;
 
     const rct::xmr_amount amount = rct::randXmrAmount(10 * COIN);
 
@@ -88,9 +88,11 @@ TEST(wallet_scanning, view_scan_as_sender_mainaddr)
         // call view_incoming_scan_transaction with no meaningful key nor subaddresses maps,
         // just with the proper ECDH
         const auto enote_scan_infos =  tools::wallet::view_incoming_scan_transaction_as_sender(tx,
-            {&main_derivation, 1},
-            {},
-            bob_main_addr);
+                                                                                               {&main_derivation, 1},
+                                                                                               {},
+                                                                                               bob_main_addr,
+                                                                                               bob
+                                                                                               );
 
         bool matched = false;
         for (const auto &enote_scan_info : enote_scan_infos)
@@ -109,11 +111,11 @@ TEST(wallet_scanning, view_scan_as_sender_mainaddr)
 //----------------------------------------------------------------------------------------------------------------------
 TEST(wallet_scanning, view_scan_long_payment_id)
 {
-    cryptonote::account_base aether;
-    aether.generate();
+  carrot::carrot_and_legacy_account aether;
+  aether.generate();
 
-    cryptonote::account_base bob;
-    bob.generate();
+  carrot::carrot_and_legacy_account bob;
+  bob.generate();
     const cryptonote::account_public_address bob_main_addr = bob.get_keys().m_account_address;
     const crypto::public_key bob_main_spend_pubkey = bob_main_addr.m_spend_public_key;
 
@@ -123,9 +125,6 @@ TEST(wallet_scanning, view_scan_long_payment_id)
 
     const crypto::hash payment_id = crypto::rand<crypto::hash>();
 
-    // Create a keystore with a largely empty subaddress map
-    tools::keystore keystore({{bob_main_spend_pubkey, {}}}); // use a fake subaddress map with just the provided address in it
-    
     for (uint8_t hf_version = 1; hf_version < HF_VERSION_CARROT; ++hf_version)
     {
         MDEBUG("view_scan_as_sender_mainaddr: hf_version=" << static_cast<int>(hf_version));
@@ -162,10 +161,8 @@ TEST(wallet_scanning, view_scan_long_payment_id)
         // call view_incoming_scan_transaction with no meaningful key nor subaddresses maps,
         // just with the proper ECDH
         std::vector<std::optional<tools::wallet::enote_view_incoming_scan_info_t>> enote_scan_infos(tx.vout.size());
-        tools::keystore keystore;
         tools::wallet::view_incoming_scan_transaction(tx,
-                                                      bob.get_keys(),
-                                                      keystore,
+                                                      bob,
                                                       epee::to_mut_span(enote_scan_infos));
 
         bool matched = false;
@@ -186,11 +183,11 @@ TEST(wallet_scanning, view_scan_long_payment_id)
 //----------------------------------------------------------------------------------------------------------------------
 TEST(wallet_scanning, view_scan_short_payment_id)
 {
-    cryptonote::account_base aether;
-    aether.generate();
+  carrot::carrot_and_legacy_account aether;
+  aether.generate();
 
-    cryptonote::account_base bob;
-    bob.generate();
+  carrot::carrot_and_legacy_account bob;
+  bob.generate();
     const cryptonote::account_public_address bob_main_addr = bob.get_keys().m_account_address;
     const crypto::public_key bob_main_spend_pubkey = bob_main_addr.m_spend_public_key;
 
@@ -202,9 +199,6 @@ TEST(wallet_scanning, view_scan_short_payment_id)
     crypto::hash payment_id = crypto::null_hash;
     memcpy(&payment_id, &pid_8, sizeof(pid_8));
 
-    // Create a keystore with a largely empty subaddress map
-    tools::keystore keystore({{bob_main_spend_pubkey, {}}}); // use a fake subaddress map with just the provided address in it
-    
     ASSERT_FALSE(tools::wallet::is_long_payment_id(payment_id));
     ASSERT_NE(crypto::null_hash, payment_id);
 
@@ -243,10 +237,8 @@ TEST(wallet_scanning, view_scan_short_payment_id)
         // call view_incoming_scan_transaction with no meaningful key nor subaddresses maps,
         // just with the proper ECDH
         std::vector<std::optional<tools::wallet::enote_view_incoming_scan_info_t>> enote_scan_infos(tx.vout.size());
-        tools::keystore keystore;
         tools::wallet::view_incoming_scan_transaction(tx,
-                                                      bob.get_keys(),
-                                                      keystore,
+                                                      bob,
                                                       epee::to_mut_span(enote_scan_infos));
 
         bool matched = false;
