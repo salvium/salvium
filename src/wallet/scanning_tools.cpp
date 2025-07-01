@@ -357,17 +357,14 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         dummy_enote_type))
     return std::nullopt;
 
-    // Check for a Carrot
-    
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map = account.subaddress_map_cn();
-  
-    const auto subaddr_it = subaddress_map.find(res.address_spend_pubkey);
-    CHECK_AND_ASSERT_MES(subaddr_it != subaddress_map.cend(),
+    // Check for a Carrot subaddress entry
+    const auto subaddr_it = account.subaddress_map.find(res.address_spend_pubkey);
+    CHECK_AND_ASSERT_MES(subaddr_it != account.subaddress_map.cend(),
         std::nullopt,
         "view_incoming_scan_carrot_enote: carrot enote scanned successfully, "
         "but the recovered address spend pubkey was not found in the subaddress map");
 
-    const carrot::subaddress_index_extended subaddr_index = {{subaddr_it->second.major, subaddr_it->second.minor}};
+    const carrot::subaddress_index_extended subaddr_index = subaddr_it->second;
 
     memset(&res.payment_id, 0, sizeof(res.payment_id));
     memcpy(&res.payment_id, &payment_id, sizeof(carrot::payment_id_t));
