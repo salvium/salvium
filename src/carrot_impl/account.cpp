@@ -329,6 +329,13 @@ void carrot_and_legacy_account::set_carrot_keys(const AddressDeriveType default_
     generate_subaddress_map();
 }
 //----------------------------------------------------------------------------------------------------------------------
+void carrot_and_legacy_account::set_cn_subaddress_map(const std::unordered_map<crypto::public_key, cryptonote::subaddress_index>& subaddress_map_cn)
+{
+  for (const auto &p : subaddress_map_cn)
+    subaddress_map.insert({p.first, {{p.second.major, p.second.minor}, AddressDeriveType::PreCarrot}});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 AddressDeriveType carrot_and_legacy_account::resolve_derive_type(const AddressDeriveType derive_type) const
 {
     return derive_type == AddressDeriveType::Auto ? default_derive_type : derive_type;

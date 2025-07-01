@@ -2095,7 +2095,7 @@ private:
     bool should_expand(const cryptonote::subaddress_index &index) const;
     bool spends_one_of_ours(const cryptonote::transaction &tx) const;
 
-    carrot::carrot_and_legacy_account m_account;
+    mutable carrot::carrot_and_legacy_account m_account;
     boost::optional<epee::net_utils::http::login> m_daemon_login;
     std::string m_daemon_address;
     std::string m_proxy;

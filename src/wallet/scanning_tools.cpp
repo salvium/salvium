@@ -142,12 +142,10 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
     const std::optional<carrot::encrypted_payment_id_t> &encrypted_payment_id,
     const epee::span<const crypto::key_derivation> main_derivations,
     const epee::span<const crypto::key_derivation> additional_derivations,
-    //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    tools::keystore &subaddress_keystore,
+    carrot::carrot_and_legacy_account &account,
     hw::device &hwdev)
 {
-
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map = subaddress_keystore.get_all();
+    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map = account.subaddress_map_cn();
   
     boost::optional<cryptonote::subaddress_receive_info> receive_info;
     size_t main_deriv_idx;
@@ -241,7 +239,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
     };
 
     // add the entry to our temporary subaddress map via the keystore
-    subaddress_keystore.add(enote.onetime_address, {subaddr_index.index.major, subaddr_index.index.minor});
+    account.subaddress_map.insert({enote.onetime_address, subaddr_index});
     
     return enote_view_incoming_scan_info_t{
         .sender_extension_g = sender_extension_g,
@@ -338,8 +336,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
     const mx25519_pubkey &s_sender_receiver_unctx,
     const crypto::public_key &main_address_spend_pubkey,
     const carrot::view_incoming_key_device &k_view_dev,
-    //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    tools::keystore &subaddress_keystore)
+    carrot::carrot_and_legacy_account &account)
 {
     enote_view_incoming_scan_info_t res;
 
@@ -360,7 +357,9 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         dummy_enote_type))
     return std::nullopt;
 
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map = subaddress_keystore.get_all();
+    // Check for a Carrot
+    
+    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map = account.subaddress_map_cn();
   
     const auto subaddr_it = subaddress_map.find(res.address_spend_pubkey);
     CHECK_AND_ASSERT_MES(subaddr_it != subaddress_map.cend(),
@@ -471,8 +470,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
     const epee::span<const crypto::key_derivation> additional_derivations,
     const cryptonote::account_public_address &address,
     const carrot::view_incoming_key_device *k_view_dev,
-    //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    tools::keystore &subaddress_keystore,
+    carrot::carrot_and_legacy_account &account,
     hw::device &hwdev)
 {
     CHECK_AND_ASSERT_MES(!main_derivations.empty() || !additional_derivations.empty(),
@@ -498,7 +496,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
                 encrypted_payment_id,
                 main_derivations,
                 additional_derivations,
-                subaddress_keystore,
+                account,
                 hwdev);
 
             // copy long plaintext payment ID, if applicable
@@ -543,7 +541,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
                     s_sender_receiver_unctx,
                     address.m_spend_public_key,
                     *k_view_dev,
-                    subaddress_keystore);
+                    account);
             }
         }
 
@@ -554,8 +552,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
         const epee::span<const crypto::key_derivation> additional_derivations;
         const cryptonote::account_public_address &address;
         const carrot::view_incoming_key_device *k_view_dev;
-        //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map;
-        tools::keystore &subaddress_keystore;
+        carrot::carrot_and_legacy_account &account;
         hw::device &hwdev;
     };
 
@@ -567,7 +564,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
             additional_derivations,
             address,
             k_view_dev,
-            subaddress_keystore,
+            account,
             hwdev
         },
         enote);
@@ -583,8 +580,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
     const epee::span<const crypto::key_derivation> additional_derivations,
     const cryptonote::account_public_address &address,
     const carrot::view_incoming_key_device *k_view_dev,
-    //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    tools::keystore &subaddress_keystore,
+    carrot::carrot_and_legacy_account &account,
     hw::device &hwdev)
 {
     MoneroEnoteVariant enote;
@@ -635,14 +631,14 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
     }
 
     return view_incoming_scan_enote(enote,
-        local_output_index,
-        tx_extra_nonce,
-        main_derivations,
-        additional_derivations,
-        address,
-        k_view_dev,
-        subaddress_keystore,
-        hwdev);
+                                    local_output_index,
+                                    tx_extra_nonce,
+                                    main_derivations,
+                                    additional_derivations,
+                                    address,
+                                    k_view_dev,
+                                    account,
+                                    hwdev);
 }
 //-------------------------------------------------------------------------------------------------------------------
 std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote_from_prefix(
@@ -652,8 +648,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote_from_pre
     const std::size_t local_output_index,
     const cryptonote::account_public_address &address,
     const crypto::secret_key &k_view_incoming,
-    //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    tools::keystore &subaddress_keystore,
+    carrot::carrot_and_legacy_account &account,
     hw::device &hwdev)
 {
     const bool is_carrot = carrot::is_carrot_transaction_v1(tx_prefix);
@@ -700,13 +695,13 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote_from_pre
 
     // 4. view scan enote
     return view_incoming_scan_enote(enote,
-        local_output_index,
-        tx_extra_nonce,
-        epee::to_span(main_derivations),
-        epee::to_span(additional_derivations),
-        address,
-        &k_view_dev,
-        subaddress_keystore,
+                                    local_output_index,
+                                    tx_extra_nonce,
+                                    epee::to_span(main_derivations),
+                                    epee::to_span(additional_derivations),
+                                    address,
+                                    &k_view_dev,
+                                    account,
         hwdev);
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -717,9 +712,7 @@ void view_incoming_scan_transaction(
     const cryptonote::blobdata &tx_extra_nonce,
     const epee::span<const crypto::key_derivation> main_derivations,
     const epee::span<const crypto::key_derivation> additional_derivations,
-    const cryptonote::account_keys &acc,
-    //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    tools::keystore &subaddress_keystore,
+    carrot::carrot_and_legacy_account &account,
     const epee::span<std::optional<enote_view_incoming_scan_info_t>> enote_scan_infos_out)
 {
     const size_t n_outputs = tx.vout.size();
@@ -729,31 +722,29 @@ void view_incoming_scan_transaction(
 
     //! @TODO: HW device
     const bool is_carrot = carrot::is_carrot_transaction_v1(tx);
-    carrot::view_incoming_key_ram_borrowed_device k_view_dev(acc.m_view_secret_key);
+    carrot::view_incoming_key_ram_borrowed_device k_view_dev(account.get_keys().m_view_secret_key);
 
     // do view-incoming scan for each output enotes
     for (size_t local_output_index = 0; local_output_index < n_outputs; ++local_output_index)
     {
         auto &enote_scan_info = const_cast<std::optional<enote_view_incoming_scan_info_t>&>(enote_scan_infos_out[local_output_index]);
         enote_scan_info = view_incoming_scan_enote(tx,
-            local_output_index,
-            main_tx_ephemeral_pubkeys,
-            additional_tx_ephemeral_pubkeys,
-            tx_extra_nonce,
-            main_derivations,
-            additional_derivations,
-            is_carrot ? acc.m_carrot_account_address : acc.m_account_address,
-            &k_view_dev,
-            subaddress_keystore,
-            acc.get_device());
+                                                   local_output_index,
+                                                   main_tx_ephemeral_pubkeys,
+                                                   additional_tx_ephemeral_pubkeys,
+                                                   tx_extra_nonce,
+                                                   main_derivations,
+                                                   additional_derivations,
+                                                   is_carrot ? account.get_keys().m_carrot_account_address : account.get_keys().m_account_address,
+                                                   &k_view_dev,
+                                                   account,
+                                                   account.get_keys().get_device());
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
 void view_incoming_scan_transaction(
     const cryptonote::transaction &tx,
-    const cryptonote::account_keys &acc,
-    //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    tools::keystore &subaddress_keystore,
+    carrot::carrot_and_legacy_account &account,
     const epee::span<std::optional<enote_view_incoming_scan_info_t>> enote_scan_infos_out)
 {
     // 1. parse tx extra
@@ -775,36 +766,33 @@ void view_incoming_scan_transaction(
     std::vector<crypto::key_derivation> additional_derivations;
     const bool is_carrot = carrot::is_carrot_transaction_v1(tx);
     perform_ecdh_derivations(epee::to_span(main_tx_ephemeral_pubkeys),
-        epee::to_span(additional_tx_ephemeral_pubkeys),
-        acc.m_view_secret_key,
-        acc.get_device(),
-        is_carrot,
-        main_derivations,
-        additional_derivations);
+                             epee::to_span(additional_tx_ephemeral_pubkeys),
+                             account.get_keys().m_view_secret_key,
+                             account.get_keys().get_device(),
+                             is_carrot,
+                             main_derivations,
+                             additional_derivations);
 
     // 3. view-incoming scan output enotes
     view_incoming_scan_transaction(tx,
-        epee::to_span(main_tx_ephemeral_pubkeys),
-        epee::to_span(additional_tx_ephemeral_pubkeys),
-        tx_extra_nonce,
-        epee::to_span(main_derivations),
-        epee::to_span(additional_derivations),
-        acc,
-        subaddress_keystore,
-        enote_scan_infos_out);
+                                   epee::to_span(main_tx_ephemeral_pubkeys),
+                                   epee::to_span(additional_tx_ephemeral_pubkeys),
+                                   tx_extra_nonce,
+                                   epee::to_span(main_derivations),
+                                   epee::to_span(additional_derivations),
+                                   account,
+                                   enote_scan_infos_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 std::vector<std::optional<enote_view_incoming_scan_info_t>> view_incoming_scan_transaction(
     const cryptonote::transaction &tx,
-    const cryptonote::account_keys &acc,
-    //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    tools::keystore &subaddress_keystore)
+    carrot::carrot_and_legacy_account &account)
 {
     const auto n_outputs = tx.vout.size();
     std::vector<std::optional<enote_view_incoming_scan_info_t>> res(n_outputs);
     if (n_outputs > 0)
     {
-        view_incoming_scan_transaction(tx, acc, subaddress_keystore, epee::to_mut_span(res));
+      view_incoming_scan_transaction(tx, account, epee::to_mut_span(res));
     }
 
     return res;
@@ -814,7 +802,8 @@ std::vector<std::optional<enote_view_incoming_scan_info_t>> view_incoming_scan_t
     const cryptonote::transaction &tx,
     const epee::span<const crypto::key_derivation> custom_main_derivations,
     const epee::span<const crypto::key_derivation> custom_additional_derivations,
-    const cryptonote::account_public_address &address)
+    const cryptonote::account_public_address &address,
+    carrot::carrot_and_legacy_account &account)
 {
     // 1. Resize output
     const size_t n_outputs = tx.vout.size();
@@ -831,9 +820,6 @@ std::vector<std::optional<enote_view_incoming_scan_info_t>> view_incoming_scan_t
             tx_extra_nonce))
         MWARNING("Transaction extra has unsupported format: " << cryptonote::get_transaction_hash(tx));
 
-    tools::keystore keystore;
-    keystore.add(address.m_spend_public_key, {});
-    
     // 3. do view-incoming scan for each output enotes
     hw::device &hwdev = hw::get_device("default");
     for (size_t local_output_index = 0; local_output_index < n_outputs; ++local_output_index)
@@ -841,16 +827,16 @@ std::vector<std::optional<enote_view_incoming_scan_info_t>> view_incoming_scan_t
         auto &enote_scan_info = res[local_output_index];
 
         enote_scan_info = view_incoming_scan_enote(tx,
-            local_output_index,
-            epee::to_span(main_tx_ephemeral_pubkeys),
-            epee::to_span(additional_tx_ephemeral_pubkeys),
-            tx_extra_nonce,
-            custom_main_derivations,
-            custom_additional_derivations,
-            address,
-            /*k_view_dev=*/nullptr,
-            keystore,
-            hwdev);
+                                                   local_output_index,
+                                                   epee::to_span(main_tx_ephemeral_pubkeys),
+                                                   epee::to_span(additional_tx_ephemeral_pubkeys),
+                                                   tx_extra_nonce,
+                                                   custom_main_derivations,
+                                                   custom_additional_derivations,
+                                                   address,
+                                                   /*k_view_dev=*/nullptr,
+                                                   account,
+                                                   hwdev);
     }
 
     return res;

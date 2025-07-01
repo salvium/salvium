@@ -205,7 +205,7 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
 
     cryptonote::transaction tx;
     tx.pruned = true;
-    tx.version = 2;
+    tx.version = TRANSACTION_VERSION_N_OUTS;
     tx.unlock_time = 0;
     tx.vin.reserve(nins);
     tx.vout.reserve(nouts);

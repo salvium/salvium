@@ -2447,11 +2447,9 @@ void wallet2::process_new_transaction(
   const size_t n_outputs = tx.vout.size();
 
   // view-incoming scan enotes
-  tools::keystore keystore(m_subaddresses);
   const std::vector<std::optional<wallet::enote_view_incoming_scan_info_t>> enote_scan_infos =
     wallet::view_incoming_scan_transaction(tx,
-      this->m_account.get_keys(),
-      keystore);
+      this->m_account);
 
   // if view-incoming scan was successful, try deriving the key image
   bool password_failure = false;
@@ -3470,14 +3468,11 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
   hw::reset_mode rst(hwdev);
   hwdev.set_mode(hw::device::TRANSACTION_PARSE);
 
-  // Create a thread-safe keystore instance to allow detection of `STAKE`, `AUDIT` and `RETURN_PAYMENT` TX outputs
-  tools::keystore keystore(m_subaddresses);
-  
   // define view-incoming scan and key image derivation job
   std::vector<std::optional<wallet::enote_view_incoming_scan_info_t>> enote_scan_infos(num_tx_outputs);
   std::vector<std::optional<crypto::key_image>> output_key_images(num_tx_outputs);
   bool password_failure = false;
-  auto tx_scan_job = [this, &enote_scan_infos, &output_key_images, &password_failure, &keystore]
+  auto tx_scan_job = [this, &enote_scan_infos, &output_key_images, &password_failure]
     (const cryptonote::transaction &tx, size_t tx_output_idx)
   {
     if (tx.vout.empty())
@@ -3494,8 +3489,7 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
     }
 
     wallet::view_incoming_scan_transaction(tx,
-      this->m_account.get_keys(),
-      keystore,
+      this->m_account,
       {&enote_scan_infos[0] + tx_output_idx, tx.vout.size()});
 
     // if view-incoming scan was successful, try deriving the key image
@@ -5542,6 +5536,7 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
   if (r)
   {
     m_account.set_carrot_keys();
+    m_account.set_cn_subaddress_map(m_subaddresses);
 
     if (!m_is_background_wallet)
       setup_keys(password);
@@ -12904,9 +12899,10 @@ void wallet2::check_tx_key_helper(const cryptonote::transaction &tx, const crypt
   received = 0;
 
   const auto enote_scan_infos = wallet::view_incoming_scan_transaction_as_sender(tx,
-    {&derivation, 1},
-    epee::to_span(additional_derivations),
-    address);
+                                                                                 {&derivation, 1},
+                                                                                 epee::to_span(additional_derivations),
+                                                                                 address,
+                                                                                 m_account);
 
   for (const auto &enote_scan_info : enote_scan_infos)
     if (enote_scan_info && enote_scan_info->address_spend_pubkey == address.m_spend_public_key)
@@ -13907,8 +13903,6 @@ crypto::public_key wallet2::get_tx_pub_key_from_received_outs(const tools::walle
     error::wallet_internal_error,
     "get_tx_pub_key_from_received_outs is not relevant for Carrot txs");
 
-  tools::keystore subaddress_keystore(m_subaddresses);
-  
   const auto enote_scan_info = wallet::view_incoming_scan_enote_from_prefix(
     td.m_tx,
     td.amount(),
@@ -13916,7 +13910,7 @@ crypto::public_key wallet2::get_tx_pub_key_from_received_outs(const tools::walle
     td.m_internal_output_index,
     m_account_public_address,
     m_account.get_keys().m_view_secret_key,
-    subaddress_keystore,
+    m_account,
     m_account.get_device());
 
   const size_t main_tx_pubkey_index = enote_scan_info ? enote_scan_info->main_tx_pubkey_index : 0;
@@ -14237,7 +14231,6 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
     PERF_TIMER_START(import_key_images_F);
     auto spent_txid = spent_txids.begin();
     auto it = spent_txids.begin();
-    tools::keystore keystore(m_subaddresses);
     for (const COMMAND_RPC_GET_TRANSACTIONS::entry& e : gettxs_res.txs)
     {
       THROW_WALLET_EXCEPTION_IF(e.in_pool, error::wallet_internal_error, "spent tx isn't supposed to be in txpool");
@@ -14251,8 +14244,7 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
       // get received (change) amount
       std::map<std::string, uint64_t> tx_money_got_in_outs;
       const auto enote_scan_infos = wallet::view_incoming_scan_transaction(spent_tx,
-        m_account.get_keys(),
-        keystore);
+                                                                           m_account);
       for (const auto &enote_scan_info : enote_scan_infos)
         if (enote_scan_info && enote_scan_info->subaddr_index)
           tx_money_got_in_outs[enote_scan_info->asset_type] += enote_scan_info->amount; //! @TODO: check overflow

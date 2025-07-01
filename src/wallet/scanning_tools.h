@@ -38,7 +38,6 @@
 #include "cryptonote_basic/blobdatatype.h"
 #include "cryptonote_basic/subaddress_index.h"
 #include "cryptonote_basic/tx_extra.h"
-#include "common/keystore.h"
 #include "common/variant.h"
 
 //third party headers
@@ -108,8 +107,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote_from_pre
     const std::size_t local_output_index,
     const cryptonote::account_public_address &address,
     const crypto::secret_key &k_view_incoming,
-    //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    tools::keystore &subaddress_keystore,
+    carrot::carrot_and_legacy_account &account,
     hw::device &hwdev);
 
 void view_incoming_scan_transaction(
@@ -119,27 +117,22 @@ void view_incoming_scan_transaction(
     const cryptonote::blobdata &tx_extra_nonce,
     const epee::span<const crypto::key_derivation> main_derivations,
     const epee::span<const crypto::key_derivation> additional_derivations,
-    const cryptonote::account_keys &acc,
-    //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    tools::keystore &subaddress_keystore,
+    carrot::carrot_and_legacy_account &account,
     const epee::span<std::optional<enote_view_incoming_scan_info_t>> enote_scan_infos_out);
 void view_incoming_scan_transaction(
     const cryptonote::transaction &tx,
-    const cryptonote::account_keys &acc,
-    //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    tools::keystore &subaddress_keystore,
+    carrot::carrot_and_legacy_account &account,
     const epee::span<std::optional<enote_view_incoming_scan_info_t>> enote_scan_infos_out);
 std::vector<std::optional<enote_view_incoming_scan_info_t>> view_incoming_scan_transaction(
     const cryptonote::transaction &tx,
-    const cryptonote::account_keys &acc,
-    //const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    tools::keystore &subaddress_keystore);
+    carrot::carrot_and_legacy_account &account);
 
 std::vector<std::optional<enote_view_incoming_scan_info_t>> view_incoming_scan_transaction_as_sender(
     const cryptonote::transaction &tx,
     const epee::span<const crypto::key_derivation> custom_main_derivations,
     const epee::span<const crypto::key_derivation> custom_additional_derivations,
-    const cryptonote::account_public_address &address);
+    const cryptonote::account_public_address &address,
+    carrot::carrot_and_legacy_account &account);
 
 bool is_long_payment_id(const crypto::hash &pid);
 
