@@ -81,11 +81,16 @@ static bool is_transfer_usable_for_input_selection(const wallet2::transfer_detai
     const uint64_t last_locked_block_index = cryptonote::get_last_locked_block_index(
         td.m_tx.unlock_time, td.m_block_height);
     */
+    // Reject locked outputs
+    size_t blocks_locked_for = CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE;
+    if (td.m_tx.type == cryptonote::transaction_type::MINER || td.m_tx.type == cryptonote::transaction_type::PROTOCOL)
+      blocks_locked_for = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
 
     return !td.m_spent
         && td.m_key_image_known
         && !td.m_key_image_partial
         && !td.m_frozen
+        && (top_block_index >= td.m_block_height + blocks_locked_for)
         // && last_locked_block_index <= top_block_index
         && td.m_subaddr_index.major == from_account
         && (from_subaddresses.empty() || from_subaddresses.count(td.m_subaddr_index.minor) == 1)
@@ -171,6 +176,30 @@ static crypto::public_key find_change_address_spend_pubkey(
 {
     const auto change_it = std::find_if(subaddress_map.cbegin(), subaddress_map.cend(),
         [subaddr_account](const auto &p) { return p.second.major == subaddr_account && p.second.minor == 0; });
+    CHECK_AND_ASSERT_THROW_MES(change_it != subaddress_map.cend(),
+        "find_change_address_spend_pubkey: missing change address (index "
+        << subaddr_account << ",0) in subaddress map");
+    // HERE BE DRAGONS!!!
+    // SRCG: Disabling the following check is necessary to allow return_payments to work...
+    //       ...but if we can find an alternative to using the subaddress_map, we should! 
+    /*
+    const auto change_it_2 = std::find_if(std::next(change_it), subaddress_map.cend(),
+        [subaddr_account](const auto &p) { return p.second.major == subaddr_account && p.second.minor == 0; });
+    CHECK_AND_ASSERT_THROW_MES(change_it_2 == subaddress_map.cend(),
+        "find_change_address_spend_pubkey: provided subaddress map is malformed!!! At least two spend pubkeys map to "
+        "index " << subaddr_account << ",0 in the subaddress map!");
+    */
+    // LAND AHOY!!!
+    return change_it->first;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static crypto::public_key find_change_address_spend_pubkey(
+    const std::unordered_map<crypto::public_key, carrot::subaddress_index_extended> &subaddress_map,
+    const std::uint32_t subaddr_account)
+{
+    const auto change_it = std::find_if(subaddress_map.cbegin(), subaddress_map.cend(),
+        [subaddr_account](const auto &p) { return p.second.index.major == subaddr_account && p.second.index.minor == 0; });
     CHECK_AND_ASSERT_THROW_MES(change_it != subaddress_map.cend(),
         "find_change_address_spend_pubkey: missing change address (index "
         << subaddr_account << ",0) in subaddress map");
@@ -420,7 +449,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     tx_proposals.reserve(dsts.size() / (carrot::CARROT_MAX_TX_OUTPUTS - 1) + 1);
 
     const crypto::public_key change_address_spend_pubkey
-        = find_change_address_spend_pubkey(subaddress_map, subaddr_account);
+      = find_change_address_spend_pubkey(w.get_account().subaddress_map, subaddr_account);
 
     while (!dsts.empty())
     {
@@ -763,10 +792,9 @@ bool get_address_openings_x_y(
     crypto::secret_key &y_out)
 {
     const std::vector<crypto::public_key> v_pubkeys{src.real_out_tx_key};
-    const epee::span<const crypto::public_key> main_tx_ephemeral_pubkeys = 
-        epee::to_span(v_pubkeys);
-    const epee::span<const crypto::public_key> additional_tx_ephemeral_pubkeys = 
-        epee::to_span(src.real_out_additional_tx_keys);
+    const std::vector<crypto::public_key> v_pubkeys_empty{};
+    const epee::span<const crypto::public_key> main_tx_ephemeral_pubkeys = (src.real_out_tx_key == crypto::null_pkey) ? epee::to_span(v_pubkeys_empty) :  epee::to_span(v_pubkeys);
+    const epee::span<const crypto::public_key> additional_tx_ephemeral_pubkeys = epee::to_span(src.real_out_additional_tx_keys);
 
     // 2. perform ECDH derivations
     std::vector<crypto::key_derivation> main_derivations;
@@ -833,7 +861,7 @@ bool get_address_openings_x_y(
         nominal_janus_anchor_out
     );
     bool r = w.get_account().try_searching_for_opening_for_onetime_address(
-        src.address_spend_pubkey,
+        address_spend_pubkey_out,
         sender_extension_g_out,
         sender_extension_t_out,
         x_out,
