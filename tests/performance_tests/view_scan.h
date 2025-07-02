@@ -222,6 +222,7 @@ public:
         carrot::RCTOutputEnoteProposal output_proposal;
         carrot::get_output_proposal_normal_v1(payment_proposal,
             {},
+            nullptr,
             output_proposal,
             m_encrypted_payment_id);
         m_enote = output_proposal.enote;

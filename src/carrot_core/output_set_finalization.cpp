@@ -161,6 +161,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     std::vector<RCTOutputEnoteProposal> &output_enote_proposals_out,
     encrypted_payment_id_t &encrypted_payment_id_out,
     size_t &change_index_out,
+    std::unordered_map<crypto::public_key, size_t> &normal_payments_indices_out,
     std::vector<std::pair<bool, std::size_t>> *payment_proposal_order_out)
 {
     output_enote_proposals_out.clear();
@@ -203,6 +204,10 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     // D^other_e
     std::optional<mx25519_pubkey> other_enote_ephemeral_pubkey;
 
+
+    // map destinations to output keys to be able to find the indices of these outputs in tx
+    std::unordered_map<crypto::public_key, crypto::public_key> output_destinations_to_keys;
+
     // construct normal enotes
     for (size_t i = 0; i < normal_payment_proposals.size(); ++i)
     {
@@ -212,6 +217,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
         encrypted_payment_id_t encrypted_payment_id;
         get_output_proposal_normal_v1(normal_payment_proposals[i],
             tx_first_key_image,
+            s_view_balance_dev,
             output_entry.first,
             encrypted_payment_id);
 
@@ -223,6 +229,11 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
         const bool is_integrated = normal_payment_proposals[i].destination.payment_id != null_payment_id;
         if (is_integrated)
             encrypted_payment_id_out = encrypted_payment_id;
+
+        // save the one time key for this destination
+        output_destinations_to_keys.insert(
+            {output_entry.first.enote.onetime_address, normal_payment_proposals[i].destination.address_spend_pubkey}
+        );
     }
 
     // in the case that there is no required pid_enc, set it to the provided dummy
@@ -287,8 +298,13 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
         if (sortable_data[i].first.enote.onetime_address == change_address)
         {
             change_index_out = i;
-            break;
+            continue;
         }
+
+        const auto spend_key = output_destinations_to_keys[sortable_data[i].first.enote.onetime_address];
+        normal_payments_indices_out.insert(
+            {spend_key, i}
+        );
     }
 
     // collect output_enote_proposals_out and payment_proposal_order_out

@@ -86,6 +86,7 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_origin_
             .randomness = randomness
         },
         tx_first_key_image,
+        nullptr, // s_view_balance_dev
         enote_proposal_out,
         encrypted_payment_id_out
     );

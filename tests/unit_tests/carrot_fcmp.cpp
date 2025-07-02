@@ -375,6 +375,7 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
     std::vector<RCTOutputEnoteProposal> output_enote_proposals;
     encrypted_payment_id_t encrypted_payment_id;
     size_t change_index;
+    std::unordered_map<crypto::public_key, size_t> normal_payments_indices;
     get_output_enote_proposals(tx_proposal.normal_payment_proposals,
         selfsend_payment_proposal_cores,
         tx_proposal.dummy_encrypted_payment_id,
@@ -384,7 +385,8 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
         tx_proposal.key_images_sorted.at(0),
         output_enote_proposals,
         encrypted_payment_id,
-        change_index);
+        change_index,
+        normal_payments_indices);
 
     // Collect balance info and enotes
     std::vector<crypto::public_key> input_onetime_addresses;
@@ -413,6 +415,8 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
         tx_proposal.key_images_sorted,
         tx_proposal.sources,
         tx_proposal.fee,
+        0, // change_index
+        {}, // change_masks
         encrypted_payment_id);
 
     ASSERT_EQ(2, tx.version);

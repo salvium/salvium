@@ -115,6 +115,7 @@ TEST(carrot_core, main_address_normal_scan_completeness)
     encrypted_payment_id_t encrypted_payment_id;
     get_output_proposal_normal_v1(proposal,
         tx_first_key_image,
+        nullptr, // s_view_balance_dev
         enote_proposal,
         encrypted_payment_id);
 
@@ -185,6 +186,7 @@ TEST(carrot_core, subaddress_normal_scan_completeness)
     encrypted_payment_id_t encrypted_payment_id;
     get_output_proposal_normal_v1(proposal,
         tx_first_key_image,
+        nullptr, // s_view_balance_dev
         enote_proposal,
         encrypted_payment_id);
 
@@ -252,6 +254,7 @@ TEST(carrot_core, integrated_address_normal_scan_completeness)
     encrypted_payment_id_t encrypted_payment_id;
     get_output_proposal_normal_v1(proposal,
         tx_first_key_image,
+        nullptr, // s_view_balance_dev
         enote_proposal,
         encrypted_payment_id);
 
@@ -711,6 +714,7 @@ static void subtest_2out_transfer_get_output_enote_proposals_completeness(const 
     std::vector<RCTOutputEnoteProposal> enote_proposals;
     encrypted_payment_id_t encrypted_payment_id;
     size_t change_index;
+    std::unordered_map<crypto::public_key, size_t> normal_payments_indices;
     get_output_enote_proposals({bob_payment_proposal},
         {alice_payment_proposal},
         dummy_encrypted_pid,
@@ -719,7 +723,8 @@ static void subtest_2out_transfer_get_output_enote_proposals_completeness(const 
         tx_first_key_image,
         enote_proposals,
         encrypted_payment_id,
-        change_index);
+        change_index,
+        normal_payments_indices);
 
     ASSERT_EQ(2, enote_proposals.size()); // 2-out tx
 

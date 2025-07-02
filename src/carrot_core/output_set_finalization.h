@@ -111,6 +111,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     std::vector<RCTOutputEnoteProposal> &output_enote_proposals_out,
     encrypted_payment_id_t &encrypted_payment_id_out,
     size_t &change_index_out,
+    std::unordered_map<crypto::public_key, size_t> &normal_payments_indices_out,
     std::vector<std::pair<bool, std::size_t>> *payment_proposal_order_out = nullptr);
 /**
  * brief: get_coinbase_output_enotes - convert a *finalized* set of payment proposals into coinbase output enotes

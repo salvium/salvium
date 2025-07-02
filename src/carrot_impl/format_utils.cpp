@@ -197,18 +197,27 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
     const std::vector<crypto::key_image> &key_images,
     const std::vector<cryptonote::tx_source_entry> &sources,
     const rct::xmr_amount fee,
+    const cryptonote::transaction_type tx_type,
+    const size_t change_index,
+    const std::vector<uint8_t> change_masks,
     const encrypted_payment_id_t encrypted_payment_id)
 {
     const size_t nins = key_images.size();
     const size_t nouts = enotes.size();
     CHECK_AND_ASSERT_THROW_MES(nins == sources.size(), "invalid inputs/sources size");
+    CHECK_AND_ASSERT_THROW_MES(change_masks.size() == nouts - 1, "invalid change masks size. Expected: "  << nouts - 1 << " got: " << change_masks.size());
 
     cryptonote::transaction tx;
     tx.pruned = true;
     tx.version = TRANSACTION_VERSION_N_OUTS;
     tx.unlock_time = 0;
+    tx.source_asset_type = "SAL1";
+    tx.destination_asset_type = "SAL1";
+    tx.type = tx_type;
+    tx.return_address_change_mask.assign(change_masks.begin(), change_masks.end());
     tx.vin.reserve(nins);
     tx.vout.reserve(nouts);
+    tx.return_address_list.reserve(change_masks.size());
     tx.extra.reserve(MAX_TX_EXTRA_SIZE);
     tx.rct_signatures.type = carrot_v1_rct_type;
     tx.rct_signatures.txnFee = fee;
@@ -233,6 +242,7 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
     }
 
     //outputs
+    size_t i = 0;
     for (const CarrotEnoteV1 &enote : enotes)
     {
         //K_o,vt,anchor_enc
@@ -249,6 +259,14 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
 
         //C_a
         tx.rct_signatures.outPk.push_back(rct::ctkey{rct::key{}, enote.amount_commitment});
+
+        //K_return
+        if (i != change_index) {
+            crypto::public_key K_return;
+            memcpy(K_return.data, enote.return_enc.bytes, sizeof(crypto::public_key));
+            tx.return_address_list.push_back(K_return);
+        }
+        i++;
     }
 
     //ephemeral pubkeys: D_e

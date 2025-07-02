@@ -47,6 +47,7 @@
 #include "ringct/bulletproofs_plus.h"
 #include "wallet/scanning_tools.cpp"
 #include "common/container_helpers.h"
+#include "carrot_core/payment_proposal.cpp"
 
 //third party headers
 
@@ -872,6 +873,53 @@ bool get_address_openings_x_y(
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
+void encrypt_change_index(
+    const std::vector<carrot::CarrotPaymentProposalV1> &proposals,
+    const crypto::key_image &tx_first_key_image,
+    const size_t change_index,
+    const std::unordered_map<crypto::public_key, size_t> &normal_payments_indices,
+    std::vector<uint8_t> &change_masks_out
+) {
+    // 2. input context: input_context = "R" || KI_1
+    const carrot::input_context_t input_context = carrot::make_carrot_input_context(tx_first_key_image);
+
+    // 3. make D_e and do external ECDH
+    for (const auto &p: proposals) {
+        // get shared secret
+        mx25519_pubkey s_sender_receiver_unctx;
+        mx25519_pubkey eph_pubkey;
+        carrot::get_normal_proposal_ecdh_parts(
+            p,
+            input_context,
+            eph_pubkey,
+            s_sender_receiver_unctx
+        );
+
+        // derive a scalar from the shared secret
+        crypto::secret_key output_index_key;
+        crypto::key_derivation output_index_derivation;
+        memcpy(output_index_derivation.data, s_sender_receiver_unctx.data, sizeof(output_index_derivation.data));
+        crypto::derivation_to_scalar(
+            output_index_derivation,
+            normal_payments_indices.at(p.destination.address_spend_pubkey),
+            output_index_key
+        );
+
+        // Calculate the encrypted_change_index data for this output
+        struct {
+            char domain_separator[8];
+            crypto::secret_key output_index_key;
+        } eci_buf;
+        std::memset(eci_buf.domain_separator, 0x0, sizeof(eci_buf.domain_separator));
+        std::strncpy(eci_buf.domain_separator, "CHG_IDX", 8);
+        eci_buf.output_index_key = output_index_key;
+        crypto::secret_key eci_out;
+        keccak((uint8_t *)&eci_buf, sizeof(eci_buf), (uint8_t*)&eci_out, sizeof(eci_out));
+        uint8_t eci_data = change_index ^ eci_out.data[0];
+        change_masks_out.push_back(eci_data);
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
 cryptonote::transaction finalize_all_proofs_from_transfer_details(
     const carrot::CarrotTransactionProposalV1 &tx_proposal,
     const cryptonote::transaction_type tx_type,
@@ -908,6 +956,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     std::vector<carrot::RCTOutputEnoteProposal> output_enote_proposals;
     carrot::encrypted_payment_id_t encrypted_payment_id;
     size_t change_index;
+    std::unordered_map<crypto::public_key, size_t> normal_payments_indices;
     carrot::get_output_enote_proposals(tx_proposal.normal_payment_proposals,
         selfsend_payment_proposal_cores,
         tx_proposal.dummy_encrypted_payment_id,
@@ -917,6 +966,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         output_enote_proposals,
         encrypted_payment_id,
         change_index,
+        normal_payments_indices,
         nullptr);
     CHECK_AND_ASSERT_THROW_MES(output_enote_proposals.size() == n_outputs,
         "finalize_all_proofs_from_transfer_details: unexpected number of output enote proposals");
@@ -940,15 +990,24 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     for (size_t i = 0; i < enotes.size(); ++i)
         enotes[i] = output_enote_proposals.at(i).enote;
 
+    // encrypt change index per output
+    std::vector<uint8_t> change_masks;
+    encrypt_change_index(
+        tx_proposal.normal_payment_proposals,
+        tx_proposal.key_images_sorted.at(0),
+        change_index,
+        normal_payments_indices,
+        change_masks);
+
     // serialize transaction
     cryptonote::transaction tx = carrot::store_carrot_to_transaction_v1(enotes,
         tx_proposal.key_images_sorted,
         tx_proposal.sources,
         tx_proposal.fee,
+        tx_type,
+        change_index,
+        change_masks,
         encrypted_payment_id);
-    tx.source_asset_type = "SAL1";
-    tx.destination_asset_type = "SAL1";
-    tx.type = tx_type;
 
     // aliases
     hw::device &hwdev = acc_keys.get_device();
@@ -1068,9 +1127,6 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         }
     }
 
-    // fee
-    uint64_t fee = amount_in - amount_out - tx.amount_burnt;
-
     // bpp
     tx.rct_signatures.p.bulletproofs_plus.push_back(
         rct::bulletproof_plus_PROVE(outamounts, output_amount_blinding_factors)
@@ -1090,7 +1146,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         destination_asset_types,
         inamounts,
         outamounts,
-        fee,
+        tx_proposal.fee,
         mixRing,
         index,
         outSk,

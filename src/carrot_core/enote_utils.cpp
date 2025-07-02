@@ -221,6 +221,26 @@ void make_sparc_return_pubkey_encryption_mask(const unsigned char s_sender_recei
     derive_bytes_32(transcript.data(), transcript.size(), s_sender_receiver_unctx, &return_pubkey_mask_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
+void make_sparc_return_pubkey(const unsigned char s_sender_receiver_unctx[32],
+    const input_context_t &input_context,
+    const view_balance_secret_device *s_view_balance_dev,
+    const crypto::public_key &onetime_address,
+    encrypted_return_pubkey_t &return_pubkey_out)
+{
+    // K_return = k_return G ^ m_return
+    crypto::secret_key k_return;
+    crypto::public_key return_pub;
+    encrypted_return_pubkey_t K_return;
+    encrypted_return_pubkey_t m_return;
+    s_view_balance_dev->make_internal_return_privkey(input_context, onetime_address, k_return);
+    crypto::secret_key_to_public_key(k_return, return_pub);
+    static_assert(sizeof(K_return.bytes) == sizeof(return_pub.data), "Size mismatch");
+    memcpy(K_return.bytes, return_pub.data, sizeof(encrypted_return_pubkey_t));
+    make_sparc_return_pubkey_encryption_mask(s_sender_receiver_unctx, input_context, onetime_address, m_return);
+    return_pubkey_out = K_return ^ m_return;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 input_context_t make_carrot_input_context_coinbase(const std::uint64_t block_index)
 {
     // input_context = "C" || IntToBytes256(block_index)

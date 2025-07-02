@@ -104,6 +104,9 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
     const std::vector<crypto::key_image> &key_images,
     const std::vector<cryptonote::tx_source_entry> &sources,
     const rct::xmr_amount fee,
+    const cryptonote::transaction_type tx_type,
+    const size_t change_index,
+    const std::vector<uint8_t> change_masks,
     const encrypted_payment_id_t encrypted_payment_id);
 /**
  * brief: try_load_carrot_enote_from_transaction_v1 - load one non-coinbase Carrot enote from a cryptonote::transaction

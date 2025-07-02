@@ -60,6 +60,7 @@ void get_output_enote_proposals_from_proposal_v1(const CarrotTransactionProposal
 
     // derive enote proposals
     size_t change_index;
+    std::unordered_map<crypto::public_key, size_t> normal_payments_indices;
     get_output_enote_proposals(tx_proposal.normal_payment_proposals,
         selfsend_payment_proposal_cores,
         tx_proposal.dummy_encrypted_payment_id,
@@ -69,6 +70,7 @@ void get_output_enote_proposals_from_proposal_v1(const CarrotTransactionProposal
         output_enote_proposals_out,
         encrypted_payment_id_out,
         change_index,
+        normal_payments_indices,
         payment_proposal_order_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -123,6 +125,9 @@ void make_pruned_transaction_from_proposal_v1(const CarrotTransactionProposalV1 
         tx_proposal.key_images_sorted,
         tx_proposal.sources,
         tx_proposal.fee,
+        cryptonote::transaction_type::TRANSFER,
+        0, // change_index
+        {}, // change_masks
         encrypted_payment_id);
 
     // add extra payload and sort
