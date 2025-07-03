@@ -61,7 +61,7 @@ namespace cryptonote
     crypto::secret_key k_generate_image;
     crypto::secret_key s_generate_address;
 
-    // carrot public keys (minus K^0_v, which is shared with legacy K^0_v)
+    // carrot public keys (minus K_v, which is shared with legacy K_v)
     account_public_address m_carrot_account_address;
 
     
@@ -101,6 +101,7 @@ namespace cryptonote
     bool make_multisig(const crypto::secret_key &view_secret_key, const crypto::secret_key &spend_secret_key, const crypto::public_key &spend_public_key, const std::vector<crypto::secret_key> &multisig_keys);
     const account_keys& get_keys() const;
     std::string get_public_address_str(network_type nettype) const;
+    std::string get_carrot_public_address_str(network_type nettype) const;
     std::string get_public_integrated_address_str(const crypto::hash8 &payment_id, network_type nettype) const;
 
     hw::device& get_device() const  {return m_keys.get_device();}

@@ -276,6 +276,14 @@ DISABLE_VS_WARNINGS(4244 4345)
     //TODO: change this code into base 58
     return get_account_address_as_str(nettype, false, m_keys.m_account_address);
   }
+  //----------------------------------------------------------------------------------------------------------------------
+  std::string account_base::get_carrot_public_address_str(network_type nettype) const
+  {
+    // Build the cryptonote::account_public_address
+    account_public_address addr{m_keys.m_carrot_account_address.m_spend_public_key, m_keys.m_account_address.m_view_public_key};
+    // change this code into base 58
+    return get_account_address_as_str(nettype, false, addr, true);
+  }
   //-----------------------------------------------------------------
   std::string account_base::get_public_integrated_address_str(const crypto::hash8 &payment_id, network_type nettype) const
   {

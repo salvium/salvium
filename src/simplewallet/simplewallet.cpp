@@ -5477,15 +5477,9 @@ boost::optional<epee::wipeable_string> simple_wallet::open_wallet(const boost::p
       
     message_writer(console_color_white, true) <<
     prefix << ": " << m_wallet->get_account().get_public_address_str(m_wallet->nettype());
-
-    const auto addr = m_wallet->get_account().cryptonote_address(carrot::null_payment_id, carrot::AddressDeriveType::Carrot);
-    cryptonote::account_public_address carrot_address {
-      .m_spend_public_key = addr.address_spend_pubkey,
-      .m_view_public_key = addr.address_view_pubkey
-    };
     prefix = tr("Opened carrot wallet");
     message_writer(console_color_white, true) <<
-    prefix << ": " << cryptonote::get_account_address_as_str(m_wallet->nettype(), false, carrot_address);
+      prefix << ": " << m_wallet->get_account().get_carrot_public_address_str(m_wallet->nettype());
     if (m_wallet->get_account().get_device()) {
        message_writer(console_color_white, true) << "Wallet is on device: " << m_wallet->get_account().get_device().get_name();
     }
@@ -5645,7 +5639,11 @@ void simple_wallet::start_background_mining()
   {
     COMMAND_RPC_START_MINING::request req;
     COMMAND_RPC_START_MINING::response res;
-    req.miner_address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
+    uint8_t hf_version = m_wallet->get_current_hard_fork();
+    if (hf_version >= HF_VERSION_CARROT)
+      req.miner_address = m_wallet->get_account().get_carrot_public_address_str(m_wallet->nettype());
+    else
+      req.miner_address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
     req.threads_count = 1;
     req.do_background_mining = true;
     req.ignore_battery = false;
@@ -5769,7 +5767,11 @@ bool simple_wallet::start_mining(const std::vector<std::string>& args)
     return true;
   }
   COMMAND_RPC_START_MINING::request req = AUTO_VAL_INIT(req); 
-  req.miner_address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
+  uint8_t hf_version = m_wallet->get_current_hard_fork();
+  if (hf_version >= HF_VERSION_CARROT)
+    req.miner_address = m_wallet->get_account().get_carrot_public_address_str(m_wallet->nettype());
+  else
+    req.miner_address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
 
   bool ok = true;
   size_t arg_size = args.size();

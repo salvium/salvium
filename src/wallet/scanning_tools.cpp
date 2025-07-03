@@ -238,8 +238,11 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
         .derive_type = carrot::AddressDeriveType::PreCarrot
     };
 
-    // add the entry to our temporary subaddress map via the keystore
+    // HERE BE DRAGONS!!!
+    // SRCG: whilst the following code will work, it'd be better being moved to the TX_BUILDER code
+    // add the entry to our subaddress map in case it's a change payment (false positives won't hurt us)
     account.subaddress_map.insert({enote.onetime_address, subaddr_index});
+    // LAND AHOY!!!
     
     return enote_view_incoming_scan_info_t{
         .sender_extension_g = sender_extension_g,
@@ -390,7 +393,7 @@ static void perform_ecdh_derivations(const epee::span<const crypto::public_key> 
     main_derivations_out.clear();
     additional_derivations_out.clear();
     main_derivations_out.reserve(main_tx_ephemeral_pubkeys.size());
-    additional_derivations_out.reserve(additional_derivations_out.size());
+    additional_derivations_out.reserve(additional_tx_ephemeral_pubkeys.size());
 
     if (is_carrot)
     {
@@ -719,7 +722,7 @@ void view_incoming_scan_transaction(
 
     //! @TODO: HW device
     const bool is_carrot = carrot::is_carrot_transaction_v1(tx);
-    carrot::view_incoming_key_ram_borrowed_device k_view_dev(account.get_keys().m_view_secret_key);
+    carrot::view_incoming_key_ram_borrowed_device k_view_dev(is_carrot ? account.get_keys().k_view_incoming : account.get_keys().m_view_secret_key);
 
     // do view-incoming scan for each output enotes
     for (size_t local_output_index = 0; local_output_index < n_outputs; ++local_output_index)

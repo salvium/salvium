@@ -71,6 +71,7 @@ namespace cryptonote {
     account_public_address address;
     bool is_subaddress;
     bool has_payment_id;
+    bool is_carrot;
     crypto::hash8 payment_id;
   };
 
@@ -87,12 +88,14 @@ namespace cryptonote {
       network_type nettype
     , bool subaddress
     , const account_public_address& adr
+    , bool is_carrot = false
     );
 
   std::string get_account_integrated_address_as_str(
       network_type nettype
     , const account_public_address& adr
     , const crypto::hash8& payment_id
+    , bool is_carrot = false
     );
 
   bool get_account_address_from_str(

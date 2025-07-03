@@ -155,9 +155,12 @@ namespace cryptonote {
       network_type nettype
     , bool subaddress
     , account_public_address const & adr
+    , bool is_carrot
     )
   {
-    uint64_t address_prefix = subaddress ? get_config(nettype).CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX : get_config(nettype).CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
+    uint64_t address_prefix = is_carrot
+      ? (subaddress ? get_config(nettype).CARROT_PUBLIC_SUBADDRESS_BASE58_PREFIX : get_config(nettype).CARROT_PUBLIC_ADDRESS_BASE58_PREFIX)
+      : (subaddress ? get_config(nettype).CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX : get_config(nettype).CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
 
     return tools::base58::encode_addr(address_prefix, t_serializable_object_to_blob(adr));
   }
@@ -166,9 +169,10 @@ namespace cryptonote {
       network_type nettype
     , account_public_address const & adr
     , crypto::hash8 const & payment_id
+    , bool is_carrot
     )
   {
-    uint64_t integrated_address_prefix = get_config(nettype).CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
+    uint64_t integrated_address_prefix = is_carrot ? get_config(nettype).CARROT_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX : get_config(nettype).CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
 
     integrated_address iadr = {
       adr, payment_id
@@ -196,6 +200,9 @@ namespace cryptonote {
     uint64_t address_prefix = get_config(nettype).CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
     uint64_t integrated_address_prefix = get_config(nettype).CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
     uint64_t subaddress_prefix = get_config(nettype).CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX;
+    uint64_t carrot_address_prefix = get_config(nettype).CARROT_PUBLIC_ADDRESS_BASE58_PREFIX;
+    uint64_t carrot_integrated_address_prefix = get_config(nettype).CARROT_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
+    uint64_t carrot_subaddress_prefix = get_config(nettype).CARROT_PUBLIC_SUBADDRESS_BASE58_PREFIX;
 
     if (2 * sizeof(public_address_outer_blob) != str.size())
     {
@@ -211,21 +218,45 @@ namespace cryptonote {
       {
         info.is_subaddress = false;
         info.has_payment_id = true;
+        info.is_carrot = false;
       }
       else if (address_prefix == prefix)
       {
         info.is_subaddress = false;
         info.has_payment_id = false;
+        info.is_carrot = false;
       }
       else if (subaddress_prefix == prefix)
       {
         info.is_subaddress = true;
         info.has_payment_id = false;
+        info.is_carrot = false;
+      }
+      else if (carrot_integrated_address_prefix == prefix)
+      {
+        info.is_subaddress = false;
+        info.has_payment_id = true;
+        info.is_carrot = true;
+      }
+      else if (carrot_address_prefix == prefix)
+      {
+        info.is_subaddress = false;
+        info.has_payment_id = false;
+        info.is_carrot = true;
+      }
+      else if (carrot_subaddress_prefix == prefix)
+      {
+        info.is_subaddress = true;
+        info.has_payment_id = false;
+        info.is_carrot = true;
       }
       else {
         LOG_PRINT_L1("Wrong address prefix: " << prefix << ", expected " << address_prefix 
           << " or " << integrated_address_prefix
-          << " or " << subaddress_prefix);
+          << " or " << subaddress_prefix
+          << " or " << carrot_address_prefix
+          << " or " << carrot_integrated_address_prefix
+          << " or " << carrot_subaddress_prefix);
         return false;
       }
 
@@ -287,6 +318,7 @@ namespace cryptonote {
       info.address = blob.m_address;
       info.is_subaddress = false;
       info.has_payment_id = false;
+      info.is_carrot = false;
     }
 
     return true;
