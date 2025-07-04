@@ -58,8 +58,8 @@ CarrotDestinationV1 carrot_and_legacy_account::cryptonote_address(const payment_
     switch (resolve_derive_type(derive_type))
     {
     case AddressDeriveType::Carrot:
-        make_carrot_integrated_address_v1(get_keys().m_carrot_account_address.m_spend_public_key,
-            get_keys().m_account_address.m_view_public_key,
+        make_carrot_integrated_address_v1(get_keys().m_carrot_main_address.m_spend_public_key,
+            get_keys().m_carrot_main_address.m_view_public_key,
             payment_id,
             addr);
         break;
@@ -326,6 +326,13 @@ void carrot_and_legacy_account::set_carrot_keys(const AddressDeriveType default_
         m_keys.m_carrot_account_address.m_view_public_key
     );
 
+    // carrot main wallet address
+    m_keys.m_carrot_main_address.m_spend_public_key = m_keys.m_carrot_account_address.m_spend_public_key;
+    k_view_incoming_dev.view_key_scalar_mult_ed25519(
+        crypto::get_G(),
+        m_keys.m_carrot_main_address.m_view_public_key
+    );    
+    
     this->default_derive_type = default_derive_type;
     generate_subaddress_map();
 }

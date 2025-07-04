@@ -800,12 +800,13 @@ bool get_address_openings_x_y(
     // 2. perform ECDH derivations
     std::vector<crypto::key_derivation> main_derivations;
     std::vector<crypto::key_derivation> additional_derivations;
+    bool is_carrot = carrot::is_carrot_transaction_v1(tx);
     wallet::perform_ecdh_derivations(
         main_tx_ephemeral_pubkeys,
         additional_tx_ephemeral_pubkeys,
-        w.get_account().get_keys().m_view_secret_key,
+        is_carrot ? w.get_account().get_keys().k_view_incoming : w.get_account().get_keys().m_view_secret_key,
         w.get_account().get_keys().get_device(),
-        carrot::is_carrot_transaction_v1(tx),
+        is_carrot,
         main_derivations,
         additional_derivations
     );
@@ -948,8 +949,8 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
 
     //! @TODO: HW device
     carrot::cryptonote_hierarchy_address_device_ram_borrowed addr_dev(
-        acc_keys.m_account_address.m_spend_public_key,
-        acc_keys.m_view_secret_key);
+        acc_keys.m_carrot_account_address.m_spend_public_key,
+        acc_keys.k_view_incoming);
 
     // finalize enotes
     LOG_PRINT_L3("Getting output enote proposals");

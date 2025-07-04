@@ -61,8 +61,11 @@ namespace cryptonote
     crypto::secret_key k_generate_image;
     crypto::secret_key s_generate_address;
 
-    // carrot public keys (minus K_v, which is shared with legacy K_v)
+    // carrot public account address (K_s, K_v)
     account_public_address m_carrot_account_address;
+
+    // carrot main address (K^0_s, K^0_v)
+    account_public_address m_carrot_main_address;
 
     
     BEGIN_KV_SERIALIZE_MAP()

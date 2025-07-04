@@ -767,7 +767,7 @@ void view_incoming_scan_transaction(
     const bool is_carrot = carrot::is_carrot_transaction_v1(tx);
     perform_ecdh_derivations(epee::to_span(main_tx_ephemeral_pubkeys),
                              epee::to_span(additional_tx_ephemeral_pubkeys),
-                             account.get_keys().m_view_secret_key,
+                             is_carrot ? account.get_keys().k_view_incoming : account.get_keys().m_view_secret_key,
                              account.get_keys().get_device(),
                              is_carrot,
                              main_derivations,
@@ -864,9 +864,7 @@ std::optional<crypto::key_image> try_derive_enote_key_image(
     {
         const cryptonote::subaddress_index subaddr_index_cn{enote_scan_info.subaddr_index->index.major,
             enote_scan_info.subaddr_index->index.minor};
-        subaddress_extension = rct::sk2rct(
-            acc.get_keys().get_device().get_subaddress_secret_key(acc.get_keys().m_view_secret_key, subaddr_index_cn)
-        );
+        subaddress_extension = rct::sk2rct(acc.get_keys().get_device().get_subaddress_secret_key(enote_scan_info.is_carrot ? acc.get_keys().k_view_incoming : acc.get_keys().m_view_secret_key, subaddr_index_cn));
     }
     else // !subaddr_index_cn.is_zero()
     {
