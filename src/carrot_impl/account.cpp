@@ -110,14 +110,13 @@ CarrotDestinationV1 carrot_and_legacy_account::subaddress(const subaddress_index
     return addr;
 }
 //----------------------------------------------------------------------------------------------------------------------
-std::unordered_map<crypto::public_key, cryptonote::subaddress_index> carrot_and_legacy_account::subaddress_map_cn() const
+std::unordered_map<crypto::public_key, cryptonote::subaddress_index> carrot_and_legacy_account::get_subaddress_map() const
 {
     std::unordered_map<crypto::public_key, cryptonote::subaddress_index> res;
     for (const auto &p : subaddress_map)
-        if (p.second.derive_type == AddressDeriveType::PreCarrot)
-            res.emplace(p.first, cryptonote::subaddress_index{p.second.index.major, p.second.index.minor});
+        res.emplace(p.first, cryptonote::subaddress_index{p.second.index.major, p.second.index.minor});
     CHECK_AND_ASSERT_THROW_MES(!res.empty(),
-        "carrot_and_legacy_account::subaddress_map_cn: subaddress map does not contain pre-carrot subaddresses");
+        "carrot_and_legacy_account::get_subaddress_map: subaddress map does not contain subaddresses");
     return res;
 }
 //----------------------------------------------------------------------------------------------------------------------

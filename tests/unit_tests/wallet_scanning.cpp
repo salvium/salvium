@@ -90,8 +90,7 @@ TEST(wallet_scanning, view_scan_as_sender_mainaddr)
         const auto enote_scan_infos =  tools::wallet::view_incoming_scan_transaction_as_sender(tx,
                                                                                                {&main_derivation, 1},
                                                                                                {},
-                                                                                               bob_main_addr,
-                                                                                               bob
+                                                                                               bob_main_addr
                                                                                                );
 
         bool matched = false;

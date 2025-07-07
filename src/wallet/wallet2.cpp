@@ -12901,8 +12901,7 @@ void wallet2::check_tx_key_helper(const cryptonote::transaction &tx, const crypt
   const auto enote_scan_infos = wallet::view_incoming_scan_transaction_as_sender(tx,
                                                                                  {&derivation, 1},
                                                                                  epee::to_span(additional_derivations),
-                                                                                 address,
-                                                                                 m_account);
+                                                                                 address);
 
   for (const auto &enote_scan_info : enote_scan_infos)
     if (enote_scan_info && enote_scan_info->address_spend_pubkey == address.m_spend_public_key)
@@ -13910,7 +13909,7 @@ crypto::public_key wallet2::get_tx_pub_key_from_received_outs(const tools::walle
     td.m_internal_output_index,
     m_account_public_address,
     m_account.get_keys().m_view_secret_key,
-    m_account,
+    m_account.get_subaddress_map(),
     m_account.get_device());
 
   const size_t main_tx_pubkey_index = enote_scan_info ? enote_scan_info->main_tx_pubkey_index : 0;

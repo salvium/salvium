@@ -107,7 +107,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote_from_pre
     const std::size_t local_output_index,
     const cryptonote::account_public_address &address,
     const crypto::secret_key &k_view_incoming,
-    carrot::carrot_and_legacy_account &account,
+    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
     hw::device &hwdev);
 
 void view_incoming_scan_transaction(
@@ -131,8 +131,7 @@ std::vector<std::optional<enote_view_incoming_scan_info_t>> view_incoming_scan_t
     const cryptonote::transaction &tx,
     const epee::span<const crypto::key_derivation> custom_main_derivations,
     const epee::span<const crypto::key_derivation> custom_additional_derivations,
-    const cryptonote::account_public_address &address,
-    carrot::carrot_and_legacy_account &account);
+    const cryptonote::account_public_address &address);
 
 bool is_long_payment_id(const crypto::hash &pid);
 
