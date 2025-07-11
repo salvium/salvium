@@ -197,6 +197,7 @@ static void subtest_legacy_2out_transfer_get_output_enote_proposals_completeness
         tx_first_key_image,
         enote_proposals,
         encrypted_payment_id,
+        cryptonote::transaction_type::TRANSFER,
         change_index,
         normal_payments_indices);
 

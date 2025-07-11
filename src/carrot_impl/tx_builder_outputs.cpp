@@ -69,6 +69,7 @@ void get_output_enote_proposals_from_proposal_v1(const CarrotTransactionProposal
         tx_proposal.key_images_sorted.at(0),
         output_enote_proposals_out,
         encrypted_payment_id_out,
+        tx_proposal.tx_type,
         change_index,
         normal_payments_indices,
         payment_proposal_order_out);
@@ -126,7 +127,6 @@ void make_pruned_transaction_from_proposal_v1(const CarrotTransactionProposalV1 
         tx_proposal.sources,
         tx_proposal.fee,
         cryptonote::transaction_type::TRANSFER,
-        0, // change_index
         {}, // change_masks
         encrypted_payment_id);
 

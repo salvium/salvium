@@ -1272,7 +1272,7 @@ private:
     bool parse_tx_from_str(const std::string &signed_tx_st, std::vector<tools::wallet2::pending_tx> &ptx, std::function<bool(const signed_tx_set &)> accept_func);
     std::vector<wallet2::pending_tx> create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type tx_type, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, const unique_index_container& subtract_fee_from_outputs = {});     // pass subaddr_indices by value on purpose
     std::vector<wallet2::pending_tx> create_transactions_all(uint64_t below, cryptonote::transaction_type tx_type, const std::string& asset_type, const cryptonote::account_public_address &address, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices);
-    std::vector<wallet2::pending_tx> create_transactions_single(const crypto::key_image &ki, const cryptonote::account_public_address &address, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra);
+    std::vector<wallet2::pending_tx> create_transactions_single(const crypto::key_image &ki, const cryptonote::account_public_address &address, const cryptonote::transaction_type tx_type, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra);
     std::vector<wallet2::pending_tx> create_transactions_return(std::vector<size_t> transfers_indices);
     std::vector<wallet2::pending_tx> create_transactions_from(const cryptonote::account_public_address &address, const cryptonote::transaction_type tx_type, const std::string& asset_type, bool is_subaddress, const size_t outputs, std::vector<size_t> unused_transfers_indices, std::vector<size_t> unused_dust_indices, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra);
     bool sanity_check(const std::vector<wallet2::pending_tx> &ptx_vector, const std::vector<cryptonote::tx_destination_entry>& dsts, const unique_index_container& subtract_fee_from_outputs = {}) const;
@@ -1946,6 +1946,16 @@ private:
       const bool pool,
       std::optional<crypto::key_image> &ki_out,
       bool &password_failure_inout);
+
+    void scan_protocol_tx_output(
+      const cryptonote::transaction& tx,
+      const size_t local_output_index,
+      const crypto::public_key &onetime_address,
+      const uint64_t height,
+      uint64_t &td_origin_idx_out,
+      crypto::public_key locked_coins_pk_out,
+      wallet::enote_view_incoming_scan_info_t &enote_scan_info_out
+    );
 
     void process_new_transaction(
         const crypto::hash &txid,

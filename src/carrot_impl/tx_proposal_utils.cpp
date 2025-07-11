@@ -117,6 +117,7 @@ void make_carrot_transaction_proposal_v1(const std::vector<CarrotPaymentProposal
     const rct::xmr_amount fee_per_weight,
     const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
+    const cryptonote::transaction_type tx_type,
     select_inputs_func_t &&select_inputs,
     carve_fees_and_balance_func_t &&carve_fees_and_balance,
     const crypto::public_key &change_address_spend_pubkey,
@@ -226,6 +227,9 @@ void make_carrot_transaction_proposal_v1(const std::vector<CarrotPaymentProposal
     std::sort(tx_proposal_out.key_images_sorted.begin(),
         tx_proposal_out.key_images_sorted.end(),
         std::greater{}); // consensus rules dictate inputs sorted in *reverse* lexicographical order since v7
+
+    // set the transaction type
+    tx_proposal_out.tx_type = tx_type;
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_carrot_transaction_proposal_v1_transfer(
@@ -234,6 +238,7 @@ void make_carrot_transaction_proposal_v1_transfer(
     const rct::xmr_amount fee_per_weight,
     const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
+    const cryptonote::transaction_type tx_type,
     select_inputs_func_t &&select_inputs,
     const crypto::public_key &change_address_spend_pubkey,
     const subaddress_index_extended &change_address_index,
@@ -385,6 +390,7 @@ void make_carrot_transaction_proposal_v1_transfer(
         fee_per_weight,
         fee_quantization_mask,
         extra,
+        tx_type,
         std::forward<select_inputs_func_t>(select_inputs),
         std::move(carve_fees_and_balance),
         change_address_spend_pubkey,
@@ -398,6 +404,7 @@ void make_carrot_transaction_proposal_v1_sweep(
     const rct::xmr_amount fee_per_weight,
     const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
+    const cryptonote::transaction_type tx_type,
     std::vector<CarrotSelectedInput> &&selected_inputs,
     const crypto::public_key &change_address_spend_pubkey,
     const subaddress_index_extended &change_address_index,
@@ -477,6 +484,7 @@ void make_carrot_transaction_proposal_v1_sweep(
         fee_per_weight,
         fee_quantization_mask,
         extra,
+        tx_type,
         std::move(select_inputs),
         std::move(carve_fees_and_balance),
         change_address_spend_pubkey,

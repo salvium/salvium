@@ -160,8 +160,9 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     const crypto::key_image &tx_first_key_image,
     std::vector<RCTOutputEnoteProposal> &output_enote_proposals_out,
     encrypted_payment_id_t &encrypted_payment_id_out,
+    cryptonote::transaction_type tx_type,
     size_t &change_index_out,
-    std::unordered_map<crypto::public_key, size_t> &normal_payments_indices_out,
+    std::unordered_map<crypto::public_key, size_t> &payments_indices_out,
     std::vector<std::pair<bool, std::size_t>> *payment_proposal_order_out)
 {
     output_enote_proposals_out.clear();
@@ -204,8 +205,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     // D^other_e
     std::optional<mx25519_pubkey> other_enote_ephemeral_pubkey;
 
-
-    // map destinations to output keys to be able to find the indices of these outputs in tx
+    // map destinations to output keys in order to find the indices of these outputs in tx
     std::unordered_map<crypto::public_key, crypto::public_key> output_destinations_to_keys;
 
     // construct normal enotes
@@ -215,11 +215,19 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
         output_entry.second = {false, i};
 
         encrypted_payment_id_t encrypted_payment_id;
-        get_output_proposal_normal_v1(normal_payment_proposals[i],
-            tx_first_key_image,
-            s_view_balance_dev,
-            output_entry.first,
-            encrypted_payment_id);
+        if (tx_type == cryptonote::transaction_type::RETURN) {
+            get_output_proposal_return_v1(normal_payment_proposals[i],
+                tx_first_key_image,
+                s_view_balance_dev,
+                output_entry.first,
+                encrypted_payment_id);
+        } else {
+            get_output_proposal_normal_v1(normal_payment_proposals[i],
+                tx_first_key_image,
+                s_view_balance_dev,
+                output_entry.first,
+                encrypted_payment_id);
+        }
 
         // if 1 normal, and 2 self-send, set D^other_e equal to this D_e
         if (num_proposals == 2)
@@ -281,10 +289,16 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
             CARROT_THROW(std::invalid_argument, "neither a view-balance nor view-incoming device was provided");
         }
 
+        // save the change one time key
         if (selfsend_payment_proposal.enote_type == CarrotEnoteType::CHANGE)
         {
             change_address = output_entry.first.enote.onetime_address;
         }
+
+        // save the one time key for this destination
+        output_destinations_to_keys.insert(
+            {output_entry.first.enote.onetime_address, selfsend_payment_proposal.destination_address_spend_pubkey}
+        );
     }
 
     // sort enotes by K_o
@@ -298,11 +312,11 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
         if (sortable_data[i].first.enote.onetime_address == change_address)
         {
             change_index_out = i;
-            continue;
         }
 
+        // map destinations to output indices
         const auto spend_key = output_destinations_to_keys[sortable_data[i].first.enote.onetime_address];
-        normal_payments_indices_out.insert(
+        payments_indices_out.insert(
             {spend_key, i}
         );
     }

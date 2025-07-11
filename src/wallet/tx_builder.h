@@ -63,6 +63,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const rct::xmr_amount fee_per_weight,
     const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
+    const cryptonote::transaction_type tx_type,
     const uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
     wallet2::unique_index_container subtract_fee_from_outputs,
@@ -72,13 +73,13 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const std::vector<cryptonote::tx_destination_entry> &dsts,
     const std::uint32_t priority,
     const std::vector<uint8_t> &extra,
+    const cryptonote::transaction_type tx_type,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
     const wallet2::unique_index_container &subtract_fee_from_outputs);
 
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep(
-    const wallet2::transfer_container &transfers,
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
+    wallet2 &w,
     const std::vector<crypto::key_image> &input_key_images,
     const cryptonote::account_public_address &address,
     const bool is_subaddress,
@@ -86,6 +87,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const rct::xmr_amount fee_per_weight,
     const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
+    const cryptonote::transaction_type tx_type,
     const std::uint64_t top_block_index);
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep(
     wallet2 &w,
@@ -94,11 +96,11 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const bool is_subaddress,
     const size_t n_dests_per_tx,
     const std::uint32_t priority,
-    const std::vector<uint8_t> &extra);
+    const std::vector<uint8_t> &extra,
+    const cryptonote::transaction_type tx_type);
 
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep_all(
-    const wallet2::transfer_container &transfers,
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
+    wallet2 &w,
     const rct::xmr_amount only_below,
     const cryptonote::account_public_address &address,
     const bool is_subaddress,
@@ -106,6 +108,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const rct::xmr_amount fee_per_weight,
     const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
+    const cryptonote::transaction_type tx_type,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
     const std::uint64_t top_block_index);
@@ -117,6 +120,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const size_t n_dests_per_tx,
     const std::uint32_t priority,
     const std::vector<uint8_t> &extra,
+    const cryptonote::transaction_type tx_type,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices);
 wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionProposalV1 &tx_proposal,

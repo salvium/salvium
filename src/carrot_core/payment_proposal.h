@@ -145,9 +145,10 @@ void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
 * outparam: encrypted_payment_id_out - pid_enc
 */
 void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,
-                                   const crypto::key_image &tx_first_key_image,
-                                   RCTOutputEnoteProposal &output_enote_out,
-                                   encrypted_payment_id_t &encrypted_payment_id_out);
+    const crypto::key_image &tx_first_key_image,
+    const view_balance_secret_device *s_view_balance_dev,
+    RCTOutputEnoteProposal &output_enote_out,
+    encrypted_payment_id_t &encrypted_payment_id_out);
 /**
 * brief: get_output_proposal_special_v1 - convert the carrot proposal to an output proposal (external selfsend)
 * param: proposal -

@@ -55,7 +55,7 @@ namespace wallet
 {
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static bool parse_tx_extra_for_scanning(const std::vector<std::uint8_t> &tx_extra,
+bool parse_tx_extra_for_scanning(const std::vector<std::uint8_t> &tx_extra,
     const std::size_t n_outputs,
     std::vector<crypto::public_key> &main_tx_ephemeral_pubkeys_out,
     std::vector<crypto::public_key> &additional_tx_ephemeral_pubkeys_out,
@@ -373,7 +373,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void perform_ecdh_derivations(const epee::span<const crypto::public_key> main_tx_ephemeral_pubkeys,
+void perform_ecdh_derivations(const epee::span<const crypto::public_key> main_tx_ephemeral_pubkeys,
     const epee::span<const crypto::public_key> additional_tx_ephemeral_pubkeys,
     const crypto::secret_key &k_view_incoming,
     hw::device &hwdev,
@@ -859,7 +859,14 @@ std::optional<crypto::key_image> try_derive_enote_key_image(
     {
         const cryptonote::subaddress_index subaddr_index_cn{enote_scan_info.subaddr_index->index.major,
             enote_scan_info.subaddr_index->index.minor};
-        subaddress_extension = rct::sk2rct(acc.get_keys().get_device().get_subaddress_secret_key(enote_scan_info.is_carrot ? acc.get_keys().k_view_incoming : acc.get_keys().m_view_secret_key, subaddr_index_cn));
+        subaddress_extension = rct::sk2rct(
+            acc.get_keys()
+            .get_device()
+            .get_subaddress_secret_key(
+                enote_scan_info.is_carrot ? acc.get_keys().k_view_incoming : acc.get_keys().m_view_secret_key, 
+                subaddr_index_cn
+            )
+        );
     }
     else // !subaddr_index_cn.is_zero()
     {

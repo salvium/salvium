@@ -1873,7 +1873,7 @@ namespace tools
     {
       uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
       uint32_t priority = m_wallet->adjust_priority(req.priority);
-      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_single(ki, dsts[0].addr, dsts[0].is_subaddress, req.outputs, mixin, req.unlock_time, priority, extra);
+      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_single(ki, dsts[0].addr, cryptonote::transaction_type::TRANSFER, dsts[0].is_subaddress, req.outputs, mixin, req.unlock_time, priority, extra);
 
       if (ptx_vector.empty())
       {

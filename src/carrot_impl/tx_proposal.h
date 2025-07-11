@@ -84,6 +84,8 @@ struct CarrotTransactionProposalV1
     encrypted_payment_id_t dummy_encrypted_payment_id;
     /// Fee to miner
     rct::xmr_amount fee;
+    /// transaction type, e.g.
+    cryptonote::transaction_type tx_type;
 
     /// This field is truly "extra". It should contain only tx.extra fields that aren't present in a
     /// normal Carrot transaction, i.e. NOT ephemeral pubkeys nor encrypted PIDs

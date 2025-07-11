@@ -339,6 +339,7 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
         /*selfsend_payment_proposals=*/{},
         fee_per_weight,
         /*extra=*/{},
+        cryptonote::transaction_type::TRANSFER,
         [&input_info_by_ki]
         (
             const boost::multiprecision::int128_t&,
@@ -385,6 +386,7 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
         tx_proposal.key_images_sorted.at(0),
         output_enote_proposals,
         encrypted_payment_id,
+        cryptonote::transaction_type::TRANSFER,
         change_index,
         normal_payments_indices);
 
@@ -415,7 +417,6 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
         tx_proposal.key_images_sorted,
         tx_proposal.sources,
         tx_proposal.fee,
-        0, // change_index
         {}, // change_masks
         encrypted_payment_id);
 

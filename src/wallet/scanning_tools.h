@@ -100,6 +100,21 @@ using MoneroEnoteVariant = std::variant<PreCarrotEnote,
     carrot::CarrotCoinbaseEnoteV1,
     carrot::CarrotEnoteV1>;
 
+
+bool parse_tx_extra_for_scanning(const std::vector<std::uint8_t> &tx_extra,
+    const std::size_t n_outputs,
+    std::vector<crypto::public_key> &main_tx_ephemeral_pubkeys_out,
+    std::vector<crypto::public_key> &additional_tx_ephemeral_pubkeys_out,
+    cryptonote::blobdata &tx_extra_nonce_out);
+
+void perform_ecdh_derivations(const epee::span<const crypto::public_key> main_tx_ephemeral_pubkeys,
+    const epee::span<const crypto::public_key> additional_tx_ephemeral_pubkeys,
+    const crypto::secret_key &k_view_incoming,
+    hw::device &hwdev,
+    const bool is_carrot,
+    std::vector<crypto::key_derivation> &main_derivations_out,
+    std::vector<crypto::key_derivation> &additional_derivations_out);
+
 std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote_from_prefix(
     const cryptonote::transaction_prefix &tx_prefix,
     const rct::xmr_amount amount,

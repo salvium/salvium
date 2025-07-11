@@ -226,6 +226,7 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_return_
     get_output_proposal_return_v1(
         proposal_return,
         tx_return_first_key_image,
+        &bob.s_view_balance_dev,
         enote_proposal_return,
         encrypted_payment_id_return
     );

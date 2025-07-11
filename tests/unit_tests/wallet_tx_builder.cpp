@@ -167,6 +167,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_transfer_1)
         /*fee_per_weight=*/1,
         5,
         /*extra=*/{},
+        /*tx_type=*/cryptonote::transaction_type::TRANSFER,
         /*subaddr_account=*/0,
         /*subaddr_indices=*/{},
         {},
@@ -229,6 +230,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_transfer_2)
         /*fee_per_weight=*/1,
         5,
         /*extra=*/{},
+        /*tx_type=*/cryptonote::transaction_type::TRANSFER,
         /*subaddr_account=*/spending_subaddr_account,
         /*subaddr_indices=*/{},
         {},
@@ -288,9 +290,11 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_1)
 
     const tools::wallet2::transfer_container transfers{gen_transfer_details()};
 
+    tools::wallet2 w;
     const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(
-        transfers,
-        {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        // transfers,
+        // {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        w,
         {transfers.front().m_key_image},
         bob.get_keys().m_account_address,
         /*is_subaddress=*/false,
@@ -298,6 +302,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_1)
         /*fee_per_weight=*/1,
         5,
         /*extra=*/{},
+        /*tx_type=*/cryptonote::transaction_type::TRANSFER,
         transfers.front().m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
     ASSERT_EQ(1, tx_proposals.size());
     const carrot::CarrotTransactionProposalV1 &tx_proposal = tx_proposals.at(0);
@@ -322,10 +327,11 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_2)
     bob.generate();
 
     const tools::wallet2::transfer_container transfers{gen_transfer_details()};
-
+    tools::wallet2 w;
     const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(
-        transfers,
-        {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        // transfers,
+        // {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        w,
         {transfers.front().m_key_image},
         bob.get_keys().m_account_address,
         /*is_subaddress=*/false,
@@ -333,6 +339,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_2)
         /*fee_per_weight=*/1,
         5,
         /*extra=*/{},
+        /*tx_type=*/cryptonote::transaction_type::TRANSFER,
         transfers.front().m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
     ASSERT_EQ(1, tx_proposals.size());
     const carrot::CarrotTransactionProposalV1 &tx_proposal = tx_proposals.at(0);
@@ -365,10 +372,11 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_3)
     alice.generate();
 
     const tools::wallet2::transfer_container transfers{gen_transfer_details()};
-
+    tools::wallet2 w;
     const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(
-        transfers,
-        {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        // transfers,
+        // {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        w,
         {transfers.front().m_key_image},
         alice.get_keys().m_account_address,
         /*is_subaddress=*/false,
@@ -376,6 +384,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_3)
         /*fee_per_weight=*/1,
         5,
         /*extra=*/{},
+        /*tx_type=*/cryptonote::transaction_type::TRANSFER,
         transfers.front().m_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
     ASSERT_EQ(1, tx_proposals.size());
     const carrot::CarrotTransactionProposalV1 &tx_proposal = tx_proposals.at(0);
@@ -442,9 +451,11 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_4)
     const size_t n_dests_per_tx = 4;
 
     // make tx proposals
+    tools::wallet2 w;
     const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(
-        transfers,
-        {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        // transfers,
+        // {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        w,
         selected_key_images,
         bob.get_keys().m_account_address,
         /*is_subaddress=*/false,
@@ -452,6 +463,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_4)
         /*fee_per_weight=*/1,
         5,
         /*extra=*/{},
+        /*tx_type=*/cryptonote::transaction_type::TRANSFER,
         top_block_index);
     ASSERT_EQ(4, tx_proposals.size());
 
@@ -524,9 +536,11 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_5)
     const size_t n_dests_per_tx = 8;
 
     // make tx proposals
+    tools::wallet2 w;
     const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(
-        transfers,
-        {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        // transfers,
+        // {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        w,
         selected_key_images,
         alice.get_keys().m_account_address,
         /*is_subaddress=*/false,
@@ -534,6 +548,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_5)
         /*fee_per_weight=*/1,
         5,
         /*extra=*/{},
+        /*tx_type=*/cryptonote::transaction_type::TRANSFER,
         top_block_index);
     ASSERT_EQ(8, tx_proposals.size());
 
@@ -609,9 +624,11 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_6)
     const size_t n_dests_per_tx = 2;
 
     // make tx proposals
+    tools::wallet2 w;
     const std::vector<carrot::CarrotTransactionProposalV1> tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(
-        transfers,
-        {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        // transfers,
+        // {{alice.get_keys().m_account_address.m_spend_public_key, {}}},
+        w,
         selected_key_images,
         alice.get_keys().m_account_address,
         /*is_subaddress=*/false,
@@ -619,6 +636,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_6)
         /*fee_per_weight=*/1,
         5,
         /*extra=*/{},
+        /*tx_type=*/cryptonote::transaction_type::TRANSFER,
         top_block_index);
     ASSERT_EQ(1, tx_proposals.size());
     const carrot::CarrotTransactionProposalV1 &tx_proposal = tx_proposals.at(0);

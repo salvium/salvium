@@ -160,6 +160,7 @@ static void subtest_multi_account_transfer_over_transaction(const unittest_trans
         tx_preproposal.fee_per_weight,
         5,
         tx_preproposal.extra_extra,
+        cryptonote::transaction_type::TRANSFER,
         make_fake_input_selection_callback(),
         ss_keys.carrot_account_spend_pubkey,
         {{0, 0}, AddressDeriveType::Carrot},
@@ -214,6 +215,7 @@ static void subtest_multi_account_transfer_over_transaction(const unittest_trans
         parsed_key_images.at(0),
         rederived_output_enote_proposals,
         rederived_encrypted_payment_id,
+        cryptonote::transaction_type::TRANSFER,
         change_index,
         normal_payments_indices);
     EXPECT_EQ(*parsed_encrypted_payment_id, rederived_encrypted_payment_id);

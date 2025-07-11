@@ -8138,7 +8138,7 @@ bool simple_wallet::sweep_single(const std::vector<std::string> &args_)
   try
   {
     // figure out what tx will be necessary
-    auto ptx_vector = m_wallet->create_transactions_single(ki, info.address, info.is_subaddress, outputs, fake_outs_count, 0 /* unlock_time */, priority, extra);
+    auto ptx_vector = m_wallet->create_transactions_single(ki, info.address, cryptonote::transaction_type::TRANSFER, info.is_subaddress, outputs, fake_outs_count, 0 /* unlock_time */, priority, extra);
 
     if (ptx_vector.empty())
     {
@@ -8411,8 +8411,8 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
       asset_type = td.asset_type;
     }
     std::ostringstream prompt;
-    if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
-      return true;
+    // if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
+    //   return true;
     prompt << boost::format(tr("Returning %s %s for a total fee of %s %s.  Is this okay?")) %
       print_money(total_sent) % asset_type %
       print_money(total_fee) % asset_type;

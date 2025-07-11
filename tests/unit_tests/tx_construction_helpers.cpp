@@ -409,6 +409,7 @@ cryptonote::transaction construct_carrot_pruned_transaction_fake_inputs(
         fake_fee_per_weight,
         5,
         /*extra=*/{},
+        cryptonote::transaction_type::TRANSFER,
         std::move(select_inputs),
         acc_keys.m_account_address.m_spend_public_key,
         {{0, 0}, carrot::AddressDeriveType::PreCarrot},

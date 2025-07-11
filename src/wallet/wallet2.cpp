@@ -97,6 +97,7 @@ using namespace epee;
 #include "net/socks_connect.h"
 #include "carrot_impl/format_utils.h"
 #include "tx_builder.h"
+#include "scanning_tools.h"
 
 extern "C"
 {
@@ -2532,23 +2533,20 @@ void wallet2::process_new_scanned_transaction(
   }
 
   bool notify = false;
-  // per receiving subaddress index
+  // per receiving subaddress index -> (asset type, amount, one time address) 
   std::unordered_map<cryptonote::subaddress_index, std::map<std::string, uint64_t>> tx_money_got_in_outs;
-  std::unordered_map<cryptonote::subaddress_index, amounts_container> tx_amounts_individual_outs;
+  std::unordered_map<cryptonote::subaddress_index, std::vector<std::tuple<uint64_t, crypto::public_key>>> tx_amounts_individual_outs;
 
   // Note that this includes any 0-amount outputs, which we keep track of for background scanning
   bool received_an_output = false;
-
   crypto::hash payment_id = null_hash;
 
   // for each for scanned output...
   for (size_t local_output_index = 0; local_output_index < n_scanned_enotes; ++local_output_index)
   {
-    const auto &enote_scan_info_local = enote_scan_infos[local_output_index];
-    bool is_protocol = (tx.type == cryptonote::transaction_type::PROTOCOL);
-    if (!is_protocol)
-      if (!enote_scan_info_local || !enote_scan_info_local->subaddr_index)
-        continue;
+    const auto &enote_scan_info = enote_scan_infos[local_output_index];
+    if (!enote_scan_info || !enote_scan_info->subaddr_index)
+      continue;
 
     received_an_output = true;
 
@@ -2559,113 +2557,18 @@ void wallet2::process_new_scanned_transaction(
       continue;
     }
 
-    uint64_t td_origin_idx = (uint64_t)-1;
-    wallet::enote_view_incoming_scan_info_t enote_scan_info_protocol;
-    if (is_protocol) {
-
-      // Check that it is intended for us
-      if (!m_salvium_txs.count(onetime_address))
-        continue;
-
-      // Get the origin TX details
-      td_origin_idx = m_salvium_txs.at(onetime_address);
-      THROW_WALLET_EXCEPTION_IF(td_origin_idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate protocol TX origin in m_transfers");
-      const transfer_details &td_origin = m_transfers[td_origin_idx];
-      THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.type != cryptonote::transaction_type::AUDIT &&
-                                td_origin.m_tx.type != cryptonote::transaction_type::STAKE,
-                                error::wallet_internal_error,
-                                "incorrect TX type for protocol_tx origin in m_transfers");
-      
-      // Perform the correct sanity checks needed for each type of origin TX
-      if (td_origin.m_tx.type == cryptonote::transaction_type::STAKE) {
-        
-        // Check the age of the TX
-        uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
-        THROW_WALLET_EXCEPTION_IF(td_origin.m_block_height != height - stake_lock_period - 1,
-                                  error::wallet_internal_error,
-                                  "STAKE TX payout at incorrect height: found at " + std::to_string(height) +
-                                  ", but expected at " + std::to_string(td_origin.m_block_height + stake_lock_period + 1));
-
-        // Check the amount
-        THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.amount_burnt > tx.vout[local_output_index].amount,
-                                  error::wallet_internal_error,
-                                  "STAKE TX payout (" + print_money(tx.vout[local_output_index].amount) +
-                                  ") is less than staked amount " + print_money(td_origin.m_tx.amount_burnt));
-
-        // Populate the dummy enote_scan_info struct
-        THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(td_origin.m_tx.vout[0], enote_scan_info_protocol.address_spend_pubkey),
-                                  error::wallet_internal_error,
-                                  "failed to retrieve origin TX address spend pubkey");
-        enote_scan_info_protocol.amount = tx.vout[local_output_index].amount;
-        enote_scan_info_protocol.amount_blinding_factor = rct::I;
-        THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_asset_type(tx.vout[local_output_index], enote_scan_info_protocol.asset_type),
-                                  error::wallet_internal_error,
-                                  "failed to retrieve output asset type");
-        enote_scan_info_protocol.main_tx_pubkey_index = 0;
-        enote_scan_info_protocol.payment_id = crypto::null_hash;
-        enote_scan_info_protocol.subaddr_index = carrot::subaddress_index_extended{{td_origin.m_subaddr_index.major,td_origin.m_subaddr_index.minor}};
-        
-      } else if (td_origin.m_tx.type == cryptonote::transaction_type::AUDIT) {
-
-        // Check the amount
-        THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.amount_burnt != tx.vout[local_output_index].amount,
-                                  error::wallet_internal_error,
-                                  "AUDIT TX error - payout " + print_money(tx.vout[local_output_index].amount) +
-                                  " does not match audited amount " + print_money(td_origin.m_tx.amount_burnt));
-
-        // Populate the dummy enote_scan_info struct
-        THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(td_origin.m_tx.vout[0], enote_scan_info_protocol.address_spend_pubkey),
-                                  error::wallet_internal_error,
-                                  "failed to retrieve origin TX address spend pubkey");
-        enote_scan_info_protocol.amount = tx.vout[local_output_index].amount;
-        enote_scan_info_protocol.amount_blinding_factor = rct::I;
-        THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_asset_type(tx.vout[local_output_index], enote_scan_info_protocol.asset_type),
-                                  error::wallet_internal_error,
-                                  "failed to retrieve output asset type");
-        enote_scan_info_protocol.main_tx_pubkey_index = 0;
-        enote_scan_info_protocol.payment_id = crypto::null_hash;
-        enote_scan_info_protocol.subaddr_index = carrot::subaddress_index_extended{{td_origin.m_subaddr_index.major,td_origin.m_subaddr_index.minor}};
-        
-      } else {
-        
-        // Should never happen - only STAKE and AUDIT should pay out in a PROTOCOL transaction
-        assert(false);
-      }
-        
-      // Get the output key for the change entry
-      crypto::public_key pk_locked_coins = crypto::null_pkey;
-      THROW_WALLET_EXCEPTION_IF(!get_output_public_key(td_origin.m_tx.vout[td_origin.m_internal_output_index], pk_locked_coins),
-                                error::wallet_internal_error,
-                                "Failed to get output public key for locked coins");
-
-      // At this point, we need to clear the "locked coins" count, because otherwise we will be counting yield stakes twice in our balance
-      //THROW_WALLET_EXCEPTION_IF(!m_locked_coins.erase(pk_locked_coins), error::wallet_internal_error, "Failed to remove protocol_tx entry from m_locked_coins");
-      if (!m_locked_coins.erase(pk_locked_coins)) {
-        LOG_ERROR("Failed to remove protocol_tx entry from m_locked_coins - possible duplicate output key detected");
-      }
-    } else {
-      // Check for return_payment
-      if (m_salvium_txs.count(enote_scan_info_local->address_spend_pubkey)) {
-        // Must be a return payment
-        td_origin_idx = m_salvium_txs[enote_scan_info_local->address_spend_pubkey];
-      }
-    }
-
-    const auto &enote_scan_info = (is_protocol) ? enote_scan_info_protocol : enote_scan_info_local;
-    
     // check for burning bug
     const auto ot_it = m_pub_keys.find(onetime_address);
     const transfer_details *burning_td = ot_it != m_pub_keys.cend() ? &m_transfers.at(ot_it->second) : nullptr;
     const bool should_treat_as_burned = burning_td &&
-       (burning_td->amount() >= enote_scan_info->amount || burning_td->m_spent)
-       ;
+      (burning_td->amount() >= enote_scan_info->amount || burning_td->m_spent);
     if (should_treat_as_burned)
     {
       // We already have an older received transfer with a greater-than-or-equal amount
       LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(ot_it->first)
-                << " from received " << print_money(enote_scan_info->amount) << " output already exists with "
-                << (burning_td->m_spent ? "spent" : "unspent") << " "
-                << print_money(burning_td->amount()) << " in tx " << burning_td->m_txid << ", received output ignored");
+        << " from received " << print_money(enote_scan_info->amount) << " output already exists with "
+        << (burning_td->m_spent ? "spent" : "unspent") << " "
+        << print_money(burning_td->amount()) << " in tx " << burning_td->m_txid << ", received output ignored");
       continue;
     }
     else if (burning_td)
@@ -2678,8 +2581,13 @@ void wallet2::process_new_scanned_transaction(
     const rct::xmr_amount extra_received_money = enote_scan_info->amount - (burning_td ? burning_td->amount() : 0);
     const cryptonote::subaddress_index subaddr_index_cn{
         enote_scan_info->subaddr_index->index.major, enote_scan_info->subaddr_index->index.minor};
-    tx_money_got_in_outs[subaddr_index_cn][enote_scan_info->asset_type] += extra_received_money;
-    tx_amounts_individual_outs[subaddr_index_cn].push_back(extra_received_money);
+
+    // Only count >0 amount outs
+    if (enote_scan_info->amount > 0)
+    {
+      tx_money_got_in_outs[subaddr_index_cn][enote_scan_info->asset_type] += extra_received_money;
+      tx_amounts_individual_outs[subaddr_index_cn].push_back(std::make_tuple(extra_received_money, onetime_address));
+    }
 
     // set payment id
     const bool ignore_long_pid = block_version >= IGNORE_LONG_PAYMENT_ID_FROM_BLOCK_VERSION;
@@ -2705,10 +2613,6 @@ void wallet2::process_new_scanned_transaction(
     if (pool)
         continue;
 
-    // expand subaddress table if applicable
-    if (should_expand(subaddr_index_cn))
-        expand_subaddresses(subaddr_index_cn);
-
     // update m_transfers view-incoming scan info, and default values
     transfer_details& td = tools::add_element(m_transfers);
     td.m_block_height = height;
@@ -2725,47 +2629,12 @@ void wallet2::process_new_scanned_transaction(
     td.m_recovered_spend_pubkey = enote_scan_info->address_spend_pubkey;
     td.m_rct = tx.version >= 2;
     td.m_frozen = false;
-    set_unspent(m_transfers.size() - 1);
-    td.m_td_origin_idx = td_origin_idx;
+    td.m_td_origin_idx = m_salvium_txs.find(enote_scan_info->address_spend_pubkey) != m_salvium_txs.end() ?
+      m_salvium_txs.at(enote_scan_info->address_spend_pubkey) : std::numeric_limits<uint64_t>::max();
 
     // update m_transfers key image values
-    if (td_origin_idx != (uint64_t)-1) {
-
-      // Return payment received - rebuild the correct key image
-      THROW_WALLET_EXCEPTION_IF(td_origin_idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate return_payment TX origin in m_transfers");
-      const transfer_details &td_origin = m_transfers[td_origin_idx];
-      hw::device &hwdev =  m_account.get_device();
-      hw::reset_mode rst(hwdev);
-      hwdev.set_mode(hw::device::TRANSACTION_PARSE);
-      const crypto::public_key tx_public_key = get_tx_pub_key_from_extra(tx);
-      const std::vector<crypto::public_key> additional_tx_public_keys = get_additional_tx_pub_keys_from_extra(tx);
-      keypair in_ephemeral;
-      crypto::key_image ki;
-      origin_data origin_tx_data;
-      origin_tx_data.tx_pub_key = get_tx_pub_key_from_extra(td_origin.m_tx);
-      origin_tx_data.output_index = td_origin.m_internal_output_index;
-      origin_tx_data.tx_type = td_origin.m_tx.type;
-      rct::salvium_input_data_t sid;
-      THROW_WALLET_EXCEPTION_IF(!cryptonote::generate_key_image_helper(m_account.get_keys(),
-                                                                       m_subaddresses,
-                                                                       onetime_address,
-                                                                       tx_public_key,
-                                                                       additional_tx_public_keys,
-                                                                       local_output_index,
-                                                                       in_ephemeral,
-                                                                       ki,
-                                                                       hwdev,
-                                                                       true,
-                                                                       origin_tx_data,
-                                                                       sid),
-                                error::wallet_internal_error,
-                                "failed to obtain key image for protocol_tx output");
-      td.m_key_image_known = true;
-      td.m_key_image = ki;
-    } else {
-      td.m_key_image_known = bool(output_key_images[local_output_index]);
-      td.m_key_image = output_key_images[local_output_index].value_or(crypto::key_image{});
-    }
+    td.m_key_image_known = bool(output_key_images[local_output_index]);
+    td.m_key_image = output_key_images[local_output_index].value_or(crypto::key_image{});
     if (!td.m_key_image_known)
     {
       // we might have cold signed, and have a mapping to key images
@@ -2776,11 +2645,12 @@ void wallet2::process_new_scanned_transaction(
         td.m_key_image_known = true;
       }
     }
-    if (!td.m_key_image_known && is_protocol)
+
+    // override the key image for PROTOCOL/RETURN tx outputs.
+    if (td.m_td_origin_idx != std::numeric_limits<uint64_t>::max())
     {
-      // We need to manually create the key image data
-      THROW_WALLET_EXCEPTION_IF(td_origin_idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate protocol TX origin in m_transfers");
-      const transfer_details &td_origin = m_transfers[td_origin_idx];
+      THROW_WALLET_EXCEPTION_IF(td.m_td_origin_idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate return_payment TX origin in m_transfers");
+      const transfer_details &td_origin = m_transfers[td.m_td_origin_idx];
       hw::device &hwdev =  m_account.get_device();
       hw::reset_mode rst(hwdev);
       hwdev.set_mode(hw::device::TRANSACTION_PARSE);
@@ -2794,7 +2664,7 @@ void wallet2::process_new_scanned_transaction(
       origin_tx_data.tx_type = td_origin.m_tx.type;
       rct::salvium_input_data_t sid;
       THROW_WALLET_EXCEPTION_IF(!cryptonote::generate_key_image_helper(m_account.get_keys(),
-                                                                       m_subaddresses,
+                                                                       m_account.get_subaddress_map(),
                                                                        onetime_address,
                                                                        tx_public_key,
                                                                        additional_tx_public_keys,
@@ -2812,6 +2682,8 @@ void wallet2::process_new_scanned_transaction(
     }
     td.m_key_image_request = m_watch_only; // for view wallets, that flag means "we want to request it"
     td.m_key_image_partial = m_multisig;
+
+    set_unspent(m_transfers.size() - 1);
 
     // update m_key_images, m_pub_keys, and output_tracker_cache
     if (td.m_key_image_known)
@@ -2832,44 +2704,9 @@ void wallet2::process_new_scanned_transaction(
         update_multisig_rescan_info(*m_multisig_rescan_k, *m_multisig_rescan_info, m_transfers.size() - 1);
     }
 
-    // Check for Salvium-specific logic
-    if (tx.type == cryptonote::transaction_type::TRANSFER) {
-
-      // Store the potential return details for a pre-Carrot return_payment
-      // We might store garbage entries here occasionally, but they shouldn't impact performance significantly
-      crypto::public_key P_change = crypto::null_pkey;
-      size_t change_idx = local_output_index;
-      THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[change_idx], P_change), error::wallet_internal_error, "Failed to get output public key");
-      m_subaddresses[P_change] = subaddr_index_cn;
-      m_salvium_txs.insert({P_change, m_transfers.size()-1});
-      
-    } else if (tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::AUDIT) {
-
-      // The CONVERT/STAKE/AUDIT TX was created by us - therefore we need to expect an output in the PROTOCOL_TX
-      // It could be a refund, an audit, or a conversion
-      THROW_WALLET_EXCEPTION_IF(tx.vout.size() != 1, error::wallet_internal_error, "Incorrect number of outputs from CONVERT/STAKE/AUDIT TX");
-            
-      // Add the change output_public_key to the list of subaddresses to check
-      crypto::public_key P_change = crypto::null_pkey;
-      THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[0], P_change), error::wallet_internal_error, "Failed to get change output public key");
-      m_subaddresses[P_change] = subaddr_index_cn;//tx_scan_info[o].received->index;//{0,0};
-      if (tx.version >= TRANSACTION_VERSION_N_OUTS)
-        m_salvium_txs.insert({tx.return_address_list[local_output_index], m_transfers.size()-1});
-      else
-        m_salvium_txs.insert({tx.return_address, m_transfers.size()-1});
-            
-      if (tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::AUDIT) {
-        // Additionally, with STAKE and AUDIT TXs, we need to update our "balance staked" subtotal, because otherwise our balance is out by the staked coins until they mature!
-        // SRCG: must remember to deduct the number of staked coins when they mature!!
-        LOG_PRINT_L1("***** STAKED/AUDITED COINS : " << tx.amount_burnt << " *****");
-        m_locked_coins.insert({P_change, {0, tx.amount_burnt, tx.source_asset_type}});
-      }
-            
-    }
-    
     // money received callbacks
     LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
-    if (!ignore_callbacks && 0 != m_callback)
+    if (!ignore_callbacks && 0 != m_callback && td.m_amount > 0)
       m_callback->on_money_received(height, txid, tx, td.m_amount, td.asset_type, 0, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time, td.m_td_origin_idx);
   }
 
@@ -3000,8 +2837,22 @@ void wallet2::process_new_scanned_transaction(
   {
     if (subaddr_account && i->first.major == *subaddr_account)
     {
-      // tx_amounts_individual_outs.erase(i->first);
-      // i = tx_money_got_in_outs.erase(i);
+      // save the change output key in our subaddress_map, so we can receive money to it later
+      // from protocol or return txs
+      for (const auto entry: tx_amounts_individual_outs[i->first]) {
+        const crypto::public_key &onetime_address = std::get<1>(entry);
+        m_account.insert_subaddresses({{onetime_address, {i->first.major, i->first.minor}}});
+        // save to m_subaddresses as well, so that we can populate account subaddress map
+        // when we open the wallet first time.
+        m_subaddresses[onetime_address] = i->first;
+
+        // update m_salvium_txs
+        m_salvium_txs.insert({onetime_address, m_transfers.size()-1});
+      }
+
+      // delete change output from amounts
+      tx_amounts_individual_outs.erase(i->first);
+
       // delete individual change asset output
       for (auto assets_it = i->second.begin(); assets_it != i->second.end();) {
         if (assets_it->first == source_asset)
@@ -3027,12 +2878,16 @@ void wallet2::process_new_scanned_transaction(
     {
       for (const auto& j : i.second)
       {
+        amounts_container amounts;
+        for (const auto& entry: tx_amounts_individual_outs[i.first]) {
+          amounts.push_back(std::get<0>(entry));
+        }
         payment_details payment;
         payment.m_tx_hash      = txid;
         payment.m_fee          = fee;
         payment.m_asset_type   = j.first;
         payment.m_amount       = j.second;
-        payment.m_amounts      = tx_amounts_individual_outs[i.first];
+        payment.m_amounts      = amounts;
         payment.m_block_height = height;
         payment.m_unlock_time  = tx.unlock_time;
         payment.m_timestamp    = ts;
@@ -5536,7 +5391,6 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
   if (r)
   {
     m_account.set_carrot_keys();
-    m_account.set_cn_subaddress_map(m_subaddresses);
 
     if (!m_is_background_wallet)
       setup_keys(password);
@@ -6720,6 +6574,7 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
 
   if (get_num_subaddress_accounts() == 0)
     add_subaddress_account(tr("Primary account"));
+  m_account.insert_subaddresses(m_subaddresses);
 
   try
   {
@@ -10543,7 +10398,7 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
     std::vector<std::pair<std::string, std::string>> circ_amounts;
     THROW_WALLET_EXCEPTION_IF(!get_circulating_supply(circ_amounts), error::wallet_internal_error, "Failed to get circulating supply");
     // make a normal tx
-    bool r = cryptonote::construct_tx_and_get_tx_key(a_keys/*m_account.get_keys()*/, m_subaddresses, sources, splitted_dsts, hf_version, source_asset, dest_asset, tx_type, change_dts.addr, extra, tx, unlock_time, tx_key, additional_tx_keys, true, rct_config, use_view_tags);
+    bool r = cryptonote::construct_tx_and_get_tx_key(a_keys/*m_account.get_keys()*/, m_account.get_subaddress_map(), sources, splitted_dsts, hf_version, source_asset, dest_asset, tx_type, change_dts.addr, extra, tx, unlock_time, tx_key, additional_tx_keys, true, rct_config, use_view_tags);
     LOG_PRINT_L2("constructed tx, r="<<r);
     THROW_WALLET_EXCEPTION_IF(!r, error::tx_not_constructed, sources, dsts, unlock_time, m_nettype);
   }
@@ -10850,7 +10705,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
   const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
   if (do_carrot_tx_construction)
   {
-    const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts, priority, extra, subaddr_account, subaddr_indices, subtract_fee_from_outputs);
+    const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts, priority, extra, tx_type, subaddr_account, subaddr_indices, subtract_fee_from_outputs);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
     for (const auto &tx_proposal : tx_proposals)
@@ -11686,7 +11541,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
   const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
   if (do_carrot_tx_construction)
   {
-    const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep_all(*this, below, address, is_subaddress, outputs, priority, extra, subaddr_account, subaddr_indices);
+    const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep_all(*this, below, address, is_subaddress, outputs, priority, extra, tx_type, subaddr_account, subaddr_indices);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
     // TODO: use CLSAGS here..
@@ -11772,12 +11627,12 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
   return create_transactions_from(address, tx_type, asset_type, is_subaddress, outputs, unused_transfers_indices, unused_dust_indices, fake_outs_count, unlock_time, priority, extra);
 }
 
-std::vector<wallet2::pending_tx> wallet2::create_transactions_single(const crypto::key_image &ki, const cryptonote::account_public_address &address, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra)
+std::vector<wallet2::pending_tx> wallet2::create_transactions_single(const crypto::key_image &ki, const cryptonote::account_public_address &address, const cryptonote::transaction_type tx_type, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra)
 {
   const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
   if (do_carrot_tx_construction)
   {
-    const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(*this, {ki}, address, is_subaddress, outputs, priority, extra);
+    const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(*this, {ki}, address, is_subaddress, outputs, priority, extra, tx_type);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
     // TODO: use CLSAGS here..
@@ -11828,6 +11683,108 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
     const transfer_details &td = get_transfer_details(td_idx);
     THROW_WALLET_EXCEPTION_IF(td.m_txid != td_origin.m_txid, error::wallet_internal_error, tr("TX hashes do not match for inputs to return_payment"));
     THROW_WALLET_EXCEPTION_IF(td.asset_type != td_origin.asset_type, error::wallet_internal_error, tr("TX asset_type values do not match for inputs to return_payment"));
+  }
+
+  const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
+  if (do_carrot_tx_construction)
+  {
+    // calculate the return address
+    // 1. parse tx extra
+    std::vector<crypto::public_key> main_tx_ephemeral_pubkeys;
+    std::vector<crypto::public_key> additional_tx_ephemeral_pubkeys;
+    cryptonote::blobdata tx_extra_nonce;
+    if (!wallet::parse_tx_extra_for_scanning(td_origin.m_tx.extra,
+            td_origin.m_tx.vout.size(),
+            main_tx_ephemeral_pubkeys,
+            additional_tx_ephemeral_pubkeys,
+            tx_extra_nonce))
+        MWARNING("Return transaction extra has unsupported format: ");
+
+    THROW_WALLET_EXCEPTION_IF(main_tx_ephemeral_pubkeys.empty() && additional_tx_ephemeral_pubkeys.empty(), error::wallet_internal_error,
+        "Transaction missing ephemeral pubkeys");
+    const bool is_carrot = carrot::is_carrot_transaction_v1(td_origin.m_tx);
+    THROW_WALLET_EXCEPTION_IF(!is_carrot, error::wallet_internal_error,
+        "Return payment is only supported for Carrot transactions");
+
+    // 2. perform ECDH derivations
+    std::vector<crypto::key_derivation> main_derivations;
+    std::vector<crypto::key_derivation> additional_derivations;
+    wallet::perform_ecdh_derivations(
+      epee::to_span(main_tx_ephemeral_pubkeys),
+      epee::to_span(additional_tx_ephemeral_pubkeys),
+      m_account.get_keys().k_view_incoming,
+      m_account.get_keys().get_device(),
+      is_carrot,
+      main_derivations,
+      additional_derivations
+    );
+
+    // 3. input context
+    carrot::input_context_t input_context = carrot::gen_input_context();
+    if (td_origin.m_tx.vin[0].type() == typeid(cryptonote::txin_to_key)) {
+      input_context = carrot::make_carrot_input_context(boost::get<cryptonote::txin_to_key>(td_origin.m_tx.vin[0]).k_image);
+    } else if (td_origin.m_tx.vin[0].type() == typeid(cryptonote::txin_gen)) {
+      input_context = carrot::make_carrot_input_context_coinbase(boost::get<cryptonote::txin_gen>(td_origin.m_tx.vin[0]).height);
+    } else {
+      THROW_WALLET_EXCEPTION_IF(true, error::wallet_internal_error, "Unsupported input type for return_payment");
+    }
+    const mx25519_pubkey origin_tx_shared_secret_unctx = carrot::raw_byte_convert<mx25519_pubkey>(main_derivations[0]);
+
+    // 4. compute m_return
+    crypto::public_key output_key;
+    carrot::encrypted_return_pubkey_t m_return;
+    THROW_WALLET_EXCEPTION_IF(
+      !cryptonote::get_output_public_key(td_origin.m_tx.vout[td_origin.m_internal_output_index], output_key),
+      error::wallet_internal_error,
+      "Failed to identify output key"
+    );
+    carrot::make_sparc_return_pubkey_encryption_mask(
+      origin_tx_shared_secret_unctx.data,
+      input_context,
+      output_key,
+      m_return
+    );
+
+    // 5. compute K_return from m_return
+    carrot::encrypted_return_pubkey_t K_return;
+    crypto::public_key return_pub;
+    std::memcpy(
+      K_return.bytes,
+      td_origin.m_tx.return_address_list[td_origin.m_internal_output_index].data,
+      sizeof(carrot::encrypted_return_pubkey_t)
+    );
+    K_return = K_return ^ m_return;
+    static_assert(sizeof(K_return.bytes) == sizeof(return_pub.data), "Size mismatch");
+    std::memcpy(return_pub.data, K_return.bytes, sizeof(carrot::encrypted_return_pubkey_t));
+
+    // 6. compute the change index
+    crypto::secret_key z_i;
+    derivation_to_scalar(main_derivations[0], td_origin.m_internal_output_index, z_i);
+    struct {
+      char domain_separator[8];
+      crypto::secret_key output_index_key;
+    } buf;
+    std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+    std::strncpy(buf.domain_separator, "CHG_IDX", 8);
+    std::memcpy(buf.output_index_key.data, z_i.data, sizeof(crypto::secret_key));
+    uint8_t eci_data = td_origin.m_tx.return_address_change_mask[td_origin.m_internal_output_index];
+    crypto::secret_key eci_out;
+    keccak((uint8_t *)&buf, sizeof(buf), (uint8_t*)&eci_out, sizeof(eci_out));
+    uint8_t change_index = eci_data ^ eci_out.data[0];
+
+    crypto::public_key change_key;
+    THROW_WALLET_EXCEPTION_IF(
+      !cryptonote::get_output_public_key(td_origin.m_tx.vout[change_index], change_key),
+      error::wallet_internal_error,
+      "Failed to identify change output"
+    );
+
+    // 7. Make a destination address for the return
+    cryptonote::account_public_address address;
+    address.m_spend_public_key = change_key;
+    address.m_view_public_key = return_pub;
+
+    return create_transactions_from(address, cryptonote::transaction_type::RETURN, asset_type, is_subaddress, outputs, transfers_indices, unused_dust_indices, fake_outs_count, unlock_time, priority, extra);
   }
   
   // To return a payment, we need to know the y value to process the F value
@@ -11952,12 +11909,11 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
     for (const size_t transfer_idx : unused_dust_indices)
       input_key_images.push_back(m_transfers.at(transfer_idx).m_key_image);
 
-    const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(*this, input_key_images, address, is_subaddress, outputs, priority, extra);
+    const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(*this, input_key_images, address, is_subaddress, outputs, priority, extra, tx_type);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
-    // TODO: use CLSAGS here..
-    // for (const auto &tx_proposal : tx_proposals)
-    //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
+    for (const auto &tx_proposal : tx_proposals)
+      ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
     return ptx_vector;
   }
 

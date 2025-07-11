@@ -107,8 +107,7 @@ namespace carrot
     );
 
     void set_carrot_keys(const AddressDeriveType default_derive_type = AddressDeriveType::Carrot);
-
-    void set_cn_subaddress_map(const std::unordered_map<crypto::public_key, cryptonote::subaddress_index>& subaddress_map);
+    void insert_subaddresses(const std::unordered_map<crypto::public_key, cryptonote::subaddress_index>& subaddress_map);
     
     AddressDeriveType resolve_derive_type(const AddressDeriveType derive_type) const;
   };
