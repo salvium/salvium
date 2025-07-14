@@ -2583,7 +2583,7 @@ void wallet2::process_new_scanned_transaction(
         enote_scan_info->subaddr_index->index.major, enote_scan_info->subaddr_index->index.minor};
 
     // Only count >0 amount outs
-    if (enote_scan_info->amount > 0)
+    //if (enote_scan_info->amount > 0)
     {
       tx_money_got_in_outs[subaddr_index_cn][enote_scan_info->asset_type] += extra_received_money;
       tx_amounts_individual_outs[subaddr_index_cn].push_back(std::make_tuple(extra_received_money, onetime_address));
@@ -2664,7 +2664,7 @@ void wallet2::process_new_scanned_transaction(
       origin_tx_data.tx_type = td_origin.m_tx.type;
       rct::salvium_input_data_t sid;
       THROW_WALLET_EXCEPTION_IF(!cryptonote::generate_key_image_helper(m_account.get_keys(),
-                                                                       m_account.get_subaddress_map(),
+                                                                       m_account.get_subaddress_map_cn(),
                                                                        onetime_address,
                                                                        tx_public_key,
                                                                        additional_tx_public_keys,
@@ -10414,7 +10414,7 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
     std::vector<std::pair<std::string, std::string>> circ_amounts;
     THROW_WALLET_EXCEPTION_IF(!get_circulating_supply(circ_amounts), error::wallet_internal_error, "Failed to get circulating supply");
     // make a normal tx
-    bool r = cryptonote::construct_tx_and_get_tx_key(a_keys/*m_account.get_keys()*/, m_account.get_subaddress_map(), sources, splitted_dsts, hf_version, source_asset, dest_asset, tx_type, change_dts.addr, extra, tx, unlock_time, tx_key, additional_tx_keys, true, rct_config, use_view_tags);
+    bool r = cryptonote::construct_tx_and_get_tx_key(a_keys/*m_account.get_keys()*/, m_account.get_subaddress_map_cn(), sources, splitted_dsts, hf_version, source_asset, dest_asset, tx_type, change_dts.addr, extra, tx, unlock_time, tx_key, additional_tx_keys, true, rct_config, use_view_tags);
     LOG_PRINT_L2("constructed tx, r="<<r);
     THROW_WALLET_EXCEPTION_IF(!r, error::tx_not_constructed, sources, dsts, unlock_time, m_nettype);
   }
@@ -13881,7 +13881,7 @@ crypto::public_key wallet2::get_tx_pub_key_from_received_outs(const tools::walle
     td.m_internal_output_index,
     m_account_public_address,
     m_account.get_keys().m_view_secret_key,
-    m_account.get_subaddress_map(),
+    m_account,
     m_account.get_device());
 
   const size_t main_tx_pubkey_index = enote_scan_info ? enote_scan_info->main_tx_pubkey_index : 0;

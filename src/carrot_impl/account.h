@@ -69,7 +69,7 @@ namespace carrot
 
     CarrotDestinationV1 subaddress(const subaddress_index_extended &subaddress_index) const;
 
-    std::unordered_map<crypto::public_key, cryptonote::subaddress_index> get_subaddress_map() const;
+    std::unordered_map<crypto::public_key, cryptonote::subaddress_index> get_subaddress_map_cn() const;
     
     // brief: opening_for_subaddress - return (k^g_a, k^t_a) for j s.t. K^j_s = (k^g_a * G + k^t_a * T)
     void opening_for_subaddress(const subaddress_index_extended &subaddress_index,

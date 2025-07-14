@@ -142,9 +142,11 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
     const std::optional<carrot::encrypted_payment_id_t> &encrypted_payment_id,
     const epee::span<const crypto::key_derivation> main_derivations,
     const epee::span<const crypto::key_derivation> additional_derivations,
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
+    carrot::carrot_and_legacy_account &account,
     hw::device &hwdev)
 {
+    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map = account.get_subaddress_map_cn();
+    
     boost::optional<cryptonote::subaddress_receive_info> receive_info;
     size_t main_deriv_idx;
     for (main_deriv_idx = 0; main_deriv_idx < std::max<size_t>(1, main_derivations.size()); ++main_deriv_idx)
@@ -236,6 +238,12 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
         .derive_type = carrot::AddressDeriveType::PreCarrot
     };
 
+    // HERE BE DRAGONS!!!
+    // SRCG: whilst the following code will work, it'd be better being moved to the TX_BUILDER code
+    // add the entry to our subaddress map in case it's a change payment (false positives won't hurt us)
+    account.subaddress_map.insert({enote.onetime_address, subaddr_index});
+    // LAND AHOY!!!
+    
     return enote_view_incoming_scan_info_t{
         .sender_extension_g = sender_extension_g,
         .sender_extension_t = crypto::null_skey,
@@ -331,7 +339,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
     const mx25519_pubkey &s_sender_receiver_unctx,
     const crypto::public_key &main_address_spend_pubkey,
     const carrot::view_incoming_key_device &k_view_dev,
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map)
+    carrot::carrot_and_legacy_account &account)
 {
     enote_view_incoming_scan_info_t res;
 
@@ -352,13 +360,13 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         dummy_enote_type))
     return std::nullopt;
 
-    const auto subaddr_it = subaddress_map.find(res.address_spend_pubkey);
-    CHECK_AND_ASSERT_MES(subaddr_it != subaddress_map.cend(),
+    const auto subaddr_it = account.subaddress_map.find(res.address_spend_pubkey);
+    CHECK_AND_ASSERT_MES(subaddr_it != account.subaddress_map.cend(),
         std::nullopt,
         "view_incoming_scan_carrot_enote: carrot enote scanned successfully, "
         "but the recovered address spend pubkey was not found in the subaddress map");
 
-    const carrot::subaddress_index_extended subaddr_index = {{subaddr_it->second.major, subaddr_it->second.minor}};
+    const carrot::subaddress_index_extended subaddr_index = subaddr_it->second;
 
     memset(&res.payment_id, 0, sizeof(res.payment_id));
     memcpy(&res.payment_id, &payment_id, sizeof(carrot::payment_id_t));
@@ -461,7 +469,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
     const epee::span<const crypto::key_derivation> additional_derivations,
     const cryptonote::account_public_address &address,
     const carrot::view_incoming_key_device *k_view_dev,
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
+    carrot::carrot_and_legacy_account &account,
     hw::device &hwdev)
 {
     CHECK_AND_ASSERT_MES(!main_derivations.empty() || !additional_derivations.empty(),
@@ -487,7 +495,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
                 encrypted_payment_id,
                 main_derivations,
                 additional_derivations,
-                subaddress_map,
+                account,
                 hwdev);
 
             // copy long plaintext payment ID, if applicable
@@ -532,7 +540,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
                     s_sender_receiver_unctx,
                     address.m_spend_public_key,
                     *k_view_dev,
-                    subaddress_map);
+                    account);
             }
         }
 
@@ -543,7 +551,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
         const epee::span<const crypto::key_derivation> additional_derivations;
         const cryptonote::account_public_address &address;
         const carrot::view_incoming_key_device *k_view_dev;
-        const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map;
+        carrot::carrot_and_legacy_account &account;
         hw::device &hwdev;
     };
 
@@ -555,7 +563,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
             additional_derivations,
             address,
             k_view_dev,
-            subaddress_map,
+            account,
             hwdev
         },
         enote);
@@ -571,7 +579,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
     const epee::span<const crypto::key_derivation> additional_derivations,
     const cryptonote::account_public_address &address,
     const carrot::view_incoming_key_device *k_view_dev,
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
+    carrot::carrot_and_legacy_account &account,
     hw::device &hwdev)
 {
     MoneroEnoteVariant enote;
@@ -628,7 +636,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
         additional_derivations,
         address,
         k_view_dev,
-        subaddress_map,
+        account,
         hwdev);
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -639,7 +647,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote_from_pre
     const std::size_t local_output_index,
     const cryptonote::account_public_address &address,
     const crypto::secret_key &k_view_incoming,
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
+    carrot::carrot_and_legacy_account &account,
     hw::device &hwdev)
 {
     const bool is_carrot = carrot::is_carrot_transaction_v1(tx_prefix);
@@ -692,7 +700,7 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote_from_pre
         epee::to_span(additional_derivations),
         address,
         &k_view_dev,
-        subaddress_map,
+        account,
         hwdev);
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -733,7 +741,7 @@ void view_incoming_scan_transaction(
                                                    additional_derivations,
                                                    address,
                                                    &k_view_dev,
-                                                   account.get_subaddress_map(),
+                                                   account,
                                                    account.get_keys().get_device());
     }
 }
@@ -817,6 +825,8 @@ std::vector<std::optional<enote_view_incoming_scan_info_t>> view_incoming_scan_t
 
     // 3. do view-incoming scan for each output enotes
     hw::device &hwdev = hw::get_device("default");
+    carrot::carrot_and_legacy_account dummy_account;
+    dummy_account.subaddress_map[address.m_spend_public_key] = {{}};
     for (size_t local_output_index = 0; local_output_index < n_outputs; ++local_output_index)
     {
         auto &enote_scan_info = res[local_output_index];
@@ -830,7 +840,7 @@ std::vector<std::optional<enote_view_incoming_scan_info_t>> view_incoming_scan_t
             custom_additional_derivations,
             address,
             /*k_view_dev=*/nullptr,
-            {{address.m_spend_public_key, {}}},
+            dummy_account,
             hwdev);
     }
 
