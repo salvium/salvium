@@ -2583,7 +2583,7 @@ void wallet2::process_new_scanned_transaction(
         enote_scan_info->subaddr_index->index.major, enote_scan_info->subaddr_index->index.minor};
 
     // Only count >0 amount outs
-    if (enote_scan_info->amount > 0)
+    //if (enote_scan_info->amount > 0)
     {
       tx_money_got_in_outs[subaddr_index_cn][enote_scan_info->asset_type] += extra_received_money;
       tx_amounts_individual_outs[subaddr_index_cn].push_back(std::make_tuple(extra_received_money, onetime_address));
