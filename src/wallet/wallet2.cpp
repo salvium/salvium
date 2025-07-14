@@ -2582,7 +2582,8 @@ void wallet2::process_new_scanned_transaction(
     const cryptonote::subaddress_index subaddr_index_cn{
         enote_scan_info->subaddr_index->index.major, enote_scan_info->subaddr_index->index.minor};
 
-    // Only count >0 amount outs
+    // we have to save even the 0 amount enotes since we need to save their one time addresses
+    // for some protocol txs.
     //if (enote_scan_info->amount > 0)
     {
       tx_money_got_in_outs[subaddr_index_cn][enote_scan_info->asset_type] += extra_received_money;
@@ -2847,7 +2848,7 @@ void wallet2::process_new_scanned_transaction(
         } else {
           derive_type = carrot::AddressDeriveType::PreCarrot;
         }
-        const carrot::subaddress_index_extended subaddr_ext = {i->first.major, i->first.minor, derive_type};
+        const carrot::subaddress_index_extended subaddr_ext = {i->first.major, i->first.minor, derive_type, true};
         m_account.insert_subaddresses({{onetime_address, subaddr_ext}});
         // save to m_subaddresses as well, so that we can populate account subaddress map
         // when we open the wallet first time.
@@ -6587,7 +6588,8 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
     // if we have subaddresses, we need to insert them into the account
     for (const auto &subaddress : m_subaddresses)
       m_account.insert_subaddresses(
-        {{subaddress.first, {{subaddress.second.major, subaddress.second.minor}, carrot::AddressDeriveType::PreCarrot}}}
+        // TODO: we assume none of these subaddresses are return tx subaddresses
+        {{subaddress.first, {{subaddress.second.major, subaddress.second.minor}, carrot::AddressDeriveType::PreCarrot, false}}}
       );
   }
 

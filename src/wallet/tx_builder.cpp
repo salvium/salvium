@@ -120,7 +120,7 @@ static bool build_payment_proposals(std::vector<carrot::CarrotPaymentProposalV1>
                 .amount = tx_dest_entry.amount,
                 .enote_type = carrot::CarrotEnoteType::PAYMENT
             },
-            .subaddr_index = {subaddr_index, carrot::AddressDeriveType::PreCarrot} // @TODO: handle carrot
+            .subaddr_index = {subaddr_index, carrot::AddressDeriveType::Carrot, false},
         });
     }
     else // not *known* self-send address
@@ -180,17 +180,13 @@ static crypto::public_key find_change_address_spend_pubkey(
     CHECK_AND_ASSERT_THROW_MES(change_it != subaddress_map.cend(),
         "find_change_address_spend_pubkey: missing change address (index "
         << subaddr_account << ",0) in subaddress map");
-    // HERE BE DRAGONS!!!
-    // SRCG: Disabling the following check is necessary to allow return_payments to work...
-    //       ...but if we can find an alternative to using the subaddress_map, we should! 
-    /*
+
     const auto change_it_2 = std::find_if(std::next(change_it), subaddress_map.cend(),
         [subaddr_account](const auto &p) { return p.second.major == subaddr_account && p.second.minor == 0; });
     CHECK_AND_ASSERT_THROW_MES(change_it_2 == subaddress_map.cend(),
         "find_change_address_spend_pubkey: provided subaddress map is malformed!!! At least two spend pubkeys map to "
         "index " << subaddr_account << ",0 in the subaddress map!");
-    */
-    // LAND AHOY!!!
+
     return change_it->first;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -200,21 +196,27 @@ static crypto::public_key find_change_address_spend_pubkey(
     const std::uint32_t subaddr_account)
 {
     const auto change_it = std::find_if(subaddress_map.cbegin(), subaddress_map.cend(),
-        [subaddr_account](const auto &p) { return p.second.index.major == subaddr_account && p.second.index.minor == 0; });
+        [subaddr_account](const auto &p) { 
+            return  p.second.index.major == subaddr_account &&
+                    p.second.index.minor == 0 &&
+                    p.second.derive_type == carrot::AddressDeriveType::Carrot &&
+                    p.second.is_return_spend_key == false;
+        });
     CHECK_AND_ASSERT_THROW_MES(change_it != subaddress_map.cend(),
         "find_change_address_spend_pubkey: missing change address (index "
         << subaddr_account << ",0) in subaddress map");
-    // HERE BE DRAGONS!!!
-    // SRCG: Disabling the following check is necessary to allow return_payments to work...
-    //       ...but if we can find an alternative to using the subaddress_map, we should! 
-    /*
+    
     const auto change_it_2 = std::find_if(std::next(change_it), subaddress_map.cend(),
-        [subaddr_account](const auto &p) { return p.second.major == subaddr_account && p.second.minor == 0; });
+        [subaddr_account](const auto &p) { 
+            return  p.second.index.major == subaddr_account &&
+                    p.second.index.minor == 0 &&
+                    p.second.derive_type == carrot::AddressDeriveType::Carrot && 
+                    p.second.is_return_spend_key == false;
+        });
     CHECK_AND_ASSERT_THROW_MES(change_it_2 == subaddress_map.cend(),
         "find_change_address_spend_pubkey: provided subaddress map is malformed!!! At least two spend pubkeys map to "
         "index " << subaddr_account << ",0 in the subaddress map!");
-    */
-    // LAND AHOY!!!
+
     return change_it->first;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -445,13 +447,12 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
 {
     wallet2::transfer_container unused_transfers;
     w.get_transfers(unused_transfers);
-    const auto subaddress_map = w.get_subaddress_map_ref();
 
     std::vector<carrot::CarrotTransactionProposalV1> tx_proposals;
     tx_proposals.reserve(dsts.size() / (carrot::CARROT_MAX_TX_OUTPUTS - 1) + 1);
 
     const crypto::public_key change_address_spend_pubkey
-      = find_change_address_spend_pubkey(w.get_account().subaddress_map, subaddr_account);
+      = find_change_address_spend_pubkey(w.get_account().get_subaddress_map_ref(), subaddr_account);
 
     while (!dsts.empty())
     {
@@ -468,7 +469,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
             const bool is_selfsend = build_payment_proposals(normal_payment_proposals,
                 selfsend_payment_proposals,
                 dst,
-                subaddress_map);
+                w.get_account().get_subaddress_map_cn());
             if (subtract_fee_from_outputs.count(dsts.size() - 1))
             {
                 if (is_selfsend)
@@ -503,7 +504,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
             tx_type,
             std::move(select_inputs),
             change_address_spend_pubkey,
-            {{subaddr_account, 0}, carrot::AddressDeriveType::PreCarrot}, //! @TODO: handle Carrot keys
+            {{subaddr_account, 0}, carrot::AddressDeriveType::Carrot, false},
             subtractable_normal_payment_proposals,
             subtractable_selfsend_payment_proposals,
             tx_proposal);
@@ -615,7 +616,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     }
 
     const crypto::public_key change_address_spend_pubkey
-      = find_change_address_spend_pubkey(w.get_account().subaddress_map, subaddr_account);
+      = find_change_address_spend_pubkey(w.get_account().get_subaddress_map_ref(), subaddr_account);
 
     // get 1 payment proposal corresponding to (address, is_subaddres)
     std::vector<carrot::CarrotPaymentProposalV1> normal_payment_proposals;

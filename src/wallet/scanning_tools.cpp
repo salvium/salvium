@@ -241,7 +241,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
     // HERE BE DRAGONS!!!
     // SRCG: whilst the following code will work, it'd be better being moved to the TX_BUILDER code
     // add the entry to our subaddress map in case it's a change payment (false positives won't hurt us)
-    account.subaddress_map.insert({enote.onetime_address, subaddr_index});
+    account.get_subaddress_map_ref().insert({enote.onetime_address, subaddr_index});
     // LAND AHOY!!!
     
     return enote_view_incoming_scan_info_t{
@@ -360,8 +360,8 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         dummy_enote_type))
     return std::nullopt;
 
-    const auto subaddr_it = account.subaddress_map.find(res.address_spend_pubkey);
-    CHECK_AND_ASSERT_MES(subaddr_it != account.subaddress_map.cend(),
+    const auto subaddr_it = account.get_subaddress_map_ref().find(res.address_spend_pubkey);
+    CHECK_AND_ASSERT_MES(subaddr_it != account.get_subaddress_map_ref().cend(),
         std::nullopt,
         "view_incoming_scan_carrot_enote: carrot enote scanned successfully, "
         "but the recovered address spend pubkey was not found in the subaddress map");
@@ -826,7 +826,7 @@ std::vector<std::optional<enote_view_incoming_scan_info_t>> view_incoming_scan_t
     // 3. do view-incoming scan for each output enotes
     hw::device &hwdev = hw::get_device("default");
     carrot::carrot_and_legacy_account dummy_account;
-    dummy_account.subaddress_map[address.m_spend_public_key] = {{}};
+    dummy_account.get_subaddress_map_ref()[address.m_spend_public_key] = {{}};
     for (size_t local_output_index = 0; local_output_index < n_outputs; ++local_output_index)
     {
         auto &enote_scan_info = res[local_output_index];

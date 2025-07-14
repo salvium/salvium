@@ -120,6 +120,10 @@ std::unordered_map<crypto::public_key, cryptonote::subaddress_index> carrot_and_
     return res;
 }
 //----------------------------------------------------------------------------------------------------------------------
+std::unordered_map<crypto::public_key, subaddress_index_extended>& carrot_and_legacy_account::get_subaddress_map_ref() {
+    return subaddress_map;
+}
+//----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::opening_for_subaddress(const subaddress_index_extended &subaddress_index,
     crypto::secret_key &address_privkey_g_out,
     crypto::secret_key &address_privkey_t_out,
@@ -283,7 +287,7 @@ void carrot_and_legacy_account::generate_subaddress_map()
         {
             for (const AddressDeriveType derive_type : derive_types)
             {
-                const subaddress_index_extended subaddr_index{{major_index, minor_index}, derive_type};
+                const subaddress_index_extended subaddr_index{{major_index, minor_index}, derive_type, false};
                 const CarrotDestinationV1 addr = subaddress(subaddr_index);
                 subaddress_map.insert({addr.address_spend_pubkey, subaddr_index});
             }
@@ -339,7 +343,7 @@ void carrot_and_legacy_account::set_carrot_keys(const AddressDeriveType default_
 void carrot_and_legacy_account::insert_subaddresses(const std::unordered_map<crypto::public_key, subaddress_index_extended>& subaddress_map_cn)
 {
     for (const auto &p : subaddress_map_cn)
-        subaddress_map.insert({p.first, {{p.second.index.major, p.second.index.minor}, p.second.derive_type}});
+        subaddress_map.insert({p.first, {{p.second.index.major, p.second.index.minor}, p.second.derive_type, p.second.is_return_spend_key}});
 }
 
 //----------------------------------------------------------------------------------------------------------------------
