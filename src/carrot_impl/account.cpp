@@ -110,7 +110,7 @@ CarrotDestinationV1 carrot_and_legacy_account::subaddress(const subaddress_index
     return addr;
 }
 //----------------------------------------------------------------------------------------------------------------------
-std::unordered_map<crypto::public_key, cryptonote::subaddress_index> carrot_and_legacy_account::get_subaddress_map() const
+std::unordered_map<crypto::public_key, cryptonote::subaddress_index> carrot_and_legacy_account::get_subaddress_map_cn() const
 {
     std::unordered_map<crypto::public_key, cryptonote::subaddress_index> res;
     for (const auto &p : subaddress_map)

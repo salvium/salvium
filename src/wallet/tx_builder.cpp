@@ -630,7 +630,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         const bool is_selfsend_dest = build_payment_proposals(normal_payment_proposals,
             selfsend_payment_proposals,
             de,
-            w.get_account().get_subaddress_map());
+            w.get_account().get_subaddress_map_cn());
         CHECK_AND_ASSERT_THROW_MES((is_selfsend_dest && selfsend_payment_proposals.size() == i+1)
                 || (!is_selfsend_dest && normal_payment_proposals.size() == i+1),
             __func__ << ": BUG in build_payment_proposals: incorrect count for payment proposal lists");
