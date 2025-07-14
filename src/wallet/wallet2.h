@@ -1402,6 +1402,7 @@ private:
       if (ver < 20)
         return;
       a & m_subaddresses.parent();
+      a & m_subaddresses_extended.parent();
       std::unordered_map<cryptonote::subaddress_index, crypto::public_key> dummy_subaddresses_inv;
       a & dummy_subaddresses_inv;
       a & m_subaddress_labels;
@@ -1468,6 +1469,7 @@ private:
       FIELD(m_scanned_pool_txs[0])
       FIELD(m_scanned_pool_txs[1])
       FIELD(m_subaddresses)
+      FIELD(m_subaddresses_extended)
       FIELD(m_subaddress_labels)
       FIELD(m_additional_tx_keys)
       FIELD(m_attributes)
@@ -2130,6 +2132,7 @@ private:
     serializable_unordered_map<crypto::public_key, size_t> m_pub_keys;
     cryptonote::account_public_address m_account_public_address;
     serializable_unordered_map<crypto::public_key, cryptonote::subaddress_index> m_subaddresses;
+    serializable_unordered_map<crypto::public_key, carrot::subaddress_index_extended> m_subaddresses_extended;
     std::vector<std::vector<std::string>> m_subaddress_labels;
     serializable_unordered_map<crypto::hash, std::string> m_tx_notes;
     serializable_unordered_map<std::string, std::string> m_attributes;

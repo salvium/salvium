@@ -2841,10 +2841,17 @@ void wallet2::process_new_scanned_transaction(
       // from protocol or return txs
       for (const auto entry: tx_amounts_individual_outs[i->first]) {
         const crypto::public_key &onetime_address = std::get<1>(entry);
-        m_account.insert_subaddresses({{onetime_address, {i->first.major, i->first.minor}}});
+        carrot::AddressDeriveType derive_type;
+        if (use_fork_rules(HF_VERSION_CARROT, 0)) {
+          derive_type = carrot::AddressDeriveType::Carrot;
+        } else {
+          derive_type = carrot::AddressDeriveType::PreCarrot;
+        }
+        const carrot::subaddress_index_extended subaddr_ext = {i->first.major, i->first.minor, derive_type};
+        m_account.insert_subaddresses({{onetime_address, subaddr_ext}});
         // save to m_subaddresses as well, so that we can populate account subaddress map
         // when we open the wallet first time.
-        m_subaddresses[onetime_address] = i->first;
+        m_subaddresses_extended[onetime_address] = subaddr_ext;
 
         // update m_salvium_txs
         m_salvium_txs.insert({onetime_address, m_transfers.size()-1});
@@ -6574,7 +6581,16 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
 
   if (get_num_subaddress_accounts() == 0)
     add_subaddress_account(tr("Primary account"));
-  m_account.insert_subaddresses(m_subaddresses);
+  m_account.insert_subaddresses(m_subaddresses_extended);
+  if (!m_subaddresses.empty())
+  {
+    // if we have subaddresses, we need to insert them into the account
+    for (const auto &subaddress : m_subaddresses)
+      m_account.insert_subaddresses(
+        {{subaddress.first, {{subaddress.second.major, subaddress.second.minor}, carrot::AddressDeriveType::PreCarrot}}}
+      );
+  }
+
 
   try
   {
