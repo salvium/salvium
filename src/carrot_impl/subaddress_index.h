@@ -77,10 +77,11 @@ struct subaddress_index_extended
 {
     subaddress_index index;
     AddressDeriveType derive_type;
+    bool is_return_spend_key;
 };
 static inline bool operator==(const subaddress_index_extended &a, const subaddress_index_extended &b)
 {
-    return a.index == b.index && a.derive_type == b.derive_type;
+    return a.index == b.index && a.derive_type == b.derive_type && a.is_return_spend_key == b.is_return_spend_key;
 }
 static inline bool operator!=(const subaddress_index_extended &a, const subaddress_index_extended &b)
 {

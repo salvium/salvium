@@ -50,7 +50,6 @@ namespace carrot
     view_balance_secret_ram_borrowed_device s_view_balance_dev;
     generate_address_secret_ram_borrowed_device s_generate_address_dev;
 
-    std::unordered_map<crypto::public_key, subaddress_index_extended> subaddress_map;
     AddressDeriveType default_derive_type;
 
     carrot_and_legacy_account(): k_view_incoming_dev(get_keys().k_view_incoming),
@@ -70,6 +69,7 @@ namespace carrot
     CarrotDestinationV1 subaddress(const subaddress_index_extended &subaddress_index) const;
 
     std::unordered_map<crypto::public_key, cryptonote::subaddress_index> get_subaddress_map_cn() const;
+    std::unordered_map<crypto::public_key, subaddress_index_extended>& get_subaddress_map_ref();
     
     // brief: opening_for_subaddress - return (k^g_a, k^t_a) for j s.t. K^j_s = (k^g_a * G + k^t_a * T)
     void opening_for_subaddress(const subaddress_index_extended &subaddress_index,
@@ -110,5 +110,8 @@ namespace carrot
     void insert_subaddresses(const std::unordered_map<crypto::public_key, subaddress_index_extended>& subaddress_map);
     
     AddressDeriveType resolve_derive_type(const AddressDeriveType derive_type) const;
+
+    private:
+        std::unordered_map<crypto::public_key, subaddress_index_extended> subaddress_map;
   };
 }
