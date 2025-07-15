@@ -2840,7 +2840,7 @@ void wallet2::process_new_scanned_transaction(
     {
       // save the change output key in our subaddress_map, so we can receive money to it later
       // from protocol or return txs
-      for (const auto entry: tx_amounts_individual_outs[i->first]) {
+      for (const auto &entry: tx_amounts_individual_outs[i->first]) {
         const crypto::public_key &onetime_address = std::get<1>(entry);
         carrot::AddressDeriveType derive_type;
         if (use_fork_rules(HF_VERSION_CARROT, 0)) {
@@ -2849,7 +2849,6 @@ void wallet2::process_new_scanned_transaction(
           derive_type = carrot::AddressDeriveType::PreCarrot;
         }
         const carrot::subaddress_index_extended subaddr_ext = {i->first.major, i->first.minor, derive_type, true};
-        m_account.insert_subaddresses({{onetime_address, subaddr_ext}});
         // save to m_subaddresses as well, so that we can populate account subaddress map
         // when we open the wallet first time.
         m_subaddresses_extended[onetime_address] = subaddr_ext;

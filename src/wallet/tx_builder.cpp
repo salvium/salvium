@@ -184,7 +184,7 @@ static crypto::public_key find_change_address_spend_pubkey(
     const auto change_it_2 = std::find_if(std::next(change_it), subaddress_map.cend(),
         [subaddr_account](const auto &p) { return p.second.major == subaddr_account && p.second.minor == 0; });
     CHECK_AND_ASSERT_THROW_MES(change_it_2 == subaddress_map.cend(),
-        "find_change_address_spend_pubkey: provided subaddress map is malformed!!! At least two spend pubkeys map to "
+        "find_change_address_spend_pubkey: provided CN subaddress map is malformed!!! At least two spend pubkeys map to "
         "index " << subaddr_account << ",0 in the subaddress map!");
 
     return change_it->first;
@@ -981,7 +981,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         << n_inputs << "-in " << n_outputs << "-out, with "
         << tx_proposal.normal_payment_proposals.size() << " normal payment proposals, "
         << tx_proposal.selfsend_payment_proposals.size() << " self-send payment proposals, and a fee of "
-        << tx_proposal.fee << " pXMR");
+        << cryptonote::print_money(tx_proposal.fee) << " SAL1");
 
     wallet2::transfer_container transfers;
     w.get_transfers(transfers);
@@ -1094,7 +1094,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
             sid.origin_tx_type = src.origin_tx_data.tx_type;
             bool r = cryptonote::generate_key_image_helper(
                 w.get_account().get_keys(),
-                w.get_subaddress_map_ref(),
+                w.get_account().get_subaddress_map_cn(),
                 out_key,
                 src.real_out_tx_key,
                 src.real_out_additional_tx_keys,
