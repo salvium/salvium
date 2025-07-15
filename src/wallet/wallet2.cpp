@@ -2993,6 +2993,7 @@ void wallet2::process_outgoing(const crypto::hash &txid, const cryptonote::trans
 //----------------------------------------------------------------------------------------------------
 bool wallet2::should_skip_block(const cryptonote::block &b, uint64_t height) const
 {
+  if (height == 0) return false;
   // seeking only for blocks that are not older then the wallet creation time plus 1 day. 1 day is for possible user incorrect time setup
   return !(b.timestamp + 60*60*24 > m_account.get_createtime() && height >= m_refresh_from_block_height && height >= m_skip_to_height);
 }
@@ -3009,7 +3010,11 @@ void wallet2::process_new_blockchain_entry(const cryptonote::block& b,
   THROW_WALLET_EXCEPTION_IF(bche.txs.size() + 2 != parsed_block.o_indices.indices.size(), error::wallet_internal_error,
       "block transactions=" + std::to_string(bche.txs.size()) +
       " not match with daemon response size=" + std::to_string(parsed_block.o_indices.indices.size()));
-
+  
+  if (height == 0) {
+    m_blockchain.clear();
+  }
+  
   THROW_WALLET_EXCEPTION_IF(height != m_blockchain.size(), error::wallet_internal_error,
       "New blockchain entry mismatch: block height " + std::to_string(height) +
       " is not the expected next height " + std::to_string(m_blockchain.size()));
@@ -3425,7 +3430,7 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
     const epee::span<const std::optional<crypto::key_image>> output_key_images_span(
       output_key_images.data() + tx_output_idx, n_block_outputs);
 
-    if(current_index >= m_blockchain.size())
+    if(!current_index || current_index >= m_blockchain.size())
     {
       process_new_blockchain_entry(bl, blocks[i], parsed_blocks[i], bl_id, current_index, enote_scan_infos_span, output_key_images_span, output_tracker_cache);
       ++blocks_added;
