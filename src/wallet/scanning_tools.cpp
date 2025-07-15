@@ -235,13 +235,14 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
     //j
     const carrot::subaddress_index_extended subaddr_index{
         .index = {receive_info->index.major, receive_info->index.minor},
-        .derive_type = carrot::AddressDeriveType::PreCarrot
+        .derive_type = carrot::AddressDeriveType::PreCarrot,
+        .is_return_spend_key = true
     };
 
     // HERE BE DRAGONS!!!
     // SRCG: whilst the following code will work, it'd be better being moved to the TX_BUILDER code
     // add the entry to our subaddress map in case it's a change payment (false positives won't hurt us)
-    account.get_subaddress_map_ref().insert({enote.onetime_address, subaddr_index});
+    account.insert_subaddresses({{enote.onetime_address, subaddr_index}});
     // LAND AHOY!!!
     
     return enote_view_incoming_scan_info_t{
