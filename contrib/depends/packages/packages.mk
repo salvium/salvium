@@ -19,7 +19,7 @@ mingw32_native_packages :=
 mingw32_packages = icu4c libiconv
 
 linux_native_packages :=
-linux_packages :=
+linux_packages := eudev
 
 freebsd_native_packages := freebsd_base
 freebsd_packages :=
