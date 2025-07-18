@@ -124,6 +124,11 @@ std::unordered_map<crypto::public_key, subaddress_index_extended>& carrot_and_le
     return subaddress_map;
 }
 //----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
+std::unordered_map<crypto::public_key, input_context_t>& carrot_and_legacy_account::get_input_context_map_ref() {
+    return input_context_map;
+}
+//----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::opening_for_subaddress(const subaddress_index_extended &subaddress_index,
     crypto::secret_key &address_privkey_g_out,
     crypto::secret_key &address_privkey_t_out,
@@ -345,7 +350,12 @@ void carrot_and_legacy_account::insert_subaddresses(const std::unordered_map<cry
     for (const auto &p : subaddress_map_cn)
         subaddress_map.insert({p.first, {{p.second.index.major, p.second.index.minor}, p.second.derive_type, p.second.is_return_spend_key}});
 }
-
+//----------------------------------------------------------------------------------------------------------------------
+void carrot_and_legacy_account::insert_input_context(const std::unordered_map<crypto::public_key, input_context_t>& icm)
+{
+    for (const auto &p : icm)
+        input_context_map.insert({p.first, p.second});
+}
 //----------------------------------------------------------------------------------------------------------------------
 AddressDeriveType carrot_and_legacy_account::resolve_derive_type(const AddressDeriveType derive_type) const
 {

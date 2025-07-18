@@ -159,6 +159,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     const view_incoming_key_device *k_view_dev,
     const crypto::key_image &tx_first_key_image,
     std::vector<RCTOutputEnoteProposal> &output_enote_proposals_out,
+    RCTOutputEnoteProposal &return_enote_out,
     encrypted_payment_id_t &encrypted_payment_id_out,
     cryptonote::transaction_type tx_type,
     size_t &change_index_out,
@@ -173,7 +174,11 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     // assert payment proposals numbers
     const size_t num_selfsend_proposals = selfsend_payment_proposals.size();
     const size_t num_proposals = normal_payment_proposals.size() + num_selfsend_proposals;
-    CARROT_CHECK_AND_THROW(num_proposals >= CARROT_MIN_TX_OUTPUTS, too_few_outputs, "too few payment proposals");
+    if (tx_type == cryptonote::transaction_type::STAKE || tx_type == cryptonote::transaction_type::BURN) {
+        CARROT_CHECK_AND_THROW(num_proposals == 1, too_few_outputs, "tx doesn't have correct number of proposals");
+    } else {
+        CARROT_CHECK_AND_THROW(num_proposals >= CARROT_MIN_TX_OUTPUTS, too_few_outputs, "too few payment proposals");
+    }
     CARROT_CHECK_AND_THROW(num_proposals <= CARROT_MAX_TX_OUTPUTS, too_many_outputs, "too many payment proposals");
     CARROT_CHECK_AND_THROW(num_selfsend_proposals, too_few_outputs, "no selfsend payment proposal");
 
@@ -281,7 +286,9 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
             get_output_proposal_special_v1(selfsend_payment_proposal,
                 *k_view_dev,
                 tx_first_key_image,
+                tx_type,
                 other_enote_ephemeral_pubkey,
+                return_enote_out,
                 output_entry.first);
         }
         else // neither k_v nor s_vb device passed

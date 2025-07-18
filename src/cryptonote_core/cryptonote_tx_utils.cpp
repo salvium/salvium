@@ -362,29 +362,15 @@ namespace cryptonote
 
         // Iterate over the protocol_data we received, creating an enote for each entry
         for (auto const& entry: protocol_data) {
-          
-          carrot::CarrotDestinationV1 destination;
-          carrot::make_carrot_main_address_v1(entry.P_change,
-                                              entry.return_address,
-                                              destination);
-
-          CHECK_AND_ASSERT_THROW_MES(!destination.is_subaddress,
-                                     "construct_protocol_tx: subaddress are not allowed in miner transactions");
-          CHECK_AND_ASSERT_THROW_MES(destination.payment_id == carrot::null_payment_id,
-                                     "construct_protocol_tx: integrated addresses are not allowed in miner transactions");
-
-          LOG_PRINT_L2(((entry.type == cryptonote::transaction_type::STAKE) ? "Yield TX payout submitted " : "Audit TX payout submitted ") << entry.amount_burnt << entry.source_asset);
-
-          const carrot::CarrotPaymentProposalV1 payment_proposal{
-            .destination = destination,
-            .amount = entry.amount_burnt,
-            .asset_type = "SAL1",
-            .randomness = carrot::gen_janus_anchor()
-          };
-
           // Build the proposal
           carrot::CarrotCoinbaseEnoteV1 e;
-          get_coinbase_output_proposal_v1(payment_proposal, height, e);
+          e.onetime_address = entry.return_address;
+          e.amount = entry.amount_burnt;
+          e.asset_type = entry.destination_asset;
+          e.view_tag = entry.return_view_tag;
+          e.anchor_enc = entry.return_anchor_enc;
+          e.block_index = height;
+          memcpy(e.enote_ephemeral_pubkey.data, entry.return_pubkey.data, sizeof(crypto::public_key));
           enotes.push_back(e);
         }
 

@@ -206,6 +206,7 @@ static void subtest_multi_account_transfer_over_transaction(const unittest_trans
     std::vector<RCTOutputEnoteProposal> rederived_output_enote_proposals;
     encrypted_payment_id_t rederived_encrypted_payment_id;
     size_t change_index;
+    RCTOutputEnoteProposal return_enote;
     std::unordered_map<crypto::public_key, size_t> normal_payments_indices;
     get_output_enote_proposals(tx_proposal.normal_payment_proposals,
         modified_selfsend_payment_proposals,
@@ -214,6 +215,7 @@ static void subtest_multi_account_transfer_over_transaction(const unittest_trans
         &ss_keys.k_view_incoming_dev,
         parsed_key_images.at(0),
         rederived_output_enote_proposals,
+        return_enote,
         rederived_encrypted_payment_id,
         cryptonote::transaction_type::TRANSFER,
         change_index,

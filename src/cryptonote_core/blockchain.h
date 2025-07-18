@@ -1176,6 +1176,13 @@ namespace cryptonote
     bool calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& yield_payouts);
 
     /**
+     * calculate the yield payouts
+     *
+     * @return TRUE if the payouts were calculated successfully, FALSE otherwise
+     */
+    bool calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info_carrot, uint64_t>>& yield_payouts);
+
+    /**
      * @brief get the ABI entry for a particular height from the cache
      *
      * Retrieve the ABI entry for the specified height from the local cache.

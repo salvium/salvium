@@ -86,6 +86,8 @@ struct CarrotTransactionProposalV1
     rct::xmr_amount fee;
     /// transaction type, e.g.
     cryptonote::transaction_type tx_type;
+    /// how much money tx burns
+    rct::xmr_amount amount_burnt;
 
     /// This field is truly "extra". It should contain only tx.extra fields that aren't present in a
     /// normal Carrot transaction, i.e. NOT ephemeral pubkeys nor encrypted PIDs

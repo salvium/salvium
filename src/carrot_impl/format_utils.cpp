@@ -198,7 +198,9 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
     const std::vector<cryptonote::tx_source_entry> &sources,
     const rct::xmr_amount fee,
     const cryptonote::transaction_type tx_type,
-    const std::vector<uint8_t> change_masks,
+    const rct::xmr_amount tx_amount_burnt,
+    const std::vector<uint8_t> &change_masks,
+    const carrot::RCTOutputEnoteProposal &return_enote,
     const encrypted_payment_id_t encrypted_payment_id)
 {
     const size_t nins = key_images.size();
@@ -208,11 +210,15 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
 
     cryptonote::transaction tx;
     tx.pruned = true;
-    tx.version = TRANSACTION_VERSION_N_OUTS;
     tx.unlock_time = 0;
     tx.source_asset_type = "SAL1";
     tx.destination_asset_type = "SAL1";
-    tx.type = tx_type == cryptonote::transaction_type::RETURN ? cryptonote::transaction_type::TRANSFER : tx_type;
+    tx.version = TRANSACTION_VERSION_CARROT;
+    tx.type = 
+        tx_type == cryptonote::transaction_type::RETURN ? cryptonote::transaction_type::TRANSFER : tx_type;
+    tx.amount_burnt = (
+        tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN
+    ) ? tx_amount_burnt : 0;
     tx.return_address_change_mask.assign(change_masks.begin(), change_masks.end());
     tx.vin.reserve(nins);
     tx.vout.reserve(nouts);
@@ -259,9 +265,21 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
         tx.rct_signatures.outPk.push_back(rct::ctkey{rct::key{}, enote.amount_commitment});
 
         //K_return
-        crypto::public_key K_return;
-        memcpy(K_return.data, enote.return_enc.bytes, sizeof(crypto::public_key));
-        tx.return_address_list.push_back(K_return);
+        if (tx_type != cryptonote::transaction_type::STAKE) {
+            crypto::public_key K_return;
+            memcpy(K_return.data, enote.return_enc.bytes, sizeof(crypto::public_key));
+            tx.return_address_list.push_back(K_return);
+        }
+    }
+
+    // store the return pubkey for stake txs
+    if (tx_type == cryptonote::transaction_type::STAKE)
+    {
+        tx.protocol_tx_data.version = 1;
+        memcpy(tx.protocol_tx_data.return_address.data, return_enote.enote.onetime_address.data, sizeof(crypto::public_key));
+        memcpy(tx.protocol_tx_data.return_pubkey.data, return_enote.enote.enote_ephemeral_pubkey.data, sizeof(crypto::public_key));
+        tx.protocol_tx_data.return_view_tag = return_enote.enote.view_tag;
+        tx.protocol_tx_data.return_anchor_enc = return_enote.enote.anchor_enc;
     }
 
     //ephemeral pubkeys: D_e

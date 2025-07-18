@@ -68,6 +68,8 @@ namespace cryptonote
     uint8_t type;
     crypto::public_key P_change;
     crypto::public_key return_pubkey;
+    carrot::view_tag_t return_view_tag;
+    carrot::encrypted_janus_anchor_t return_anchor_enc;
     uint64_t origin_height;
   };
 

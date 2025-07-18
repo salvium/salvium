@@ -207,6 +207,17 @@ typedef struct yield_tx_info {
   crypto::public_key return_pubkey;
 } yield_tx_info;
 
+typedef struct yield_tx_info_carrot {
+  uint8_t version;
+  uint64_t block_height;
+  crypto::hash tx_hash;
+  uint64_t locked_coins;
+  crypto::public_key return_address;
+  crypto::public_key return_pubkey;
+  carrot::view_tag_t return_view_tag;
+  carrot::encrypted_janus_anchor_t return_anchor_enc;
+} yield_tx_info_carrot;
+
 #define DBF_SAFE       1
 #define DBF_FAST       2
 #define DBF_FASTEST    4
@@ -1923,6 +1934,8 @@ public:
 
   virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi) const = 0;
   virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) const = 0;
+
+  virtual int get_carrot_yield_tx_info(const uint64_t height, std::vector<yield_tx_info_carrot>& yti_container) const = 0;
 
   
   /**
