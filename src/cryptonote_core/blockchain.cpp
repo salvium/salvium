@@ -1427,8 +1427,8 @@ std::tuple<bool, size_t> Blockchain::validate_treasury_payout(const transaction&
 
   // find the treasury output
   const auto [tx_key, onetime_address, anchor_enc, viewtag] = treasury_data;
-  //const auto expected_output_key = std::get<1>(treasury_output_data);
-  const auto &output = std::find_if(tx.vout.begin(), tx.vout.end(), [&onetime_address](const tx_out &o) {
+  const auto &oa = onetime_address; // Alias to support capture compatibility on MacOS
+  const auto &output = std::find_if(tx.vout.begin(), tx.vout.end(), [&oa](const tx_out &o) {
     std::string output_key;
     if (o.target.type() == typeid(txout_to_carrot_v1)) {
       output_key = epee::string_tools::pod_to_hex(boost::get<txout_to_carrot_v1>(o.target).key);
@@ -1436,7 +1436,7 @@ std::tuple<bool, size_t> Blockchain::validate_treasury_payout(const transaction&
       return false;
     }
 
-    return output_key == onetime_address; 
+    return output_key == oa;
   });
 
   if (output == tx.vout.end()) {
