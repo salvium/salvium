@@ -8845,27 +8845,29 @@ bool simple_wallet::donate(const std::vector<std::string> &args_)
   }
   // push back address, amount, payment id
   std::string address_str;
+  uint8_t hf_version = m_wallet->get_current_hard_fork();
+  std::string donation_addr = (hf_version >= HF_VERSION_CARROT) ? SALVIUM_DONATION_ADDR_CARROT : SALVIUM_DONATION_ADDR;
   if (m_wallet->nettype() != cryptonote::MAINNET)
   {
     // if not mainnet, convert donation address string to the relevant network type
     address_parse_info info;
-    if (!cryptonote::get_account_address_from_str(info, cryptonote::MAINNET, SALVIUM_DONATION_ADDR))
+    if (!cryptonote::get_account_address_from_str(info, cryptonote::MAINNET, donation_addr))
     {
-      fail_msg_writer() << tr("Failed to parse donation address: ") << SALVIUM_DONATION_ADDR;
+      fail_msg_writer() << tr("Failed to parse donation address: ") << donation_addr;
       return true;
     }
     address_str = cryptonote::get_account_address_as_str(m_wallet->nettype(), info.is_subaddress, info.address);
   }
   else
   {
-    address_str = SALVIUM_DONATION_ADDR;
+    address_str = donation_addr;
   }
   local_args.push_back(address_str);
   local_args.push_back(amount_str);
   if (!payment_id_str.empty())
     local_args.push_back(payment_id_str);
   if (m_wallet->nettype() == cryptonote::MAINNET)
-    message_writer() << (boost::format(tr("Donating %s %s to The Salvium Team (donate.salvium.io or %s).")) % amount_str % cryptonote::get_unit(cryptonote::get_default_decimal_point()) % SALVIUM_DONATION_ADDR).str();
+    message_writer() << (boost::format(tr("Donating %s %s to The Salvium Team (donate.salvium.io or %s).")) % amount_str % cryptonote::get_unit(cryptonote::get_default_decimal_point()) % donation_addr).str();
   else
     message_writer() << (boost::format(tr("Donating %s %s to %s.")) % amount_str % cryptonote::get_unit(cryptonote::get_default_decimal_point()) % address_str).str();
   transfer(local_args);

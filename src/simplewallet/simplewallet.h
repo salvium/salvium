@@ -53,8 +53,9 @@
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "wallet.simplewallet"
-// Hardcode Monero's donation address (see #1447)
-constexpr const char SALVIUM_DONATION_ADDR[] = "888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H";
+// Hardcode Salvium's donation address
+constexpr const char SALVIUM_DONATION_ADDR[] = "SaLvdZR6w1A21sf2Wh6jYEh1wzY4GSbT7RX6FjyPsnLsffWLrzFQeXUXJcmBLRWDzZC2YXeYe5t7qKsnrg9FpmxmEcxPHsEYfqA";
+constexpr const char SALVIUM_DONATION_ADDR_CARROT[] = "SC11mFun51iNknWgaoHcUmD5XctETVKuTVwpRxpXvfL79y8NedCDkcef1oWx54kHfd9bgmmvMyE49KiiHaucF25J8ijNnjZZ9R";
 
 /*!
  * \namespace cryptonote
