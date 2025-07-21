@@ -868,11 +868,20 @@ bool simple_wallet::carrot_keys(const std::vector<std::string> &args/* = std::ve
     printf("master secret: ");
     print_secret_key(m_wallet->get_account().get_keys().s_master);
     putchar('\n');
-    printf("view-received secret: ");
-    print_secret_key(m_wallet->get_account().get_keys().m_view_secret_key);
+    printf("prove-spend key: ");
+    print_secret_key(m_wallet->get_account().get_keys().k_prove_spend);
     putchar('\n');
-    printf("view-all secret: ");
+    printf("view-balance secret: ");
     print_secret_key(m_wallet->get_account().get_keys().s_view_balance);
+    putchar('\n');
+    printf("generate-image key: ");
+    print_secret_key(m_wallet->get_account().get_keys().k_generate_image);
+    putchar('\n');
+    printf("view-incoming key: ");
+    print_secret_key(m_wallet->get_account().get_keys().k_view_incoming);
+    putchar('\n');
+    printf("generate-address secret: ");
+    print_secret_key(m_wallet->get_account().get_keys().s_generate_address);
     putchar('\n');
   }
   // TODO: print the public wallet address for the different wallet tiers
@@ -894,7 +903,8 @@ bool simple_wallet::viewkey(const std::vector<std::string> &args/* = std::vector
     print_secret_key(m_wallet->get_account().get_keys().m_view_secret_key);
     putchar('\n');
   }
-  std::cout << "public: " << string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_account_address.m_view_public_key) << std::endl;
+  std::cout << "CN public: " << string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_account_address.m_view_public_key) << std::endl;
+  std::cout << "Carrot public: " << string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_carrot_account_address.m_view_public_key) << std::endl;
 
   return true;
 }
@@ -917,7 +927,8 @@ bool simple_wallet::spendkey(const std::vector<std::string> &args/* = std::vecto
     print_secret_key(m_wallet->get_account().get_keys().m_spend_secret_key);
     putchar('\n');
   }
-  std::cout << "public: " << string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_account_address.m_spend_public_key) << std::endl;
+  std::cout << "CN public: " << string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_account_address.m_spend_public_key) << std::endl;
+  std::cout << "Carrot public: " << string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_carrot_account_address.m_spend_public_key) << std::endl;
 
   return true;
 }
@@ -6374,6 +6385,7 @@ bool simple_wallet::show_balance_unlocked(bool detailed)
   const std::string tag = m_wallet->get_account_tags().second[m_current_subaddress_account];
   success_msg_writer() << tr("Tag: ") << (tag.empty() ? std::string{tr("(No tag assigned)")} : tag);
   std::vector<std::string> asset_types = m_wallet->list_asset_types();
+  bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
   for (auto& asset: asset_types) {
     uint64_t blocks_to_unlock, time_to_unlock;
     uint64_t unlocked_balance = m_wallet->unlocked_balance(m_current_subaddress_account, asset, false, &blocks_to_unlock, &time_to_unlock);
@@ -6397,8 +6409,10 @@ bool simple_wallet::show_balance_unlocked(bool detailed)
     m_wallet->get_transfers(transfers);
     for (const auto& i : balance_per_subaddress)
     {
+      carrot::subaddress_index_extended subaddr = {{m_current_subaddress_account, i.first},
+                                                   is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot};
       cryptonote::subaddress_index subaddr_index = {m_current_subaddress_account, i.first};
-      std::string address_str = m_wallet->get_subaddress_as_str(subaddr_index).substr(0, 6);
+      std::string address_str = m_wallet->get_subaddress_as_str(subaddr).substr(0, 6);
       uint64_t num_unspent_outputs = std::count_if(transfers.begin(), transfers.end(), [&subaddr_index](const tools::wallet2::transfer_details& td) { return !td.m_spent && td.m_subaddr_index == subaddr_index; });
       success_msg_writer() << boost::format(tr("%8u %6s %21s %21s %7u %21s")) % i.first % address_str % print_money(i.second) % print_money(unlocked_balance_per_subaddress[i.first].first) % num_unspent_outputs % m_wallet->get_subaddress_label(subaddr_index);
     }
@@ -8843,29 +8857,31 @@ bool simple_wallet::donate(const std::vector<std::string> &args_)
     fail_msg_writer() << tr("amount is wrong: ") << local_args.back() << ", " << tr("expected number from 0 to ") << print_money(std::numeric_limits<uint64_t>::max());
     return true;
   }
+  uint8_t hf_version = m_wallet->get_current_hard_fork();
   // push back address, amount, payment id
   std::string address_str;
+  std::string DONATION_ADDR = (hf_version >= HF_VERSION_CARROT) ? SALVIUM_DONATION_ADDR_CARROT : SALVIUM_DONATION_ADDR;
   if (m_wallet->nettype() != cryptonote::MAINNET)
   {
     // if not mainnet, convert donation address string to the relevant network type
     address_parse_info info;
-    if (!cryptonote::get_account_address_from_str(info, cryptonote::MAINNET, SALVIUM_DONATION_ADDR))
+    if (!cryptonote::get_account_address_from_str(info, cryptonote::MAINNET, DONATION_ADDR))
     {
-      fail_msg_writer() << tr("Failed to parse donation address: ") << SALVIUM_DONATION_ADDR;
+      fail_msg_writer() << tr("Failed to parse donation address: ") << DONATION_ADDR;
       return true;
     }
     address_str = cryptonote::get_account_address_as_str(m_wallet->nettype(), info.is_subaddress, info.address);
   }
   else
   {
-    address_str = SALVIUM_DONATION_ADDR;
+    address_str = DONATION_ADDR;
   }
   local_args.push_back(address_str);
   local_args.push_back(amount_str);
   if (!payment_id_str.empty())
     local_args.push_back(payment_id_str);
   if (m_wallet->nettype() == cryptonote::MAINNET)
-    message_writer() << (boost::format(tr("Donating %s %s to The Salvium Team (donate.salvium.io or %s).")) % amount_str % cryptonote::get_unit(cryptonote::get_default_decimal_point()) % SALVIUM_DONATION_ADDR).str();
+    message_writer() << (boost::format(tr("Donating %s %s to The Salvium Team (donate.salvium.io or %s).")) % amount_str % cryptonote::get_unit(cryptonote::get_default_decimal_point()) % DONATION_ADDR).str();
   else
     message_writer() << (boost::format(tr("Donating %s %s to %s.")) % amount_str % cryptonote::get_unit(cryptonote::get_default_decimal_point()) % address_str).str();
   transfer(local_args);
@@ -10803,15 +10819,16 @@ bool simple_wallet::print_address(const std::vector<std::string> &args/* = std::
   std::vector<std::string> local_args = args;
   tools::wallet2::transfer_container transfers;
   m_wallet->get_transfers(transfers);
+  bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
 
-  auto print_address_sub = [this, &transfers](uint32_t index)
+  auto print_address_sub = [this, &transfers, is_carrot](uint32_t index)
   {
     bool used = std::find_if(
       transfers.begin(), transfers.end(),
       [this, &index](const tools::wallet2::transfer_details& td) {
         return td.m_subaddr_index == cryptonote::subaddress_index{ m_current_subaddress_account, index };
       }) != transfers.end();
-    success_msg_writer() << index << "  " << m_wallet->get_subaddress_as_str({m_current_subaddress_account, index}) << "  " << (index == 0 ? tr("Primary address") : m_wallet->get_subaddress_label({m_current_subaddress_account, index})) << " " << (used ? tr("(used)") : "");
+    success_msg_writer() << index << "  " << m_wallet->get_subaddress_as_str({{m_current_subaddress_account, index}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot}) << "  " << (index == 0 ? tr("Primary address") : m_wallet->get_subaddress_label({m_current_subaddress_account, index})) << " " << (used ? tr("(used)") : "");
   };
 
   uint32_t index = 0;

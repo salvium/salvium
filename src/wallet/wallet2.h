@@ -1179,7 +1179,8 @@ private:
     boost::optional<cryptonote::subaddress_index> get_subaddress_index(const cryptonote::account_public_address& address) const;
     crypto::public_key get_subaddress_spend_public_key(const cryptonote::subaddress_index& index) const;
     std::vector<crypto::public_key> get_subaddress_spend_public_keys(uint32_t account, uint32_t begin, uint32_t end) const;
-    std::string get_subaddress_as_str(const cryptonote::subaddress_index& index) const;
+    //std::string get_subaddress_as_str(const cryptonote::subaddress_index& index) const;
+    std::string get_subaddress_as_str(const carrot::subaddress_index_extended& index) const;
     std::string get_address_as_str() const { return get_subaddress_as_str({0, 0}); }
     std::string get_integrated_address_as_str(const crypto::hash8& payment_id) const;
     void add_subaddress_account(const std::string& label);
