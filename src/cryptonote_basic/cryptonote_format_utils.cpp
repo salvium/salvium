@@ -113,7 +113,7 @@ namespace cryptonote
     const bool plus = (
       rv.type == rct::RCTTypeBulletproofPlus ||
       rv.type == rct::RCTTypeFullProofs ||
-      rv.type == rct::RCTTypeSalviumZero ||
+      /*rv.type == rct::RCTTypeSalviumZero ||*/
       rv.type == rct::RCTTypeSalviumOne);
     const uint64_t bp_base = (32 * ((plus ? 6 : 9) + 7 * 2)) / 2; // notional size of a 2 output proof, normalized to 1 proof (ie, divided by 2)
     const size_t n_outputs = tx.vout.size();
