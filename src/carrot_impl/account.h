@@ -70,7 +70,7 @@ namespace carrot
 
     std::unordered_map<crypto::public_key, cryptonote::subaddress_index> get_subaddress_map_cn() const;
     std::unordered_map<crypto::public_key, subaddress_index_extended>& get_subaddress_map_ref();
-    std::unordered_map<crypto::public_key, input_context_t>& get_input_context_map_ref();
+    std::unordered_map<crypto::public_key, std::pair<input_context_t, crypto::public_key>>& get_input_context_map_ref();
 
     // brief: opening_for_subaddress - return (k^g_a, k^t_a) for j s.t. K^j_s = (k^g_a * G + k^t_a * T)
     void opening_for_subaddress(const subaddress_index_extended &subaddress_index,
@@ -109,12 +109,13 @@ namespace carrot
 
     void set_carrot_keys(const AddressDeriveType default_derive_type = AddressDeriveType::Carrot);
     void insert_subaddresses(const std::unordered_map<crypto::public_key, subaddress_index_extended>& subaddress_map);
-    void insert_input_context(const std::unordered_map<crypto::public_key, input_context_t>& input_context_map);
+    void insert_input_context(const std::unordered_map<crypto::public_key, std::pair<input_context_t, crypto::public_key>>& input_context_map);
 
     AddressDeriveType resolve_derive_type(const AddressDeriveType derive_type) const;
 
     private:
         std::unordered_map<crypto::public_key, subaddress_index_extended> subaddress_map;
-        std::unordered_map<crypto::public_key, input_context_t> input_context_map;
+        // Kr -> {input_context, K_change}
+        std::unordered_map<crypto::public_key, std::pair<input_context_t, crypto::public_key>> input_context_map;
   };
 }

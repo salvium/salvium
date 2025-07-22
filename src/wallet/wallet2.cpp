@@ -98,6 +98,7 @@ using namespace epee;
 #include "carrot_impl/format_utils.h"
 #include "tx_builder.h"
 #include "scanning_tools.h"
+#include "carrot_core/scan.h"
 
 extern "C"
 {
@@ -2648,38 +2649,123 @@ void wallet2::process_new_scanned_transaction(
     }
 
     // override the key image for PROTOCOL/RETURN tx outputs.
+    // TODO: move the following if-else case to 2 separate functions.
     if (td.m_td_origin_idx != std::numeric_limits<uint64_t>::max())
     {
-      THROW_WALLET_EXCEPTION_IF(td.m_td_origin_idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate return_payment TX origin in m_transfers");
-      const transfer_details &td_origin = m_transfers[td.m_td_origin_idx];
-      hw::device &hwdev =  m_account.get_device();
-      hw::reset_mode rst(hwdev);
-      hwdev.set_mode(hw::device::TRANSACTION_PARSE);
-      const crypto::public_key tx_public_key = get_tx_pub_key_from_extra(tx);
-      const std::vector<crypto::public_key> additional_tx_public_keys = get_additional_tx_pub_keys_from_extra(tx);
-      keypair in_ephemeral;
-      crypto::key_image ki;
-      origin_data origin_tx_data;
-      origin_tx_data.tx_pub_key = get_tx_pub_key_from_extra(td_origin.m_tx);
-      origin_tx_data.output_index = td_origin.m_internal_output_index;
-      origin_tx_data.tx_type = td_origin.m_tx.type;
-      rct::salvium_input_data_t sid;
-      THROW_WALLET_EXCEPTION_IF(!cryptonote::generate_key_image_helper(m_account.get_keys(),
-                                                                       m_account.get_subaddress_map_cn(),
-                                                                       onetime_address,
-                                                                       tx_public_key,
-                                                                       additional_tx_public_keys,
-                                                                       local_output_index,
-                                                                       in_ephemeral,
-                                                                       ki,
-                                                                       hwdev,
-                                                                       true,
-                                                                       origin_tx_data,
-                                                                       sid),
-                                error::wallet_internal_error,
-                                "failed to obtain key image for protocol_tx output");
-      td.m_key_image_known = true;
-      td.m_key_image = ki;
+      if(enote_scan_info->is_carrot && enote_scan_info->is_return)
+      {
+        // We need to handle the return output case specifically
+        const auto origin_idx = m_salvium_txs.find(onetime_address);
+        const auto& origin_td = m_transfers[origin_idx->second];
+
+        // 2. perform ECDH derivations
+        std::vector<crypto::key_derivation> main_derivations;
+        std::vector<crypto::key_derivation> additional_derivations;
+        const bool is_carrot = carrot::is_carrot_transaction_v1(tx);
+        wallet::perform_ecdh_derivations(
+          epee::to_span(std::vector<crypto::public_key>{td.get_eph_public_key()}),
+          epee::to_span(std::vector<crypto::public_key>{}),
+          m_account.get_keys().k_view_incoming,
+          m_account.get_keys().get_device(),
+          true,
+          main_derivations,
+          additional_derivations
+        );
+        const mx25519_pubkey s_sender_receiver_unctx = carrot::raw_byte_convert<mx25519_pubkey>(main_derivations[0]);
+
+        crypto::secret_key recovered_sender_extension_g_change;
+        crypto::secret_key recovered_sender_extension_t_change;
+        crypto::public_key recovered_address_spend_pubkey_change;
+        rct::xmr_amount recovered_amount_change;
+        crypto::secret_key recovered_amount_blinding_factor_change;
+        carrot::CarrotEnoteType recovered_enote_type_change;
+        carrot::janus_anchor_t recovered_internal_message_out_change;
+        const std::optional<carrot::encrypted_payment_id_t> encrypted_payment_id = std::nullopt;
+        carrot::payment_id_t payment_id_out;
+        carrot::CarrotEnoteV1 change_enote; // TODO: populate
+        const bool scan_success_change = carrot::try_scan_carrot_enote_external_receiver(
+          change_enote,
+          encrypted_payment_id,
+          s_sender_receiver_unctx,
+          epee::to_span(
+            std::vector<crypto::public_key>{m_account.get_keys().m_carrot_account_address.m_spend_public_key}
+          ),
+          m_account.k_view_incoming_dev,
+          recovered_sender_extension_g_change,
+          recovered_sender_extension_t_change,
+          recovered_address_spend_pubkey_change,
+          recovered_amount_change,
+          recovered_amount_blinding_factor_change,
+          payment_id_out,
+          recovered_enote_type_change
+        );
+
+        THROW_WALLET_EXCEPTION_IF(
+          !scan_success_change,
+          error::wallet_internal_error,
+          "process_new_scanned_transaction: failed to scan change output for return payment"
+        );
+
+        crypto::secret_key k_return;
+        const auto &input_context = m_account.get_input_context_map_ref().at(onetime_address);
+        m_account.k_view_incoming_dev.make_internal_return_privkey(input_context.first, input_context.second, k_return);
+
+        // make sure we can spend this output
+        crypto::secret_key sum_g;
+        sc_add(to_bytes(sum_g), to_bytes(recovered_sender_extension_g_change), to_bytes(k_return));
+        THROW_WALLET_EXCEPTION_IF(
+          !m_account.can_open_fcmp_onetime_address(
+            m_account.get_keys().m_carrot_account_address.m_spend_public_key,
+            sum_g,
+            recovered_sender_extension_t_change,
+            onetime_address
+          ),
+          error::wallet_internal_error,
+          "process_new_scanned_transaction: cannot open FCMP onetime address"
+        );
+
+        // set the key image
+        crypto::key_image ki = m_account.derive_key_image(
+          input_context.second,
+          sum_g,
+          recovered_sender_extension_t_change,
+          onetime_address
+        );
+
+        td.m_key_image_known = true;
+        td.m_key_image = ki;
+      } else {
+        THROW_WALLET_EXCEPTION_IF(td.m_td_origin_idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate return_payment TX origin in m_transfers");
+        const transfer_details &td_origin = m_transfers[td.m_td_origin_idx];
+        hw::device &hwdev =  m_account.get_device();
+        hw::reset_mode rst(hwdev);
+        hwdev.set_mode(hw::device::TRANSACTION_PARSE);
+        const crypto::public_key tx_public_key = get_tx_pub_key_from_extra(tx);
+        const std::vector<crypto::public_key> additional_tx_public_keys = get_additional_tx_pub_keys_from_extra(tx);
+        keypair in_ephemeral;
+        crypto::key_image ki;
+        origin_data origin_tx_data;
+        origin_tx_data.tx_pub_key = get_tx_pub_key_from_extra(td_origin.m_tx);
+        origin_tx_data.output_index = td_origin.m_internal_output_index;
+        origin_tx_data.tx_type = td_origin.m_tx.type;
+        rct::salvium_input_data_t sid;
+        THROW_WALLET_EXCEPTION_IF(!cryptonote::generate_key_image_helper(m_account.get_keys(),
+                                                                         m_account.get_subaddress_map_cn(),
+                                                                         onetime_address,
+                                                                         tx_public_key,
+                                                                         additional_tx_public_keys,
+                                                                         local_output_index,
+                                                                         in_ephemeral,
+                                                                         ki,
+                                                                         hwdev,
+                                                                         true,
+                                                                         origin_tx_data,
+                                                                         sid),
+                                  error::wallet_internal_error,
+                                  "failed to obtain key image for protocol_tx output");
+        td.m_key_image_known = true;
+        td.m_key_image = ki;
+      }
     }
     td.m_key_image_request = m_watch_only; // for view wallets, that flag means "we want to request it"
     td.m_key_image_partial = m_multisig;

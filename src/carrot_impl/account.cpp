@@ -125,7 +125,7 @@ std::unordered_map<crypto::public_key, subaddress_index_extended>& carrot_and_le
 }
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
-std::unordered_map<crypto::public_key, input_context_t>& carrot_and_legacy_account::get_input_context_map_ref() {
+std::unordered_map<crypto::public_key, std::pair<input_context_t, crypto::public_key>>& carrot_and_legacy_account::get_input_context_map_ref() {
     return input_context_map;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -351,7 +351,7 @@ void carrot_and_legacy_account::insert_subaddresses(const std::unordered_map<cry
         subaddress_map.insert({p.first, {{p.second.index.major, p.second.index.minor}, p.second.derive_type, p.second.is_return_spend_key}});
 }
 //----------------------------------------------------------------------------------------------------------------------
-void carrot_and_legacy_account::insert_input_context(const std::unordered_map<crypto::public_key, input_context_t>& icm)
+void carrot_and_legacy_account::insert_input_context(const std::unordered_map<crypto::public_key, std::pair<input_context_t, crypto::public_key>>& icm)
 {
     for (const auto &p : icm)
         input_context_map.insert({p.first, p.second});

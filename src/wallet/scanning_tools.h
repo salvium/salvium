@@ -78,6 +78,9 @@ struct enote_view_incoming_scan_info_t
 
     // whether this output is to a carrot address or not
     bool is_carrot;
+
+    // whether this output is a return output
+    bool is_return;
 };
 
 struct PreCarrotEnote
