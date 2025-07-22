@@ -285,6 +285,8 @@ namespace cryptonote {
         LOG_PRINT_L1("Failed to validate address keys");
         return false;
       }
+
+      info.address.m_is_carrot = info.is_carrot;
     }
     else
     {
@@ -316,6 +318,7 @@ namespace cryptonote {
 
       //we success
       info.address = blob.m_address;
+      info.address.m_is_carrot = false;
       info.is_subaddress = false;
       info.has_payment_id = false;
       info.is_carrot = false;

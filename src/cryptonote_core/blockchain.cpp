@@ -1866,6 +1866,15 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
     b.timestamp = median_ts;
   }
 
+  // Verify that we aren't mixing Carrot and non-Carrot
+  if (b.major_version >= HF_VERSION_CARROT && !miner_address.m_is_carrot) {
+    LOG_ERROR("mining to CryptoNote wallet address, but Carrot wallet address is required");
+    return false;
+  } else if (b.major_version < HF_VERSION_CARROT && miner_address.m_is_carrot) {
+    LOG_ERROR("mining to Carrot wallet address, but Carrot isn't supported yet");
+    return false;
+  }
+  
   std::map<std::string, uint64_t> circ_supply = get_db().get_circulating_supply();
 
   // Check if we are supposed to be obtaining PRs from the Oracle
@@ -2355,7 +2364,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
 
     if(!prevalidate_protocol_transaction(b, bei.height, hf_version))
     {
-      MERROR_VER("Block with id: " << epee::string_tools::pod_to_hex(id) << " (as alternative) has incorrect miner transaction.");
+      MERROR_VER("Block with id: " << epee::string_tools::pod_to_hex(id) << " (as alternative) has incorrect protocol transaction.");
       bvc.m_verifivation_failed = true;
       return false;
     }
