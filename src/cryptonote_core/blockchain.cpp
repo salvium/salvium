@@ -3818,7 +3818,7 @@ bool Blockchain::have_tx_keyimges_as_spent(const transaction &tx) const
 bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys, const uint8_t &hf_version)
 {
   PERF_TIMER(expand_transaction_2);
-  CHECK_AND_ASSERT_MES(tx.version == 2 || tx.version == 3 || tx.version == 4, false, "Transaction version is not 2/3");
+  CHECK_AND_ASSERT_MES(tx.version == 2 || tx.version == 3 || tx.version == 4, false, "Transaction version is not 2/3/4");
 
   rct::rctSig &rv = tx.rct_signatures;
 
@@ -4017,14 +4017,6 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
       return false;
     }
 
-    // min/max tx version based on HF, and we accept v1 txes if having a non mixable
-    const size_t max_tx_version = (hf_version >= HF_VERSION_ENABLE_N_OUTS) ? TRANSACTION_VERSION_CARROT : TRANSACTION_VERSION_2_OUTS;
-    if (tx.version > max_tx_version)
-    {
-      MERROR_VER("transaction version " << (unsigned)tx.version << " is higher than max accepted version " << max_tx_version);
-      tvc.m_verifivation_failed = true;
-      return false;
-    }
     const size_t min_tx_version = (n_unmixable > 0 ? 1 : 2);
     if (tx.version < min_tx_version)
     {

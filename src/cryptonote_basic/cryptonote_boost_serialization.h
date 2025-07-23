@@ -167,7 +167,7 @@ namespace boost
   }
 
   template <class Archive>
-  inline void serialize(Archive &a, cryptonote::protocol_tx_data &x, const boost::serialization::version_type ver)
+  inline void serialize(Archive &a, cryptonote::protocol_tx_data_t &x, const boost::serialization::version_type ver)
   {
     a & x.version;
     a & x.return_address;

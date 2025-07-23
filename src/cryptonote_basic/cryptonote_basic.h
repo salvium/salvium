@@ -197,7 +197,7 @@ namespace cryptonote
 
   };
 
-  class protocol_tx_data {
+  class protocol_tx_data_t {
   public:
     uint8_t version;
     crypto::public_key return_address;
@@ -244,7 +244,7 @@ namespace cryptonote
     // Slippage limit
     uint64_t amount_slippage_limit;
 
-    protocol_tx_data protocol_tx_data;
+    protocol_tx_data_t protocol_tx_data;
 
     BEGIN_SERIALIZE()
       VARINT_FIELD(version)
@@ -781,7 +781,7 @@ VARIANT_TAG(binary_archive, cryptonote::txout_to_scripthash, 0x1);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_key, 0x2);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_tagged_key, 0x3);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_carrot_v1, 0x4);
-VARIANT_TAG(binary_archive, cryptonote::protocol_tx_data, 0x0);
+VARIANT_TAG(binary_archive, cryptonote::protocol_tx_data_t, 0x0);
 VARIANT_TAG(binary_archive, cryptonote::transaction, 0xcc);
 VARIANT_TAG(binary_archive, cryptonote::block, 0xbb);
 
@@ -794,7 +794,7 @@ VARIANT_TAG(json_archive, cryptonote::txout_to_scripthash, "scripthash");
 VARIANT_TAG(json_archive, cryptonote::txout_to_key, "key");
 VARIANT_TAG(json_archive, cryptonote::txout_to_tagged_key, "tagged_key");
 VARIANT_TAG(json_archive, cryptonote::txout_to_carrot_v1, "carrot_v1");
-VARIANT_TAG(json_archive, cryptonote::protocol_tx_data, "protocol_tx_data");
+VARIANT_TAG(json_archive, cryptonote::protocol_tx_data_t, "protocol_tx_data");
 VARIANT_TAG(json_archive, cryptonote::transaction, "tx");
 VARIANT_TAG(json_archive, cryptonote::block, "block");
 
@@ -807,6 +807,6 @@ VARIANT_TAG(debug_archive, cryptonote::txout_to_scripthash, "scripthash");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_key, "key");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_tagged_key, "tagged_key");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_carrot_v1, "carrot_v1");
-VARIANT_TAG(debug_archive, cryptonote::protocol_tx_data, "protocol_tx_data");
+VARIANT_TAG(debug_archive, cryptonote::protocol_tx_data_t, "protocol_tx_data");
 VARIANT_TAG(debug_archive, cryptonote::transaction, "tx");
 VARIANT_TAG(debug_archive, cryptonote::block, "block");

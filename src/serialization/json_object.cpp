@@ -518,7 +518,7 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_to_scripthash& 
   }
 }
 
-void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::protocol_tx_data& ptd)
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::protocol_tx_data_t& ptd)
 {
   dest.StartObject();
 
@@ -531,7 +531,7 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::p
   dest.EndObject();
 }
 
-void fromJsonValue(const rapidjson::Value& val, cryptonote::protocol_tx_data& ptd)
+void fromJsonValue(const rapidjson::Value& val, cryptonote::protocol_tx_data_t& ptd)
 {
   if (!val.IsObject())
   {
