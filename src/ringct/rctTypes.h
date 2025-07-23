@@ -446,7 +446,7 @@ namespace rct {
             return false;
           for (size_t i = 0; i < outputs; ++i)
           {
-            if (type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumZero)
+            if (type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumZero || type == RCTTypeSalviumOne)
             {
               // Since RCTTypeBulletproof2 enote types, we don't serialize the blinding factor, and only serialize the
               // first 8 bytes of ecdhInfo[i].amount
@@ -504,7 +504,7 @@ namespace rct {
           FIELD(outPk)
           VARINT_FIELD(txnFee)
           FIELD(p_r)
-          if (type == RCTTypeSalviumZero)
+          if (type == RCTTypeSalviumZero || type == RCTTypeSalviumOne)
           {
             FIELD(salvium_data)
           }
@@ -673,6 +673,7 @@ namespace rct {
           FIELD(bulletproofs_plus)
           FIELD(MGs)
           FIELD(CLSAGs)
+          FIELD(TCLSAGs)
           FIELD(pseudoOuts)
         END_SERIALIZE()
     };

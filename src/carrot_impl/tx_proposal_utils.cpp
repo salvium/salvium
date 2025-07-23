@@ -90,7 +90,7 @@ static void append_additional_payment_proposal_if_necessary(
 //-------------------------------------------------------------------------------------------------------------------
 std::uint64_t get_carrot_default_tx_extra_size(const std::size_t n_outputs)
 {
-    CHECK_AND_ASSERT_THROW_MES(n_outputs <= FCMP_PLUS_PLUS_MAX_OUTPUTS,
+    CHECK_AND_ASSERT_THROW_MES(n_outputs <= CARROT_MAX_TX_OUTPUTS,
         "get_carrot_default_tx_extra_size: n_outputs too high: " << n_outputs);
     CHECK_AND_ASSERT_THROW_MES(n_outputs >= CARROT_MIN_TX_OUTPUTS,
         "get_carrot_default_tx_extra_size: n_outputs too low: " << n_outputs);
