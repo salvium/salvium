@@ -669,6 +669,7 @@ namespace cryptonote
   {
     crypto::public_key m_spend_public_key;
     crypto::public_key m_view_public_key;
+    bool m_is_carrot;
 
     BEGIN_SERIALIZE_OBJECT()
       FIELD(m_spend_public_key)
@@ -683,7 +684,8 @@ namespace cryptonote
     bool operator==(const account_public_address& rhs) const
     {
       return m_spend_public_key == rhs.m_spend_public_key &&
-             m_view_public_key == rhs.m_view_public_key;
+             m_view_public_key == rhs.m_view_public_key &&
+             m_is_carrot == rhs.m_is_carrot;
     }
 
     bool operator!=(const account_public_address& rhs) const

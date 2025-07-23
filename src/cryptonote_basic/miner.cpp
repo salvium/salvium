@@ -176,6 +176,7 @@ namespace cryptonote
     if(!m_phandler->get_block_template(bl, m_mine_address, di, height, expected_reward, extra_nonce, seed_height, seed_hash))
     {
       LOG_ERROR("Failed to get_block_template(), stopping mining");
+      stop();
       return false;
     }
     set_block_template(bl, di, height, expected_reward);
@@ -185,7 +186,12 @@ namespace cryptonote
   bool miner::on_idle()
   {
     m_update_block_template_interval.do_call([&](){
-      if(is_mining())request_block_template();
+      if(is_mining()) {
+        if (!request_block_template()) {
+          stop();
+          return false;
+        }
+      }
       return true;
     });
 
@@ -393,7 +399,10 @@ namespace cryptonote
       return false;
     }
 
-    request_block_template();//lets update block template
+    if (!request_block_template()) {
+      LOG_ERROR("Unable to start miner - unknown error");
+      return false;
+    }
 
     m_stop = false;
     m_thread_index = 0;

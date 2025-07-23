@@ -1432,7 +1432,7 @@ namespace cryptonote
     RPC_TRACKER(start_mining);
     CHECK_CORE_READY();
     cryptonote::address_parse_info info;
-    if(!get_account_address_from_str(info, nettype(), req.miner_address))
+    if(!get_account_address_from_str(info, m_core.get_nettype(), req.miner_address))
     {
       res.status = "Failed, wrong address";
       LOG_PRINT_L0(res.status);
@@ -1441,6 +1441,17 @@ namespace cryptonote
     if (info.is_subaddress)
     {
       res.status = "Mining to subaddress isn't supported yet";
+      LOG_PRINT_L0(res.status);
+      return true;
+    }
+
+    const uint8_t version = m_core.get_blockchain_storage().get_current_hard_fork_version();
+    if (info.is_carrot && version < HF_VERSION_CARROT) {
+      res.status = "Mining to Carrot wallet address, but Carrot isn't supported yet";
+      LOG_PRINT_L0(res.status);
+      return true;
+    } else if (!info.is_carrot && version >= HF_VERSION_CARROT) {
+      res.status = "Mining to CryptoNote wallet address, but Carrot wallet address is required";
       LOG_PRINT_L0(res.status);
       return true;
     }
@@ -1955,6 +1966,17 @@ namespace cryptonote
     {
       error_resp.code = CORE_RPC_ERROR_CODE_MINING_TO_SUBADDRESS;
       error_resp.message = "Mining to subaddress is not supported yet";
+      return false;
+    }
+
+    const uint8_t version = m_core.get_blockchain_storage().get_current_hard_fork_version();
+    if (info.is_carrot && version < HF_VERSION_CARROT) {
+      error_resp.code = CORE_RPC_ERROR_CODE_INVALID_CLIENT;
+      error_resp.message = "Mining to Carrot wallet address, but Carrot isn't supported yet";
+      return false;
+    } else if (!info.is_carrot && version >= HF_VERSION_CARROT) {
+      error_resp.code = CORE_RPC_ERROR_CODE_INVALID_CLIENT;
+      error_resp.message = "Mining to CryptoNote wallet address, but Carrot wallet address is required";
       return false;
     }
 
