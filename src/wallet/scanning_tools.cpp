@@ -255,26 +255,123 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
         .amount_blinding_factor = amount_blinding_factor,
         .asset_type = enote.asset_type,
         .main_tx_pubkey_index = main_deriv_idx,
-        .is_carrot = false
+        .is_carrot = false,
+        .is_return = false
     };
 }
 //-------------------------------------------------------------------------------------------------------------------
+static bool scan_return_output(
+    const carrot::CarrotCoinbaseEnoteV1 &enote,
+    carrot::carrot_and_legacy_account &account,
+    crypto::public_key &address_spend_pubkey_out
+) {
+    const auto &return_output_map = account.get_return_output_map_ref();
+    CHECK_AND_ASSERT_MES(return_output_map.count(enote.onetime_address), false, "return output not found");
+    const auto &return_output = return_output_map.at(enote.onetime_address);
+
+    // 1. make k_return
+    crypto::secret_key k_return;
+    account.k_view_incoming_dev.make_internal_return_privkey(return_output.input_context, return_output.address_spend_pubkey, k_return);
+
+    // 2. compute K_return' = k_return * G
+    crypto::public_key K_return;
+    crypto::secret_key_to_public_key(k_return, K_return);
+
+    // 3. ssr
+    mx25519_pubkey shared_secret_return_unctx;
+    crypto::hash shared_secret_return;
+    carrot::make_carrot_uncontextualized_shared_key_receiver(k_return, enote.enote_ephemeral_pubkey, shared_secret_return_unctx);
+    carrot::make_carrot_sender_receiver_secret(
+        shared_secret_return_unctx.data,
+        enote.enote_ephemeral_pubkey,
+        return_output.input_context,
+        shared_secret_return
+    );
+
+    // 4. verify the view_tag
+    CHECK_AND_ASSERT_MES(
+        carrot::test_carrot_view_tag(
+            shared_secret_return_unctx.data,
+            return_output.input_context,
+            enote.onetime_address,
+            enote.view_tag
+        ),
+        false,
+        "view tag verification failed for carrot coinbase enote"
+    );
+
+    // 5. compute anchor_return
+    carrot::janus_anchor_t recovered_anchor_return = 
+        carrot::decrypt_carrot_anchor(enote.anchor_enc, shared_secret_return, enote.onetime_address);
+
+    // 6. compute d_e'
+    crypto::secret_key recovered_ephemeral_privkey_return;
+    carrot::make_carrot_enote_ephemeral_privkey(
+        recovered_anchor_return,
+        return_output.input_context,
+        return_output.address_spend_pubkey,
+        carrot::null_payment_id,
+        recovered_ephemeral_privkey_return
+    );
+
+    // 7. compute D_e'
+    mx25519_pubkey recovered_ephemeral_pubkey_return;
+    carrot::make_carrot_enote_ephemeral_pubkey(
+        recovered_ephemeral_privkey_return,
+        return_output.address_spend_pubkey,
+        false,
+        recovered_ephemeral_pubkey_return
+    );
+
+    // 8. verify the enote ephemeral pubkey
+    CHECK_AND_ASSERT_MES(
+        memcmp(recovered_ephemeral_pubkey_return.data, enote.enote_ephemeral_pubkey.data, sizeof(mx25519_pubkey)) == 0,
+        false,
+        "carrot coinbase enote protection verification failed"
+    );
+
+    address_spend_pubkey_out = return_output.address_spend_pubkey;
+    return true;
+}
 //-------------------------------------------------------------------------------------------------------------------
 static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_coinbase_enote(
     const carrot::CarrotCoinbaseEnoteV1 &enote,
     const mx25519_pubkey &s_sender_receiver_unctx,
-    const crypto::public_key &main_address_spend_pubkey)
+    const crypto::public_key &main_address_spend_pubkey,
+    carrot::carrot_and_legacy_account &account)
 {
     enote_view_incoming_scan_info_t res;
 
+    bool found_in_return = false;
     if (!carrot::try_scan_carrot_coinbase_enote_receiver(enote,
             s_sender_receiver_unctx,
             main_address_spend_pubkey,
             res.sender_extension_g,
             res.sender_extension_t))
-        return std::nullopt;
+    {
+        // check for known return addresses
+        const auto &subaddress_map = account.get_subaddress_map_ref();
+        if (subaddress_map.find(enote.onetime_address) == subaddress_map.end())
+            return std::nullopt;
 
-    res.address_spend_pubkey = main_address_spend_pubkey;
+        found_in_return = true;
+    }
+
+    if (found_in_return) {
+        // scan the return output
+        crypto::public_key address_spend_pubkey;
+        if (!scan_return_output(enote, account, address_spend_pubkey))
+            return std::nullopt;
+
+        res.address_spend_pubkey = address_spend_pubkey;
+        res.return_address = enote.onetime_address;
+        res.is_return = true;
+    } else {
+        // we received a coinbase enote
+        res.address_spend_pubkey = main_address_spend_pubkey;
+        res.is_return = false;
+    }
+    
     res.payment_id = crypto::null_hash;
     res.subaddr_index = carrot::subaddress_index_extended{{0, 0}};
     res.amount = enote.amount;
@@ -326,6 +423,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         res.main_tx_pubkey_index = 0;
         res.asset_type = enote.asset_type;
         res.is_carrot = true;
+        res.is_return = false;
 
         return res;
     }
@@ -358,8 +456,8 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         res.amount,
         amount_blinding_factor_sk,
         payment_id,
-        dummy_enote_type))
-    return std::nullopt;
+        dummy_enote_type)) 
+        return std::nullopt;
 
     const auto subaddr_it = account.get_subaddress_map_ref().find(res.address_spend_pubkey);
     CHECK_AND_ASSERT_MES(subaddr_it != account.get_subaddress_map_ref().cend(),
@@ -372,11 +470,50 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
     memset(&res.payment_id, 0, sizeof(res.payment_id));
     memcpy(&res.payment_id, &payment_id, sizeof(carrot::payment_id_t));
 
+    // we received and output
+    // save the Kr = K_change + K_return to out subaddress map
+    // make k_return
+    crypto::secret_key k_return;
+    const carrot::input_context_t input_context = carrot::make_carrot_input_context(enote.tx_first_key_image);
+    k_view_dev.make_internal_return_privkey(input_context, enote.onetime_address, k_return);
+
+    // compute K_return = k_return * G
+    crypto::public_key K_return;
+    crypto::secret_key_to_public_key(k_return, K_return);
+
+    // compute K_r = K_return + K_o
+    crypto::public_key K_r = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(enote.onetime_address)));
+    account.insert_subaddresses({{K_r, {{subaddr_index.index.major, subaddr_index.index.minor},
+        carrot::AddressDeriveType::Carrot, true}}});
+
+    // calculate the key image for the return output
+    crypto::secret_key sum_g;
+    sc_add(to_bytes(sum_g), to_bytes(res.sender_extension_g), to_bytes(k_return));
+    crypto::key_image key_image = account.derive_key_image(
+        account.get_keys().m_carrot_account_address.m_spend_public_key,
+        sum_g,
+        res.sender_extension_t,
+        K_r
+    );
+
+    crypto::secret_key x, y;
+    account.try_searching_for_opening_for_onetime_address(
+        account.get_keys().m_carrot_account_address.m_spend_public_key,
+        sum_g,
+        res.sender_extension_t,
+        x,
+        y
+    );
+
+    // save the input context & change output key
+    account.insert_return_output_info({{K_r, {input_context, enote.onetime_address, key_image, x, y}}});
+
     res.subaddr_index = subaddr_index;
     res.amount_blinding_factor = rct::sk2rct(amount_blinding_factor_sk);
     res.main_tx_pubkey_index = 0;
     res.asset_type = enote.asset_type;
     res.is_carrot = true;
+    res.is_return = false;
 
     return res;
 }
@@ -516,7 +653,8 @@ std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_enote(
 
             return view_incoming_scan_carrot_coinbase_enote(enote,
                 s_sender_receiver_unctx,
-                address.m_spend_public_key);
+                address.m_spend_public_key,
+                account);
         }
 
         std::optional<enote_view_incoming_scan_info_t> operator()(const carrot::CarrotEnoteV1 &enote) const
@@ -827,7 +965,7 @@ std::vector<std::optional<enote_view_incoming_scan_info_t>> view_incoming_scan_t
     // 3. do view-incoming scan for each output enotes
     hw::device &hwdev = hw::get_device("default");
     carrot::carrot_and_legacy_account dummy_account;
-    dummy_account.get_subaddress_map_ref()[address.m_spend_public_key] = {{}};
+    dummy_account.insert_subaddresses({{address.m_spend_public_key, {{0, 0}, carrot::AddressDeriveType::Carrot, false}}});
     for (size_t local_output_index = 0; local_output_index < n_outputs; ++local_output_index)
     {
         auto &enote_scan_info = res[local_output_index];
@@ -860,9 +998,16 @@ bool is_long_payment_id(const crypto::hash &pid)
 std::optional<crypto::key_image> try_derive_enote_key_image(
     const enote_view_incoming_scan_info_t &enote_scan_info,
     const carrot::carrot_and_legacy_account &acc)
-{
+{   
+    // we skip the return output key image generation here to do it in process_new_scanned_transaction.
     if (!enote_scan_info.subaddr_index)
         return std::nullopt;
+
+    // if we have a carrot return enote, we return already derived key image
+    if (enote_scan_info.is_carrot && enote_scan_info.is_return)
+    {
+        return acc.get_return_output_map_ref().at(enote_scan_info.return_address).key_image;
+    }
 
     // k^j_subext
     rct::key subaddress_extension;

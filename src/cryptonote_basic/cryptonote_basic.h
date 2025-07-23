@@ -197,6 +197,23 @@ namespace cryptonote
 
   };
 
+  class protocol_tx_data_t {
+  public:
+    uint8_t version;
+    crypto::public_key return_address;
+    crypto::public_key return_pubkey;
+    carrot::view_tag_t return_view_tag;
+    carrot::encrypted_janus_anchor_t return_anchor_enc;
+
+    BEGIN_SERIALIZE_OBJECT()
+      VARINT_FIELD(version)
+      FIELD(return_address)
+      FIELD(return_pubkey)
+      FIELD(return_view_tag)
+      FIELD(return_anchor_enc)
+    END_SERIALIZE()
+  };
+
   class transaction_prefix
   {
 
@@ -227,6 +244,8 @@ namespace cryptonote
     // Slippage limit
     uint64_t amount_slippage_limit;
 
+    protocol_tx_data_t protocol_tx_data;
+
     BEGIN_SERIALIZE()
       VARINT_FIELD(version)
       if(version == 0 || CURRENT_TRANSACTION_VERSION < version) return false;
@@ -244,8 +263,14 @@ namespace cryptonote
             FIELD(return_address_list)
             FIELD(return_address_change_mask)
           } else {
-            FIELD(return_address)
-            FIELD(return_pubkey)
+            if (type == cryptonote::transaction_type::STAKE &&
+                version >= TRANSACTION_VERSION_CARROT)
+            {
+              FIELD(protocol_tx_data)
+            } else {
+              FIELD(return_address)
+              FIELD(return_pubkey)
+            }
           }
           FIELD(source_asset_type)
           FIELD(destination_asset_type)
@@ -268,6 +293,10 @@ namespace cryptonote
       return_address_list.clear();
       return_address_change_mask.clear();
       return_pubkey = crypto::null_pkey;
+      protocol_tx_data.return_address = crypto::null_pkey;
+      protocol_tx_data.return_pubkey = crypto::null_pkey;
+      protocol_tx_data.return_view_tag = {};
+      protocol_tx_data.return_anchor_enc = {};
       source_asset_type.clear();
       destination_asset_type.clear();
       amount_burnt = 0;
@@ -754,6 +783,7 @@ VARIANT_TAG(binary_archive, cryptonote::txout_to_scripthash, 0x1);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_key, 0x2);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_tagged_key, 0x3);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_carrot_v1, 0x4);
+VARIANT_TAG(binary_archive, cryptonote::protocol_tx_data_t, 0x0);
 VARIANT_TAG(binary_archive, cryptonote::transaction, 0xcc);
 VARIANT_TAG(binary_archive, cryptonote::block, 0xbb);
 
@@ -766,6 +796,7 @@ VARIANT_TAG(json_archive, cryptonote::txout_to_scripthash, "scripthash");
 VARIANT_TAG(json_archive, cryptonote::txout_to_key, "key");
 VARIANT_TAG(json_archive, cryptonote::txout_to_tagged_key, "tagged_key");
 VARIANT_TAG(json_archive, cryptonote::txout_to_carrot_v1, "carrot_v1");
+VARIANT_TAG(json_archive, cryptonote::protocol_tx_data_t, "protocol_tx_data");
 VARIANT_TAG(json_archive, cryptonote::transaction, "tx");
 VARIANT_TAG(json_archive, cryptonote::block, "block");
 
@@ -778,5 +809,6 @@ VARIANT_TAG(debug_archive, cryptonote::txout_to_scripthash, "scripthash");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_key, "key");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_tagged_key, "tagged_key");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_carrot_v1, "carrot_v1");
+VARIANT_TAG(debug_archive, cryptonote::protocol_tx_data_t, "protocol_tx_data");
 VARIANT_TAG(debug_archive, cryptonote::transaction, "tx");
 VARIANT_TAG(debug_archive, cryptonote::block, "block");

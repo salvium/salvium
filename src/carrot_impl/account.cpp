@@ -110,7 +110,7 @@ CarrotDestinationV1 carrot_and_legacy_account::subaddress(const subaddress_index
     return addr;
 }
 //----------------------------------------------------------------------------------------------------------------------
-std::unordered_map<crypto::public_key, cryptonote::subaddress_index> carrot_and_legacy_account::get_subaddress_map_cn() const
+const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> carrot_and_legacy_account::get_subaddress_map_cn() const
 {
     std::unordered_map<crypto::public_key, cryptonote::subaddress_index> res;
     for (const auto &p : subaddress_map)
@@ -120,8 +120,13 @@ std::unordered_map<crypto::public_key, cryptonote::subaddress_index> carrot_and_
     return res;
 }
 //----------------------------------------------------------------------------------------------------------------------
-std::unordered_map<crypto::public_key, subaddress_index_extended>& carrot_and_legacy_account::get_subaddress_map_ref() {
+const std::unordered_map<crypto::public_key, subaddress_index_extended>& carrot_and_legacy_account::get_subaddress_map_ref() const {
     return subaddress_map;
+}
+//----------------------------------------------------------------------------------------------------------------------
+const std::unordered_map<crypto::public_key, return_output_info_t>& 
+carrot_and_legacy_account::get_return_output_map_ref() const {
+    return return_output_map;
 }
 //----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::opening_for_subaddress(const subaddress_index_extended &subaddress_index,
@@ -345,7 +350,12 @@ void carrot_and_legacy_account::insert_subaddresses(const std::unordered_map<cry
     for (const auto &p : subaddress_map_cn)
         subaddress_map.insert({p.first, {{p.second.index.major, p.second.index.minor}, p.second.derive_type, p.second.is_return_spend_key}});
 }
-
+//----------------------------------------------------------------------------------------------------------------------
+void carrot_and_legacy_account::insert_return_output_info(const std::unordered_map<crypto::public_key, return_output_info_t>& roi_map)
+{
+    for (const auto &p : roi_map)
+        return_output_map.insert({p.first, p.second});
+}
 //----------------------------------------------------------------------------------------------------------------------
 AddressDeriveType carrot_and_legacy_account::resolve_derive_type(const AddressDeriveType derive_type) const
 {

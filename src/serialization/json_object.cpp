@@ -277,8 +277,14 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
         INSERT_INTO_JSON_OBJECT(dest, return_address_list, tx.return_address_list);
         INSERT_INTO_JSON_OBJECT(dest, return_address_change_mask, tx.return_address_change_mask);
       } else {
-        INSERT_INTO_JSON_OBJECT(dest, return_address, tx.return_address);
-        INSERT_INTO_JSON_OBJECT(dest, return_pubkey, tx.return_pubkey);
+        if (tx.type == cryptonote::transaction_type::STAKE &&
+              tx.version >= TRANSACTION_VERSION_CARROT)
+        {
+          INSERT_INTO_JSON_OBJECT(dest, protocol_tx_data, tx.protocol_tx_data);
+        } else {
+          INSERT_INTO_JSON_OBJECT(dest, return_address, tx.return_address);
+          INSERT_INTO_JSON_OBJECT(dest, return_pubkey, tx.return_pubkey);
+        }
       }
       INSERT_INTO_JSON_OBJECT(dest, source_asset_type, tx.source_asset_type);
       INSERT_INTO_JSON_OBJECT(dest, destination_asset_type, tx.destination_asset_type);
@@ -320,8 +326,14 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
         GET_FROM_JSON_OBJECT(val, tx.return_address_list, return_address_list);
         GET_FROM_JSON_OBJECT(val, tx.return_address_change_mask, return_address_change_mask);
       } else {
-        GET_FROM_JSON_OBJECT(val, tx.return_address, return_address);
-        GET_FROM_JSON_OBJECT(val, tx.return_pubkey, return_pubkey);
+        if (tx.type == cryptonote::transaction_type::STAKE &&
+              tx.version >= TRANSACTION_VERSION_CARROT)
+        {
+          GET_FROM_JSON_OBJECT(val, tx.protocol_tx_data, protocol_tx_data);
+        } else {
+          GET_FROM_JSON_OBJECT(val, tx.return_address, return_address);
+          GET_FROM_JSON_OBJECT(val, tx.return_pubkey, return_pubkey);
+        }
       }
       GET_FROM_JSON_OBJECT(val, tx.source_asset_type, source_asset_type);
       GET_FROM_JSON_OBJECT(val, tx.destination_asset_type, destination_asset_type);
@@ -504,6 +516,33 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_to_scripthash& 
   {
     throw WRONG_TYPE("json object");
   }
+}
+
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::protocol_tx_data_t& ptd)
+{
+  dest.StartObject();
+
+  INSERT_INTO_JSON_OBJECT(dest, version, ptd.version);
+  INSERT_INTO_JSON_OBJECT(dest, return_address, ptd.return_address);
+  INSERT_INTO_JSON_OBJECT(dest, return_pubkey, ptd.return_pubkey);
+  INSERT_INTO_JSON_OBJECT(dest, return_view_tag, ptd.return_view_tag);
+  INSERT_INTO_JSON_OBJECT(dest, return_anchor_enc, ptd.return_anchor_enc);
+
+  dest.EndObject();
+}
+
+void fromJsonValue(const rapidjson::Value& val, cryptonote::protocol_tx_data_t& ptd)
+{
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, ptd.version, version);
+  GET_FROM_JSON_OBJECT(val, ptd.return_address, return_address);
+  GET_FROM_JSON_OBJECT(val, ptd.return_pubkey, return_pubkey);
+  GET_FROM_JSON_OBJECT(val, ptd.return_view_tag, return_view_tag);
+  GET_FROM_JSON_OBJECT(val, ptd.return_anchor_enc, return_anchor_enc);
 }
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::txin_to_key& txin)

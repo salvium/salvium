@@ -391,6 +391,19 @@ private:
         return output_public_key;
       };
 
+      const crypto::public_key get_eph_public_key() const {
+        crypto::public_key eph_public_key;
+        eph_public_key = cryptonote::get_tx_pub_key_from_extra(m_tx);
+        if (eph_public_key != crypto::null_pkey)
+          return eph_public_key;
+
+        const auto additional_pub_keys = cryptonote::get_additional_tx_pub_keys_from_extra(m_tx);
+        if (!additional_pub_keys.empty())
+          return additional_pub_keys[m_internal_output_index];
+
+        return crypto::null_pkey;
+      };
+
       bool is_carrot() const
       {
         THROW_WALLET_EXCEPTION_IF(m_tx.vout.size() <= m_internal_output_index,

@@ -98,6 +98,7 @@ using namespace epee;
 #include "carrot_impl/format_utils.h"
 #include "tx_builder.h"
 #include "scanning_tools.h"
+#include "carrot_core/scan.h"
 
 extern "C"
 {
@@ -2652,8 +2653,8 @@ void wallet2::process_new_scanned_transaction(
       }
     }
 
-    // override the key image for PROTOCOL/RETURN tx outputs.
-    if (td.m_td_origin_idx != std::numeric_limits<uint64_t>::max())
+    // override the key image for pre-carrot PROTOCOL/RETURN tx outputs.
+    if (!enote_scan_info->is_carrot && td.m_td_origin_idx != std::numeric_limits<uint64_t>::max())
     {
       THROW_WALLET_EXCEPTION_IF(td.m_td_origin_idx >= get_num_transfer_details(), error::wallet_internal_error, "cannot locate return_payment TX origin in m_transfers");
       const transfer_details &td_origin = m_transfers[td.m_td_origin_idx];
@@ -2669,20 +2670,22 @@ void wallet2::process_new_scanned_transaction(
       origin_tx_data.output_index = td_origin.m_internal_output_index;
       origin_tx_data.tx_type = td_origin.m_tx.type;
       rct::salvium_input_data_t sid;
-      THROW_WALLET_EXCEPTION_IF(!cryptonote::generate_key_image_helper(m_account.get_keys(),
-                                                                       m_account.get_subaddress_map_cn(),
-                                                                       onetime_address,
-                                                                       tx_public_key,
-                                                                       additional_tx_public_keys,
-                                                                       local_output_index,
-                                                                       in_ephemeral,
-                                                                       ki,
-                                                                       hwdev,
-                                                                       true,
-                                                                       origin_tx_data,
-                                                                       sid),
-                                error::wallet_internal_error,
-                                "failed to obtain key image for protocol_tx output");
+      THROW_WALLET_EXCEPTION_IF(!cryptonote::generate_key_image_helper(
+        m_account.get_keys(),
+        m_account.get_subaddress_map_cn(),
+        onetime_address,
+        tx_public_key,
+        additional_tx_public_keys,
+        local_output_index,
+        in_ephemeral,
+        ki,
+        hwdev,
+        true,
+        origin_tx_data,
+        sid),
+        error::wallet_internal_error,
+        "failed to obtain key image for protocol_tx output"
+      );
       td.m_key_image_known = true;
       td.m_key_image = ki;
     }

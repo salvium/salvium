@@ -188,6 +188,7 @@ static void subtest_legacy_2out_transfer_get_output_enote_proposals_completeness
     std::vector<RCTOutputEnoteProposal> enote_proposals;
     encrypted_payment_id_t encrypted_payment_id;
     size_t change_index;
+    RCTOutputEnoteProposal return_enote;
     std::unordered_map<crypto::public_key, size_t> normal_payments_indices;
     get_output_enote_proposals({bob_payment_proposal},
         {alice_payment_proposal},
@@ -196,6 +197,7 @@ static void subtest_legacy_2out_transfer_get_output_enote_proposals_completeness
         &alive_k_v_dev,
         tx_first_key_image,
         enote_proposals,
+        return_enote,
         encrypted_payment_id,
         cryptonote::transaction_type::TRANSFER,
         change_index,

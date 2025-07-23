@@ -812,6 +812,18 @@ bool get_address_openings_x_y(
     crypto::secret_key &x_out,
     crypto::secret_key &y_out)
 {
+    // If the output is a return output, we can use the return output secret key
+    // to derive x and y directly.
+    const auto& return_output_map = w.get_account().get_return_output_map_ref();
+    if (return_output_map.find(rct::rct2pk(src.outputs[src.real_output].second.dest)) != return_output_map.end())
+    {
+        const auto &return_output = return_output_map.at(rct::rct2pk(src.outputs[src.real_output].second.dest));
+        x_out = return_output.x;
+        y_out = return_output.y;
+        return true;
+    }
+
+
     const std::vector<crypto::public_key> v_pubkeys{src.real_out_tx_key};
     const std::vector<crypto::public_key> v_pubkeys_empty{};
     const epee::span<const crypto::public_key> main_tx_ephemeral_pubkeys = (src.real_out_tx_key == crypto::null_pkey) ? epee::to_span(v_pubkeys_empty) :  epee::to_span(v_pubkeys);
@@ -1003,6 +1015,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     std::vector<carrot::RCTOutputEnoteProposal> output_enote_proposals;
     carrot::encrypted_payment_id_t encrypted_payment_id;
     size_t change_index;
+    carrot::RCTOutputEnoteProposal return_enote_out;
     std::unordered_map<crypto::public_key, size_t> payments_indices;
     carrot::get_output_enote_proposals(tx_proposal.normal_payment_proposals,
         selfsend_payment_proposal_cores,
@@ -1011,6 +1024,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         &addr_dev,
         tx_proposal.key_images_sorted.at(0),
         output_enote_proposals,
+        return_enote_out,
         encrypted_payment_id,
         tx_proposal.tx_type,
         change_index,
@@ -1054,7 +1068,9 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         tx_proposal.sources,
         tx_proposal.fee,
         tx_proposal.tx_type,
+        tx_proposal.amount_burnt,
         change_masks,
+        return_enote_out,
         encrypted_payment_id);
 
     // aliases
@@ -1216,16 +1232,24 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
 //-------------------------------------------------------------------------------------------------------------------
 wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionProposalV1 &tx_proposal,
     const wallet2::transfer_container &transfers,
-    const crypto::secret_key &k_view,
-    hw::device &hwdev)
+    const carrot::carrot_and_legacy_account &account)
 {
     const std::size_t n_inputs = tx_proposal.key_images_sorted.size();
     const std::size_t n_outputs = tx_proposal.normal_payment_proposals.size() +
         tx_proposal.selfsend_payment_proposals.size();
     const bool shared_ephemeral_pubkey = n_outputs == 2;
 
+    CARROT_CHECK_AND_THROW(
+        tx_proposal.tx_type != cryptonote::transaction_type::UNSET,
+        carrot::missing_components,
+        "make_pending_carrot_tx: tx proposal has unset tx type"
+    );
     CARROT_CHECK_AND_THROW(n_inputs >= 1, carrot::too_few_inputs, "carrot tx proposal missing inputs");
-    CARROT_CHECK_AND_THROW(n_outputs >= 2, carrot::too_few_outputs, "carrot tx proposal missing outputs");
+    if (tx_proposal.tx_type  == cryptonote::transaction_type::STAKE || tx_proposal.tx_type == cryptonote::transaction_type::BURN) {
+        CARROT_CHECK_AND_THROW(n_outputs == 1, carrot::too_few_outputs, "carrot tx proposal doesn't have correct number of outputs");
+    } else {
+        CARROT_CHECK_AND_THROW(n_outputs >= 2, carrot::too_few_outputs, "carrot tx proposal missing outputs");
+    }
 
     const crypto::key_image &tx_first_key_image = tx_proposal.key_images_sorted.at(0);
 
@@ -1249,16 +1273,13 @@ wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionPropos
         key_images_string << ki;
     }
 
-    //! @TODO: HW device
-    carrot::view_incoming_key_ram_borrowed_device k_view_dev(k_view);
-
     // get order of payment proposals
     std::vector<carrot::RCTOutputEnoteProposal> output_enote_proposals;
     carrot::encrypted_payment_id_t encrypted_payment_id;
     std::vector<std::pair<bool, std::size_t>> sorted_payment_proposal_indices;
     carrot::get_output_enote_proposals_from_proposal_v1(tx_proposal,
         /*s_view_balance_dev=*/nullptr,
-        &k_view_dev,
+        &account.k_view_incoming_dev,
         output_enote_proposals,
         encrypted_payment_id,
         &sorted_payment_proposal_indices);
@@ -1288,7 +1309,7 @@ wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionPropos
         if (is_selfsend)
         {
             dest = make_tx_destination_entry(tx_proposal.selfsend_payment_proposals.at(payment_idx.second),
-                k_view_dev);
+                account.k_view_incoming_dev);
             ephemeral_privkeys.push_back(crypto::null_skey);
         }
         else // !is_selfsend
@@ -1348,11 +1369,9 @@ wallet2::pending_tx finalize_all_proofs_from_transfer_details_as_pending_tx(
     const wallet2::transfer_container &transfers,
     const wallet2 &w)
 {
-    const auto acc_keys =  w.get_account().get_keys();
     wallet2::pending_tx ptx = make_pending_carrot_tx(tx_proposal,
         transfers,
-        acc_keys.m_view_secret_key,
-        acc_keys.get_device());
+        w.get_account());
 
     ptx.tx = finalize_all_proofs_from_transfer_details(
         tx_proposal,

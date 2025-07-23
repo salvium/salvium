@@ -109,6 +109,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     const view_incoming_key_device *k_view_dev,
     const crypto::key_image &tx_first_key_image,
     std::vector<RCTOutputEnoteProposal> &output_enote_proposals_out,
+    RCTOutputEnoteProposal &return_enote_out,
     encrypted_payment_id_t &encrypted_payment_id_out,
     cryptonote::transaction_type tx_type,
     size_t &change_index_out,

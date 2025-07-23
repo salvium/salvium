@@ -78,6 +78,12 @@ struct enote_view_incoming_scan_info_t
 
     // whether this output is to a carrot address or not
     bool is_carrot;
+
+    // whether this output is a return output
+    bool is_return;
+
+    // Kr = K_return + K_o
+    crypto::public_key return_address;
 };
 
 struct PreCarrotEnote

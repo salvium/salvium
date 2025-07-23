@@ -323,10 +323,13 @@ TEST(carrot_core, main_address_special_scan_completeness)
         const crypto::key_image tx_first_key_image = rct::rct2ki(rct::pkGen()); 
 
         RCTOutputEnoteProposal enote_proposal;
+        RCTOutputEnoteProposal return_enote;
         get_output_proposal_special_v1(proposal,
             keys.k_view_incoming_dev,
             tx_first_key_image,
+            cryptonote::transaction_type::TRANSFER, // tx_type
             std::nullopt,
+            return_enote,
             enote_proposal);
 
         ASSERT_EQ(proposal.amount, enote_proposal.amount);
@@ -400,10 +403,13 @@ TEST(carrot_core, subaddress_special_scan_completeness)
         const crypto::key_image tx_first_key_image = rct::rct2ki(rct::pkGen()); 
 
         RCTOutputEnoteProposal enote_proposal;
+        RCTOutputEnoteProposal return_enote;
         get_output_proposal_special_v1(proposal,
             keys.k_view_incoming_dev,
             tx_first_key_image,
+            cryptonote::transaction_type::TRANSFER, // tx_type
             std::nullopt,
+            return_enote,
             enote_proposal);
 
         ASSERT_EQ(proposal.amount, enote_proposal.amount);
@@ -714,6 +720,7 @@ static void subtest_2out_transfer_get_output_enote_proposals_completeness(const 
     std::vector<RCTOutputEnoteProposal> enote_proposals;
     encrypted_payment_id_t encrypted_payment_id;
     size_t change_index;
+    RCTOutputEnoteProposal return_enote;
     std::unordered_map<crypto::public_key, size_t> normal_payments_indices;
     get_output_enote_proposals({bob_payment_proposal},
         {alice_payment_proposal},
@@ -722,6 +729,7 @@ static void subtest_2out_transfer_get_output_enote_proposals_completeness(const 
         &alice.k_view_incoming_dev,
         tx_first_key_image,
         enote_proposals,
+        return_enote,
         encrypted_payment_id,
         cryptonote::transaction_type::TRANSFER,
         change_index,

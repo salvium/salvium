@@ -217,8 +217,19 @@ void make_carrot_transaction_proposal_v1(const std::vector<CarrotPaymentProposal
         input_amount_sum -= normal_payment_proposal.amount;
     for (const CarrotPaymentProposalVerifiableSelfSendV1 &selfsend_payment_proposal : selfsend_payment_proposals)
         input_amount_sum -= selfsend_payment_proposal.proposal.amount;
-    CHECK_AND_ASSERT_THROW_MES(input_amount_sum == 0,
-        "make_carrot_transaction_proposal_v1: post-carved transaction does not balance");
+
+    if (tx_type != cryptonote::transaction_type::STAKE &&
+        tx_type != cryptonote::transaction_type::BURN)
+    {
+        CHECK_AND_ASSERT_THROW_MES(input_amount_sum == 0,
+            "make_carrot_transaction_proposal_v1: post-carved transaction does not balance");
+    } else {
+        tx_proposal_out.amount_burnt = input_amount_sum.convert_to<uint64_t>();
+        CHECK_AND_ASSERT_THROW_MES(tx_proposal_out.amount_burnt >= 0,
+            "make_carrot_transaction_proposal_v1: post-carved transaction burnt amount is negative: "
+            << tx_proposal_out.amount_burnt);
+        input_amount_sum -= tx_proposal_out.amount_burnt;
+    }
 
     // collect and sort key images
     tx_proposal_out.key_images_sorted.reserve(selected_inputs.size());
@@ -273,7 +284,8 @@ void make_carrot_transaction_proposal_v1_transfer(
     carve_fees_and_balance_func_t carve_fees_and_balance =
     [
         &subtractable_normal_payment_proposals,
-        &subtractable_selfsend_payment_proposals
+        &subtractable_selfsend_payment_proposals,
+        &tx_type
     ]
     (
         const boost::multiprecision::uint128_t &input_sum_amount,
@@ -318,6 +330,15 @@ void make_carrot_transaction_proposal_v1_transfer(
         
         selfsend_payment_proposals.back().proposal.amount =
             boost::numeric_cast<rct::xmr_amount>(implicit_change_amount);
+
+        // remove the self send payment we have made to ourself now that we have our change payment.
+        if (tx_type == cryptonote::transaction_type::STAKE ||
+            tx_type == cryptonote::transaction_type::BURN)
+        {
+            selfsend_payment_proposals.back().proposal.enote_ephemeral_pubkey = 
+                selfsend_payment_proposals.front().proposal.enote_ephemeral_pubkey;
+            selfsend_payment_proposals.erase(selfsend_payment_proposals.begin());
+        }
 
         // deduct an even fee amount from all subtractable outputs
         const size_t num_subtractble_normal = subtractable_normal_payment_proposals.size();

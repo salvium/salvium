@@ -80,6 +80,7 @@ typedef struct mdb_txn_cursors
   MDB_cursor *m_txc_yield_blocks;
   MDB_cursor *m_txc_audit_txs;
   MDB_cursor *m_txc_audit_blocks;
+  MDB_cursor *m_txc_carrot_yield_txs;
 
 } mdb_txn_cursors;
 
@@ -108,6 +109,7 @@ typedef struct mdb_txn_cursors
 #define m_cur_yield_blocks	m_cursors->m_txc_yield_blocks
 #define m_cur_audit_txs		m_cursors->m_txc_audit_txs
 #define m_cur_audit_blocks	m_cursors->m_txc_audit_blocks
+#define m_cur_carrot_yield_txs		m_cursors->m_txc_carrot_yield_txs
 
 typedef struct mdb_rflags
 {
@@ -137,6 +139,7 @@ typedef struct mdb_rflags
   bool m_rf_yield_blocks;
   bool m_rf_audit_txs;
   bool m_rf_audit_blocks;
+  bool m_rf_carrot_yield_txs;
 } mdb_rflags;
 
 typedef struct mdb_threadinfo
@@ -474,6 +477,7 @@ private:
 
   virtual int get_yield_block_info(const uint64_t height, yield_block_info& ybi) const;
   virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) const;
+  virtual int get_carrot_yield_tx_info(const uint64_t height, std::vector<yield_tx_info_carrot>& yti_container) const;
 
 private:
   MDB_env* m_env;
@@ -511,9 +515,11 @@ private:
 
   MDB_dbi m_yield_txs;
   MDB_dbi m_yield_blocks;
-
+  
   MDB_dbi m_audit_txs;
   MDB_dbi m_audit_blocks;
+
+  MDB_dbi m_carrot_yield_txs;
 
   mutable uint64_t m_cum_size;	// used in batch size estimation
   mutable unsigned int m_cum_count;

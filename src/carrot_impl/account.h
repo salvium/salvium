@@ -43,6 +43,28 @@ static constexpr std::uint32_t MAX_SUBADDRESS_MINOR_INDEX = 20;
 
 namespace carrot
 {
+
+    struct return_output_info_t {
+        input_context_t input_context;
+        crypto::public_key address_spend_pubkey;
+        crypto::key_image key_image;
+        crypto::secret_key x;
+        crypto::secret_key y;
+
+        return_output_info_t(
+            const input_context_t &input_context,
+            const crypto::public_key &address_spend_pubkey,
+            const crypto::key_image &key_image,
+            const crypto::secret_key &x,
+            const crypto::secret_key &y):
+            input_context(input_context),
+            address_spend_pubkey(address_spend_pubkey),
+            key_image(key_image),
+            x(x),
+            y(y) {}
+    };
+
+
   class carrot_and_legacy_account : public cryptonote::account_base
   {
     public:
@@ -68,9 +90,10 @@ namespace carrot
 
     CarrotDestinationV1 subaddress(const subaddress_index_extended &subaddress_index) const;
 
-    std::unordered_map<crypto::public_key, cryptonote::subaddress_index> get_subaddress_map_cn() const;
-    std::unordered_map<crypto::public_key, subaddress_index_extended>& get_subaddress_map_ref();
-    
+    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> get_subaddress_map_cn() const;
+    const std::unordered_map<crypto::public_key, subaddress_index_extended>& get_subaddress_map_ref() const;
+    const std::unordered_map<crypto::public_key, return_output_info_t>& get_return_output_map_ref() const;
+
     // brief: opening_for_subaddress - return (k^g_a, k^t_a) for j s.t. K^j_s = (k^g_a * G + k^t_a * T)
     void opening_for_subaddress(const subaddress_index_extended &subaddress_index,
         crypto::secret_key &address_privkey_g_out,
@@ -108,10 +131,15 @@ namespace carrot
 
     void set_carrot_keys(const AddressDeriveType default_derive_type = AddressDeriveType::Carrot);
     void insert_subaddresses(const std::unordered_map<crypto::public_key, subaddress_index_extended>& subaddress_map);
-    
+    void insert_return_output_info(
+        const std::unordered_map<crypto::public_key, return_output_info_t>& input_context_map
+    );
+
     AddressDeriveType resolve_derive_type(const AddressDeriveType derive_type) const;
 
     private:
         std::unordered_map<crypto::public_key, subaddress_index_extended> subaddress_map;
+        // Kr -> return_output_info
+        std::unordered_map<crypto::public_key, return_output_info_t> return_output_map;
   };
 }

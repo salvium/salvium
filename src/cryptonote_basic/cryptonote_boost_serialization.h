@@ -166,6 +166,15 @@ namespace boost
     a & x.target;
   }
 
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::protocol_tx_data_t &x, const boost::serialization::version_type ver)
+  {
+    a & x.version;
+    a & x.return_address;
+    a & x.return_pubkey;
+    a & x.return_view_tag;
+    a & x.return_anchor_enc;
+  }
 
   template <class Archive>
   inline void serialize(Archive &a, cryptonote::transaction_prefix &x, const boost::serialization::version_type ver)
@@ -183,8 +192,14 @@ namespace boost
           a & x.return_address_list;
           a & x.return_address_change_mask;
         } else {
-          a & x.return_address;
-          a & x.return_pubkey;
+          if (x.type == cryptonote::transaction_type::STAKE &&
+              x.version >= TRANSACTION_VERSION_CARROT)
+          {
+            a & x.protocol_tx_data;
+          } else {
+            a & x.return_address;
+            a & x.return_pubkey;
+          }
         }
         a & x.source_asset_type;
         a & x.destination_asset_type;
@@ -209,8 +224,14 @@ namespace boost
           a & x.return_address_list;
           a & x.return_address_change_mask;
         } else {
-          a & x.return_address;
-          a & x.return_pubkey;
+          if (x.type == cryptonote::transaction_type::STAKE &&
+              x.version >= TRANSACTION_VERSION_CARROT)
+          {
+            a & x.protocol_tx_data;
+          } else {
+            a & x.return_address;
+            a & x.return_pubkey;
+          }
         }
         a & x.source_asset_type;
         a & x.destination_asset_type;

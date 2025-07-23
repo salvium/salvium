@@ -55,6 +55,13 @@ bool view_incoming_key_ram_borrowed_device::view_key_scalar_mult_x25519(const mx
     return make_carrot_uncontextualized_shared_key_receiver(m_k_view_incoming, D, kvD);
 }
 //-------------------------------------------------------------------------------------------------------------------
+void view_incoming_key_ram_borrowed_device::make_internal_return_privkey(const input_context_t &input_context,
+    const crypto::public_key &onetime_address,
+    crypto::secret_key &return_privkey_out) const
+{
+    make_sparc_return_privkey(to_bytes(m_k_view_incoming), input_context, onetime_address, return_privkey_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
 void view_incoming_key_ram_borrowed_device::make_janus_anchor_special(
     const mx25519_pubkey &enote_ephemeral_pubkey,
     const input_context_t &input_context,

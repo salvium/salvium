@@ -357,7 +357,9 @@ void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
 void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &proposal,
     const view_incoming_key_device &k_view_dev,
     const crypto::key_image &tx_first_key_image,
+    const cryptonote::transaction_type tx_type,
     const std::optional<mx25519_pubkey> &other_enote_ephemeral_pubkey,
+    RCTOutputEnoteProposal &return_enote_out,
     RCTOutputEnoteProposal &output_enote_out)
 {
     // 1. sanity checks
@@ -424,6 +426,37 @@ void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &propo
     output_enote_out.enote.asset_type             = "SAL1";
     output_enote_out.enote.return_enc             = crypto::rand<carrot::encrypted_return_pubkey_t>();
     output_enote_out.amount                       = proposal.amount;
+
+    // 10. construct the stake return enote
+    if (tx_type == cryptonote::transaction_type::STAKE) {
+        // make k_return
+        crypto::secret_key k_return;
+        k_view_dev.make_internal_return_privkey(input_context, output_enote_out.enote.onetime_address, k_return);
+
+        // compute K_return = k_return * G
+        crypto::public_key return_pub;
+        crypto::secret_key_to_public_key(k_return, return_pub);
+
+        // Make a destination address for the return
+        CarrotDestinationV1 return_destination;
+        make_carrot_main_address_v1(output_enote_out.enote.onetime_address, return_pub, return_destination);
+
+        // Create the return proposal, using the return address and the amount
+        const CarrotPaymentProposalV1 proposal_return = CarrotPaymentProposalV1{
+            .destination = return_destination,
+            .amount = 0,
+            .randomness = gen_janus_anchor()
+        };
+
+        encrypted_payment_id_t encrypted_payment_id_return;
+        get_output_proposal_return_v1(
+            proposal_return,
+            tx_first_key_image,
+            nullptr, // s_view_balance_dev
+            return_enote_out,
+            encrypted_payment_id_return
+        );
+    }
 }
 //-------------------------------------------------------------------------------------------------------------------
 void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,

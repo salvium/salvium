@@ -417,7 +417,10 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
         tx_proposal.key_images_sorted,
         tx_proposal.sources,
         tx_proposal.fee,
+        tx_proposal.tx_type,
+        tx_proposal.amount_burnt,
         {}, // change_masks
+        {}, // return_enote
         encrypted_payment_id);
 
     ASSERT_EQ(2, tx.version);
