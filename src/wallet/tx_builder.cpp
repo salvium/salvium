@@ -812,6 +812,18 @@ bool get_address_openings_x_y(
     crypto::secret_key &x_out,
     crypto::secret_key &y_out)
 {
+    // If the output is a return output, we can use the return output secret key
+    // to derive x and y directly.
+    const auto& return_output_map = w.get_account().get_return_output_map_ref();
+    if (return_output_map.find(rct::rct2pk(src.outputs[src.real_output].second.dest)) != return_output_map.end())
+    {
+        const auto &return_output = return_output_map.at(rct::rct2pk(src.outputs[src.real_output].second.dest));
+        x_out = return_output.x;
+        y_out = return_output.y;
+        return true;
+    }
+
+
     const std::vector<crypto::public_key> v_pubkeys{src.real_out_tx_key};
     const std::vector<crypto::public_key> v_pubkeys_empty{};
     const epee::span<const crypto::public_key> main_tx_ephemeral_pubkeys = (src.real_out_tx_key == crypto::null_pkey) ? epee::to_span(v_pubkeys_empty) :  epee::to_span(v_pubkeys);
