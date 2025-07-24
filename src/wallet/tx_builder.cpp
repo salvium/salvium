@@ -590,7 +590,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const size_t n_inputs = input_key_images.size();
     CARROT_CHECK_AND_THROW(n_inputs, carrot::too_few_inputs, "no key images provided");
     CARROT_CHECK_AND_THROW(n_dests_per_tx, carrot::too_few_outputs, "sweep must have at least one destination");
-    CARROT_CHECK_AND_THROW(n_dests_per_tx <= FCMP_PLUS_PLUS_MAX_OUTPUTS,
+    CARROT_CHECK_AND_THROW(n_dests_per_tx <= carrot::CARROT_MAX_TX_OUTPUTS,
         carrot::too_many_outputs, "too many sweep destinations per transaction");
 
     // Check that the key image is usable and isn't spent, collect amounts, and get subaddress account index
@@ -636,11 +636,11 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
                 || (!is_selfsend_dest && normal_payment_proposals.size() == i+1),
             __func__ << ": BUG in build_payment_proposals: incorrect count for payment proposal lists");
     }
-    CARROT_CHECK_AND_THROW(normal_payment_proposals.size() < FCMP_PLUS_PLUS_MAX_OUTPUTS,
+    CARROT_CHECK_AND_THROW(normal_payment_proposals.size() < carrot::CARROT_MAX_TX_OUTPUTS,
         carrot::too_many_outputs, "too many *outgoing* sweep destinations per tx, we also need 1 self-send output");
 
     // make `n_txs` tx proposals with `n_output` payment proposals each
-    const size_t n_txs = div_ceil<size_t>(n_inputs, FCMP_PLUS_PLUS_MAX_INPUTS);
+    const size_t n_txs = div_ceil<size_t>(n_inputs, carrot::CARROT_MAX_TX_INPUTS);
     std::vector<carrot::CarrotTransactionProposalV1> tx_proposals(n_txs);
     size_t ki_idx = 0;
     for (carrot::CarrotTransactionProposalV1 &tx_proposal : tx_proposals)
@@ -650,7 +650,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
             selfsend_payment_proposals.back().proposal.enote_type = carrot::CarrotEnoteType::CHANGE;
 
         // collect inputs for this tx
-        const size_t ki_idx_end = std::min<size_t>(n_inputs, ki_idx + FCMP_PLUS_PLUS_MAX_INPUTS);
+        const size_t ki_idx_end = std::min<size_t>(n_inputs, ki_idx + carrot::CARROT_MAX_TX_INPUTS);
         std::vector<carrot::CarrotSelectedInput> selected_inputs;
         selected_inputs.reserve(n_inputs - ki_idx_end);
         for (; ki_idx < ki_idx_end; ++ki_idx)
