@@ -133,7 +133,7 @@ void get_coinbase_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
 */
 void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
     const crypto::key_image &tx_first_key_image,
-    const view_balance_secret_device *s_view_balance_dev,
+    const view_incoming_key_device *k_view_dev,
     RCTOutputEnoteProposal &output_enote_out,
     encrypted_payment_id_t &encrypted_payment_id_out);
 /**
@@ -146,7 +146,7 @@ void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
 */
 void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,
     const crypto::key_image &tx_first_key_image,
-    const view_balance_secret_device *s_view_balance_dev,
+    const view_incoming_key_device *k_view_dev,
     RCTOutputEnoteProposal &output_enote_out,
     encrypted_payment_id_t &encrypted_payment_id_out);
 /**

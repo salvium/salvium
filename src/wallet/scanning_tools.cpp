@@ -261,13 +261,16 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
 }
 //-------------------------------------------------------------------------------------------------------------------
 static bool scan_return_output(
-    const carrot::CarrotCoinbaseEnoteV1 &enote,
+    const crypto::public_key &enote_onetime_address,
+    const mx25519_pubkey &enote_ephemeral_pubkey,
+    const carrot::view_tag_t &enote_view_tag,
+    const carrot::encrypted_janus_anchor_t &enote_anchor_enc,
     carrot::carrot_and_legacy_account &account,
     crypto::public_key &address_spend_pubkey_out
 ) {
     const auto &return_output_map = account.get_return_output_map_ref();
-    CHECK_AND_ASSERT_MES(return_output_map.count(enote.onetime_address), false, "return output not found");
-    const auto &return_output = return_output_map.at(enote.onetime_address);
+    CHECK_AND_ASSERT_MES(return_output_map.count(enote_onetime_address), false, "return output not found");
+    const auto &return_output = return_output_map.at(enote_onetime_address);
 
     // 1. make k_return
     crypto::secret_key k_return;
@@ -280,10 +283,10 @@ static bool scan_return_output(
     // 3. ssr
     mx25519_pubkey shared_secret_return_unctx;
     crypto::hash shared_secret_return;
-    carrot::make_carrot_uncontextualized_shared_key_receiver(k_return, enote.enote_ephemeral_pubkey, shared_secret_return_unctx);
+    carrot::make_carrot_uncontextualized_shared_key_receiver(k_return, enote_ephemeral_pubkey, shared_secret_return_unctx);
     carrot::make_carrot_sender_receiver_secret(
         shared_secret_return_unctx.data,
-        enote.enote_ephemeral_pubkey,
+        enote_ephemeral_pubkey,
         return_output.input_context,
         shared_secret_return
     );
@@ -293,8 +296,8 @@ static bool scan_return_output(
         carrot::test_carrot_view_tag(
             shared_secret_return_unctx.data,
             return_output.input_context,
-            enote.onetime_address,
-            enote.view_tag
+            enote_onetime_address,
+            enote_view_tag
         ),
         false,
         "view tag verification failed for carrot coinbase enote"
@@ -302,7 +305,7 @@ static bool scan_return_output(
 
     // 5. compute anchor_return
     carrot::janus_anchor_t recovered_anchor_return = 
-        carrot::decrypt_carrot_anchor(enote.anchor_enc, shared_secret_return, enote.onetime_address);
+        carrot::decrypt_carrot_anchor(enote_anchor_enc, shared_secret_return, enote_onetime_address);
 
     // 6. compute d_e'
     crypto::secret_key recovered_ephemeral_privkey_return;
@@ -325,7 +328,7 @@ static bool scan_return_output(
 
     // 8. verify the enote ephemeral pubkey
     CHECK_AND_ASSERT_MES(
-        memcmp(recovered_ephemeral_pubkey_return.data, enote.enote_ephemeral_pubkey.data, sizeof(mx25519_pubkey)) == 0,
+        memcmp(recovered_ephemeral_pubkey_return.data, enote_ephemeral_pubkey.data, sizeof(mx25519_pubkey)) == 0,
         false,
         "carrot coinbase enote protection verification failed"
     );
@@ -360,8 +363,16 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
     if (found_in_return) {
         // scan the return output
         crypto::public_key address_spend_pubkey;
-        if (!scan_return_output(enote, account, address_spend_pubkey))
+        if (!scan_return_output(
+                enote.onetime_address,
+                enote.enote_ephemeral_pubkey,
+                enote.view_tag,
+                enote.anchor_enc,
+                account,
+                address_spend_pubkey)
+        ) {
             return std::nullopt;
+        }
 
         res.address_spend_pubkey = address_spend_pubkey;
         res.return_address = enote.onetime_address;
@@ -445,6 +456,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
     crypto::secret_key amount_blinding_factor_sk;
     carrot::payment_id_t payment_id;
     carrot::CarrotEnoteType dummy_enote_type;
+    bool found_in_return = false;
     if (!carrot::try_scan_carrot_enote_external_receiver(enote,
         encrypted_payment_id,
         s_sender_receiver_unctx,
@@ -456,64 +468,98 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         res.amount,
         amount_blinding_factor_sk,
         payment_id,
-        dummy_enote_type)) 
-        return std::nullopt;
+        dummy_enote_type))
+    {
+        // check for known return addresses
+        const auto &subaddress_map = account.get_subaddress_map_ref();
+        if (subaddress_map.find(enote.onetime_address) == subaddress_map.end())
+            return std::nullopt;
 
-    const auto subaddr_it = account.get_subaddress_map_ref().find(res.address_spend_pubkey);
-    CHECK_AND_ASSERT_MES(subaddr_it != account.get_subaddress_map_ref().cend(),
+        found_in_return = true;
+    }
+
+    if (found_in_return) {
+        // scan the return output
+        crypto::public_key address_spend_pubkey;
+        if (!scan_return_output(
+                enote.onetime_address,
+                enote.enote_ephemeral_pubkey,
+                enote.view_tag,
+                enote.anchor_enc,
+                account,
+                address_spend_pubkey)
+        ) {
+            return std::nullopt;
+        }
+
+        res.address_spend_pubkey = address_spend_pubkey;
+        res.return_address = enote.onetime_address;
+        res.is_return = true;
+    } else {
+        // we received a normal enote
+        res.address_spend_pubkey = main_address_spend_pubkey;
+        res.is_return = false;
+    }
+
+    if (!found_in_return) {
+        const auto subaddr_it = account.get_subaddress_map_ref().find(res.address_spend_pubkey);
+        CHECK_AND_ASSERT_MES(subaddr_it != account.get_subaddress_map_ref().cend(),
         std::nullopt,
         "view_incoming_scan_carrot_enote: carrot enote scanned successfully, "
         "but the recovered address spend pubkey was not found in the subaddress map");
+        const carrot::subaddress_index_extended subaddr_index = subaddr_it->second;
 
-    const carrot::subaddress_index_extended subaddr_index = subaddr_it->second;
+        memset(&res.payment_id, 0, sizeof(res.payment_id));
+        memcpy(&res.payment_id, &payment_id, sizeof(carrot::payment_id_t));
 
-    memset(&res.payment_id, 0, sizeof(res.payment_id));
-    memcpy(&res.payment_id, &payment_id, sizeof(carrot::payment_id_t));
+        // we received and output
+        // save the Kr = K_change + K_return to out subaddress map
+        for (const auto &output_key : enote.tx_output_keys) {
+            // make k_return
+            crypto::secret_key k_return;
+            const carrot::input_context_t input_context = carrot::make_carrot_input_context(enote.tx_first_key_image);
+            k_view_dev.make_internal_return_privkey(input_context, output_key, k_return);
 
-    // we received and output
-    // save the Kr = K_change + K_return to out subaddress map
-    // make k_return
-    crypto::secret_key k_return;
-    const carrot::input_context_t input_context = carrot::make_carrot_input_context(enote.tx_first_key_image);
-    k_view_dev.make_internal_return_privkey(input_context, enote.onetime_address, k_return);
+            // compute K_return = k_return * G
+            crypto::public_key K_return;
+            crypto::secret_key_to_public_key(k_return, K_return);
 
-    // compute K_return = k_return * G
-    crypto::public_key K_return;
-    crypto::secret_key_to_public_key(k_return, K_return);
+            // compute K_r = K_return + K_o
+            crypto::public_key K_r = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(enote.onetime_address)));
+            account.insert_subaddresses({{K_r, {{subaddr_index.index.major, subaddr_index.index.minor},
+                carrot::AddressDeriveType::Carrot, true}}});
 
-    // compute K_r = K_return + K_o
-    crypto::public_key K_r = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(enote.onetime_address)));
-    account.insert_subaddresses({{K_r, {{subaddr_index.index.major, subaddr_index.index.minor},
-        carrot::AddressDeriveType::Carrot, true}}});
+            // calculate the key image for the return output
+            crypto::secret_key sum_g;
+            sc_add(to_bytes(sum_g), to_bytes(res.sender_extension_g), to_bytes(k_return));
+            crypto::key_image key_image = account.derive_key_image(
+                account.get_keys().m_carrot_account_address.m_spend_public_key,
+                sum_g,
+                res.sender_extension_t,
+                K_r
+            );
 
-    // calculate the key image for the return output
-    crypto::secret_key sum_g;
-    sc_add(to_bytes(sum_g), to_bytes(res.sender_extension_g), to_bytes(k_return));
-    crypto::key_image key_image = account.derive_key_image(
-        account.get_keys().m_carrot_account_address.m_spend_public_key,
-        sum_g,
-        res.sender_extension_t,
-        K_r
-    );
+            crypto::secret_key x, y;
+            account.try_searching_for_opening_for_onetime_address(
+                account.get_keys().m_carrot_account_address.m_spend_public_key,
+                sum_g,
+                res.sender_extension_t,
+                x,
+                y
+            );
 
-    crypto::secret_key x, y;
-    account.try_searching_for_opening_for_onetime_address(
-        account.get_keys().m_carrot_account_address.m_spend_public_key,
-        sum_g,
-        res.sender_extension_t,
-        x,
-        y
-    );
+            // save the input context & change output key
+            account.insert_return_output_info({{K_r, {input_context, output_key, key_image, x, y}}});
+        }
+        res.subaddr_index = subaddr_index;
+    } else {
+        res.subaddr_index = carrot::subaddress_index_extended{{0, 0}};
+    }
 
-    // save the input context & change output key
-    account.insert_return_output_info({{K_r, {input_context, enote.onetime_address, key_image, x, y}}});
-
-    res.subaddr_index = subaddr_index;
     res.amount_blinding_factor = rct::sk2rct(amount_blinding_factor_sk);
     res.main_tx_pubkey_index = 0;
     res.asset_type = enote.asset_type;
     res.is_carrot = true;
-    res.is_return = false;
 
     return res;
 }

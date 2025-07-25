@@ -223,7 +223,7 @@ void make_sparc_return_pubkey_encryption_mask(const unsigned char s_sender_recei
 //-------------------------------------------------------------------------------------------------------------------
 void make_sparc_return_pubkey(const unsigned char s_sender_receiver_unctx[32],
     const input_context_t &input_context,
-    const view_balance_secret_device *s_view_balance_dev,
+    const view_incoming_key_device *k_view_incoming_dev,
     const crypto::public_key &onetime_address,
     encrypted_return_pubkey_t &return_pubkey_out)
 {
@@ -232,7 +232,7 @@ void make_sparc_return_pubkey(const unsigned char s_sender_receiver_unctx[32],
     crypto::public_key return_pub;
     encrypted_return_pubkey_t K_return;
     encrypted_return_pubkey_t m_return;
-    s_view_balance_dev->make_internal_return_privkey(input_context, onetime_address, k_return);
+    k_view_incoming_dev->make_internal_return_privkey(input_context, onetime_address, k_return);
     crypto::secret_key_to_public_key(k_return, return_pub);
     static_assert(sizeof(K_return.bytes) == sizeof(return_pub.data), "Size mismatch");
     memcpy(K_return.bytes, return_pub.data, sizeof(encrypted_return_pubkey_t));

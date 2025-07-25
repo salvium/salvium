@@ -170,7 +170,7 @@ static void get_external_output_proposal_parts(const mx25519_pubkey &s_sender_re
     const CarrotEnoteType enote_type,
     const mx25519_pubkey &enote_ephemeral_pubkey,
     const input_context_t &input_context,
-    const view_balance_secret_device *s_view_balance_dev,
+    const view_incoming_key_device *k_view_incoming_dev,
     const bool coinbase_amount_commitment,
     crypto::hash &s_sender_receiver_out,
     crypto::secret_key &amount_blinding_factor_out,
@@ -206,10 +206,10 @@ static void get_external_output_proposal_parts(const mx25519_pubkey &s_sender_re
     make_carrot_view_tag(s_sender_receiver_unctx.data, input_context, onetime_address_out, view_tag_out);
 
     // 4. construct the return pubkey
-    if (s_view_balance_dev != nullptr)
+    if (k_view_incoming_dev != nullptr)
         make_sparc_return_pubkey(s_sender_receiver_unctx.data,
             input_context,
-            s_view_balance_dev,
+            k_view_incoming_dev,
             onetime_address_out,
             return_pubkey_out);
 }
@@ -303,7 +303,7 @@ void get_coinbase_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
 //-------------------------------------------------------------------------------------------------------------------
 void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
     const crypto::key_image &tx_first_key_image,
-    const view_balance_secret_device *s_view_balance_dev,
+    const view_incoming_key_device *k_view_incoming_dev,
     RCTOutputEnoteProposal &output_enote_out,
     encrypted_payment_id_t &encrypted_payment_id_out)
 {
@@ -331,7 +331,7 @@ void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
         CarrotEnoteType::PAYMENT,
         output_enote_out.enote.enote_ephemeral_pubkey,
         input_context,
-        s_view_balance_dev,
+        k_view_incoming_dev,
         false, // coinbase_amount_commitment
         s_sender_receiver,
         output_enote_out.amount_blinding_factor,
@@ -452,7 +452,7 @@ void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &propo
         get_output_proposal_return_v1(
             proposal_return,
             tx_first_key_image,
-            nullptr, // s_view_balance_dev
+            nullptr, // k_view_dev
             return_enote_out,
             encrypted_payment_id_return
         );
@@ -461,7 +461,7 @@ void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &propo
 //-------------------------------------------------------------------------------------------------------------------
 void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,
     const crypto::key_image &tx_first_key_image,
-    const view_balance_secret_device *s_view_balance_dev,
+    const view_incoming_key_device *k_view_incoming_dev,
     RCTOutputEnoteProposal &output_enote_out,
     encrypted_payment_id_t &encrypted_payment_id_out)
 {
@@ -490,7 +490,7 @@ void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,
         CarrotEnoteType::PAYMENT,
         output_enote_out.enote.enote_ephemeral_pubkey,
         input_context,
-        s_view_balance_dev,
+        k_view_incoming_dev,
         false, // coinbase_amount_commitment
         s_sender_receiver,
         output_enote_out.amount_blinding_factor,
