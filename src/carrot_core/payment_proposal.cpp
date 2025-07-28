@@ -179,7 +179,7 @@ static void get_external_output_proposal_parts(const mx25519_pubkey &s_sender_re
     encrypted_amount_t &encrypted_amount_out,
     encrypted_payment_id_t &encrypted_payment_id_out,
     view_tag_t &view_tag_out,
-    encrypted_return_pubkey_t return_pubkey_out)
+    encrypted_return_pubkey_t &return_pubkey_out)
 {
     // 1. s^ctx_sr = H_32(s_sr, D_e, input_context)
     make_carrot_sender_receiver_secret(s_sender_receiver_unctx.data,

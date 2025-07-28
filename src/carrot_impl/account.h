@@ -46,19 +46,22 @@ namespace carrot
 
     struct return_output_info_t {
         input_context_t input_context;
-        crypto::public_key address_spend_pubkey;
+        crypto::public_key K_o; // output onetime address
+        crypto::public_key K_change; // change output onetime address
         crypto::key_image key_image;
         crypto::secret_key x;
         crypto::secret_key y;
 
         return_output_info_t(
             const input_context_t &input_context,
-            const crypto::public_key &address_spend_pubkey,
+            const crypto::public_key &K_o,
+            const crypto::public_key &K_change,
             const crypto::key_image &key_image,
             const crypto::secret_key &x,
             const crypto::secret_key &y):
             input_context(input_context),
-            address_spend_pubkey(address_spend_pubkey),
+            K_o(K_o),
+            K_change(K_change),
             key_image(key_image),
             x(x),
             y(y) {}
