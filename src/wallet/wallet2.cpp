@@ -11699,7 +11699,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   THROW_WALLET_EXCEPTION_IF(idx >= get_num_transfer_details(), error::wallet_internal_error, tr("cannot locate return_payment origin index in m_transfers"));
   const transfer_details& td_origin = get_transfer_details(idx);
   const std::string asset_type = td_origin.m_tx.source_asset_type;
-  bool is_subaddress = true;
+  bool is_subaddress = false;
   size_t outputs = 1;
   std::vector<size_t> unused_dust_indices = {};
   size_t fake_outs_count = get_min_ring_size() - 1; // Use the default ring size
@@ -11816,6 +11816,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
 
     return create_transactions_from(address, cryptonote::transaction_type::RETURN, asset_type, is_subaddress, outputs, transfers_indices, unused_dust_indices, fake_outs_count, unlock_time, priority, extra);
   }
+
+  // pre-carrot return payment construction uses subaddress true
+  is_subaddress = true;
   
   // To return a payment, we need to know the y value to process the F value
   // ...but the y value is calculated differently depending on the original TX

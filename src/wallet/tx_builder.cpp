@@ -664,7 +664,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
             tx_type,
             std::move(selected_inputs),
             change_address_spend_pubkey,
-            {{subaddr_account, 0}, carrot::AddressDeriveType::PreCarrot}, //! @TODO: handle Carrot keys
+            {{subaddr_account, 0}, carrot::AddressDeriveType::Carrot},
             tx_proposal);
     
         // populate the sources
