@@ -266,10 +266,12 @@ static bool scan_return_output(
     const carrot::view_tag_t &return_view_tag,
     const carrot::encrypted_janus_anchor_t &return_anchor_enc,
     const carrot::encrypted_amount_t &return_amount_enc,
+    const std::optional<rct::key> amount_commitment,
     const carrot::input_context_t &return_input_context,
     carrot::carrot_and_legacy_account &account,
     crypto::public_key &address_spend_pubkey_out,
-    rct::xmr_amount &amount_out
+    rct::xmr_amount &amount_out,
+    crypto::secret_key &amount_blinding_factor_out
 ) {
     const auto &return_output_map = account.get_return_output_map_ref();
     CHECK_AND_ASSERT_MES(return_output_map.count(return_onetime_address), false, "return output not found");
@@ -338,6 +340,21 @@ static bool scan_return_output(
 
     amount_out = carrot::decrypt_carrot_amount(return_amount_enc, shared_secret_return, return_onetime_address);
     address_spend_pubkey_out = origin_tx.K_change;
+
+    if (amount_commitment)
+    {
+        CHECK_AND_ASSERT_MES(
+            carrot::try_recompute_carrot_amount_commitment(shared_secret_return,
+                amount_out,
+                address_spend_pubkey_out,
+                carrot::CarrotEnoteType::PAYMENT,
+                amount_commitment.value(),
+                amount_blinding_factor_out
+            ),
+            false,
+            "failed to recompute carrot amount commitment for return output"
+        );
+    }
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -373,6 +390,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         // scan the return output
         crypto::public_key address_spend_pubkey;
         carrot::encrypted_amount_t amount_enc;
+        crypto::secret_key amount_blinding_factor;
         rct::xmr_amount amount;
         if (!scan_return_output(
                 enote.onetime_address,
@@ -380,11 +398,13 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
                 enote.view_tag,
                 enote.anchor_enc,
                 amount_enc,
+                std::nullopt, // no amount commitment for coinbase enotes
                 account.get_return_output_map_ref()
                 .at(enote.onetime_address).input_context,
                 account,
                 address_spend_pubkey,
-                amount)
+                amount,
+                amount_blinding_factor) 
         ) {
             return std::nullopt;
         }
@@ -502,10 +522,12 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
                 enote.view_tag,
                 enote.anchor_enc,
                 enote.amount_enc,
+                enote.amount_commitment,
                 carrot::make_carrot_input_context(enote.tx_first_key_image),
                 account,
                 res.address_spend_pubkey,
-                res.amount)
+                res.amount,
+                amount_blinding_factor_sk)
         ) {
             return std::nullopt;
         }
