@@ -355,6 +355,14 @@ bool try_load_carrot_enote_from_transaction_v1(const cryptonote::transaction &tx
 
     //D_e
     enote_out.enote_ephemeral_pubkey = enote_ephemeral_pubkeys[ephemeral_pubkey_index];
+    
+    // save all output keys in order to calculate Kr values.
+    for (const auto& out: tx.vout) {
+        const cryptonote::txout_to_carrot_v1 * const carrot_out = boost::strict_get<cryptonote::txout_to_carrot_v1>(&out.target);
+        if (carrot_out) {
+            enote_out.tx_output_keys.push_back(carrot_out->key);
+        }
+    }
 
     return true;
 }

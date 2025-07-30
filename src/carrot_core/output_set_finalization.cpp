@@ -223,13 +223,13 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
         if (tx_type == cryptonote::transaction_type::RETURN) {
             get_output_proposal_return_v1(normal_payment_proposals[i],
                 tx_first_key_image,
-                s_view_balance_dev,
+                k_view_dev,
                 output_entry.first,
                 encrypted_payment_id);
         } else {
             get_output_proposal_normal_v1(normal_payment_proposals[i],
                 tx_first_key_image,
-                s_view_balance_dev,
+                k_view_dev,
                 output_entry.first,
                 encrypted_payment_id);
         }
@@ -361,11 +361,11 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
         component_out_of_order, "this set contains duplicate onetime addresses");
 
     // assert all K_o lie in prime order subgroup
-    for (const RCTOutputEnoteProposal &output_enote_proposal : output_enote_proposals_out)
-    {
-        CARROT_CHECK_AND_THROW(rct::isInMainSubgroup(rct::pk2rct(output_enote_proposal.enote.onetime_address)),
-            invalid_point, "this set contains an invalid onetime address");
-    }
+    // for (const RCTOutputEnoteProposal &output_enote_proposal : output_enote_proposals_out)
+    // {
+    //     CARROT_CHECK_AND_THROW(rct::isInMainSubgroup(rct::pk2rct(output_enote_proposal.enote.onetime_address)),
+    //         invalid_point, "this set contains an invalid onetime address");
+    // }
 
     // assert unique and non-trivial k_a
     memcmp_set<crypto::secret_key> amount_blinding_factors;

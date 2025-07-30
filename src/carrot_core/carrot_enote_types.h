@@ -75,6 +75,8 @@ struct CarrotEnoteV1 final
     mx25519_pubkey enote_ephemeral_pubkey;
     /// L_0
     crypto::key_image tx_first_key_image;
+    // transaction output keys
+    std::vector<crypto::public_key> tx_output_keys;
 };
 
 /// equality operators
