@@ -5238,16 +5238,17 @@ boost::optional<epee::wipeable_string> simple_wallet::new_wallet(const boost::pr
   try
   {
     recovery_val = m_wallet->generate(m_wallet_file, std::move(rc.second).password(), recovery_key, recover, two_random, create_address_file);
-    message_writer(console_color_white, true) << tr("Generated new legacy wallet: ")
+    message_writer(console_color_white, true) << tr("Generated new legacy (CN) wallet: ")
       << m_wallet->get_account().get_public_address_str(m_wallet->nettype());
 
     const auto addr = m_wallet->get_account().cryptonote_address(carrot::null_payment_id, carrot::AddressDeriveType::Carrot);
     cryptonote::account_public_address carrot_address {
       .m_spend_public_key = addr.address_spend_pubkey,
-      .m_view_public_key = addr.address_view_pubkey
+      .m_view_public_key = addr.address_view_pubkey,
+      .m_is_carrot = true
     };
-    message_writer(console_color_white, true) << tr("Generated new carrot wallet: ")
-      << cryptonote::get_account_address_as_str(m_wallet->nettype(), false, carrot_address);
+    message_writer(console_color_white, true) << tr("Generated new Carrot wallet: ")
+                                              << cryptonote::get_account_address_as_str(m_wallet->nettype(), false, carrot_address, true);
     PAUSE_READLINE();
     std::cout << tr("View key: ");
     print_secret_key(m_wallet->get_account().get_keys().m_view_secret_key);
@@ -5484,11 +5485,11 @@ boost::optional<epee::wipeable_string> simple_wallet::open_wallet(const boost::p
     else if (m_wallet->is_background_wallet())
       prefix = tr("Opened background wallet");
     else
-      prefix = tr("Opened legacy wallet");
+      prefix = tr("Opened legacy (CN) wallet");
       
     message_writer(console_color_white, true) <<
     prefix << ": " << m_wallet->get_account().get_public_address_str(m_wallet->nettype());
-    prefix = tr("Opened carrot wallet");
+    prefix = tr("Opened Carrot wallet");
     message_writer(console_color_white, true) <<
       prefix << ": " << m_wallet->get_account().get_carrot_public_address_str(m_wallet->nettype());
     if (m_wallet->get_account().get_device()) {
