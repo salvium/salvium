@@ -118,6 +118,7 @@ namespace cryptonote
     };
 
 
+    std::atomic<bool> m_forced_stop;
     std::atomic<bool> m_stop;
     epee::critical_section m_template_lock;
     block m_template;
