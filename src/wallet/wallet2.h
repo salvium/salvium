@@ -47,7 +47,7 @@
 #include <random>
 
 #include "include_base_utils.h"
-#include "carrot_impl/account.h"
+#include "carrot_core/account.h"
 #include "carrot_impl/carrot_offchain_serialization.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/account_boost_serialization.h"

@@ -823,86 +823,99 @@ bool get_address_openings_x_y(
         return true;
     }
 
-
     const std::vector<crypto::public_key> v_pubkeys{src.real_out_tx_key};
     const std::vector<crypto::public_key> v_pubkeys_empty{};
     const epee::span<const crypto::public_key> main_tx_ephemeral_pubkeys = (src.real_out_tx_key == crypto::null_pkey) ? epee::to_span(v_pubkeys_empty) :  epee::to_span(v_pubkeys);
     const epee::span<const crypto::public_key> additional_tx_ephemeral_pubkeys = epee::to_span(src.real_out_additional_tx_keys);
 
-    // 2. perform ECDH derivations
-    std::vector<crypto::key_derivation> main_derivations;
-    std::vector<crypto::key_derivation> additional_derivations;
-    bool is_carrot = carrot::is_carrot_transaction_v1(tx);
-    wallet::perform_ecdh_derivations(
-        main_tx_ephemeral_pubkeys,
-        additional_tx_ephemeral_pubkeys,
-        is_carrot ? w.get_account().get_keys().k_view_incoming : w.get_account().get_keys().m_view_secret_key,
-        w.get_account().get_keys().get_device(),
-        is_carrot,
-        main_derivations,
-        additional_derivations
-    );
+    // we have to try both internal and external derivations
+    bool r = false;
+    for (size_t i = 0; i < 2; ++i) {
+        // perform ECDH derivations
+        std::vector<crypto::key_derivation> main_derivations;
+        std::vector<crypto::key_derivation> additional_derivations;
+        if (i == 0) {
+            wallet::perform_ecdh_derivations(
+                main_tx_ephemeral_pubkeys,
+                additional_tx_ephemeral_pubkeys,
+                w.get_account().get_keys().k_view_incoming,
+                w.get_account().get_keys().get_device(),
+                src.carrot,
+                main_derivations,
+                additional_derivations
+            );
+        } else {
+            crypto::key_derivation main_derivation;
+            memcpy(main_derivation.data, w.get_account().get_keys().s_view_balance.data, sizeof(crypto::secret_key));
+            main_derivations.push_back(main_derivation);
+        }
 
-    crypto::hash s_sender_receiver;
-    const crypto::key_derivation &kd = main_derivations.size()
-        ? main_derivations[0]
-        : additional_derivations[src.real_output_in_tx_index];
-    const mx25519_pubkey s_sender_receiver_unctx = carrot::raw_byte_convert<mx25519_pubkey>(kd);
+        crypto::hash s_sender_receiver;
+        const crypto::key_derivation &kd = main_derivations.size()
+            ? main_derivations[0]
+            : additional_derivations[src.real_output_in_tx_index];
+        const mx25519_pubkey s_sender_receiver_unctx = carrot::raw_byte_convert<mx25519_pubkey>(kd);
 
-    // ephemeral pubkeys
-    const epee::span<const crypto::public_key> enote_ephemeral_pubkeys_pk = 
-        main_tx_ephemeral_pubkeys.empty() ? additional_tx_ephemeral_pubkeys : main_tx_ephemeral_pubkeys;
-    const epee::span<const mx25519_pubkey> enote_ephemeral_pubkeys = {
-        reinterpret_cast<const mx25519_pubkey*>(enote_ephemeral_pubkeys_pk.data()),
-        enote_ephemeral_pubkeys_pk.size()
-    };
+        // ephemeral pubkeys
+        const epee::span<const crypto::public_key> enote_ephemeral_pubkeys_pk = 
+            main_tx_ephemeral_pubkeys.empty() ? additional_tx_ephemeral_pubkeys : main_tx_ephemeral_pubkeys;
+        const epee::span<const mx25519_pubkey> enote_ephemeral_pubkeys = {
+            reinterpret_cast<const mx25519_pubkey*>(enote_ephemeral_pubkeys_pk.data()),
+            enote_ephemeral_pubkeys_pk.size()
+        };
 
-    const bool shared_ephemeral_pubkey = enote_ephemeral_pubkeys.size() == 1;
-    const size_t ephemeral_pubkey_index = shared_ephemeral_pubkey ? 0 : src.real_output_in_tx_index;
+        const bool shared_ephemeral_pubkey = enote_ephemeral_pubkeys.size() == 1;
+        const size_t ephemeral_pubkey_index = shared_ephemeral_pubkey ? 0 : src.real_output_in_tx_index;
 
-    // input_context
-    carrot::input_context_t input_context;
-    if (src.coinbase) {
-        input_context = carrot::make_carrot_input_context_coinbase(src.block_index);
-    } else {
-        input_context = carrot::make_carrot_input_context(src.first_rct_key_image);
+        // input_context
+        carrot::input_context_t input_context;
+        if (src.coinbase) {
+            input_context = carrot::make_carrot_input_context_coinbase(src.block_index);
+        } else {
+            input_context = carrot::make_carrot_input_context(src.first_rct_key_image);
+        }
+
+        // s^ctx_sr = H_32(s_sr, D_e, input_context)
+        make_carrot_sender_receiver_secret(s_sender_receiver_unctx.data,
+            enote_ephemeral_pubkeys[ephemeral_pubkey_index],
+            input_context,
+            s_sender_receiver);
+
+        // get the k_og and k_ot
+        crypto::secret_key sender_extension_g_out;
+        crypto::secret_key sender_extension_t_out;
+        crypto::public_key address_spend_pubkey_out;
+        carrot::payment_id_t nominal_payment_id_out;
+        carrot::janus_anchor_t nominal_janus_anchor_out;
+        carrot::encrypted_janus_anchor_t encrypted_janus_anchor;
+        carrot::encrypted_payment_id_t encrypted_payment_id;
+        carrot::scan_carrot_dest_info(
+            rct::rct2pk(src.outputs[src.real_output].second.dest),
+            src.outputs[src.real_output].second.mask,
+            encrypted_janus_anchor,
+            encrypted_payment_id,
+            s_sender_receiver,
+            sender_extension_g_out,
+            sender_extension_t_out,
+            address_spend_pubkey_out,
+            nominal_payment_id_out,
+            nominal_janus_anchor_out
+        );
+        r = w.get_account().try_searching_for_opening_for_onetime_address(
+            address_spend_pubkey_out,
+            sender_extension_g_out,
+            sender_extension_t_out,
+            x_out,
+            y_out
+        );
+
+        // If we found the opening, we can stop here
+        if (r) {
+            break;
+        }
     }
 
-    // s^ctx_sr = H_32(s_sr, D_e, input_context)
-    make_carrot_sender_receiver_secret(s_sender_receiver_unctx.data,
-        enote_ephemeral_pubkeys[ephemeral_pubkey_index],
-        input_context,
-        s_sender_receiver);
-
-    // get the k_og and k_ot
-    crypto::secret_key sender_extension_g_out;
-    crypto::secret_key sender_extension_t_out;
-    crypto::public_key address_spend_pubkey_out;
-    carrot::payment_id_t nominal_payment_id_out;
-    carrot::janus_anchor_t nominal_janus_anchor_out;
-    carrot::encrypted_janus_anchor_t encrypted_janus_anchor;
-    carrot::encrypted_payment_id_t encrypted_payment_id;
-    carrot::scan_carrot_dest_info(
-        rct::rct2pk(src.outputs[src.real_output].second.dest),
-        src.outputs[src.real_output].second.mask,
-        encrypted_janus_anchor,
-        encrypted_payment_id,
-        s_sender_receiver,
-        sender_extension_g_out,
-        sender_extension_t_out,
-        address_spend_pubkey_out,
-        nominal_payment_id_out,
-        nominal_janus_anchor_out
-    );
-    bool r = w.get_account().try_searching_for_opening_for_onetime_address(
-        address_spend_pubkey_out,
-        sender_extension_g_out,
-        sender_extension_t_out,
-        x_out,
-        y_out
-    );
     CHECK_AND_ASSERT_THROW_MES(r, "Failed to obtain openings for onetime address");
-
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -1020,7 +1033,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     carrot::get_output_enote_proposals(tx_proposal.normal_payment_proposals,
         selfsend_payment_proposal_cores,
         tx_proposal.dummy_encrypted_payment_id,
-        nullptr,
+        &w.get_account().s_view_balance_dev,
         &addr_dev,
         tx_proposal.key_images_sorted.at(0),
         output_enote_proposals,

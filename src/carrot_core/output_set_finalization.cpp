@@ -223,13 +223,13 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
         if (tx_type == cryptonote::transaction_type::RETURN) {
             get_output_proposal_return_v1(normal_payment_proposals[i],
                 tx_first_key_image,
-                k_view_dev,
+                s_view_balance_dev,
                 output_entry.first,
                 encrypted_payment_id);
         } else {
             get_output_proposal_normal_v1(normal_payment_proposals[i],
                 tx_first_key_image,
-                k_view_dev,
+                s_view_balance_dev,
                 output_entry.first,
                 encrypted_payment_id);
         }
@@ -279,6 +279,8 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
                 *s_view_balance_dev,
                 tx_first_key_image,
                 other_enote_ephemeral_pubkey,
+                tx_type,
+                return_enote_out,
                 output_entry.first);
         }
         else if (k_view_dev != nullptr)
@@ -286,9 +288,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
             get_output_proposal_special_v1(selfsend_payment_proposal,
                 *k_view_dev,
                 tx_first_key_image,
-                tx_type,
                 other_enote_ephemeral_pubkey,
-                return_enote_out,
                 output_entry.first);
         }
         else // neither k_v nor s_vb device passed
