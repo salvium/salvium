@@ -104,7 +104,9 @@ namespace cryptonote
   }
 
 
-  miner::miner(i_miner_handler* phandler, const get_block_hash_t &gbh):m_stop(1),
+  miner::miner(i_miner_handler* phandler, const get_block_hash_t &gbh):
+    m_forced_stop(1),
+    m_stop(1),
     m_template{},
     m_template_no(0),
     m_diffic(0),
@@ -176,7 +178,8 @@ namespace cryptonote
     if(!m_phandler->get_block_template(bl, m_mine_address, di, height, expected_reward, extra_nonce, seed_height, seed_hash))
     {
       LOG_ERROR("Failed to get_block_template(), stopping mining");
-      stop();
+      m_forced_stop = true;
+      m_stop = true;
       return false;
     }
     set_block_template(bl, di, height, expected_reward);
@@ -187,9 +190,14 @@ namespace cryptonote
   {
     m_update_block_template_interval.do_call([&](){
       if(is_mining()) {
-        if (!request_block_template()) {
-          stop();
-          return false;
+        // Request the block template
+        request_block_template();
+      } else {
+        // Check for forced stop
+        if (m_forced_stop) {
+          if (!m_threads_active) {
+            stop();
+          }
         }
       }
       return true;
@@ -404,6 +412,7 @@ namespace cryptonote
       return false;
     }
 
+    m_forced_stop = false;
     m_stop = false;
     m_thread_index = 0;
     set_is_background_mining_enabled(do_background);
