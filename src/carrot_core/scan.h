@@ -39,6 +39,7 @@
 #include "carrot_enote_types.h"
 #include "device.h"
 #include "span.h"
+#include "account.h"
 
 //third party headers
 
@@ -178,14 +179,30 @@ bool try_scan_carrot_enote_external_receiver(const CarrotEnoteV1 &enote,
  * return: true iff the scan process succeeded
  */
 bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
-    const view_balance_secret_device &s_view_balance_dev,
+    carrot::carrot_and_legacy_account &account,
     crypto::secret_key &sender_extension_g_out,
     crypto::secret_key &sender_extension_t_out,
     crypto::public_key &address_spend_pubkey_out,
     rct::xmr_amount &amount_out,
     crypto::secret_key &amount_blinding_factor_out,
     CarrotEnoteType &enote_type_out,
-    janus_anchor_t &internal_message_out);
+    janus_anchor_t &internal_message_out,
+    crypto::public_key &return_address_out,
+    bool &is_return_out);
 //! @TODO: try_scan_carrot_enote_internal_sender(): can't validate burning w/o passing s_sr = s_vb
+
+bool scan_return_output(
+    const crypto::public_key &return_onetime_address,
+    const mx25519_pubkey &return_ephemeral_pubkey,
+    const carrot::view_tag_t &return_view_tag,
+    const carrot::encrypted_janus_anchor_t &return_anchor_enc,
+    const carrot::encrypted_amount_t &return_amount_enc,
+    const std::optional<rct::key> amount_commitment,
+    const carrot::input_context_t &return_input_context,
+    carrot::carrot_and_legacy_account &account,
+    crypto::public_key &address_spend_pubkey_out,
+    rct::xmr_amount &amount_out,
+    crypto::secret_key &amount_blinding_factor_out
+);
 
 } //namespace carrot

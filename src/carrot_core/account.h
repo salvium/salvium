@@ -28,11 +28,11 @@
 
 #pragma once
 
-#include "carrot_core/account_secrets.h"
-#include "carrot_core/address_utils.h"
-#include "carrot_core/destination.h"
-#include "carrot_core/device_ram_borrowed.h"
-#include "carrot_core/enote_utils.h"
+#include "account_secrets.h"
+#include "address_utils.h"
+#include "destination.h"
+#include "device_ram_borrowed.h"
+#include "enote_utils.h"
 #include "carrot_impl/subaddress_index.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/subaddress_index.h"

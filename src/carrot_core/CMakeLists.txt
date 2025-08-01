@@ -29,6 +29,7 @@
 set(carrot_core_sources
   account_secrets.cpp
   address_utils.cpp
+  account.cpp
   carrot_enote_types.cpp
   core_types.cpp
   destination.cpp

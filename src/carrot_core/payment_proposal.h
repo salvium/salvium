@@ -133,7 +133,7 @@ void get_coinbase_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
 */
 void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
     const crypto::key_image &tx_first_key_image,
-    const view_incoming_key_device *k_view_dev,
+    const view_balance_secret_device *s_view_balance_dev,
     RCTOutputEnoteProposal &output_enote_out,
     encrypted_payment_id_t &encrypted_payment_id_out);
 /**
@@ -146,7 +146,7 @@ void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
 */
 void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,
     const crypto::key_image &tx_first_key_image,
-    const view_incoming_key_device *k_view_dev,
+    const view_balance_secret_device *s_view_balance_dev,
     RCTOutputEnoteProposal &output_enote_out,
     encrypted_payment_id_t &encrypted_payment_id_out);
 /**
@@ -160,9 +160,7 @@ void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,
 void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &proposal,
     const view_incoming_key_device &k_view_dev,
     const crypto::key_image &tx_first_key_image,
-    const cryptonote::transaction_type tx_type,
     const std::optional<mx25519_pubkey> &other_enote_ephemeral_pubkey,
-    RCTOutputEnoteProposal &return_enote_out,
     RCTOutputEnoteProposal &output_enote_out);
 /**
 * brief: get_output_proposal_internal_v1 - convert the carrot proposal to an output proposal (internal)
@@ -177,6 +175,8 @@ void get_output_proposal_internal_v1(const CarrotPaymentProposalSelfSendV1 &prop
     const view_balance_secret_device &s_view_balance_dev,
     const crypto::key_image &tx_first_key_image,
     const std::optional<mx25519_pubkey> &other_enote_ephemeral_pubkey,
+    const cryptonote::transaction_type tx_type,
+    RCTOutputEnoteProposal &return_enote_out,
     RCTOutputEnoteProposal &output_enote_out);
 /**
 * brief: gen_jamtis_payment_proposal_v1 - generate a random proposal
