@@ -2859,7 +2859,8 @@ void wallet2::process_new_scanned_transaction(
         const carrot::subaddress_index_extended subaddr_ext = {i->first.major, i->first.minor, derive_type, true};
         // save to m_subaddresses as well, so that we can populate account subaddress map
         // when we open the wallet first time.
-        m_subaddresses_extended[onetime_address] = subaddr_ext;
+        if (derive_type == carrot::AddressDeriveType::PreCarrot)
+          m_subaddresses_extended[onetime_address] = subaddr_ext;
 
         // update m_salvium_txs
         m_salvium_txs.insert({onetime_address, m_transfers.size()-1});
@@ -3381,9 +3382,7 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
   size_t i = 0;
   size_t tx_output_idx = 0;
   while (i < blocks.size()) {
-    const parsed_block &par_blk = parsed_blocks.at(i);
-    const std::uint64_t height = start_height + i;
-    const bool skip_scan_for_this_block = should_skip_block(par_blk.block, height);
+    /*
     if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
       tx_scan_job(par_blk.block.miner_tx, tx_output_idx);
     tx_output_idx += par_blk.block.miner_tx.vout.size();
@@ -3395,30 +3394,33 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
       if (!skip_scan_for_this_block)
         tx_scan_job(tx, tx_output_idx);
       tx_output_idx += tx.vout.size();
+    */
+    tools::threadpool::waiter scan_blocks_waiter(tpool);
+    for (size_t j = 0; j < 10; ++j)
+    {
+      if (i+j >= blocks.size()) break;
+      const parsed_block &par_blk = parsed_blocks.at(i+j);
+      const std::uint64_t height = start_height + i + j;
+      const bool skip_scan_for_this_block = should_skip_block(par_blk.block, height);
+      if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
+        tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(par_blk.block.miner_tx), tx_output_idx));
+      tx_output_idx += par_blk.block.miner_tx.vout.size();
+      if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
+        tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(par_blk.block.protocol_tx), tx_output_idx));
+      tx_output_idx += par_blk.block.protocol_tx.vout.size();
+      for (const cryptonote::transaction &tx : par_blk.txes)
+      {
+        if (!skip_scan_for_this_block)
+          tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(tx), tx_output_idx));
+        tx_output_idx += tx.vout.size();
+      }
     }
-    // tools::threadpool::waiter scan_blocks_waiter(tpool);
-    // for (size_t j = 0; j < 10; ++j)
-    // {
-    //   if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
-    //     tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(par_blk.block.miner_tx), tx_output_idx));
-    //   tx_output_idx += par_blk.block.miner_tx.vout.size();
-    //   if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
-    //     tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(par_blk.block.protocol_tx), tx_output_idx));
-    //   tx_output_idx += par_blk.block.protocol_tx.vout.size();
-    //   for (const cryptonote::transaction &tx : par_blk.txes)
-    //   {
-    //     if (!skip_scan_for_this_block)
-    //       tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(tx), tx_output_idx));
-    //     tx_output_idx += tx.vout.size();
-    //   }
-    //   if (++i >= blocks.size()) break;
-    // }
-    // if (!scan_blocks_waiter.wait())
-    // {
-    //   THROW_WALLET_EXCEPTION_IF(password_failure, error::password_needed);
-    //   THROW_WALLET_EXCEPTION(error::wallet_internal_error, "Unrecognized exception in enote scanning threadpool");
-    // }
-    i++;
+    if (!scan_blocks_waiter.wait())
+    {
+      THROW_WALLET_EXCEPTION_IF(password_failure, error::password_needed);
+      THROW_WALLET_EXCEPTION(error::wallet_internal_error, "Unrecognized exception in enote scanning threadpool");
+    }
+    i+=10;
   }
 
   // Start processing blockchain entries with scanned outputs
