@@ -92,18 +92,25 @@ static size_t estimate_rct_tx_size_carrot(int n_inputs, int mixin, int n_outputs
   size += 1 + 6;
 
   // vin
-  size += n_inputs * (1+6+4+(mixin+1)*2+32);
+  size += n_inputs * (1+1+4+(mixin+1)*2+32);
 
   // vout
-  size += n_outputs * (3+4+16+32);
+  size += n_outputs * (1+1+32+4+3+16);
 
   // extra
   size += extra_size;
 
-  // rct signatures
-
   // type
   size += 1;
+
+  // amount_burnt
+  size += 8;
+
+  // return_address data
+  // NOTE: this will be wrong by 21 bytes for STAKE TXs using `protocol_tx_data_t`
+  size += n_outputs * (32 + 1);
+  
+  // rct signatures
 
   // rangeSigs
   if (bulletproof || bulletproof_plus)
