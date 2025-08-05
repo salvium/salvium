@@ -361,11 +361,11 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
         component_out_of_order, "this set contains duplicate onetime addresses");
 
     // assert all K_o lie in prime order subgroup
-    // for (const RCTOutputEnoteProposal &output_enote_proposal : output_enote_proposals_out)
-    // {
-    //     CARROT_CHECK_AND_THROW(rct::isInMainSubgroup(rct::pk2rct(output_enote_proposal.enote.onetime_address)),
-    //         invalid_point, "this set contains an invalid onetime address");
-    // }
+    for (const RCTOutputEnoteProposal &output_enote_proposal : output_enote_proposals_out)
+    {
+        CARROT_CHECK_AND_THROW(rct::isInMainSubgroup(rct::pk2rct(output_enote_proposal.enote.onetime_address)),
+                               invalid_point, "this set contains an invalid onetime address");
+    }
 
     // assert unique and non-trivial k_a
     memcmp_set<crypto::secret_key> amount_blinding_factors;

@@ -75,5 +75,6 @@ static constexpr const unsigned int CARROT_MAX_TX_INPUTS = 128;
 // SPARC addressing protocol domain separators
 static constexpr const unsigned char SPARC_DOMAIN_SEP_RETURN_PUBKEY_ENCRYPTION_MASK[] = "SPARC return pubkey encryption mask";
 static constexpr const unsigned char SPARC_DOMAIN_SEP_RETURN_ADDRESS_SCALAR[] = "SPARC return address scalar";
+static constexpr const unsigned char SPARC_DOMAIN_SEP_RETURN_INDEX_SCALAR[] = "SPARC return index scalar";
  
 } //namespace carrot

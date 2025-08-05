@@ -208,10 +208,11 @@ static void get_external_output_proposal_parts(const mx25519_pubkey &s_sender_re
     // 4. construct the return pubkey
     if (s_view_balance_dev != nullptr)
         make_sparc_return_pubkey(s_sender_receiver_unctx.data,
-            input_context,
-            s_view_balance_dev,
-            onetime_address_out,
-            return_pubkey_out);
+                                 input_context,
+                                 s_view_balance_dev,
+                                 onetime_address_out,
+                                 0/*idx*/,
+                                 return_pubkey_out);
 }
 //-------------------------------------------------------------------------------------------------------------------    
 //-------------------------------------------------------------------------------------------------------------------

@@ -211,6 +211,17 @@ void make_sparc_return_privkey(const unsigned char s_sender_receiver_unctx[32],
     derive_scalar(transcript.data(), transcript.size(), s_sender_receiver_unctx, &return_privkey_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
+void make_sparc_return_index(const unsigned char s_sender_receiver_unctx[32],
+                             const input_context_t &input_context,
+                             const crypto::public_key &onetime_address,
+                             const uint64_t idx,
+                             crypto::secret_key &return_index_out)
+{
+    // k_return = H_32(s_sr || input_context || Ko)
+    const auto transcript = sp::make_fixed_transcript<SPARC_DOMAIN_SEP_RETURN_INDEX_SCALAR>(input_context, onetime_address, idx);
+    derive_scalar(transcript.data(), transcript.size(), s_sender_receiver_unctx, &return_index_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
 void make_sparc_return_pubkey_encryption_mask(const unsigned char s_sender_receiver_unctx[32],
     const input_context_t &input_context,
     const crypto::public_key &onetime_address,
@@ -222,22 +233,33 @@ void make_sparc_return_pubkey_encryption_mask(const unsigned char s_sender_recei
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_sparc_return_pubkey(const unsigned char s_sender_receiver_unctx[32],
-    const input_context_t &input_context,
-    const view_balance_secret_device *s_view_balance_dev,
-    const crypto::public_key &onetime_address,
-    encrypted_return_pubkey_t &return_pubkey_out)
+                              const input_context_t &input_context,
+                              const view_balance_secret_device *s_view_balance_dev,
+                              const crypto::public_key &onetime_address,
+                              const uint64_t idx,
+                              encrypted_return_pubkey_t &return_enc_pubkey_out)
 {
-    // K_return = k_return G ^ m_return
+    // K_return = k_return G + k_idx T
     crypto::secret_key k_return;
-    crypto::public_key return_pub;
-    encrypted_return_pubkey_t K_return;
-    encrypted_return_pubkey_t m_return;
+    crypto::secret_key k_idx;
+    encrypted_return_pubkey_t return_pub;
     s_view_balance_dev->make_internal_return_privkey(input_context, onetime_address, k_return);
-    crypto::secret_key_to_public_key(k_return, return_pub);
-    static_assert(sizeof(K_return.bytes) == sizeof(return_pub.data), "Size mismatch");
-    memcpy(K_return.bytes, return_pub.data, sizeof(encrypted_return_pubkey_t));
+    make_sparc_return_index(s_sender_receiver_unctx, input_context, onetime_address, idx, k_idx);
+    rct::key K_return;
+    rct::addKeys2(K_return,
+                  rct::sk2rct(k_return),
+                  rct::sk2rct(k_idx),
+                  rct::pk2rct(crypto::get_T()));
+    K_return = rct::scalarmult8(K_return);
+    if (!rct::isInMainSubgroup(K_return))
+      throw std::runtime_error("K_return is not in main subgroup");
+    static_assert(sizeof(K_return.bytes) == sizeof(return_pub.bytes), "Size mismatch");
+    memcpy(return_pub.bytes, K_return.bytes, sizeof(encrypted_return_pubkey_t));
+
+    // return_enc = return_pub ^ m_return
+    encrypted_return_pubkey_t m_return;
     make_sparc_return_pubkey_encryption_mask(s_sender_receiver_unctx, input_context, onetime_address, m_return);
-    return_pubkey_out = K_return ^ m_return;
+    return_enc_pubkey_out = return_pub ^ m_return;
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
