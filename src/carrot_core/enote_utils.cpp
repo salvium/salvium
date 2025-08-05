@@ -241,16 +241,16 @@ void make_sparc_return_pubkey(const unsigned char s_sender_receiver_unctx[32],
 {
     // K_return = k_return G + k_idx T
     crypto::secret_key k_return;
-    crypto::secret_key k_idx;
+    crypto::secret_key k_idx = crypto::null_skey;
     encrypted_return_pubkey_t return_pub;
     s_view_balance_dev->make_internal_return_privkey(input_context, onetime_address, k_return);
-    make_sparc_return_index(s_sender_receiver_unctx, input_context, onetime_address, idx, k_idx);
+    make_sparc_return_index(to_bytes(onetime_address), input_context, onetime_address, idx, k_idx);
     rct::key K_return;
     rct::addKeys2(K_return,
                   rct::sk2rct(k_return),
                   rct::sk2rct(k_idx),
                   rct::pk2rct(crypto::get_T()));
-    K_return = rct::scalarmult8(K_return);
+    //K_return = rct::scalarmult8(K_return);
     if (!rct::isInMainSubgroup(K_return))
       throw std::runtime_error("K_return is not in main subgroup");
     static_assert(sizeof(K_return.bytes) == sizeof(return_pub.bytes), "Size mismatch");

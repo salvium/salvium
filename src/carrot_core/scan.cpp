@@ -34,6 +34,11 @@
 //local headers
 #include "destination.h"
 #include "enote_utils.h"
+extern "C"
+{
+#include "crypto/crypto-ops.h"
+}
+#include "crypto/generators.h"
 #include "ringct/rctOps.h"
 #include "scan_unsafe.h"
 
@@ -508,20 +513,31 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
             const carrot::input_context_t input_context = carrot::make_carrot_input_context(enote.tx_first_key_image);
             account.s_view_balance_dev.make_internal_return_privkey(input_context, output_key, k_return);
 
-            // compute K_return = k_return * G
-            crypto::public_key K_return;
-            crypto::secret_key_to_public_key(k_return, K_return);
+            // make k_idx
+            crypto::secret_key k_idx = crypto::null_skey;
+            uint64_t idx = 0;
+            make_sparc_return_index(to_bytes(output_key), input_context, output_key, idx, k_idx);
+
+            // compute K_return = k_return * G + k_idx * T
+            rct::key K_return;
+            rct::addKeys2(K_return,
+                          rct::sk2rct(k_return),
+                          rct::sk2rct(k_idx),
+                          rct::pk2rct(crypto::get_T()));
+            //K_return = rct::scalarmult8(K_return);
 
             // compute K_r = K_return + K_o
-            crypto::public_key K_r = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(enote.onetime_address)));
+            crypto::public_key K_r = rct::rct2pk(rct::addKeys(K_return, rct::pk2rct(enote.onetime_address)));
 
             // calculate the key image for the return output
             crypto::secret_key sum_g;
             sc_add(to_bytes(sum_g), to_bytes(sender_extension_g_out), to_bytes(k_return));
+            crypto::secret_key sum_t;
+            sc_add(to_bytes(sum_t), to_bytes(sender_extension_t_out), to_bytes(k_idx));
             crypto::key_image key_image = account.derive_key_image(
                 account.get_keys().m_carrot_account_address.m_spend_public_key,
                 sum_g,
-                sender_extension_t_out,
+                sum_t,
                 K_r
             );
 
@@ -529,7 +545,7 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
             account.try_searching_for_opening_for_onetime_address(
                 account.get_keys().m_carrot_account_address.m_spend_public_key,
                 sum_g,
-                sender_extension_t_out,
+                sum_t,
                 x,
                 y
             );
