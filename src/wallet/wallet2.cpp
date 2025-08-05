@@ -2704,6 +2704,37 @@ void wallet2::process_new_scanned_transaction(
     // update m_transfer_indices
     m_transfers_indices[enote_scan_info->asset_type].insert(m_transfers.size()-1);
 
+    // Check for STAKE / AUDIT TX payouts
+    if (tx.type == cryptonote::transaction_type::PROTOCOL && td.m_td_origin_idx != std::numeric_limits<uint64_t>::max()) {
+
+      // Attempt to get the origin TX
+      THROW_WALLET_EXCEPTION_IF(td.m_td_origin_idx >= get_num_transfer_details(),
+                                error::wallet_internal_error,
+                                "cannot locate return_payment TX origin in m_transfers");
+      const transfer_details &td_origin = m_transfers[td.m_td_origin_idx];
+      THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.type != cryptonote::transaction_type::AUDIT && td_origin.m_tx.type != cryptonote::transaction_type::STAKE,
+                                error::wallet_internal_error,
+                                "incorrect TX type for protocol_tx origin in m_transfers");
+                    
+      // Get the output key for the change entry
+      crypto::public_key pk_locked_coins = crypto::null_pkey;
+      THROW_WALLET_EXCEPTION_IF(!get_output_public_key(td_origin.m_tx.vout[td_origin.m_internal_output_index], pk_locked_coins),
+                                error::wallet_internal_error,
+                                "Failed to get output public key for locked coins");
+
+      // At this point, we need to clear the "locked coins" count, because otherwise we will be counting yield stakes twice in our balance
+      if (!m_locked_coins.erase(pk_locked_coins)) {
+        LOG_ERROR("Failed to remove protocol_tx entry from m_locked_coins - possible duplicate output key detected");
+      }
+    }
+
+    // Check for STAKE / AUDIT TXs
+    if (tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::STAKE) {
+
+      // Add a "locked coins" entry so users don't freak out when they STAKE/AUDITOA
+      m_locked_coins.insert({onetime_address, {0, tx.amount_burnt, tx.source_asset_type}});
+    }
+    
     // update multisig info
     if (m_multisig)
     {
