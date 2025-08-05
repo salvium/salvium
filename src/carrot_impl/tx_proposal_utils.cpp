@@ -331,15 +331,6 @@ void make_carrot_transaction_proposal_v1_transfer(
         selfsend_payment_proposals.back().proposal.amount =
             boost::numeric_cast<rct::xmr_amount>(implicit_change_amount);
 
-        // remove the self send payment we have made to ourself now that we have our change payment.
-        if (tx_type == cryptonote::transaction_type::STAKE ||
-            tx_type == cryptonote::transaction_type::BURN)
-        {
-            selfsend_payment_proposals.back().proposal.enote_ephemeral_pubkey = 
-                selfsend_payment_proposals.front().proposal.enote_ephemeral_pubkey;
-            selfsend_payment_proposals.erase(selfsend_payment_proposals.begin());
-        }
-
         // deduct an even fee amount from all subtractable outputs
         const size_t num_subtractble_normal = subtractable_normal_payment_proposals.size();
         const size_t num_subtractable_selfsend = subtractable_selfsend_payment_proposals.size();
@@ -403,6 +394,16 @@ void make_carrot_transaction_proposal_v1_transfer(
 
         CHECK_AND_ASSERT_THROW_MES(fee_remainder == 0,
             "make unsigned transaction transfer subtractable: bug: fee remainder at end of carve function");
+        
+        // remove the self send payment we have made to ourself now that we have our change payment.
+        if (tx_type == cryptonote::transaction_type::STAKE ||
+            tx_type == cryptonote::transaction_type::BURN)
+        {
+            selfsend_payment_proposals.back().proposal.enote_ephemeral_pubkey = 
+                selfsend_payment_proposals.front().proposal.enote_ephemeral_pubkey;
+            selfsend_payment_proposals.erase(selfsend_payment_proposals.begin());
+        }
+
     }; //end carve_fees_and_balance
 
     // make unsigned transaction with fee carving callback
