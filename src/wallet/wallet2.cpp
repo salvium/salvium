@@ -6813,9 +6813,8 @@ void wallet2::process_background_cache_on_open()
     background_w2->m_custom_background_key = m_custom_background_key;
 
     // TODO: uncommet this block
-    // carrot::carrot_and_legacy_account account = m_account;
-    // account.forget_spend_key();
-    // background_w2->m_account = account;
+    background_w2->m_account.set_keys(m_account.get_keys(), false);
+    background_w2->m_account.forget_spend_key();
 
     // Load background cache from file
     background_w2->clear();

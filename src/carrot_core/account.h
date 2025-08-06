@@ -82,6 +82,8 @@ namespace carrot
         s_generate_address_dev(get_keys().s_generate_address)
     {}
 
+    void set_keys(const cryptonote::account_keys& keys, bool copy_spend_secret_keys);
+
     carrot_and_legacy_account(const carrot_and_legacy_account &k) = delete;
     carrot_and_legacy_account(carrot_and_legacy_account&&) = delete;
 

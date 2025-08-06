@@ -151,6 +151,8 @@ DISABLE_VS_WARNINGS(4244 4345)
   void account_base::forget_spend_key()
   {
     m_keys.m_spend_secret_key = crypto::secret_key();
+    m_keys.s_master = m_keys.m_spend_secret_key;
+    m_keys.k_prove_spend = m_keys.m_spend_secret_key;
     m_keys.m_multisig_keys.clear();
   }
   //-----------------------------------------------------------------
@@ -163,6 +165,7 @@ DISABLE_VS_WARNINGS(4244 4345)
         "Unexpected derived public spend key");
 
     m_keys.m_spend_secret_key = spend_secret_key;
+    m_keys.s_master = m_keys.m_spend_secret_key;
   }
   //-----------------------------------------------------------------
   crypto::secret_key account_base::generate(const crypto::secret_key& recovery_key, bool recover, bool two_random)
