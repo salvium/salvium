@@ -4021,7 +4021,7 @@ void wallet2::fast_refresh(uint64_t stop_height, uint64_t &blocks_start_height, 
 }
 
 
-bool wallet2::add_address_book_row(const cryptonote::account_public_address &address, const crypto::hash8 *payment_id, const std::string &description, bool is_subaddress)
+bool wallet2::add_address_book_row(const cryptonote::account_public_address &address, const crypto::hash8 *payment_id, const std::string &description, bool is_subaddress, bool is_carrot)
 {
   wallet2::address_book_row a;
   a.m_address = address;
@@ -4029,6 +4029,7 @@ bool wallet2::add_address_book_row(const cryptonote::account_public_address &add
   a.m_payment_id = payment_id ? *payment_id : crypto::null_hash8;
   a.m_description = description;
   a.m_is_subaddress = is_subaddress;
+  a.m_is_carrot = is_carrot;
   
   auto old_size = m_address_book.size();
   m_address_book.push_back(a);
@@ -4037,7 +4038,7 @@ bool wallet2::add_address_book_row(const cryptonote::account_public_address &add
   return false;
 }
 
-bool wallet2::set_address_book_row(size_t row_id, const cryptonote::account_public_address &address, const crypto::hash8 *payment_id, const std::string &description, bool is_subaddress)
+bool wallet2::set_address_book_row(size_t row_id, const cryptonote::account_public_address &address, const crypto::hash8 *payment_id, const std::string &description, bool is_subaddress, bool is_carrot)
 {
   wallet2::address_book_row a;
   a.m_address = address;
@@ -4045,6 +4046,7 @@ bool wallet2::set_address_book_row(size_t row_id, const cryptonote::account_publ
   a.m_payment_id = payment_id ? *payment_id : crypto::null_hash8;
   a.m_description = description;
   a.m_is_subaddress = is_subaddress;
+  a.m_is_carrot = is_carrot;
 
   const auto size = m_address_book.size();
   if (row_id >= size)
