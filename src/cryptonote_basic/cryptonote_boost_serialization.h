@@ -73,6 +73,11 @@ namespace boost
     a & reinterpret_cast<char (&)[sizeof(crypto::key_image)]>(x);
   }
   template <class Archive>
+  inline void serialize(Archive &a, carrot::input_context_t &x, const boost::serialization::version_type ver)
+  {
+    a & reinterpret_cast<char (&)[sizeof(carrot::input_context_t)]>(x);
+  }
+  template <class Archive>
   inline void serialize(Archive &a, crypto::view_tag &x, const boost::serialization::version_type ver)
   {
     a & reinterpret_cast<char (&)[sizeof(crypto::view_tag)]>(x);
