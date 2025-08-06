@@ -315,6 +315,27 @@ crypto::secret_key carrot_and_legacy_account::generate(
     return retval;
 }
 //----------------------------------------------------------------------------------------------------------------------
+void carrot_and_legacy_account::set_keys(const cryptonote::account_keys& keys, bool copy_spend_secret_keys)
+{
+  // CN keys
+  m_keys.m_account_address = keys.m_account_address;
+  if (copy_spend_secret_keys) m_keys.m_spend_secret_key = keys.m_spend_secret_key;
+  m_keys.m_view_secret_key = keys.m_view_secret_key;
+  if (copy_spend_secret_keys) m_keys.m_multisig_keys = keys.m_multisig_keys;
+  m_keys.m_device = keys.m_device;
+  m_keys.m_encryption_iv = keys.m_encryption_iv;
+
+  // Carrot keys
+  if (copy_spend_secret_keys) m_keys.s_master = keys.s_master;
+  if (copy_spend_secret_keys) m_keys.k_prove_spend = keys.k_prove_spend;
+  m_keys.s_view_balance = keys.s_view_balance;
+  m_keys.k_view_incoming = keys.k_view_incoming;
+  m_keys.k_generate_image = keys.k_generate_image;
+  m_keys.s_generate_address = keys.s_generate_address;
+  m_keys.m_carrot_account_address = keys.m_carrot_account_address;
+  m_keys.m_carrot_main_address = keys.m_carrot_main_address;
+}
+//----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::set_carrot_keys(const AddressDeriveType default_derive_type)
 {   
     // top level keys
