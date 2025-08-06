@@ -7458,6 +7458,14 @@ bool wallet2::is_transfer_unlocked(const transfer_details& td)
   uint64_t unlock_time = 0;
   if (!cryptonote::get_output_unlock_time(td.m_tx.vout[td.m_internal_output_index], unlock_time))
     return false;
+  if (unlock_time == 0) {
+    if (td.m_tx.type == cryptonote::transaction_type::MINER || td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
+      unlock_time = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
+    } else {
+      unlock_time = CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE;
+    }
+  }
+
   return is_transfer_unlocked(unlock_time, td.m_block_height);
 }
 //----------------------------------------------------------------------------------------------------
