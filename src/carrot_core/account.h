@@ -52,6 +52,16 @@ namespace carrot
         crypto::secret_key x;
         crypto::secret_key y;
 
+        return_output_info_t() {
+            // Default constructor for serialization
+            input_context = input_context_t();
+            K_o = crypto::public_key();
+            K_change = crypto::public_key();
+            key_image = crypto::key_image();
+            x = crypto::secret_key();
+            y = crypto::secret_key();
+        }
+
         return_output_info_t(
             const input_context_t &input_context,
             const crypto::public_key &K_o,
@@ -65,6 +75,15 @@ namespace carrot
             key_image(key_image),
             x(x),
             y(y) {}
+
+        BEGIN_SERIALIZE_OBJECT()
+            FIELD(input_context)
+            FIELD(K_o)
+            FIELD(K_change)
+            FIELD(key_image)
+            FIELD(x)
+            FIELD(y)
+        END_SERIALIZE()
     };
 
 
@@ -147,4 +166,36 @@ namespace carrot
         // Kr -> return_output_info
         std::unordered_map<crypto::public_key, return_output_info_t> return_output_map;
   };
+}
+
+namespace boost
+{
+    namespace serialization
+    {
+        template <class Archive>
+        inline typename std::enable_if<!Archive::is_loading::value, void>::type initialize_transfer_details(Archive &a, carrot::return_output_info_t &x, const boost::serialization::version_type ver)
+        {
+        }
+        template <class Archive>
+        inline typename std::enable_if<Archive::is_loading::value, void>::type initialize_transfer_details(Archive &a, carrot::return_output_info_t &x, const boost::serialization::version_type ver)
+        {
+            x.input_context = carrot::input_context_t();
+            x.K_o = crypto::public_key();
+            x.K_change = crypto::public_key();
+            x.key_image = crypto::key_image();
+            x.x = crypto::secret_key();
+            x.y = crypto::secret_key();
+        }
+
+        template <class Archive>
+        inline void serialize(Archive &a, carrot::return_output_info_t &x, const boost::serialization::version_type ver)
+        {
+            a & x.input_context;
+            a & x.K_o;
+            a & x.K_change;
+            a & x.key_image;
+            a & x.x;
+            a & x.y;
+        }
+    }
 }

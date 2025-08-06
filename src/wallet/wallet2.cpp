@@ -2849,21 +2849,8 @@ void wallet2::process_new_scanned_transaction(
       // save the change output key in our subaddress_map, so we can receive money to it later
       // from protocol or return txs
       for (const auto &entry: tx_amounts_individual_outs[i->first]) {
-        const crypto::public_key &onetime_address = std::get<1>(entry);
-        carrot::AddressDeriveType derive_type;
-        if (use_fork_rules(HF_VERSION_CARROT, 0)) {
-          derive_type = carrot::AddressDeriveType::Carrot;
-        } else {
-          derive_type = carrot::AddressDeriveType::PreCarrot;
-        }
-        const carrot::subaddress_index_extended subaddr_ext = {i->first.major, i->first.minor, derive_type, true};
-        // save to m_subaddresses as well, so that we can populate account subaddress map
-        // when we open the wallet first time.
-        if (derive_type == carrot::AddressDeriveType::PreCarrot)
-          m_subaddresses_extended[onetime_address] = subaddr_ext;
-
         // update m_salvium_txs
-        m_salvium_txs.insert({onetime_address, m_transfers.size()-1});
+        m_salvium_txs.insert({std::get<1>(entry), m_transfers.size()-1});
       }
 
       // delete change output from amounts
@@ -3113,8 +3100,7 @@ void wallet2::process_new_blockchain_entry(const cryptonote::block& b,
 
     m_last_block_reward = cryptonote::get_outs_money_amount(b.miner_tx);
     LOG_PRINT_L2("Processed block: " << bl_id << ", height " << height << ", " <<  miner_tx_handle_time + txs_handle_time << "(" << miner_tx_handle_time << "/" << txs_handle_time <<")ms");
-  }else
-  {
+  } else {
     if (!(height % 128))
       LOG_PRINT_L2( "Skipped block by timestamp, height: " << height << ", block time " << b.timestamp << ", account time " << m_account.get_createtime());
   }
@@ -3382,19 +3368,6 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
   size_t i = 0;
   size_t tx_output_idx = 0;
   while (i < blocks.size()) {
-    /*
-    if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
-      tx_scan_job(par_blk.block.miner_tx, tx_output_idx);
-    tx_output_idx += par_blk.block.miner_tx.vout.size();
-    if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
-      tx_scan_job(par_blk.block.protocol_tx, tx_output_idx);
-    tx_output_idx += par_blk.block.protocol_tx.vout.size();
-    for (const cryptonote::transaction &tx : par_blk.txes)
-    {
-      if (!skip_scan_for_this_block)
-        tx_scan_job(tx, tx_output_idx);
-      tx_output_idx += tx.vout.size();
-    */
     tools::threadpool::waiter scan_blocks_waiter(tpool);
     for (size_t j = 0; j < 10; ++j)
     {
@@ -3467,6 +3440,23 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
     }
     tx_output_idx += n_block_outputs;
     ++current_index;
+  }
+
+  // save accumulated return subaddresses to m_subaddresses_extended, so that we can re-insert
+  // them into account after we restart the wallet.
+  m_subaddresses_extended.clear();
+  for (const auto& subaddr: m_account.get_subaddress_map_ref()) {
+    if (subaddr.second.derive_type == carrot::AddressDeriveType::PreCarrot &&
+        subaddr.second.is_return_spend_key == true
+    ) {
+      m_subaddresses_extended.insert({subaddr.first, subaddr.second});
+    }
+  }
+
+  // save accumulated return output info to wallet
+  m_return_output_info.clear();
+  for (const auto& output_info: m_account.get_return_output_map_ref()) {
+    m_return_output_info.insert({output_info.first, output_info.second});
   }
 }
 //----------------------------------------------------------------------------------------------------
@@ -6596,17 +6586,21 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
 
   if (get_num_subaddress_accounts() == 0)
     add_subaddress_account(tr("Primary account"));
-  m_account.insert_subaddresses(m_subaddresses_extended);
+
+  // populate account subaddress list
   if (!m_subaddresses.empty())
   {
     // if we have subaddresses, we need to insert them into the account
     for (const auto &subaddress : m_subaddresses)
       m_account.insert_subaddresses(
-        // TODO: we assume none of these subaddresses are return tx subaddresses
+        // we assume none of these subaddresses are return tx subaddresses
         {{subaddress.first, {{subaddress.second.major, subaddress.second.minor}, carrot::AddressDeriveType::PreCarrot, false}}}
       );
   }
+  m_account.insert_subaddresses(m_subaddresses_extended);
 
+  // populate account return output info
+  m_account.insert_return_output_info(m_return_output_info);
 
   try
   {
