@@ -859,6 +859,7 @@ private:
       std::string m_description;   
       bool m_is_subaddress;
       bool m_has_payment_id;
+      bool m_is_carrot;
 
       BEGIN_SERIALIZE_OBJECT()
         VERSION_FIELD(0)
@@ -867,6 +868,7 @@ private:
         FIELD(m_description)
         FIELD(m_is_subaddress)
         FIELD(m_has_payment_id)
+        FIELD(m_is_carrot)
       END_SERIALIZE()
     };
 
@@ -1646,8 +1648,8 @@ private:
     * \brief GUI Address book get/store
     */
     std::vector<address_book_row> get_address_book() const { return m_address_book; }
-    bool add_address_book_row(const cryptonote::account_public_address &address, const crypto::hash8 *payment_id, const std::string &description, bool is_subaddress);
-    bool set_address_book_row(size_t row_id, const cryptonote::account_public_address &address, const crypto::hash8 *payment_id, const std::string &description, bool is_subaddress);
+    bool add_address_book_row(const cryptonote::account_public_address &address, const crypto::hash8 *payment_id, const std::string &description, bool is_subaddress, bool is_carrot);
+    bool set_address_book_row(size_t row_id, const cryptonote::account_public_address &address, const crypto::hash8 *payment_id, const std::string &description, bool is_subaddress, bool is_carrot);
     bool delete_address_book_row(std::size_t row_id);
         
     uint64_t get_num_rct_outputs();
@@ -2290,7 +2292,7 @@ BOOST_CLASS_VERSION(tools::wallet2::payment_details, 5)
 BOOST_CLASS_VERSION(tools::wallet2::pool_payment_details, 1)
 BOOST_CLASS_VERSION(tools::wallet2::unconfirmed_transfer_details, 8)
 BOOST_CLASS_VERSION(tools::wallet2::confirmed_transfer_details, 6)
-BOOST_CLASS_VERSION(tools::wallet2::address_book_row, 18)
+BOOST_CLASS_VERSION(tools::wallet2::address_book_row, 19)
 BOOST_CLASS_VERSION(tools::wallet2::reserve_proof_entry, 0)
 BOOST_CLASS_VERSION(tools::wallet2::unsigned_tx_set, 1)
 BOOST_CLASS_VERSION(tools::wallet2::signed_tx_set, 1)
@@ -2668,6 +2670,9 @@ namespace boost
       a & x.m_has_payment_id;
       if (x.m_has_payment_id)
         a & x.m_payment_id;
+      if (ver < 19)
+        return;
+      a & x.m_is_carrot;
     }
 
     template <class Archive>

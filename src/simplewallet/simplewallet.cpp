@@ -11076,7 +11076,7 @@ bool simple_wallet::address_book(const std::vector<std::string> &args/* = std::v
         description += " ";
       description += args[i];
     }
-    m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : NULL, description, info.is_subaddress);
+    m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : NULL, description, info.is_subaddress, info.is_carrot);
   }
   else
   {
@@ -11100,9 +11100,9 @@ bool simple_wallet::address_book(const std::vector<std::string> &args/* = std::v
       success_msg_writer() << tr("Index: ") << i;
       std::string address;
       if (row.m_has_payment_id)
-        address = cryptonote::get_account_integrated_address_as_str(m_wallet->nettype(), row.m_address, row.m_payment_id);
+        address = cryptonote::get_account_integrated_address_as_str(m_wallet->nettype(), row.m_address, row.m_payment_id, row.m_is_carrot);
       else
-        address = get_account_address_as_str(m_wallet->nettype(), row.m_is_subaddress, row.m_address);
+        address = get_account_address_as_str(m_wallet->nettype(), row.m_is_subaddress, row.m_address, row.m_is_carrot);
       success_msg_writer() << tr("Address: ") << address;
       success_msg_writer() << tr("Description: ") << row.m_description << "\n";
     }

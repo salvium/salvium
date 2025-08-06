@@ -3313,9 +3313,9 @@ namespace tools
         const auto &entry = ab[idx];
         std::string address;
         if (entry.m_has_payment_id)
-          address = cryptonote::get_account_integrated_address_as_str(m_wallet->nettype(), entry.m_address, entry.m_payment_id);
+          address = cryptonote::get_account_integrated_address_as_str(m_wallet->nettype(), entry.m_address, entry.m_payment_id, entry.m_is_carrot);
         else
-          address = get_account_address_as_str(m_wallet->nettype(), entry.m_is_subaddress, entry.m_address);
+          address = get_account_address_as_str(m_wallet->nettype(), entry.m_is_subaddress, entry.m_address, entry.m_is_carrot);
         res.entries.push_back(wallet_rpc::COMMAND_RPC_GET_ADDRESS_BOOK_ENTRY::entry{idx, address, entry.m_description});
       }
     }
@@ -3355,7 +3355,7 @@ namespace tools
         er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + req.address;
       return false;
     }
-    if (!m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : NULL, req.description, info.is_subaddress))
+    if (!m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : NULL, req.description, info.is_subaddress, info.is_carrot))
     {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = "Failed to add address book entry";
@@ -3414,12 +3414,13 @@ namespace tools
       entry.m_is_subaddress = info.is_subaddress;
       if (info.has_payment_id)
         entry.m_payment_id = info.payment_id;
+      entry.m_is_carrot = info.is_carrot;
     }
 
     if (req.set_description)
       entry.m_description = req.description;
 
-    if (!m_wallet->set_address_book_row(req.index, entry.m_address, req.set_address && entry.m_has_payment_id ? &entry.m_payment_id : NULL, entry.m_description, entry.m_is_subaddress))
+    if (!m_wallet->set_address_book_row(req.index, entry.m_address, req.set_address && entry.m_has_payment_id ? &entry.m_payment_id : NULL, entry.m_description, entry.m_is_subaddress, entry.m_is_carrot))
     {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = "Failed to edit address book entry";
