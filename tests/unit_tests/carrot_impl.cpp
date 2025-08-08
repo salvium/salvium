@@ -38,7 +38,6 @@
 #include "carrot_impl/tx_proposal_utils.h"
 #include "carrot_impl/input_selection.h"
 #include "carrot_mock_helpers.h"
-#include "common/container_helpers.h"
 #include "crypto/generators.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/subaddress_index.h"
@@ -63,7 +62,7 @@ static void unittest_scan_enote_set_multi_account(const std::vector<CarrotEnoteV
     res.reserve(accounts.size());
 
     for (const auto *account : accounts)
-        mock_scan_enote_set(enotes, encrypted_payment_id, *account, tools::add_element(res));
+        mock_scan_enote_set(enotes, encrypted_payment_id, *account, res.emplace_back());
 }
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
@@ -357,7 +356,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_1)
     acc1.generate();
 
     // 1 normal payment
-    CarrotPaymentProposalV1 &normal_payment_proposal = tools::add_element( tx_proposal.per_account_payments[0].second).first;
+    CarrotPaymentProposalV1 &normal_payment_proposal = tx_proposal.per_account_payments[0].second.emplace_back().first;
     normal_payment_proposal = CarrotPaymentProposalV1{
         .destination = acc0.cryptonote_address(),
         .amount = crypto::rand_idx((rct::xmr_amount) 1ull << 63),
@@ -396,21 +395,21 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_2)
     tx_proposal.self_sender_index = 2;
 
     // 1 subaddress payment
-    tools::add_element(acc0.second).first = CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
     };
 
     // 1 main address payment
-    tools::add_element(acc1.second).first = CarrotPaymentProposalV1{
+    acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
     };
 
     // 1 integrated address payment
-    tools::add_element(acc3.second).first = CarrotPaymentProposalV1{
+    acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -445,7 +444,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_3)
     tx_proposal.self_sender_index = 2;
 
     // 2 subaddress payment
-    tools::add_element(acc0.second).first = CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -454,7 +453,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_3)
     acc0.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 2 main address payment
-    tools::add_element(acc1.second).first = CarrotPaymentProposalV1{
+    acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -463,7 +462,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_3)
     acc1.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 1 integrated address payment
-    tools::add_element(acc3.second).first = CarrotPaymentProposalV1{
+    acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -498,7 +497,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_4)
     tx_proposal.self_sender_index = 2;
 
     // 2 subaddress payment
-    tools::add_element(acc0.second).first = CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -507,7 +506,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_4)
     acc0.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 2 main address payment
-    tools::add_element(acc1.second).first = CarrotPaymentProposalV1{
+    acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -516,14 +515,14 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_4)
     acc1.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 1 integrated address payment
-    tools::add_element(acc3.second).first = CarrotPaymentProposalV1{
+    acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
     };
 
     // 1 main address selfsend
-    tools::add_element(tx_proposal.explicit_selfsend_proposals).first.proposal = CarrotPaymentProposalSelfSendV1{
+    tx_proposal.explicit_selfsend_proposals.emplace_back().first.proposal = CarrotPaymentProposalSelfSendV1{
         .destination_address_spend_pubkey = acc2.first.carrot_account_spend_pubkey,
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .enote_type = CarrotEnoteType::PAYMENT,
@@ -531,7 +530,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_4)
     };
 
     // 1 subaddress selfsend
-    tools::add_element(tx_proposal.explicit_selfsend_proposals).first = CarrotPaymentProposalVerifiableSelfSendV1{
+    tx_proposal.explicit_selfsend_proposals.emplace_back().first = CarrotPaymentProposalVerifiableSelfSendV1{
         .proposal = CarrotPaymentProposalSelfSendV1{
             .destination_address_spend_pubkey = acc2.first.subaddress({{4, 19}}).address_spend_pubkey,
             .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
@@ -562,7 +561,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_5)
     acc1.generate(AddressDeriveType::PreCarrot);
 
     // 1 normal payment
-    CarrotPaymentProposalV1 &normal_payment_proposal = tools::add_element( tx_proposal.per_account_payments[0].second).first;
+    CarrotPaymentProposalV1 &normal_payment_proposal = tx_proposal.per_account_payments[0].second.emplace_back().first;
     normal_payment_proposal = CarrotPaymentProposalV1{
         .destination = acc0.cryptonote_address(),
         .amount = crypto::rand_idx((rct::xmr_amount) 1ull << 63),
@@ -601,21 +600,21 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_6)
     tx_proposal.self_sender_index = 2;
 
     // 1 subaddress payment
-    tools::add_element(acc0.second).first = CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
     };
 
     // 1 main address payment
-    tools::add_element(acc1.second).first = CarrotPaymentProposalV1{
+    acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
     };
 
     // 1 integrated address payment
-    tools::add_element(acc3.second).first = CarrotPaymentProposalV1{
+    acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -650,7 +649,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_7)
     tx_proposal.self_sender_index = 2;
 
     // 2 subaddress payment
-    tools::add_element(acc0.second).first = CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -659,7 +658,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_7)
     acc0.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 2 main address payment
-    tools::add_element(acc1.second).first = CarrotPaymentProposalV1{
+    acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -668,7 +667,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_7)
     acc1.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 1 integrated address payment
-    tools::add_element(acc3.second).first = CarrotPaymentProposalV1{
+    acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -703,7 +702,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_8)
     tx_proposal.self_sender_index = 2;
 
     // 2 subaddress payment
-    tools::add_element(acc0.second).first = CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -712,7 +711,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_8)
     acc0.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 2 main address payment
-    tools::add_element(acc1.second).first = CarrotPaymentProposalV1{
+    acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -721,14 +720,14 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_8)
     acc1.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 1 integrated address payment
-    tools::add_element(acc3.second).first = CarrotPaymentProposalV1{
+    acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
     };
 
     // 1 main address selfsend
-    tools::add_element(tx_proposal.explicit_selfsend_proposals).first.proposal = CarrotPaymentProposalSelfSendV1{
+    tx_proposal.explicit_selfsend_proposals.emplace_back().first.proposal = CarrotPaymentProposalSelfSendV1{
         .destination_address_spend_pubkey = acc2.first.carrot_account_spend_pubkey,
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .enote_type = CarrotEnoteType::PAYMENT,
@@ -736,7 +735,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_8)
     };
 
     // 1 subaddress selfsend
-    tools::add_element(tx_proposal.explicit_selfsend_proposals).first = CarrotPaymentProposalVerifiableSelfSendV1{
+    tx_proposal.explicit_selfsend_proposals.emplace_back().first = CarrotPaymentProposalVerifiableSelfSendV1{
         .proposal = CarrotPaymentProposalSelfSendV1{
             .destination_address_spend_pubkey = acc2.first.subaddress({{4, 19}}).address_spend_pubkey,
             .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
@@ -768,7 +767,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_9)
     acc1.generate();
 
     // 1 normal payment (subtractable)
-    CarrotPaymentProposalV1 &normal_payment_proposal = tools::add_element( tx_proposal.per_account_payments[0].second).first;
+    CarrotPaymentProposalV1 &normal_payment_proposal = tx_proposal.per_account_payments[0].second.emplace_back().first;
     normal_payment_proposal = CarrotPaymentProposalV1{
         .destination = acc0.cryptonote_address(),
         .amount = crypto::rand_idx((rct::xmr_amount) 1ull << 63),
@@ -809,21 +808,21 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_10)
     tx_proposal.self_sender_index = 2;
 
     // 1 subaddress payment (subtractable)
-    tools::add_element(acc0.second) = {CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{ = {CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
     }, true};
 
     // 1 main address payment
-    tools::add_element(acc1.second).first = CarrotPaymentProposalV1{
+    acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
     };
 
     // 1 integrated address payment
-    tools::add_element(acc3.second) = {CarrotPaymentProposalV1{
+    acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -859,7 +858,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_11)
     tx_proposal.self_sender_index = 2;
 
     // 2 subaddress payment
-    tools::add_element(acc0.second).first = CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -869,7 +868,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_11)
     acc0.second.back().second = true;                         //set copy as subtractable
 
     // 2 main address payment
-    tools::add_element(acc1.second).first = CarrotPaymentProposalV1{
+    acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -879,7 +878,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_11)
     acc1.second.back().second = true;                         //set copy as subtractable
 
     // 1 integrated address payment
-    tools::add_element(acc3.second).first = CarrotPaymentProposalV1{
+    acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -915,7 +914,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_12)
     tx_proposal.self_sender_index = 2;
 
     // 2 subaddress payment (1 subtractable)
-    tools::add_element(acc0.second) = {CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{ = {CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -925,7 +924,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_12)
     acc0.second.back().second = false;                        //set not subtractable, first already is
 
     // 2 main address payment
-    tools::add_element(acc1.second).first = CarrotPaymentProposalV1{
+    acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -934,14 +933,14 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_12)
     acc1.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 1 integrated address payment (subtractable)
-    tools::add_element(acc3.second) = {CarrotPaymentProposalV1{
+    acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
     }, true};
 
     // 1 main address selfsend
-    tools::add_element(tx_proposal.explicit_selfsend_proposals).first.proposal = CarrotPaymentProposalSelfSendV1{
+    tx_proposal.explicit_selfsend_proposals.emplace_back().first.proposal = CarrotPaymentProposalSelfSendV1{
         .destination_address_spend_pubkey = acc2.first.carrot_account_spend_pubkey,
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .enote_type = CarrotEnoteType::PAYMENT,
@@ -949,7 +948,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_12)
     };
 
     // 1 subaddress selfsend (subtractable)
-    tools::add_element(tx_proposal.explicit_selfsend_proposals) = {CarrotPaymentProposalVerifiableSelfSendV1{
+    tx_proposal.explicit_selfsend_proposals.emplace_back().first = CarrotPaymentProposalVerifiableSelfSendV1{
         .proposal = CarrotPaymentProposalSelfSendV1{
             .destination_address_spend_pubkey = acc2.first.subaddress({{4, 19}}).address_spend_pubkey,
             .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
@@ -981,7 +980,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_13)
     acc1.generate(AddressDeriveType::PreCarrot);
 
     // 1 normal payment (subtractable)
-    CarrotPaymentProposalV1 &normal_payment_proposal = tools::add_element( tx_proposal.per_account_payments[0].second).first;
+    CarrotPaymentProposalV1 &normal_payment_proposal = tx_proposal.per_account_payments[0].second.emplace_back().first;
     normal_payment_proposal = CarrotPaymentProposalV1{
         .destination = acc0.cryptonote_address(),
         .amount = crypto::rand_idx((rct::xmr_amount) 1ull << 63),
@@ -1022,21 +1021,21 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_14)
     tx_proposal.self_sender_index = 2;
 
     // 1 subaddress payment (subtractable)
-    tools::add_element(acc0.second) = {CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{ = {CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
     }, true};
 
     // 1 main address payment
-    tools::add_element(acc1.second).first = CarrotPaymentProposalV1{
+    acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
     };
 
     // 1 integrated address payment (subtractable)
-    tools::add_element(acc3.second) = {CarrotPaymentProposalV1{
+    acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -1072,7 +1071,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_15)
     tx_proposal.self_sender_index = 2;
 
     // 2 subaddress payment (subtractable)
-    tools::add_element(acc0.second) = {CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{ = {CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -1081,7 +1080,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_15)
     acc0.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 2 main address payment (subtractable)
-    tools::add_element(acc1.second) = {CarrotPaymentProposalV1{
+    acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -1090,7 +1089,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_15)
     acc1.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 1 integrated address payment (subtractable)
-    tools::add_element(acc3.second) = {CarrotPaymentProposalV1{
+    acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -1126,7 +1125,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_16)
     tx_proposal.self_sender_index = 2;
 
     // 2 subaddress payment (subtractable)
-    tools::add_element(acc0.second) = {CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{ = {CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -1135,7 +1134,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_16)
     acc0.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 2 main address payment (subtractable)
-    tools::add_element(acc1.second) = {CarrotPaymentProposalV1{
+    acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
@@ -1144,22 +1143,22 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_16)
     acc1.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
     // 1 integrated address payment (subtractable)
-    tools::add_element(acc3.second) = {CarrotPaymentProposalV1{
+    acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
     }, true};
 
     // 1 main address selfsend (subtractable)
-    tools::add_element(tx_proposal.explicit_selfsend_proposals) = {{CarrotPaymentProposalSelfSendV1{
+    tx_proposal.explicit_selfsend_proposals.emplace_back() = {CarrotPaymentProposalSelfSendV1{
         .destination_address_spend_pubkey = acc2.first.carrot_account_spend_pubkey,
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .enote_type = CarrotEnoteType::PAYMENT,
         // no internal messages for legacy self-sends
-    }}, true};
+    }, true};
 
     // 1 subaddress selfsend (subtractable)
-    tools::add_element(tx_proposal.explicit_selfsend_proposals) = {CarrotPaymentProposalVerifiableSelfSendV1{
+    tx_proposal.explicit_selfsend_proposals.emplace_back() = {CarrotPaymentProposalVerifiableSelfSendV1{
         .proposal = CarrotPaymentProposalSelfSendV1{
             .destination_address_spend_pubkey = acc2.first.subaddress({{4, 19}}).address_spend_pubkey,
             .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
