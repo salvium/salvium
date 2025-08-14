@@ -208,8 +208,8 @@ typedef struct yield_tx_info {
 } yield_tx_info;
 
 typedef struct yield_tx_info_carrot {
-  uint8_t version;
   uint64_t block_height;
+  uint8_t version;
   crypto::hash tx_hash;
   uint64_t locked_coins;
   crypto::public_key return_address;
