@@ -132,6 +132,9 @@ static bool try_load_pre_carrot_enote(const bool is_coinbase,
         enote_out.amount_commitment = rct::Z;
     }
 
+    // Check for protocol_tx outputs
+    enote_out.is_protocol_tx_output = (tx.type == cryptonote::transaction_type::PROTOCOL);
+    
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -168,8 +171,8 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
 
     crypto::ec_scalar amount_key;
     if (!hwdev.derivation_to_scalar(receive_info->derivation,
-            enote.local_output_index,
-            amount_key))
+                                    enote.is_protocol_tx_output ? 0 : enote.local_output_index,
+                                    amount_key))
         return std::nullopt;
 
     // a
@@ -208,16 +211,16 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
     // derive k^g_o
     crypto::secret_key sender_extension_g;
     if (!hwdev.derivation_to_scalar(receive_info->derivation,
-            enote.local_output_index,
-            sender_extension_g))
+                                    enote.is_protocol_tx_output ? 0 : enote.local_output_index,
+                                    sender_extension_g))
         return std::nullopt;
 
     // K^j_s'
     crypto::public_key address_spend_pubkey;
     if (!hwdev.derive_subaddress_public_key(enote.onetime_address,
-            receive_info->derivation,
-            enote.local_output_index,
-            address_spend_pubkey))
+                                            receive_info->derivation,
+                                            enote.is_protocol_tx_output ? 0 : enote.local_output_index,
+                                            address_spend_pubkey))
         return std::nullopt;
 
     //pid

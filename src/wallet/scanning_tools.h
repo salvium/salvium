@@ -100,6 +100,8 @@ struct PreCarrotEnote
     bool short_amount;
     rct::key amount_commitment;
     rct::ecdhTuple amount;
+
+    bool is_protocol_tx_output;
 };
 
 using MoneroEnoteVariant = std::variant<PreCarrotEnote,
