@@ -7929,8 +7929,8 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
         prompt << tr("WARNING: Outputs of multiple addresses are being used together, which might potentially compromise your privacy.\n");
     }
     
-    if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
-      return true;
+    // if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
+    //   return true;
 
     if (ptx_vector.size() > 1) {
       prompt << boost::format(tr("Sweeping %s in %llu transactions for a total fee of %s.  Is this okay?")) %

@@ -742,7 +742,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
                 subaddr_account,
                 subaddr_indices,
                 only_below ? only_below : MONEY_SUPPLY,
-                0,
+                1, // ignore_below
                 top_block_index))
             continue;
 
