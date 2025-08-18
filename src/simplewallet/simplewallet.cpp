@@ -7705,7 +7705,6 @@ bool simple_wallet::sweep_unmixable(const std::vector<std::string> &args_)
 bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, const std::vector<std::string> &args_)
 {
   CHECK_IF_BACKGROUND_SYNCING("cannot sweep");
-  std::string asset_type = (args_.size() > 1) ? args_.back() : (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) ? "SAL1" : "SAL";
   auto print_usage = [this, account, below]()
   {
     if (below)
@@ -7838,6 +7837,8 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
     }
   }
 
+  std::string asset_type = (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) ? "SAL1" : "SAL";
+  
   std::vector<uint8_t> extra;
   bool payment_id_seen = false;
   if (local_args.size() >= 2)
