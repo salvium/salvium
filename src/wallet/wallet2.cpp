@@ -11610,9 +11610,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
     const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep_all(*this, below, address, is_subaddress, outputs, priority, extra, tx_type, subaddr_account, subaddr_indices);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
-    // TODO: use CLSAGS here..
-    // for (const auto &tx_proposal : tx_proposals)
-    //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
+    for (const auto &tx_proposal : tx_proposals)
+      ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
     return ptx_vector;
   }
 
