@@ -106,7 +106,7 @@ public:
 
   bool print_transaction_pool_stats();
 
-  bool start_mining(cryptonote::account_public_address address, uint64_t num_threads, cryptonote::network_type nettype, bool do_background_mining = false, bool ignore_battery = false);
+  bool start_mining(cryptonote::account_public_address address, uint64_t num_threads, cryptonote::network_type nettype, bool do_background_mining = false, bool ignore_battery = false, bool is_carrot = false);
 
   bool stop_mining();
 
@@ -127,6 +127,8 @@ public:
   bool out_peers(bool set, uint32_t limit);
 
   bool in_peers(bool set, uint32_t limit);
+
+  uint8_t current_hard_fork_version();
 
   bool hard_fork_info(uint8_t version);
 

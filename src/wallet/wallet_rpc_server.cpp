@@ -65,7 +65,7 @@ using namespace epee;
 #define CHECK_MULTISIG_ENABLED() \
   do \
   { \
-    if (m_wallet->multisig() && !m_wallet->is_multisig_enabled()) \
+    if (m_wallet->get_multisig_status().multisig_is_active && !m_wallet->is_multisig_enabled()) \
     { \
       er.code = WALLET_RPC_ERROR_CODE_DISABLED; \
       er.message = "This wallet is multisig, and multisig is disabled. Multisig is an experimental feature and may have bugs. Things that could go wrong include: funds sent to a multisig wallet can't be spent at all, can only be spent with the participation of a malicious group member, or can be stolen by a malicious group member. You can enable it by running this once in salvium-wallet-cli: set enable-multisig-experimental 1"; \
@@ -107,7 +107,7 @@ using namespace epee;
       er.message = "Command not supported by HW wallet"; \
       return false; \
     } \
-    if (m_wallet->multisig()) \
+    if (m_wallet->get_multisig_status().multisig_is_active) \
     { \
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR; \
       er.message = "Multisig wallet cannot enable background sync"; \
@@ -438,7 +438,9 @@ namespace tools
     entry.type = pd.m_coinbase ? "block" : "in";
     entry.subaddr_index = pd.m_subaddr_index;
     entry.subaddr_indices.push_back(pd.m_subaddr_index);
-    entry.address = m_wallet->get_subaddress_as_str(pd.m_subaddr_index);
+    //entry.address = m_wallet->get_subaddress_as_str(pd.m_subaddr_index);
+    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    entry.address = m_wallet->get_subaddress_as_str({{pd.m_subaddr_index.major, pd.m_subaddr_index.minor}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
     set_confirmations(entry, m_wallet->get_blockchain_current_height(), m_wallet->get_last_block_reward(), pd.m_unlock_time);
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -470,7 +472,9 @@ namespace tools
     entry.subaddr_index = { pd.m_subaddr_account, 0 };
     for (uint32_t i: pd.m_subaddr_indices)
       entry.subaddr_indices.push_back({pd.m_subaddr_account, i});
-    entry.address = m_wallet->get_subaddress_as_str({pd.m_subaddr_account, 0});
+    //entry.address = m_wallet->get_subaddress_as_str({pd.m_subaddr_account, 0});
+    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    entry.address = m_wallet->get_subaddress_as_str({{pd.m_subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
     set_confirmations(entry, m_wallet->get_blockchain_current_height(), m_wallet->get_last_block_reward(), pd.m_unlock_time);
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -503,7 +507,9 @@ namespace tools
     entry.subaddr_index = { pd.m_subaddr_account, 0 };
     for (uint32_t i: pd.m_subaddr_indices)
       entry.subaddr_indices.push_back({pd.m_subaddr_account, i});
-    entry.address = m_wallet->get_subaddress_as_str({pd.m_subaddr_account, 0});
+    //entry.address = m_wallet->get_subaddress_as_str({pd.m_subaddr_account, 0});
+    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    entry.address = m_wallet->get_subaddress_as_str({{pd.m_subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
     set_confirmations(entry, m_wallet->get_blockchain_current_height(), m_wallet->get_last_block_reward(), pd.m_tx.unlock_time);
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -526,13 +532,17 @@ namespace tools
     entry.type = "pool";
     entry.subaddr_index = pd.m_subaddr_index;
     entry.subaddr_indices.push_back(pd.m_subaddr_index);
-    entry.address = m_wallet->get_subaddress_as_str(pd.m_subaddr_index);
+    //entry.address = m_wallet->get_subaddress_as_str(pd.m_subaddr_index);
+    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    entry.address = m_wallet->get_subaddress_as_str({{pd.m_subaddr_index.major, pd.m_subaddr_index.minor}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
     set_confirmations(entry, m_wallet->get_blockchain_current_height(), m_wallet->get_last_block_reward(), pd.m_unlock_time);
   }
   //------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::on_getbalance(const wallet_rpc::COMMAND_RPC_GET_BALANCE::request& req, wallet_rpc::COMMAND_RPC_GET_BALANCE::response& res, epee::json_rpc::error& er, const connection_context *ctx)
   {
     if (!m_wallet) return not_open(er);
+
+    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
 
     std::vector<std::string> assets_in_wallet = m_wallet->list_asset_types();
     std::string asset_type = req.asset_type.empty() ? "SAL1" : boost::algorithm::to_upper_copy(req.asset_type);
@@ -551,7 +561,7 @@ namespace tools
         if (!balance_info.balance)
           continue;
         balance_info.unlocked_balance = req.all_accounts ? m_wallet->unlocked_balance_all(req.strict, asset, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock) : m_wallet->unlocked_balance(req.account_index, asset, req.strict, &balance_info.blocks_to_unlock, &balance_info.time_to_unlock);
-        balance_info.multisig_import_needed = m_wallet->multisig() && m_wallet->has_multisig_partial_key_images();
+        balance_info.multisig_import_needed = m_wallet->get_multisig_status().multisig_is_active && m_wallet->has_multisig_partial_key_images();
         std::map<uint32_t, std::map<uint32_t, uint64_t>> balance_per_subaddress_per_account;
         std::map<uint32_t, std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>>> unlocked_balance_per_subaddress_per_account;
         if (req.all_accounts)
@@ -590,7 +600,7 @@ namespace tools
             info.account_index = account_index;
             info.address_index = i;
             cryptonote::subaddress_index index = {info.account_index, info.address_index};
-            info.address = m_wallet->get_subaddress_as_str(index);
+            info.address = m_wallet->get_subaddress_as_str({{info.account_index, info.address_index}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
             info.balance = balance_per_subaddress[i];
             info.unlocked_balance = unlocked_balance_per_subaddress[i].first;
             info.blocks_to_unlock = unlocked_balance_per_subaddress[i].second.first;
@@ -616,6 +626,9 @@ namespace tools
   bool wallet_rpc_server::on_getaddress(const wallet_rpc::COMMAND_RPC_GET_ADDRESS::request& req, wallet_rpc::COMMAND_RPC_GET_ADDRESS::response& res, epee::json_rpc::error& er, const connection_context *ctx)
   {
     if (!m_wallet) return not_open(er);
+
+    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+
     try
     {
       THROW_WALLET_EXCEPTION_IF(req.account_index >= m_wallet->get_num_subaddress_accounts(), error::account_index_outofbound);
@@ -638,7 +651,8 @@ namespace tools
         res.addresses.resize(res.addresses.size() + 1);
         auto& info = res.addresses.back();
         const cryptonote::subaddress_index index = {req.account_index, i};
-        info.address = m_wallet->get_subaddress_as_str(index);
+        //info.address = m_wallet->get_subaddress_as_str(index);
+        info.address = m_wallet->get_subaddress_as_str({{req.account_index, i}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
         info.label = m_wallet->get_subaddress_label(index);
         info.address_index = index.minor;
         info.used = std::find_if(transfers.begin(), transfers.end(), [&](const tools::wallet2::transfer_details& td) { return td.m_subaddr_index == index; }) != transfers.end();
@@ -731,6 +745,9 @@ namespace tools
   bool wallet_rpc_server::on_get_accounts(const wallet_rpc::COMMAND_RPC_GET_ACCOUNTS::request& req, wallet_rpc::COMMAND_RPC_GET_ACCOUNTS::response& res, epee::json_rpc::error& er, const connection_context *ctx)
   {
     if (!m_wallet) return not_open(er);
+
+    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    
     try
     {
       res.total_balance = 0;
@@ -751,7 +768,8 @@ namespace tools
           continue;
         wallet_rpc::COMMAND_RPC_GET_ACCOUNTS::subaddress_account_info info;
         info.account_index = subaddr_index.major;
-        info.base_address = m_wallet->get_subaddress_as_str(subaddr_index);
+        //info.base_address = m_wallet->get_subaddress_as_str(subaddr_index);
+        info.base_address = m_wallet->get_subaddress_as_str({{subaddr_index.major, subaddr_index.minor}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
 
         //for (const auto& asset: asset_types) {
           info.balance = m_wallet->balance(subaddr_index.major, "SAL1", req.strict_balances);
@@ -1139,7 +1157,7 @@ namespace tools
       fill(spent_key_images, key_image_list);
     }
 
-    if (m_wallet->multisig())
+    if (m_wallet->get_multisig_status().multisig_is_active)
     {
       multisig_txset = epee::string_tools::buff_to_hex_nodelimer(m_wallet->save_multisig_tx(ptx_vector));
       if (multisig_txset.empty())
@@ -1518,7 +1536,7 @@ namespace tools
         }
 
         for (size_t n = 0; n < exported_txs.m_ptx.size(); ++n) {
-          tx_constructions.push_back(exported_txs.m_ptx[n].construction_data);
+          tx_constructions.push_back(std::get<wallet2::tx_construction_data>(exported_txs.m_ptx[n].construction_data));
         }
       }
       catch (const std::exception &e) {
@@ -1873,7 +1891,7 @@ namespace tools
     {
       uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
       uint32_t priority = m_wallet->adjust_priority(req.priority);
-      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_single(ki, dsts[0].addr, dsts[0].is_subaddress, req.outputs, mixin, req.unlock_time, priority, extra);
+      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_single(ki, dsts[0].addr, cryptonote::transaction_type::TRANSFER, dsts[0].is_subaddress, req.outputs, mixin, req.unlock_time, priority, extra);
 
       if (ptx_vector.empty())
       {
@@ -2084,6 +2102,9 @@ namespace tools
   bool wallet_rpc_server::on_get_payments(const wallet_rpc::COMMAND_RPC_GET_PAYMENTS::request& req, wallet_rpc::COMMAND_RPC_GET_PAYMENTS::response& res, epee::json_rpc::error& er, const connection_context *ctx)
   {
     if (!m_wallet) return not_open(er);
+
+    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    
     crypto::hash payment_id;
     crypto::hash8 payment_id8;
     cryptonote::blobdata payment_id_blob;
@@ -2124,7 +2145,8 @@ namespace tools
       rpc_payment.unlock_time  = payment.m_unlock_time;
       rpc_payment.locked       = !m_wallet->is_transfer_unlocked(payment.m_unlock_time, payment.m_block_height);
       rpc_payment.subaddr_index = payment.m_subaddr_index;
-      rpc_payment.address      = m_wallet->get_subaddress_as_str(payment.m_subaddr_index);
+      //rpc_payment.address      = m_wallet->get_subaddress_as_str(payment.m_subaddr_index);
+      rpc_payment.address      = m_wallet->get_subaddress_as_str({{payment.m_subaddr_index.major, payment.m_subaddr_index.minor}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
       res.payments.push_back(rpc_payment);
     }
 
@@ -2134,6 +2156,9 @@ namespace tools
   bool wallet_rpc_server::on_get_bulk_payments(const wallet_rpc::COMMAND_RPC_GET_BULK_PAYMENTS::request& req, wallet_rpc::COMMAND_RPC_GET_BULK_PAYMENTS::response& res, epee::json_rpc::error& er, const connection_context *ctx)
   {
     res.payments.clear();
+
+    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    
     if (!m_wallet) return not_open(er);
 
     /* If the payment ID list is empty, we get payments to any payment ID (or lack thereof) */
@@ -2151,7 +2176,8 @@ namespace tools
         rpc_payment.block_height = payment.second.m_block_height;
         rpc_payment.unlock_time  = payment.second.m_unlock_time;
         rpc_payment.subaddr_index = payment.second.m_subaddr_index;
-        rpc_payment.address      = m_wallet->get_subaddress_as_str(payment.second.m_subaddr_index);
+        //rpc_payment.address      = m_wallet->get_subaddress_as_str(payment.second.m_subaddr_index);
+        rpc_payment.address      = m_wallet->get_subaddress_as_str({{payment.second.m_subaddr_index.major, payment.second.m_subaddr_index.minor}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
         rpc_payment.locked       = !m_wallet->is_transfer_unlocked(payment.second.m_unlock_time, payment.second.m_block_height);
         res.payments.push_back(std::move(rpc_payment));
       }
@@ -2206,7 +2232,8 @@ namespace tools
         rpc_payment.block_height = payment.m_block_height;
         rpc_payment.unlock_time  = payment.m_unlock_time;
         rpc_payment.subaddr_index = payment.m_subaddr_index;
-        rpc_payment.address      = m_wallet->get_subaddress_as_str(payment.m_subaddr_index);
+        //rpc_payment.address      = m_wallet->get_subaddress_as_str(payment.m_subaddr_index);
+        rpc_payment.address      = m_wallet->get_subaddress_as_str({{payment.m_subaddr_index.major, payment.m_subaddr_index.minor}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
         rpc_payment.locked       = !m_wallet->is_transfer_unlocked(payment.m_unlock_time, payment.m_block_height);
         res.payments.push_back(std::move(rpc_payment));
       }
@@ -2278,10 +2305,11 @@ namespace tools
       if (req.key_type.compare("mnemonic") == 0)
       {
         epee::wipeable_string seed;
-        bool ready;
-        if (m_wallet->multisig(&ready))
+        const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+        if (ms_status.multisig_is_active)
         {
-          if (!ready)
+          if (!ms_status.is_ready)
           {
             er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
             er.message = "This wallet is multisig, but not yet finalized";
@@ -3285,9 +3313,9 @@ namespace tools
         const auto &entry = ab[idx];
         std::string address;
         if (entry.m_has_payment_id)
-          address = cryptonote::get_account_integrated_address_as_str(m_wallet->nettype(), entry.m_address, entry.m_payment_id);
+          address = cryptonote::get_account_integrated_address_as_str(m_wallet->nettype(), entry.m_address, entry.m_payment_id, entry.m_is_carrot);
         else
-          address = get_account_address_as_str(m_wallet->nettype(), entry.m_is_subaddress, entry.m_address);
+          address = get_account_address_as_str(m_wallet->nettype(), entry.m_is_subaddress, entry.m_address, entry.m_is_carrot);
         res.entries.push_back(wallet_rpc::COMMAND_RPC_GET_ADDRESS_BOOK_ENTRY::entry{idx, address, entry.m_description});
       }
     }
@@ -3327,7 +3355,7 @@ namespace tools
         er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + req.address;
       return false;
     }
-    if (!m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : NULL, req.description, info.is_subaddress))
+    if (!m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : NULL, req.description, info.is_subaddress, info.is_carrot))
     {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = "Failed to add address book entry";
@@ -3386,12 +3414,13 @@ namespace tools
       entry.m_is_subaddress = info.is_subaddress;
       if (info.has_payment_id)
         entry.m_payment_id = info.payment_id;
+      entry.m_is_carrot = info.is_carrot;
     }
 
     if (req.set_description)
       entry.m_description = req.description;
 
-    if (!m_wallet->set_address_book_row(req.index, entry.m_address, req.set_address && entry.m_has_payment_id ? &entry.m_payment_id : NULL, entry.m_description, entry.m_is_subaddress))
+    if (!m_wallet->set_address_book_row(req.index, entry.m_address, req.set_address && entry.m_has_payment_id ? &entry.m_payment_id : NULL, entry.m_description, entry.m_is_subaddress, entry.m_is_carrot))
     {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = "Failed to edit address book entry";
@@ -4285,7 +4314,14 @@ namespace tools
   bool wallet_rpc_server::on_is_multisig(const wallet_rpc::COMMAND_RPC_IS_MULTISIG::request& req, wallet_rpc::COMMAND_RPC_IS_MULTISIG::response& res, epee::json_rpc::error& er, const connection_context *ctx)
   {
     if (!m_wallet) return not_open(er);
-    res.multisig = m_wallet->multisig(&res.ready, &res.threshold, &res.total);
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    res.multisig = ms_status.multisig_is_active;
+    res.kex_is_done = ms_status.kex_is_done;
+    res.ready = ms_status.is_ready;
+    res.threshold = ms_status.threshold;
+    res.total = ms_status.total;
+
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -4298,7 +4334,7 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    if (m_wallet->multisig())
+    if (m_wallet->get_multisig_status().multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_ALREADY_MULTISIG;
       er.message = "This wallet is already multisig";
@@ -4328,7 +4364,7 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    if (m_wallet->multisig())
+    if (m_wallet->get_multisig_status().multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_ALREADY_MULTISIG;
       er.message = "This wallet is already multisig";
@@ -4367,14 +4403,15 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    bool ready;
-    if (!m_wallet->multisig(&ready))
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    if (!ms_status.multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is not multisig";
       return false;
     }
-    if (!ready)
+    if (!ms_status.is_ready)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is multisig, but not yet finalized";
@@ -4408,15 +4445,15 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    bool ready;
-    uint32_t threshold, total;
-    if (!m_wallet->multisig(&ready, &threshold, &total))
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    if (!ms_status.multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is not multisig";
       return false;
     }
-    if (!ready)
+    if (!ms_status.is_ready)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is multisig, but not yet finalized";
@@ -4424,7 +4461,7 @@ namespace tools
     }
     CHECK_MULTISIG_ENABLED();
 
-    if (req.info.size() < threshold - 1)
+    if (req.info.size() + 1 < ms_status.threshold)
     {
       er.code = WALLET_RPC_ERROR_CODE_THRESHOLD_NOT_REACHED;
       er.message = "Needs multisig export info from more participants";
@@ -4488,9 +4525,9 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    bool ready;
-    uint32_t threshold, total;
-    if (!m_wallet->multisig(&ready, &threshold, &total))
+    multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    if (!ms_status.multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is not multisig";
@@ -4498,7 +4535,7 @@ namespace tools
     }
     CHECK_MULTISIG_ENABLED();
 
-    if (req.multisig_info.size() + 1 < total)
+    if (req.multisig_info.size() + 1 < ms_status.total)
     {
       er.code = WALLET_RPC_ERROR_CODE_THRESHOLD_NOT_REACHED;
       er.message = "Needs multisig info from more participants";
@@ -4508,8 +4545,8 @@ namespace tools
     try
     {
       res.multisig_info = m_wallet->exchange_multisig_keys(req.password, req.multisig_info, req.force_update_use_with_caution);
-      m_wallet->multisig(&ready);
-      if (ready)
+      ms_status = m_wallet->get_multisig_status();
+      if (ms_status.is_ready)
       {
         res.address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
       }
@@ -4518,6 +4555,47 @@ namespace tools
     {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = std::string("Error calling exchange_multisig_info: ") + e.what();
+      return false;
+    }
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool wallet_rpc_server::on_get_multisig_key_exchange_booster(const wallet_rpc::COMMAND_RPC_GET_MULTISIG_KEY_EXCHANGE_BOOSTER::request& req, wallet_rpc::COMMAND_RPC_GET_MULTISIG_KEY_EXCHANGE_BOOSTER::response& res, epee::json_rpc::error& er, const connection_context *ctx)
+  {
+    if (!m_wallet) return not_open(er);
+    if (m_restricted)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Command unavailable in restricted mode.";
+      return false;
+    }
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    if (ms_status.is_ready)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_ALREADY_MULTISIG;
+      er.message = "This wallet is multisig, and already finalized";
+      return false;
+    }
+
+    if (req.multisig_info.size() == 0)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_THRESHOLD_NOT_REACHED;
+      er.message = "Needs multisig info from more participants";
+      return false;
+    }
+
+    try
+    {
+      res.multisig_info = m_wallet->get_multisig_key_exchange_booster(req.password,
+        req.multisig_info,
+        req.threshold,
+        req.num_signers);
+    }
+    catch (const std::exception &e)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+      er.message = std::string("Error calling exchange_multisig_info_booster: ") + e.what();
       return false;
     }
     return true;
@@ -4532,15 +4610,15 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    bool ready;
-    uint32_t threshold, total;
-    if (!m_wallet->multisig(&ready, &threshold, &total))
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    if (!ms_status.multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is not multisig";
       return false;
     }
-    if (!ready)
+    if (!ms_status.is_ready)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is multisig, but not yet finalized";
@@ -4602,15 +4680,15 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
-    bool ready;
-    uint32_t threshold, total;
-    if (!m_wallet->multisig(&ready, &threshold, &total))
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+
+    if (!ms_status.multisig_is_active)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is not multisig";
       return false;
     }
-    if (!ready)
+    if (!ms_status.is_ready)
     {
       er.code = WALLET_RPC_ERROR_CODE_NOT_MULTISIG;
       er.message = "This wallet is multisig, but not yet finalized";
@@ -4635,7 +4713,7 @@ namespace tools
       return false;
     }
 
-    if (txs.m_signers.size() < threshold)
+    if (txs.m_signers.size() < ms_status.threshold)
     {
       er.code = WALLET_RPC_ERROR_CODE_THRESHOLD_NOT_REACHED;
       er.message = "Not enough signers signed this transaction.";

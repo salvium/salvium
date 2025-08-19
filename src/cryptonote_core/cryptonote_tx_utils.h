@@ -68,6 +68,8 @@ namespace cryptonote
     uint8_t type;
     crypto::public_key P_change;
     crypto::public_key return_pubkey;
+    carrot::view_tag_t return_view_tag;
+    carrot::encrypted_janus_anchor_t return_anchor_enc;
     uint64_t origin_height;
   };
 
@@ -75,8 +77,6 @@ namespace cryptonote
   bool construct_protocol_tx(const size_t height, transaction& tx, std::vector<protocol_data_entry>& protocol_data, const uint8_t hf_version);
   //---------------------------------------------------------------
   bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, network_type nettype = network_type::FAKECHAIN, const std::vector<hardfork_t>& hardforks = {}, const blobdata& extra_nonce = blobdata(), size_t max_outs = 999, uint8_t hard_fork_version = 1);
-  //---------------------------------------------------------------
-  std::tuple<bool, uint64_t> check_treasury_payout(network_type nettype, uint64_t height, const std::vector<hardfork_t>& hardforks, const uint8_t hf_version);
 
   struct tx_source_entry
   {
@@ -89,9 +89,14 @@ namespace cryptonote
     uint64_t real_output_in_tx_index;   //index in transaction outputs vector
     uint64_t amount;                    //money
     bool rct;                           //true if the output is rct
+    bool carrot;                        //true if the output is a carrot output
+    bool coinbase;                      //true if the output is a coinbase output
     rct::key mask;                      //ringct amount mask
     rct::multisig_kLRki multisig_kLRki; //multisig info
     std::string asset_type;
+    crypto::key_image first_rct_key_image;
+    crypto::public_key address_spend_pubkey; // the spend public key of the address that this source is for.
+    uint64_t block_index;
     origin_data origin_tx_data;
 
     void push_output(uint64_t idx, const crypto::public_key &k, uint64_t amount) { outputs.push_back(std::make_pair(idx, rct::ctkey({rct::pk2rct(k), rct::zeroCommit(amount)}))); }

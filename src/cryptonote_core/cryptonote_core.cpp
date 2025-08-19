@@ -843,7 +843,9 @@ namespace cryptonote
     bad_semantics_txes_lock.unlock();
 
     uint8_t hf_version = m_blockchain_storage.get_current_hard_fork_version();
-    const size_t max_tx_version = (hf_version >= HF_VERSION_ENABLE_N_OUTS) ? TRANSACTION_VERSION_N_OUTS : TRANSACTION_VERSION_2_OUTS;
+    const size_t max_tx_version = hf_version >= HF_VERSION_CARROT ? TRANSACTION_VERSION_CARROT :
+                                  hf_version >= HF_VERSION_ENABLE_N_OUTS ? TRANSACTION_VERSION_N_OUTS :
+                                  TRANSACTION_VERSION_2_OUTS;
     if (tx.version == 0 || tx.version > max_tx_version)
     {
       // v2 is the latest one we know
@@ -924,8 +926,16 @@ namespace cryptonote
         continue;
       const rct::rctSig &rv = tx_info[n].tx->rct_signatures;
       const uint8_t hf_version = m_blockchain_storage.get_current_hard_fork_version();
-      if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+      if (hf_version >= HF_VERSION_CARROT) {
         if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeSalviumOne) {
+          MERROR_VER("Invalid RCT type provided");
+          set_semantics_failed(tx_info[n].tx_hash);
+          tx_info[n].tvc.m_verifivation_failed = true;
+          tx_info[n].result = false;
+          return false;
+        }
+      } else if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+        if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeSalviumZero) {
           MERROR_VER("Invalid RCT type provided");
           set_semantics_failed(tx_info[n].tx_hash);
           tx_info[n].tvc.m_verifivation_failed = true;
@@ -990,6 +1000,7 @@ namespace cryptonote
           break;
         case rct::RCTTypeBulletproofPlus:
         case rct::RCTTypeFullProofs:
+        case rct::RCTTypeSalviumZero:
         case rct::RCTTypeSalviumOne:
           if (!is_canonical_bulletproof_plus_layout(rv.p.bulletproofs_plus))
           {
@@ -1017,7 +1028,7 @@ namespace cryptonote
       {
         if (!tx_info[n].result)
           continue;
-        if (tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof2 && tx_info[n].tx->rct_signatures.type != rct::RCTTypeCLSAG && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproofPlus && tx_info[n].tx->rct_signatures.type != rct::RCTTypeFullProofs && tx_info[n].tx->rct_signatures.type != rct::RCTTypeSalviumOne)
+        if (tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof2 && tx_info[n].tx->rct_signatures.type != rct::RCTTypeCLSAG && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproofPlus && tx_info[n].tx->rct_signatures.type != rct::RCTTypeFullProofs && tx_info[n].tx->rct_signatures.type != rct::RCTTypeSalviumZero && tx_info[n].tx->rct_signatures.type != rct::RCTTypeSalviumOne)
           continue;
         if (!rct::verRctSemanticsSimple(tx_info[n].tx->rct_signatures,
                                         tx_info[n].tx->type == cryptonote::transaction_type::BURN ? tx_info[n].tx->amount_burnt :

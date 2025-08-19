@@ -60,12 +60,7 @@ TEST(check_output_types, check_all)
   EXPECT_TRUE(check_output_types(tx, hf_version));
   tx.vout.clear();
  
-  // should only allow txout_to_key or txout_to_tagged_key output types
-  txout_to_script tx_out_script;
-  tx.vout.push_back(tx_out {0, tx_out_script});
-  EXPECT_FALSE(check_output_types(tx, hf_version));
-  tx.vout.clear();
- 
+  // should only allow txout_to_key or txout_to_tagged_key output types 
   txout_to_scripthash tx_out_scripthash;
   tx.vout.push_back(tx_out {0, tx_out_scripthash});
   EXPECT_FALSE(check_output_types(tx, hf_version));

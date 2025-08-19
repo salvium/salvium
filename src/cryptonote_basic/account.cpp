@@ -34,6 +34,7 @@
 #include "account.h"
 #include "warnings.h"
 #include "crypto/crypto.h"
+#include "crypto/generators.h"
 extern "C"
 {
 #include "crypto/keccak.h"
@@ -41,6 +42,7 @@ extern "C"
 #include "cryptonote_basic_impl.h"
 #include "cryptonote_format_utils.h"
 #include "cryptonote_config.h"
+#include "ringct/rctOps.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "account"
@@ -149,6 +151,8 @@ DISABLE_VS_WARNINGS(4244 4345)
   void account_base::forget_spend_key()
   {
     m_keys.m_spend_secret_key = crypto::secret_key();
+    m_keys.s_master = m_keys.m_spend_secret_key;
+    m_keys.k_prove_spend = m_keys.m_spend_secret_key;
     m_keys.m_multisig_keys.clear();
   }
   //-----------------------------------------------------------------
@@ -161,6 +165,7 @@ DISABLE_VS_WARNINGS(4244 4345)
         "Unexpected derived public spend key");
 
     m_keys.m_spend_secret_key = spend_secret_key;
+    m_keys.s_master = m_keys.m_spend_secret_key;
   }
   //-----------------------------------------------------------------
   crypto::secret_key account_base::generate(const crypto::secret_key& recovery_key, bool recover, bool two_random)
@@ -274,11 +279,20 @@ DISABLE_VS_WARNINGS(4244 4345)
     //TODO: change this code into base 58
     return get_account_address_as_str(nettype, false, m_keys.m_account_address);
   }
+  //----------------------------------------------------------------------------------------------------------------------
+  std::string account_base::get_carrot_public_address_str(network_type nettype) const
+  {
+    // Build the cryptonote::account_public_address
+    account_public_address addr{m_keys.m_carrot_main_address.m_spend_public_key, m_keys.m_carrot_main_address.m_view_public_key};
+    // change this code into base 58
+    return get_account_address_as_str(nettype, false, addr, true);
+  }
   //-----------------------------------------------------------------
   std::string account_base::get_public_integrated_address_str(const crypto::hash8 &payment_id, network_type nettype) const
   {
     //TODO: change this code into base 58
     return get_account_integrated_address_as_str(nettype, m_keys.m_account_address, payment_id);
   }
-  //-----------------------------------------------------------------
 }
+//-------------------------------------------------------------------------------------------------------------------
+

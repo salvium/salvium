@@ -857,6 +857,8 @@ static bool set_tx_rct_signatures(
     rv.type = rct::RCTTypeBulletproofPlus;
   else if (rct_config.bp_version == 5)
     rv.type = rct::RCTTypeFullProofs;
+  else if (rct_config.bp_version == 6)
+    rv.type = rct::RCTTypeSalviumZero;
   else
     return false;
   rv.txnFee = fee;
@@ -934,7 +936,7 @@ static bool set_tx_rct_signatures(
     }
     sc_sub(difference.bytes, sumpouts.bytes, sumouts.bytes);
     rct::genC(rv.p_r, difference, 0);
-    if (rv.type == rct::RCTTypeFullProofs || rv.type == rct::RCTTypeSalviumOne) {
+    if (rv.type == rct::RCTTypeFullProofs || rv.type == rct::RCTTypeSalviumZero || rv.type == rct::RCTTypeSalviumOne) {
       rv.salvium_data.pr_proof = rct::PRProof_Gen(difference);
 #ifdef DBG
       CHECK_AND_ASSERT_THROW_MES(rct::PRProof_Ver(rv.p_r, rv.salvium_data.pr_proof), "PRProof_Ver() failed on recently created proof");
@@ -954,7 +956,7 @@ static bool set_tx_rct_signatures(
   // check balance if reconstructing the tx
   else {
     rv.p.pseudoOuts = unsigned_tx.rct_signatures.p.pseudoOuts;
-    if (rv.type == rct::RCTTypeFullProofs || rv.type == rct::RCTTypeSalviumOne) {
+    if (rv.type == rct::RCTTypeFullProofs || rv.type == rct::RCTTypeSalviumZero || rv.type == rct::RCTTypeSalviumOne) {
       if (!rct::PRProof_Ver(unsigned_tx.rct_signatures.p_r, unsigned_tx.rct_signatures.salvium_data.pr_proof))
         return false;
       rv.p_r = unsigned_tx.rct_signatures.p_r;

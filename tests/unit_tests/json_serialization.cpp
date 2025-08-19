@@ -56,9 +56,8 @@ namespace test
                 source_amount += input.value().amount;
                 auto const& key = boost::get<cryptonote::txout_to_tagged_key>(input.value().target);
 
-                actual_sources.push_back(
-                    {{}, 0, key_field.pub_key, {}, std::size_t(input.index()), input.value().amount, rct, rct::identity()}
-                );
+                cryptonote::tx_source_entry foo{{}, 0, key_field.pub_key, {}, std::size_t(input.index()), input.value().amount, rct, false, false, rct::identity(), {}, "SAL1"};
+                actual_sources.push_back(foo);
 
                 for (unsigned ring = 0; ring < 10; ++ring)
                     actual_sources.back().push_output(input.index(), key.key, input.value().amount);
