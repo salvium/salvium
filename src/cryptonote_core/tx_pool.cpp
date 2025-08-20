@@ -142,7 +142,7 @@ namespace cryptonote
     PERF_TIMER(add_tx);
     if (tx.version == 0)
     {
-      // v0 or v1 never accepted
+      // v0 never accepted
       LOG_PRINT_L1("transaction version 0 is invalid");
       tvc.m_verifivation_failed = true;
       return false;
