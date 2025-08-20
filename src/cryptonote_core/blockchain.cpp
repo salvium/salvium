@@ -1348,6 +1348,11 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, 
   CHECK_AND_ASSERT_MES(b.miner_tx.vin[0].type() == typeid(txin_gen), false, "coinbase transaction in the block has the wrong type");
   CHECK_AND_ASSERT_MES(b.miner_tx.version > 1, false, "Invalid coinbase transaction version");
 
+  if (hf_version >= HF_VERSION_CARROT) {
+    CHECK_AND_ASSERT_MES(b.miner_tx.version == TRANSACTION_VERSION_CARROT, false, "miner transaction has wrong version");
+    CHECK_AND_ASSERT_MES(b.miner_tx.type == cryptonote::transaction_type::MINER, false, "miner transaction has wrong type");
+  }
+
   // for v2 txes (ringct), we only accept empty rct signatures for miner transactions,
   if (hf_version >= HF_VERSION_REJECT_SIGS_IN_COINBASE && b.miner_tx.version >= 2)
   {
@@ -1397,6 +1402,11 @@ bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t heigh
   CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 1, false, "coinbase protocol transaction in the block has no inputs");
   CHECK_AND_ASSERT_MES(b.protocol_tx.vin[0].type() == typeid(txin_gen), false, "coinbase protocol transaction in the block has the wrong type");
   CHECK_AND_ASSERT_MES(b.protocol_tx.version > 1, false, "Invalid coinbase protocol transaction version");
+
+  if (hf_version >= HF_VERSION_CARROT) {
+    CHECK_AND_ASSERT_MES(b.protocol_tx.version == TRANSACTION_VERSION_CARROT, false, "protocol transaction has wrong version");
+    CHECK_AND_ASSERT_MES(b.protocol_tx.type == cryptonote::transaction_type::PROTOCOL, false, "protocol transaction has wrong type");
+  }
 
   // for v2 txes (ringct), we only accept empty rct signatures for protocol transactions,
   if (hf_version >= HF_VERSION_REJECT_SIGS_IN_COINBASE && b.protocol_tx.version >= 2)
@@ -1621,13 +1631,18 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   );
 
   if (hf_version >= HF_VERSION_CARROT) {
-    // TODO: add other verifications for carrot yield payouts
+
     size_t output_idx = 0;
     for (auto it = carrot_yield_payouts.begin(); it != carrot_yield_payouts.end(); it++, output_idx++) {
       // Verify the output key
       crypto::public_key out_key;
       cryptonote::get_output_public_key(b.protocol_tx.vout[output_idx], out_key);
       CHECK_AND_ASSERT_MES(out_key == it->first.return_address, false, "Incorrect output key detected in protocol_tx");
+
+      // Verify the return pubkey
+      const auto additional_pubkeys = cryptonote::get_additional_tx_pub_keys_from_extra(b.protocol_tx.extra);
+      CHECK_AND_ASSERT_MES(additional_pubkeys.size() > output_idx, false, "Missing return pubkey detected in protocol_tx");
+      CHECK_AND_ASSERT_MES(additional_pubkeys[output_idx] == it->first.return_pubkey, false, "Incorrect return pubkey detected in protocol_tx");
 
       // Verify the output amount
       uint64_t expected_amount = it->second;
@@ -1636,11 +1651,21 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
       // Verify the output asset type
       std::string out_asset_type;
       cryptonote::get_output_asset_type(b.protocol_tx.vout[output_idx], out_asset_type);
-      uint8_t hf_yield = m_hardfork->get_ideal_version(it->first.block_height);
-      if (hf_yield >= HF_VERSION_SALVIUM_ONE_PROOFS)
-        CHECK_AND_ASSERT_MES(out_asset_type == "SAL1", false, "Incorrect output asset_type (!= SAL1) detected in protocol_tx");
-      else
-        CHECK_AND_ASSERT_MES(out_asset_type == "SAL", false, "Incorrect output asset_type (!= SAL) detected in protocol_tx");
+      CHECK_AND_ASSERT_MES(out_asset_type == "SAL1", false, "Incorrect output asset_type (!= SAL1) detected in protocol_tx");
+
+      // Verify the view tag
+      CHECK_AND_ASSERT_MES(
+        boost::get<cryptonote::txout_to_carrot_v1>(
+          b.protocol_tx.vout[output_idx].target
+        ).view_tag == it->first.return_view_tag, false, "Incorrect view tag detected in protocol_tx"
+      );
+
+      // Verify the anchor encrypted
+      CHECK_AND_ASSERT_MES(
+        boost::get<cryptonote::txout_to_carrot_v1>(
+          b.protocol_tx.vout[output_idx].target
+        ).encrypted_janus_anchor == it->first.return_anchor_enc, false, "Incorrect anchor detected in protocol_tx"
+      );
     }
 
     return true;
@@ -3685,7 +3710,7 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
   */
 
   if (hf_version >= HF_VERSION_CARROT) {
-    // from v11, force the new SalviumOne RCT data
+    // from v10, force the new SalviumOne RCT data
     if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::AUDIT) {
       if (tx.rct_signatures.type != rct::RCTTypeSalviumOne) {
         MERROR_VER("SalviumOne data required after v" + std::to_string(HF_VERSION_CARROT));

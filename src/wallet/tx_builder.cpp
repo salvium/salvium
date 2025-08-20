@@ -541,9 +541,6 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const std::set<uint32_t> &subaddr_indices,
     const wallet2::unique_index_container &subtract_fee_from_outputs)
 {
-    wallet2::transfer_container transfers;
-    w.get_transfers(transfers);
-
     const bool use_per_byte_fee = w.use_fork_rules(HF_VERSION_PER_BYTE_FEE, 0);
     CHECK_AND_ASSERT_THROW_MES(use_per_byte_fee,
         "make_carrot_transaction_proposals_wallet2_transfer: not using per-byte base fee");

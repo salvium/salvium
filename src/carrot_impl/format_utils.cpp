@@ -420,7 +420,7 @@ cryptonote::transaction store_carrot_to_coinbase_transaction_v1(
     cryptonote::transaction tx;
     tx.type = tx_type;
     tx.pruned = false;
-    tx.version = 2;
+    tx.version = TRANSACTION_VERSION_CARROT;
     tx.unlock_time = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
     tx.vin.reserve(1);
     tx.vout.reserve(nouts);

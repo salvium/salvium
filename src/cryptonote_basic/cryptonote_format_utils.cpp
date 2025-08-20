@@ -1383,7 +1383,7 @@ namespace cryptonote
     {
       if (hf_version >= HF_VERSION_CARROT)
       {
-        // from v11, require outputs be carrot outputs
+        // from v10, require outputs be carrot outputs
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_carrot_v1), false, "wrong variant type: "
           << o.target.type().name() << ", expected txout_to_carrot_v1 in transaction id=" << get_transaction_hash(tx));
       } else {
