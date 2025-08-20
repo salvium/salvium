@@ -1640,9 +1640,14 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
       CHECK_AND_ASSERT_MES(out_key == it->first.return_address, false, "Incorrect output key detected in protocol_tx");
 
       // Verify the return pubkey
-      const auto additional_pubkeys = cryptonote::get_additional_tx_pub_keys_from_extra(b.protocol_tx.extra);
-      CHECK_AND_ASSERT_MES(additional_pubkeys.size() > output_idx, false, "Missing return pubkey detected in protocol_tx");
-      CHECK_AND_ASSERT_MES(additional_pubkeys[output_idx] == it->first.return_pubkey, false, "Incorrect return pubkey detected in protocol_tx");
+      if (b.protocol_tx.vout.size() > 1) {
+        const auto additional_pubkeys = cryptonote::get_additional_tx_pub_keys_from_extra(b.protocol_tx.extra);
+        CHECK_AND_ASSERT_MES(additional_pubkeys.size() > output_idx, false, "Missing return pubkey detected in protocol_tx");
+        CHECK_AND_ASSERT_MES(additional_pubkeys[output_idx] == it->first.return_pubkey, false, "Incorrect return pubkey detected in protocol_tx");
+      } else {
+        const auto main_pubkey = cryptonote::get_tx_pub_key_from_extra(b.protocol_tx.extra);
+        CHECK_AND_ASSERT_MES(main_pubkey == it->first.return_pubkey, false, "Incorrect return pubkey detected in protocol_tx");
+      }
 
       // Verify the output amount
       uint64_t expected_amount = it->second;
