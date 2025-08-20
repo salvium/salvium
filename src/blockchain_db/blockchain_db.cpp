@@ -238,7 +238,7 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
       LOG_PRINT_L1("Failed to get output unlock time, aborting transaction addition");
       throw std::runtime_error("Unexpected error getting output unlock_time, aborting");
     }
-    if (miner_tx && tx.version == 2)
+    if (miner_tx && tx.version >= 2)
     {
       cryptonote::tx_out vout = tx.vout[i];
       // TODO: avoid multiple expensive zeroCommitVartime call here + get_outs_by_last_locked_block + ver_non_input_consensus

@@ -346,10 +346,8 @@ namespace cryptonote
 
     // Clear the TX contents
     tx.set_null();
-    tx.type = cryptonote::transaction_type::PROTOCOL;
-
-    // Force the TX type to 2
     tx.version = 2;
+    tx.type = cryptonote::transaction_type::PROTOCOL;
 
     const bool do_carrot = hard_fork_version >= HF_VERSION_CARROT;
     if (do_carrot)
