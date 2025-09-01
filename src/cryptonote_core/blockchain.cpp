@@ -3790,7 +3790,7 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
     }
 
     // Check for v1 TXs - genesis block protocol_tx exception required!
-    if (tx.version == 1 && epee::string_tools::pod_to_hex(cryptonote::get_transaction_hash(tx)) == "4f78ff511e860acd03138737a71505eb62eb78b620e180e58c8e13ed0e1e3e19") {
+    if (tx.version == 1) {
       MERROR("v1 TXs are not permitted");
       tvc.m_version_mismatch = true;
       return false;
@@ -3822,6 +3822,32 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
       return false;
     }
   }
+
+
+  if (tx.type == cryptonote::transaction_type::AUDIT) {
+    // Make sure we are supposed to accept AUDIT txs at this point
+    const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
+    CHECK_AND_ASSERT_MES(audit_hard_forks.find(hf_version) != audit_hard_forks.end(), false, "trying to audit outside an audit fork");
+    std::string expected_asset_type = audit_hard_forks.at(hf_version).second.first;
+    CHECK_AND_ASSERT_MES(tx.source_asset_type == expected_asset_type, false, "trying to spend " << tx.source_asset_type << " coins in an AUDIT TX");
+  } else {
+    if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL1", false, "trying to spend " << tx.source_asset_type << " coins in a non-AUDIT TX");
+    } else {
+      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL", false, "trying to spend " << tx.source_asset_type << " coins in a non-AUDIT TX");
+    }
+  }
+
+  if (tx.type == cryptonote::transaction_type::BURN) {
+    CHECK_AND_ASSERT_MES(tx.destination_asset_type == "BURN", false, "incorrect burn tx destination type:" << tx.destination_asset_type);
+  } else {
+    if (tx.source_asset_type != tx.destination_asset_type) {
+      MERROR_VER("Tx " << get_transaction_hash(tx) << " has mismatched asset types: " << tx.source_asset_type << " != " << tx.destination_asset_type);
+      tvc.m_verifivation_failed = true;
+      return false;
+    }
+  }
+  
 
   // Check for invalid TX types
   if (tx.type == cryptonote::transaction_type::UNSET || tx.type > cryptonote::transaction_type::MAX) {
@@ -4086,20 +4112,6 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     }
   }
 
-  if (tx.type == cryptonote::transaction_type::AUDIT) {
-    // Make sure we are supposed to accept AUDIT txs at this point
-    const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
-    CHECK_AND_ASSERT_MES(audit_hard_forks.find(hf_version) != audit_hard_forks.end(), false, "trying to audit outside an audit fork");
-    std::string expected_asset_type = audit_hard_forks.at(hf_version).second.first;
-    CHECK_AND_ASSERT_MES(tx.source_asset_type == expected_asset_type, false, "trying to spend " << tx.source_asset_type << " coins in an AUDIT TX");
-  } else {
-    if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
-      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL1", false, "trying to spend " << tx.source_asset_type << " coins in a non-AUDIT TX");
-    } else {
-      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL", false, "trying to spend " << tx.source_asset_type << " coins in a non-AUDIT TX");
-    }
-  }
-  
   std::vector<std::vector<rct::ctkey>> pubkeys(tx.vin.size());
   std::vector < uint64_t > results;
   results.resize(tx.vin.size(), 0);
