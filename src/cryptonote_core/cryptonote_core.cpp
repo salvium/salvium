@@ -1022,7 +1022,7 @@ namespace cryptonote
     }
     if (!rvv.empty())
     {
-      LOG_PRINT_L1("One transaction among this group has bad semantics, verifying one at a time");
+      LOG_PRINT_L1("Verifying transactions one at a time");
       ret = false;
       for (size_t n = 0; n < tx_info.size(); ++n)
       {
