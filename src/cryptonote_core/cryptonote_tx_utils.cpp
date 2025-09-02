@@ -349,8 +349,8 @@ namespace cryptonote
     tx.version = 2;
     tx.type = cryptonote::transaction_type::PROTOCOL;
 
-    const bool do_carrot = hard_fork_version >= HF_VERSION_CARROT;
-    if (do_carrot)
+    const bool force_carrot = hard_fork_version >= HF_VERSION_ENFORCE_CARROT;
+    if (force_carrot)
     {
       try
       {
@@ -394,14 +394,28 @@ namespace cryptonote
     std::vector<crypto::public_key> additional_tx_public_keys;
     for (auto const& entry: protocol_data) {
       if (entry.type == cryptonote::transaction_type::STAKE) {
-        // PAYOUT
-        LOG_PRINT_L2("Yield TX payout submitted " << entry.amount_burnt << entry.source_asset);
+        if (entry.is_carrot) {
+          tx_out out;
+          out.amount = entry.amount_burnt;
+          out.target = txout_to_carrot_v1 {
+            .asset_type = entry.destination_asset,
+            .encrypted_janus_anchor = entry.return_anchor_enc,
+            .view_tag = entry.return_view_tag,
+            .key = entry.return_address,
+          };
 
-        // Create the TX output for this refund
-        tx_out out;
-        cryptonote::set_tx_out(entry.amount_burnt, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
-        additional_tx_public_keys.push_back(entry.return_pubkey);
-        tx.vout.push_back(out);
+          additional_tx_public_keys.push_back(entry.return_pubkey);
+          tx.vout.push_back(out);
+        } else {
+          // PAYOUT
+          LOG_PRINT_L2("Yield TX payout submitted " << entry.amount_burnt << entry.source_asset);
+  
+          // Create the TX output for this refund
+          tx_out out;
+          cryptonote::set_tx_out(entry.amount_burnt, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
+          additional_tx_public_keys.push_back(entry.return_pubkey);
+          tx.vout.push_back(out);
+        }
       } else if (entry.type == cryptonote::transaction_type::AUDIT) {
         // PAYOUT
         LOG_PRINT_L2("Audit TX payout submitted " << entry.amount_burnt << entry.source_asset);
