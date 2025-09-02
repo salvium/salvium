@@ -92,6 +92,9 @@ const hardfork_t testnet_hard_forks[] = {
 
   // version 10 Carrot - including treasury mint - starts from block 1100
   {10, 1100, 0, 1739780005 },
+
+  // version 11 Carrot and CryptoNote starts from block 1200
+  {11, 1200, 0, 1756811153 },
 };
 const size_t num_testnet_hard_forks = sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]);
 const uint64_t testnet_hard_fork_version_1_till = ((uint64_t)-1);

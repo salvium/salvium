@@ -1984,8 +1984,8 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   
     // Iterate over the cached data for block yield, calculating the yield payouts due
     std::vector<std::pair<yield_tx_info, uint64_t>> yield_payouts;
-    std::vector<std::pair<yield_tx_info_carrot, uint64_t>> carrot_yield_payouts;
-    if (b.major_version >= HF_VERSION_CARROT) {
+    std::vector<std::pair<yield_tx_info_carrot, uint64_t>> carrot_yield_payouts;  
+    if (get_ideal_hard_fork_version(start_height) >= HF_VERSION_CARROT) {
       if (!calculate_yield_payouts(start_height, carrot_yield_payouts)) {
         LOG_ERROR("Failed to obtain yield payout information - aborting");
         return false;
@@ -2001,7 +2001,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
     uint8_t hf_submitted = m_hardfork->get_ideal_version(start_height);
 
     // Create the protocol_metadata entries here
-    if (b.major_version >= HF_VERSION_CARROT) {
+    if (get_ideal_hard_fork_version(start_height) >= HF_VERSION_CARROT) {
       for (const auto& yield_entry: carrot_yield_payouts) {
         cryptonote::protocol_data_entry entry;
         entry.amount_burnt = yield_entry.second;
@@ -2020,6 +2020,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
         entry.origin_height = start_height;
         entry.return_view_tag = yield_entry.first.return_view_tag;
         entry.return_anchor_enc = yield_entry.first.return_anchor_enc;
+        entry.is_carrot = true;
         protocol_entries.push_back(entry);
       }
     } else {
@@ -2040,6 +2041,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
         entry.P_change = yield_entry.first.P_change;
         entry.return_pubkey = yield_entry.first.return_pubkey;
         entry.origin_height = start_height;
+        entry.is_carrot = false;
         protocol_entries.push_back(entry);
       }
     }
@@ -4754,6 +4756,10 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
       
       boost::multiprecision::int128_t locked_coins_128 = entry.first.locked_coins;
       boost::multiprecision::int128_t yield_128 = (slippage_128 * locked_coins_128) / locked_total_128;
+      if (yield_128 > std::numeric_limits<uint64_t>::max()) {
+        LOG_ERROR("Yield exceeds uint64_t max at height " << idx);
+        return false;
+    }
       entry.second += yield_128.convert_to<uint64_t>();
     }
   }
@@ -4816,7 +4822,11 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
       
       boost::multiprecision::int128_t locked_coins_128 = entry.first.locked_coins;
       boost::multiprecision::int128_t yield_128 = (slippage_128 * locked_coins_128) / locked_total_128;
-      entry.second += yield_128.convert_to<uint64_t>();
+      uint64_t yield_u64= boost::numeric_cast<uint64_t>(yield_128);
+      if (entry.second > std::numeric_limits<uint64_t>::max() - yield_u64) {
+        throw std::overflow_error("uint64_t addition overflow");
+      }
+      entry.second += yield_u64;
     }
   }
   
