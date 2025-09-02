@@ -4759,14 +4759,14 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
     
     // Iterate over the yield_container, adding each proportion of the yield
     for (auto& entry: yield_container) {
-      
       boost::multiprecision::int128_t locked_coins_128 = entry.first.locked_coins;
       boost::multiprecision::int128_t yield_128 = (slippage_128 * locked_coins_128) / locked_total_128;
-      if (yield_128 > std::numeric_limits<uint64_t>::max()) {
-        LOG_ERROR("Yield exceeds uint64_t max at height " << idx);
-        return false;
-    }
-      entry.second += yield_128.convert_to<uint64_t>();
+      uint64_t yield_u64 = boost::numeric_cast<uint64_t>(yield_128);
+
+      if (entry.second + yield_u64 < entry.second) {
+        throw std::overflow_error("uint64_t addition overflow");
+      }
+      entry.second += yield_u64;
     }
   }
   
@@ -4825,11 +4825,11 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
     
     // Iterate over the yield_container, adding each proportion of the yield
     for (auto& entry: yield_container) {
-      
       boost::multiprecision::int128_t locked_coins_128 = entry.first.locked_coins;
       boost::multiprecision::int128_t yield_128 = (slippage_128 * locked_coins_128) / locked_total_128;
-      uint64_t yield_u64= boost::numeric_cast<uint64_t>(yield_128);
-      if (entry.second > std::numeric_limits<uint64_t>::max() - yield_u64) {
+      uint64_t yield_u64 = boost::numeric_cast<uint64_t>(yield_128);
+
+      if (entry.second + yield_u64 < entry.second) {
         throw std::overflow_error("uint64_t addition overflow");
       }
       entry.second += yield_u64;
