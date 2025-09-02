@@ -101,8 +101,11 @@ namespace cryptonote
 
     boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm, const crypto::secret_key& recovery_key,
         bool recover, bool two_random, const std::string &old_language);
-    boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm, const cryptonote::account_public_address& address,
-        const boost::optional<crypto::secret_key>& spendkey, const crypto::secret_key& viewkey);
+    boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm,
+                                                      const cryptonote::account_public_address& address,
+                                                      const boost::optional<crypto::secret_key>& spendkey,
+                                                      const crypto::secret_key& viewkey
+                                                      );
     boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm,
         const epee::wipeable_string &multisig_keys, const epee::wipeable_string &seed_pass, const std::string &old_language);
     boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm);
@@ -430,6 +433,7 @@ namespace cryptonote
     std::string m_generate_new;
     std::string m_generate_from_device;
     std::string m_generate_from_view_key;
+    std::string m_generate_from_svb_key;
     std::string m_generate_from_spend_key;
     std::string m_generate_from_keys;
     std::string m_generate_from_multisig_keys;

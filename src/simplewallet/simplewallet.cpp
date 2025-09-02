@@ -192,6 +192,7 @@ namespace
   const command_line::arg_descriptor<std::string> arg_generate_new_wallet = {"generate-new-wallet", sw::tr("Generate new wallet and save it to <arg>"), ""};
   const command_line::arg_descriptor<std::string> arg_generate_from_device = {"generate-from-device", sw::tr("Generate new wallet from device and save it to <arg>"), ""};
   const command_line::arg_descriptor<std::string> arg_generate_from_view_key = {"generate-from-view-key", sw::tr("Generate incoming-only wallet from view key"), ""};
+  const command_line::arg_descriptor<std::string> arg_generate_from_svb_key = {"generate-from-svb-key", sw::tr("Generate full view-only wallet from view key"), ""};
   const command_line::arg_descriptor<std::string> arg_generate_from_spend_key = {"generate-from-spend-key", sw::tr("Generate deterministic wallet from spend key"), ""};
   const command_line::arg_descriptor<std::string> arg_generate_from_keys = {"generate-from-keys", sw::tr("Generate wallet from private keys"), ""};
   const command_line::arg_descriptor<std::string> arg_generate_from_multisig_keys = {"generate-from-multisig-keys", sw::tr("Generate a master wallet from multisig wallet keys"), ""};
@@ -4424,12 +4425,12 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
 
   bool welcome = false;
 
-  if((!m_generate_new.empty()) + (!m_wallet_file.empty()) + (!m_generate_from_device.empty()) + (!m_generate_from_view_key.empty()) + (!m_generate_from_spend_key.empty()) + (!m_generate_from_keys.empty()) + (!m_generate_from_multisig_keys.empty()) + (!m_generate_from_json.empty()) > 1)
+  if((!m_generate_new.empty()) + (!m_wallet_file.empty()) + (!m_generate_from_device.empty()) + (!m_generate_from_view_key.empty()) + (!m_generate_from_svb_key.empty()) + (!m_generate_from_spend_key.empty()) + (!m_generate_from_keys.empty()) + (!m_generate_from_multisig_keys.empty()) + (!m_generate_from_json.empty()) > 1)
   {
-    fail_msg_writer() << tr("can't specify more than one of --generate-new-wallet=\"wallet_name\", --wallet-file=\"wallet_name\", --generate-from-view-key=\"wallet_name\", --generate-from-spend-key=\"wallet_name\", --generate-from-keys=\"wallet_name\", --generate-from-multisig-keys=\"wallet_name\", --generate-from-json=\"jsonfilename\" and --generate-from-device=\"wallet_name\"");
+    fail_msg_writer() << tr("can't specify more than one of --generate-new-wallet=\"wallet_name\", --wallet-file=\"wallet_name\", --generate-from-view-key=\"wallet_name\", --generate-from-svb-key=\"wallet_name\", --generate-from-spend-key=\"wallet_name\", --generate-from-keys=\"wallet_name\", --generate-from-multisig-keys=\"wallet_name\", --generate-from-json=\"jsonfilename\" and --generate-from-device=\"wallet_name\"");
     return false;
   }
-  else if (m_generate_new.empty() && m_wallet_file.empty() && m_generate_from_device.empty() && m_generate_from_view_key.empty() && m_generate_from_spend_key.empty() && m_generate_from_keys.empty() && m_generate_from_multisig_keys.empty() && m_generate_from_json.empty())
+  else if (m_generate_new.empty() && m_wallet_file.empty() && m_generate_from_device.empty() && m_generate_from_view_key.empty() && m_generate_from_svb_key.empty() && m_generate_from_spend_key.empty() && m_generate_from_keys.empty() && m_generate_from_multisig_keys.empty() && m_generate_from_json.empty())
   {
     if(!ask_wallet_create_if_needed()) return false;
   }
@@ -4578,6 +4579,69 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
         fail_msg_writer() << tr("view key does not match standard address");
         return false;
       }
+
+      auto r = new_wallet(vm, info.address, boost::none, viewkey);
+      CHECK_AND_ASSERT_MES(r, false, tr("account creation failed"));
+      password = *r;
+      welcome = true;
+    }
+    else if (!m_generate_from_svb_key.empty())
+    {
+      m_wallet_file = m_generate_from_svb_key;
+      // parse address
+      std::string address_string = input_line("Standard address");
+      if (std::cin.eof())
+        return false;
+      if (address_string.empty()) {
+        fail_msg_writer() << tr("No data supplied, cancelled");
+        return false;
+      }
+      cryptonote::address_parse_info info;
+      if(!get_account_address_from_str(info, nettype, address_string))
+      {
+          fail_msg_writer() << tr("failed to parse address");
+          return false;
+      }
+      if (info.is_subaddress)
+      {
+        fail_msg_writer() << tr("This address is a subaddress which cannot be used here.");
+        return false;
+      }
+      if (!info.is_carrot)
+      {
+        fail_msg_writer() << tr("This address is not a Carrot address, and cannot be used here.");
+        return false;
+      }
+
+      // parse view secret key
+      epee::wipeable_string viewkey_string = input_secure_line("Secret view key");
+      if (std::cin.eof())
+        return false;
+      if (viewkey_string.empty()) {
+        fail_msg_writer() << tr("No data supplied, cancelled");
+        return false;
+      }
+      crypto::secret_key viewkey;
+      if (!viewkey_string.hex_to_pod(unwrap(unwrap(viewkey))))
+      {
+        fail_msg_writer() << tr("failed to parse view key secret key");
+        return false;
+      }
+
+      // Create all of the necessary keys for Carrot view-only wallet
+
+      /*
+      // check the view key matches the given address
+      crypto::public_key pkey;
+      if (!crypto::secret_key_to_public_key(viewkey, pkey)) {
+        fail_msg_writer() << tr("failed to verify view key secret key");
+        return false;
+      }
+      if (info.address.m_view_public_key != pkey) {
+        fail_msg_writer() << tr("view key does not match standard address");
+        return false;
+      }
+      */
 
       auto r = new_wallet(vm, info.address, boost::none, viewkey);
       CHECK_AND_ASSERT_MES(r, false, tr("account creation failed"));
@@ -5049,6 +5113,7 @@ bool simple_wallet::handle_command_line(const boost::program_options::variables_
   m_generate_new                  = command_line::get_arg(vm, arg_generate_new_wallet);
   m_generate_from_device          = command_line::get_arg(vm, arg_generate_from_device);
   m_generate_from_view_key        = command_line::get_arg(vm, arg_generate_from_view_key);
+  m_generate_from_svb_key         = command_line::get_arg(vm, arg_generate_from_svb_key);
   m_generate_from_spend_key       = command_line::get_arg(vm, arg_generate_from_spend_key);
   m_generate_from_keys            = command_line::get_arg(vm, arg_generate_from_keys);
   m_generate_from_multisig_keys   = command_line::get_arg(vm, arg_generate_from_multisig_keys);
@@ -5064,6 +5129,7 @@ bool simple_wallet::handle_command_line(const boost::program_options::variables_
   m_subaddress_lookahead          = command_line::get_arg(vm, arg_subaddress_lookahead);
   m_use_english_language_names    = command_line::get_arg(vm, arg_use_english_language_names);
   m_restoring                     = !m_generate_from_view_key.empty() ||
+                                    !m_generate_from_svb_key.empty() ||
                                     !m_generate_from_spend_key.empty() ||
                                     !m_generate_from_keys.empty() ||
                                     !m_generate_from_multisig_keys.empty() ||
@@ -5287,8 +5353,9 @@ boost::optional<epee::wipeable_string> simple_wallet::new_wallet(const boost::pr
 }
 //----------------------------------------------------------------------------------------------------
 boost::optional<epee::wipeable_string> simple_wallet::new_wallet(const boost::program_options::variables_map& vm,
-  const cryptonote::account_public_address& address, const boost::optional<crypto::secret_key>& spendkey,
-  const crypto::secret_key& viewkey)
+                                                                 const cryptonote::account_public_address& address,
+                                                                 const boost::optional<crypto::secret_key>& spendkey,
+                                                                 const crypto::secret_key& viewkey)
 {
   std::pair<std::unique_ptr<tools::wallet2>, tools::password_container> rc;
   try { rc = tools::wallet2::make_new(vm, false, password_prompter); }
@@ -11829,6 +11896,7 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_params, arg_generate_new_wallet);
   command_line::add_arg(desc_params, arg_generate_from_device);
   command_line::add_arg(desc_params, arg_generate_from_view_key);
+  command_line::add_arg(desc_params, arg_generate_from_svb_key);
   command_line::add_arg(desc_params, arg_generate_from_spend_key);
   command_line::add_arg(desc_params, arg_generate_from_keys);
   command_line::add_arg(desc_params, arg_generate_from_multisig_keys);
