@@ -347,6 +347,8 @@ namespace cryptonote
     // Clear the TX contents
     tx.set_null();
     tx.version = 2;
+    bool carrot_found = false;
+    bool noncarrot_found = false;
     tx.type = cryptonote::transaction_type::PROTOCOL;
 
     const bool force_carrot = hard_fork_version >= HF_VERSION_ENFORCE_CARROT;
@@ -371,7 +373,7 @@ namespace cryptonote
           memcpy(e.enote_ephemeral_pubkey.data, entry.return_pubkey.data, sizeof(crypto::public_key));
           enotes.push_back(e);
         }
-
+        carrot_found = true;
         tx = store_carrot_to_coinbase_transaction_v1(enotes, std::string{}, cryptonote::transaction_type::PROTOCOL, height);
         tx.amount_burnt = 0;
         tx.invalidate_hashes();
@@ -410,12 +412,14 @@ namespace cryptonote
 
           additional_tx_public_keys.push_back(entry.return_pubkey);
           tx.vout.push_back(out);
+          carrot_found = true;
         } else {
           // Create the TX output for this refund
           tx_out out;
           cryptonote::set_tx_out(entry.amount_burnt, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
           additional_tx_public_keys.push_back(entry.return_pubkey);
           tx.vout.push_back(out);
+          noncarrot_found = true;
         }
       } else if (entry.type == cryptonote::transaction_type::AUDIT) {
         // PAYOUT
@@ -426,9 +430,19 @@ namespace cryptonote
         cryptonote::set_tx_out(entry.amount_burnt, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
         additional_tx_public_keys.push_back(entry.return_pubkey);
         tx.vout.push_back(out);
+        noncarrot_found = true;
       }
     }
+    if (carrot_found && noncarrot_found) {
+      LOG_ERROR("Cannot mix Carrot and non-Carrot outputs in the same protocol transaction");
+      return false;
+    }
 
+    if (carrot_found) {
+      // Ensure the TX version is correct
+      tx.version = TRANSACTION_VERSION_CARROT;
+    }
+  
     // Add in all of the additional TX pubkeys we need to process the payments
     add_additional_tx_pub_keys_to_extra(tx.extra, additional_tx_public_keys);
 

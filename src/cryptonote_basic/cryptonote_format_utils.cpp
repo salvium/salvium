@@ -1386,12 +1386,26 @@ namespace cryptonote
         // from v10, require outputs be carrot outputs
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_carrot_v1), false, "wrong variant type: "
           << o.target.type().name() << ", expected txout_to_carrot_v1 in transaction id=" << get_transaction_hash(tx));
-      } else if (hf_version < HF_VERSION_CARROT) {
+      } else if (hf_version >= HF_VERSION_CARROT) {
+        if (tx.type != cryptonote::transaction_type::PROTOCOL) {
+          CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_carrot_v1), false, "wrong variant type: "
+            << o.target.type().name() << ", expected txout_to_carrot_v1 in transaction id=" << get_transaction_hash(tx));
+        } else {
+          CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key) || 
+                              o.target.type() == typeid(txout_to_tagged_key) || 
+                              o.target.type() == typeid(txout_to_carrot_v1), false, "wrong variant type: "
+          << o.target.type().name() << ", expected txout_to_key or txout_to_tagged_key or txout_to_carrot_v1 in protocol transaction");
+          // require all outputs in a tx be of the same type
+          CHECK_AND_ASSERT_MES(o.target.type() == tx.vout[0].target.type(), false, "non-matching variant types: "
+                              << o.target.type().name() << " and " << tx.vout[0].target.type().name() << ", "
+                              << "expected matching variant types in protocol transaction");
+        }
+      }
+      else {
         // require outputs be of type txout_to_key OR txout_to_tagged_key
         // to allow grace period before requiring all to be txout_to_tagged_key
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key) || o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
           << o.target.type().name() << ", expected txout_to_key or txout_to_tagged_key in transaction");
-
         // require all outputs in a tx be of the same type
         CHECK_AND_ASSERT_MES(o.target.type() == tx.vout[0].target.type(), false, "non-matching variant types: "
           << o.target.type().name() << " and " << tx.vout[0].target.type().name() << ", "
