@@ -5845,7 +5845,7 @@ crypto::secret_key wallet2::generate(const std::string& wallet_, const epee::wip
 */
 void wallet2::generate(const std::string& wallet_, const epee::wipeable_string& password,
   const cryptonote::account_public_address &account_public_address,
-  const crypto::secret_key& viewkey, bool create_address_file)
+                       const crypto::secret_key& viewkey, bool create_address_file)
 {
   clear();
   prepare_file_names(wallet_);
@@ -5857,7 +5857,11 @@ void wallet2::generate(const std::string& wallet_, const epee::wipeable_string& 
     THROW_WALLET_EXCEPTION_IF(boost::filesystem::exists(m_keys_file,   ignored_ec), error::file_exists, m_keys_file);
   }
 
-  m_account.create_from_viewkey(account_public_address, viewkey);
+  if (account_public_address.m_is_carrot) {
+    m_account.create_from_svb_key(account_public_address, viewkey);
+  } else {
+    m_account.create_from_viewkey(account_public_address, viewkey);
+  }
   init_type(hw::device::device_type::SOFTWARE);
   m_watch_only = true;
   m_account_public_address = account_public_address;

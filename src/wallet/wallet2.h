@@ -1019,6 +1019,7 @@ private:
      * \param  account_public_address  The account's public address
      * \param  viewkey                 view secret key
      * \param  create_address_file     Whether to create an address file
+     * \param  is_carrot               Whether viewkey is k_v (CN) or s_vb (Carrot)
      */
     void generate(const std::string& wallet, const epee::wipeable_string& password,
       const cryptonote::account_public_address &account_public_address,

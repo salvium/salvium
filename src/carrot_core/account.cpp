@@ -336,6 +336,34 @@ void carrot_and_legacy_account::set_keys(const cryptonote::account_keys& keys, b
   m_keys.m_carrot_main_address = keys.m_carrot_main_address;
 }
 //----------------------------------------------------------------------------------------------------------------------
+void carrot_and_legacy_account::create_from_svb_key(const cryptonote::account_public_address& address, const crypto::secret_key& svb_key)
+{   
+  // top level keys
+  m_keys.s_master = crypto::null_skey;
+  make_carrot_provespend_key(m_keys.s_master, m_keys.k_prove_spend);
+  m_keys.s_view_balance = svb_key;
+  
+  // view balance keys
+  make_carrot_viewincoming_key(m_keys.s_view_balance, m_keys.k_view_incoming);
+  make_carrot_generateimage_key(m_keys.s_view_balance, m_keys.k_generate_image);
+  make_carrot_generateaddress_secret(m_keys.s_view_balance, m_keys.s_generate_address);
+
+  // carrot account address - use the provided address spend pubkey
+  m_keys.m_carrot_account_address = address;
+  k_view_incoming_dev.view_key_scalar_mult_ed25519(m_keys.m_carrot_account_address.m_spend_public_key,
+                                                   m_keys.m_carrot_account_address.m_view_public_key
+                                                   );
+
+  // carrot main wallet address
+  m_keys.m_carrot_main_address = address;
+  k_view_incoming_dev.view_key_scalar_mult_ed25519(crypto::get_G(),
+                                                   m_keys.m_carrot_main_address.m_view_public_key
+                                                   );
+    
+  this->default_derive_type = AddressDeriveType::Carrot;
+  generate_subaddress_map();
+}
+//----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::set_carrot_keys(const AddressDeriveType default_derive_type)
 {   
     // top level keys
@@ -354,6 +382,7 @@ void carrot_and_legacy_account::set_carrot_keys(const AddressDeriveType default_
         m_keys.m_carrot_account_address.m_spend_public_key,
         m_keys.m_carrot_account_address.m_view_public_key
     );
+    m_keys.m_carrot_account_address.m_is_carrot = true;
 
     // carrot main wallet address
     m_keys.m_carrot_main_address.m_spend_public_key = m_keys.m_carrot_account_address.m_spend_public_key;
@@ -361,6 +390,7 @@ void carrot_and_legacy_account::set_carrot_keys(const AddressDeriveType default_
         crypto::get_G(),
         m_keys.m_carrot_main_address.m_view_public_key
     );    
+    m_keys.m_carrot_main_address.m_is_carrot = true;
     
     this->default_derive_type = default_derive_type;
     generate_subaddress_map();
