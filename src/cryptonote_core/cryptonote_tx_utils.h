@@ -71,6 +71,7 @@ namespace cryptonote
     carrot::view_tag_t return_view_tag;
     carrot::encrypted_janus_anchor_t return_anchor_enc;
     uint64_t origin_height;
+    bool is_carrot;
   };
 
   //---------------------------------------------------------------

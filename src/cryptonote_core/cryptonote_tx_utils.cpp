@@ -347,10 +347,12 @@ namespace cryptonote
     // Clear the TX contents
     tx.set_null();
     tx.version = 2;
+    bool carrot_found = false;
+    bool noncarrot_found = false;
     tx.type = cryptonote::transaction_type::PROTOCOL;
 
-    const bool do_carrot = hard_fork_version >= HF_VERSION_CARROT;
-    if (do_carrot)
+    const bool force_carrot = hard_fork_version >= HF_VERSION_ENFORCE_CARROT;
+    if (force_carrot)
     {
       try
       {
@@ -371,7 +373,7 @@ namespace cryptonote
           memcpy(e.enote_ephemeral_pubkey.data, entry.return_pubkey.data, sizeof(crypto::public_key));
           enotes.push_back(e);
         }
-
+        carrot_found = true;
         tx = store_carrot_to_coinbase_transaction_v1(enotes, std::string{}, cryptonote::transaction_type::PROTOCOL, height);
         tx.amount_burnt = 0;
         tx.invalidate_hashes();
@@ -394,14 +396,31 @@ namespace cryptonote
     std::vector<crypto::public_key> additional_tx_public_keys;
     for (auto const& entry: protocol_data) {
       if (entry.type == cryptonote::transaction_type::STAKE) {
+
         // PAYOUT
         LOG_PRINT_L2("Yield TX payout submitted " << entry.amount_burnt << entry.source_asset);
+  
+        if (entry.is_carrot) {
+          tx_out out;
+          out.amount = entry.amount_burnt;
+          out.target = txout_to_carrot_v1 {
+            .key = entry.return_address,
+            .asset_type = entry.destination_asset,
+            .view_tag = entry.return_view_tag,
+            .encrypted_janus_anchor = entry.return_anchor_enc,
+          };
 
-        // Create the TX output for this refund
-        tx_out out;
-        cryptonote::set_tx_out(entry.amount_burnt, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
-        additional_tx_public_keys.push_back(entry.return_pubkey);
-        tx.vout.push_back(out);
+          additional_tx_public_keys.push_back(entry.return_pubkey);
+          tx.vout.push_back(out);
+          carrot_found = true;
+        } else {
+          // Create the TX output for this refund
+          tx_out out;
+          cryptonote::set_tx_out(entry.amount_burnt, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
+          additional_tx_public_keys.push_back(entry.return_pubkey);
+          tx.vout.push_back(out);
+          noncarrot_found = true;
+        }
       } else if (entry.type == cryptonote::transaction_type::AUDIT) {
         // PAYOUT
         LOG_PRINT_L2("Audit TX payout submitted " << entry.amount_burnt << entry.source_asset);
@@ -411,9 +430,19 @@ namespace cryptonote
         cryptonote::set_tx_out(entry.amount_burnt, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
         additional_tx_public_keys.push_back(entry.return_pubkey);
         tx.vout.push_back(out);
+        noncarrot_found = true;
       }
     }
+    if (carrot_found && noncarrot_found) {
+      LOG_ERROR("Cannot mix Carrot and non-Carrot outputs in the same protocol transaction");
+      return false;
+    }
 
+    if (carrot_found) {
+      // Ensure the TX version is correct
+      tx.version = TRANSACTION_VERSION_CARROT;
+    }
+  
     // Add in all of the additional TX pubkeys we need to process the payments
     add_additional_tx_pub_keys_to_extra(tx.extra, additional_tx_public_keys);
 
@@ -565,6 +594,7 @@ namespace cryptonote
       case HF_VERSION_AUDIT2:
       case HF_VERSION_AUDIT2_PAUSE:
       case HF_VERSION_CARROT:
+      case HF_VERSION_ENFORCE_CARROT:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;
