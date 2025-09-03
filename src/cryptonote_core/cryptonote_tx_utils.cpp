@@ -394,6 +394,10 @@ namespace cryptonote
     std::vector<crypto::public_key> additional_tx_public_keys;
     for (auto const& entry: protocol_data) {
       if (entry.type == cryptonote::transaction_type::STAKE) {
+
+        // PAYOUT
+        LOG_PRINT_L2("Yield TX payout submitted " << entry.amount_burnt << entry.source_asset);
+  
         if (entry.is_carrot) {
           tx_out out;
           out.amount = entry.amount_burnt;
@@ -407,9 +411,6 @@ namespace cryptonote
           additional_tx_public_keys.push_back(entry.return_pubkey);
           tx.vout.push_back(out);
         } else {
-          // PAYOUT
-          LOG_PRINT_L2("Yield TX payout submitted " << entry.amount_burnt << entry.source_asset);
-  
           // Create the TX output for this refund
           tx_out out;
           cryptonote::set_tx_out(entry.amount_burnt, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
@@ -579,6 +580,7 @@ namespace cryptonote
       case HF_VERSION_AUDIT2:
       case HF_VERSION_AUDIT2_PAUSE:
       case HF_VERSION_CARROT:
+      case HF_VERSION_ENFORCE_CARROT:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;
