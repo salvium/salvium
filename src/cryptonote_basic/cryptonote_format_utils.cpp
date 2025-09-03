@@ -1381,12 +1381,12 @@ namespace cryptonote
 
     for (const auto &o: tx.vout)
     {
-      if (hf_version >= HF_VERSION_CARROT)
+      if (hf_version >= HF_VERSION_ENFORCE_CARROT)
       {
         // from v10, require outputs be carrot outputs
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_carrot_v1), false, "wrong variant type: "
           << o.target.type().name() << ", expected txout_to_carrot_v1 in transaction id=" << get_transaction_hash(tx));
-      } else {
+      } else if (hf_version < HF_VERSION_CARROT) {
         // require outputs be of type txout_to_key OR txout_to_tagged_key
         // to allow grace period before requiring all to be txout_to_tagged_key
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key) || o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "

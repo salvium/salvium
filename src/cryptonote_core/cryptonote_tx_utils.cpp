@@ -398,10 +398,10 @@ namespace cryptonote
           tx_out out;
           out.amount = entry.amount_burnt;
           out.target = txout_to_carrot_v1 {
-            .asset_type = entry.destination_asset,
-            .encrypted_janus_anchor = entry.return_anchor_enc,
-            .view_tag = entry.return_view_tag,
             .key = entry.return_address,
+            .asset_type = entry.destination_asset,
+            .view_tag = entry.return_view_tag,
+            .encrypted_janus_anchor = entry.return_anchor_enc,
           };
 
           additional_tx_public_keys.push_back(entry.return_pubkey);

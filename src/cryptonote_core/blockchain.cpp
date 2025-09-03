@@ -1404,6 +1404,11 @@ bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t heigh
   CHECK_AND_ASSERT_MES(b.protocol_tx.version > 1, false, "Invalid coinbase protocol transaction version");
 
   if (hf_version >= HF_VERSION_CARROT) {
+    // CHECK_AND_ASSERT_MES(b.protocol_tx.version == TRANSACTION_VERSION_CARROT, false, "protocol transaction has wrong version");
+    CHECK_AND_ASSERT_MES(b.protocol_tx.type == cryptonote::transaction_type::PROTOCOL, false, "protocol transaction has wrong type");
+  }
+
+  if (hf_version >= HF_VERSION_ENFORCE_CARROT) {
     CHECK_AND_ASSERT_MES(b.protocol_tx.version == TRANSACTION_VERSION_CARROT, false, "protocol transaction has wrong version");
     CHECK_AND_ASSERT_MES(b.protocol_tx.type == cryptonote::transaction_type::PROTOCOL, false, "protocol transaction has wrong type");
   }
@@ -1583,7 +1588,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
     LOG_PRINT_L1("Block at height: " << height << " - no yield payouts due - skipping");
   } else {
     // Iterate over the cached data for block yield, calculating the yield payouts due
-    if (hf_version >= HF_VERSION_CARROT) {
+    if (get_ideal_hard_fork_version(matured_height) >= HF_VERSION_CARROT) {
       if (!calculate_yield_payouts(matured_height, carrot_yield_payouts)) {
         LOG_ERROR("Block at height: " << height << " - Failed to obtain carrot yield payout information - aborting");
         return false;
@@ -1981,11 +1986,14 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   cryptonote::yield_block_info ybi_matured;
   bool ok = get_ybi_entry(start_height, ybi_matured);
   if (ok && ybi_matured.locked_coins_this_block > 0) {
-  
+
+    // Work out what the asset_type should be based on height of submission
+    uint8_t hf_submitted = m_hardfork->get_ideal_version(start_height);
+
     // Iterate over the cached data for block yield, calculating the yield payouts due
     std::vector<std::pair<yield_tx_info, uint64_t>> yield_payouts;
     std::vector<std::pair<yield_tx_info_carrot, uint64_t>> carrot_yield_payouts;  
-    if (get_ideal_hard_fork_version(start_height) >= HF_VERSION_CARROT) {
+    if (hf_submitted >= HF_VERSION_CARROT) {
       if (!calculate_yield_payouts(start_height, carrot_yield_payouts)) {
         LOG_ERROR("Failed to obtain yield payout information - aborting");
         return false;
@@ -1997,11 +2005,8 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
       }
     }
 
-    // Work out what the asset_type should be based on height of submission
-    uint8_t hf_submitted = m_hardfork->get_ideal_version(start_height);
-
     // Create the protocol_metadata entries here
-    if (get_ideal_hard_fork_version(start_height) >= HF_VERSION_CARROT) {
+    if (!carrot_yield_payouts.empty()) {
       for (const auto& yield_entry: carrot_yield_payouts) {
         cryptonote::protocol_data_entry entry;
         entry.amount_burnt = yield_entry.second;
@@ -4717,7 +4722,7 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
   if (!yield_entries.size()) {
 
     // Report error and abort
-    LOG_ERROR("calculate_yield_payouts() called, but no yield TXs found at height " << start_height << " - aborting");
+    LOG_ERROR("calculate_yield_payouts() called for carrot, but no yield TXs found at height " << start_height << " - aborting");
     return false;
   }
 
