@@ -359,15 +359,20 @@ void mock_scan_enote_set(const std::vector<CarrotEnoteV1> &enotes,
         const CarrotEnoteV1 &enote = enotes.at(output_index);
 
         mock_scan_result_t scan_result{};
+        carrot::carrot_and_legacy_account account;
+        crypto::public_key return_address_out;
+        bool is_return_out;
         const bool r = try_scan_carrot_enote_internal_receiver(enote,
-            keys.s_view_balance_dev,
+            account,
             scan_result.sender_extension_g,
             scan_result.sender_extension_t,
             scan_result.address_spend_pubkey,
             scan_result.amount,
             scan_result.amount_blinding_factor,
             scan_result.enote_type,
-            scan_result.internal_message);
+            scan_result.internal_message,
+            return_address_out,
+            is_return_out);
 
         scan_result.output_index = output_index;
 
