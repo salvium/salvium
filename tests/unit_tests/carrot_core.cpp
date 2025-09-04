@@ -323,13 +323,10 @@ TEST(carrot_core, main_address_special_scan_completeness)
         const crypto::key_image tx_first_key_image = rct::rct2ki(rct::pkGen()); 
 
         RCTOutputEnoteProposal enote_proposal;
-        RCTOutputEnoteProposal return_enote;
         get_output_proposal_special_v1(proposal,
             keys.k_view_incoming_dev,
             tx_first_key_image,
-            cryptonote::transaction_type::TRANSFER, // tx_type
             std::nullopt,
-            return_enote,
             enote_proposal);
 
         ASSERT_EQ(proposal.amount, enote_proposal.amount);
@@ -403,13 +400,10 @@ TEST(carrot_core, subaddress_special_scan_completeness)
         const crypto::key_image tx_first_key_image = rct::rct2ki(rct::pkGen()); 
 
         RCTOutputEnoteProposal enote_proposal;
-        RCTOutputEnoteProposal return_enote;
         get_output_proposal_special_v1(proposal,
             keys.k_view_incoming_dev,
             tx_first_key_image,
-            cryptonote::transaction_type::TRANSFER, // tx_type
             std::nullopt,
-            return_enote,
             enote_proposal);
 
         ASSERT_EQ(proposal.amount, enote_proposal.amount);
@@ -460,7 +454,7 @@ TEST(carrot_core, subaddress_special_scan_completeness)
 //----------------------------------------------------------------------------------------------------------------------
 TEST(carrot_core, main_address_internal_scan_completeness)
 {
-    mock::mock_carrot_and_legacy_keys keys;
+    carrot::carrot_and_legacy_account keys;
     keys.generate();
 
     const CarrotDestinationV1 main_address = keys.cryptonote_address();
@@ -481,10 +475,13 @@ TEST(carrot_core, main_address_internal_scan_completeness)
         const crypto::key_image tx_first_key_image = rct::rct2ki(rct::pkGen()); 
 
         RCTOutputEnoteProposal enote_proposal;
+        RCTOutputEnoteProposal return_proposal;
         get_output_proposal_internal_v1(proposal,
             keys.s_view_balance_dev,
             tx_first_key_image,
             std::nullopt,
+            cryptonote::transaction_type::TRANSFER, // tx_type
+            return_proposal,
             enote_proposal);
 
         ASSERT_EQ(proposal.amount, enote_proposal.amount);
@@ -498,15 +495,19 @@ TEST(carrot_core, main_address_internal_scan_completeness)
         crypto::secret_key recovered_amount_blinding_factor;
         CarrotEnoteType recovered_enote_type;
         janus_anchor_t recovered_internal_message;
+        crypto::public_key return_address_out;
+        bool is_return_out;
         const bool scan_success = try_scan_carrot_enote_internal_receiver(enote_proposal.enote,
-            keys.s_view_balance_dev,
+            keys,
             recovered_sender_extension_g,
             recovered_sender_extension_t,
             recovered_address_spend_pubkey,
             recovered_amount,
             recovered_amount_blinding_factor,
             recovered_enote_type,
-            recovered_internal_message);
+            recovered_internal_message,
+            return_address_out,
+            is_return_out);
 
         ASSERT_TRUE(scan_success);
 
@@ -527,7 +528,7 @@ TEST(carrot_core, main_address_internal_scan_completeness)
 //----------------------------------------------------------------------------------------------------------------------
 TEST(carrot_core, subaddress_internal_scan_completeness)
 {
-    mock::mock_carrot_and_legacy_keys keys;
+    carrot::carrot_and_legacy_account keys;
     keys.generate();
 
     const uint32_t j_major = crypto::rand_idx(mock::MAX_SUBADDRESS_MAJOR_INDEX);
@@ -551,10 +552,13 @@ TEST(carrot_core, subaddress_internal_scan_completeness)
         const crypto::key_image tx_first_key_image = rct::rct2ki(rct::pkGen()); 
 
         RCTOutputEnoteProposal enote_proposal;
+        RCTOutputEnoteProposal return_proposal;
         get_output_proposal_internal_v1(proposal,
             keys.s_view_balance_dev,
             tx_first_key_image,
             std::nullopt,
+            cryptonote::transaction_type::TRANSFER, // tx_type
+            return_proposal,
             enote_proposal);
 
         ASSERT_EQ(proposal.amount, enote_proposal.amount);
@@ -568,15 +572,19 @@ TEST(carrot_core, subaddress_internal_scan_completeness)
         crypto::secret_key recovered_amount_blinding_factor;
         CarrotEnoteType recovered_enote_type;
         janus_anchor_t recovered_internal_message;
+        crypto::public_key return_address_out;
+        bool is_return_out;
         const bool scan_success = try_scan_carrot_enote_internal_receiver(enote_proposal.enote,
-            keys.s_view_balance_dev,
+            keys,
             recovered_sender_extension_g,
             recovered_sender_extension_t,
             recovered_address_spend_pubkey,
             recovered_amount,
             recovered_amount_blinding_factor,
             recovered_enote_type,
-            recovered_internal_message);
+            recovered_internal_message,
+            return_address_out,
+            is_return_out);
 
         ASSERT_TRUE(scan_success);
 

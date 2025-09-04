@@ -84,7 +84,7 @@ TEST(wallet_tx_builder, input_selection_basic)
     tools::wallet2::transfer_container transfers;
     for (size_t i = 0; i < 10; ++i)
     {
-        tools::wallet2::transfer_details &td = tools::add_element(transfers);
+        tools::wallet2::transfer_details &td = transfers.emplace_back();
         td = gen_transfer_details();
         td.m_block_height = transfers.size(); // small ascending block heights
     }
@@ -206,7 +206,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_transfer_2)
     std::unordered_map<crypto::key_image, std::size_t> allowed_transfers;
     for (size_t i = 0; i < FCMP_PLUS_PLUS_MAX_INPUTS + 2; ++i)
     {
-        tools::wallet2::transfer_details &td = tools::add_element(transfers);
+        tools::wallet2::transfer_details &td = transfers.emplace_back();
         td = gen_transfer_details();
         td.m_subaddr_index.major = (i % 2 == 0) ? spending_subaddr_account : (spending_subaddr_account - 1);
         td.m_subaddr_index.minor = crypto::rand_range<std::uint32_t>(0, carrot::mock::MAX_SUBADDRESS_MINOR_INDEX);

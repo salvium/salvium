@@ -38,9 +38,9 @@
  
 using namespace cryptonote;
  
-const uint64_t AMOUNT_BURNT = 1000000000000; // 1 SAL
-const uint64_t STAKE_REWARD = 10000000000000; // 10 SAL
-const uint64_t STAKE_PAYOUT = 216001000000000000; // 216k SAL
+const uint64_t AMOUNT_BURNT = 1000000000000; // 10000 SAL
+const uint64_t STAKE_REWARD = 10000000000000; // 100000 SAL
+const uint64_t STAKE_PAYOUT = 216001000000000000; // 2160000k SAL
 const uint64_t STAKE_LOCK_PERIOD = get_config(network_type::FAKECHAIN).STAKE_LOCK_PERIOD;
 const auto AUDIT_HARD_FORKS = get_config(network_type::FAKECHAIN).AUDIT_HARD_FORKS;
  

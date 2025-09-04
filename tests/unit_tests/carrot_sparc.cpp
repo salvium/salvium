@@ -54,7 +54,7 @@ static auto auto_wiper(T &obj)
 }
 //----------------------------------------------------------------------------------------------------------------------
 std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_origin_tx(
-    mock::mock_carrot_and_legacy_keys &alice,
+    carrot::carrot_and_legacy_account &alice,
     CarrotDestinationV1 &bob_address
 ) {
     // spend input
@@ -62,9 +62,10 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_origin_
 
     // make change output
     RCTOutputEnoteProposal enote_proposal_change;
+    RCTOutputEnoteProposal return_proposal;
     get_output_proposal_internal_v1(
         CarrotPaymentProposalSelfSendV1{
-            .destination_address_spend_pubkey = alice.carrot_account_spend_pubkey,
+            .destination_address_spend_pubkey = alice.get_keys().m_carrot_account_address.m_spend_public_key,
             .amount = crypto::rand<rct::xmr_amount>(),
             .enote_type = CarrotEnoteType::CHANGE,
             .enote_ephemeral_pubkey = gen_x25519_pubkey(),
@@ -72,6 +73,8 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_origin_
         alice.s_view_balance_dev,
         tx_first_key_image,
         std::nullopt,
+        cryptonote::transaction_type::TRANSFER, // tx_type
+        return_proposal,
         enote_proposal_change
     );
 
@@ -138,7 +141,7 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_origin_
 }
 //----------------------------------------------------------------------------------------------------------------------
 std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_return_tx(
-    mock::mock_carrot_and_legacy_keys &bob,
+    carrot::carrot_and_legacy_account &bob,
     std::vector<RCTOutputEnoteProposal> &origin_tx_outputs
 ) {
     // [0] enote is change, [1] enote bob received
@@ -169,7 +172,7 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_return_
         received_output,
         std::nullopt,
         origin_tx_shared_secret_unctx,
-        {&bob.carrot_account_spend_pubkey, 1},
+        {&bob.get_keys().m_carrot_account_address.m_spend_public_key, 1},
         bob.k_view_incoming_dev,
         recovered_sender_extension_g,
         recovered_sender_extension_t,
@@ -182,7 +185,7 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_return_
     EXPECT_TRUE(scan_success);
 
     // check we can spend it
-    EXPECT_TRUE(bob.can_open_fcmp_onetime_address(bob.carrot_account_spend_pubkey,
+    EXPECT_TRUE(bob.can_open_fcmp_onetime_address(bob.get_keys().m_carrot_account_address.m_spend_public_key,
                                                   recovered_sender_extension_g,
                                                   recovered_sender_extension_t,
                                                   received_output.onetime_address));
@@ -237,7 +240,7 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_return_
 TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
 {
     // these will generate a new format carrot address.
-    mock::mock_carrot_and_legacy_keys alice, bob;
+    carrot::carrot_and_legacy_account alice, bob;
     alice.generate();
     bob.generate();
 
@@ -332,20 +335,23 @@ TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
     crypto::secret_key recovered_amount_blinding_factor_change;
     CarrotEnoteType recovered_enote_type_change;
     janus_anchor_t recovered_internal_message_out_change;
+    crypto::public_key return_address_out;
+    bool is_return_out;
     const bool scan_success_change = try_scan_carrot_enote_internal_receiver(change_output,
-                                                                             alice.s_view_balance_dev,
+                                                                             alice,
                                                                              recovered_sender_extension_g_change,
                                                                              recovered_sender_extension_t_change,
                                                                              recovered_address_spend_pubkey_change,
                                                                              recovered_amount_change,
                                                                              recovered_amount_blinding_factor_change,
                                                                              recovered_enote_type_change,
-                                                                             recovered_internal_message_out_change);
-    
+                                                                             recovered_internal_message_out_change,
+                                                                             return_address_out,
+                                                                             is_return_out);
     ASSERT_TRUE(scan_success_change);
 
     // check spendability of the change output
-    EXPECT_TRUE(alice.can_open_fcmp_onetime_address(alice.carrot_account_spend_pubkey,
+    EXPECT_TRUE(alice.can_open_fcmp_onetime_address(alice.get_keys().m_carrot_account_address.m_spend_public_key,
                                                     recovered_sender_extension_g_change,
                                                     recovered_sender_extension_t_change,
                                                     change_output.onetime_address));
@@ -353,7 +359,7 @@ TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
     // check spendability of the return_payment
     crypto::secret_key sum_g;
     sc_add(to_bytes(sum_g), to_bytes(recovered_sender_extension_g_change), to_bytes(k_return));
-    ASSERT_TRUE(alice.can_open_fcmp_onetime_address(alice.carrot_account_spend_pubkey,
+    ASSERT_TRUE(alice.can_open_fcmp_onetime_address(alice.get_keys().m_carrot_account_address.m_spend_public_key,
                                                     sum_g,
                                                     recovered_sender_extension_t_change,
                                                     return_output.onetime_address));
