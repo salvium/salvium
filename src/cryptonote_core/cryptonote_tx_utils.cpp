@@ -361,10 +361,13 @@ namespace cryptonote
       LOG_ERROR("Cannot mix Carrot and non-Carrot outputs in the same protocol transaction");
       return false;
     }
+    if (carrot_found && hard_fork_version < HF_VERSION_CARROT) {
+      LOG_ERROR("Carrot outputs found in CryptoNote protocol transaction");
+      return false;
+    }
     
-    if (carrot_found || hard_fork_version >= HF_VERSION_ENFORCE_CARROT)
+    if (carrot_found)
     {
-
       // Ensure the TX version is correct
       tx.version = TRANSACTION_VERSION_CARROT;
       try
@@ -594,7 +597,6 @@ namespace cryptonote
       case HF_VERSION_AUDIT2:
       case HF_VERSION_AUDIT2_PAUSE:
       case HF_VERSION_CARROT:
-      case HF_VERSION_ENFORCE_CARROT:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;
