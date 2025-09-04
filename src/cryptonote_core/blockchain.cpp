@@ -1403,15 +1403,14 @@ bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t heigh
   CHECK_AND_ASSERT_MES(b.protocol_tx.vin[0].type() == typeid(txin_gen), false, "coinbase protocol transaction in the block has the wrong type");
   CHECK_AND_ASSERT_MES(b.protocol_tx.version > 1, false, "Invalid coinbase protocol transaction version");
 
-  if (hf_version >= HF_VERSION_CARROT) {
-    CHECK_AND_ASSERT_MES(b.protocol_tx.version == TRANSACTION_VERSION_CARROT || 2, false, "protocol transaction has wrong version");
-    CHECK_AND_ASSERT_MES(b.protocol_tx.type == cryptonote::transaction_type::PROTOCOL, false, "protocol transaction has wrong type");
-  }
-
   if (hf_version >= HF_VERSION_ENFORCE_CARROT) {
     CHECK_AND_ASSERT_MES(b.protocol_tx.version == TRANSACTION_VERSION_CARROT, false, "protocol transaction has wrong version");
     CHECK_AND_ASSERT_MES(b.protocol_tx.type == cryptonote::transaction_type::PROTOCOL, false, "protocol transaction has wrong type");
+  } else if (hf_version >= HF_VERSION_CARROT) {
+    CHECK_AND_ASSERT_MES(b.protocol_tx.version == 2 || b.protocol_tx.version == TRANSACTION_VERSION_CARROT, false, "protocol transaction has wrong version");
+    CHECK_AND_ASSERT_MES(b.protocol_tx.type == cryptonote::transaction_type::PROTOCOL, false, "protocol transaction has wrong type");
   }
+
 
   // for v2 txes (ringct), we only accept empty rct signatures for protocol transactions,
   if (hf_version >= HF_VERSION_REJECT_SIGS_IN_COINBASE && b.protocol_tx.version >= 2)
