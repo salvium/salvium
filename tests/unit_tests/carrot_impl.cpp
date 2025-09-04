@@ -808,11 +808,11 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_10)
     tx_proposal.self_sender_index = 2;
 
     // 1 subaddress payment (subtractable)
-    acc0.second.emplace_back().first = CarrotPaymentProposalV1{ = {CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
-    }, true};
+    };
 
     // 1 main address payment
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
@@ -826,7 +826,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_10)
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
-    }, true};
+    };
 
     // specify fee per weight
     tx_proposal.fee_per_weight = 314159;
@@ -914,11 +914,11 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_12)
     tx_proposal.self_sender_index = 2;
 
     // 2 subaddress payment (1 subtractable)
-    acc0.second.emplace_back().first = CarrotPaymentProposalV1{ = {CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first =CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
-    }, true};
+    };
     acc0.second.push_back(acc0.second.front());
     acc0.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
     acc0.second.back().second = false;                        //set not subtractable, first already is
@@ -937,7 +937,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_12)
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
-    }, true};
+    };
 
     // 1 main address selfsend
     tx_proposal.explicit_selfsend_proposals.emplace_back().first.proposal = CarrotPaymentProposalSelfSendV1{
@@ -955,7 +955,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_12)
             .enote_type = CarrotEnoteType::CHANGE
         },
         .subaddr_index = {{4, 19}}
-    }, true};
+    };
 
     // specify fee per weight
     tx_proposal.fee_per_weight = 314159;
@@ -1021,11 +1021,11 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_14)
     tx_proposal.self_sender_index = 2;
 
     // 1 subaddress payment (subtractable)
-    acc0.second.emplace_back().first = CarrotPaymentProposalV1{ = {CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
-    }, true};
+    };
 
     // 1 main address payment
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
@@ -1039,7 +1039,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_14)
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
-    }, true};
+    };
 
     // specify fee per weight
     tx_proposal.fee_per_weight = 314159;
@@ -1071,11 +1071,11 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_15)
     tx_proposal.self_sender_index = 2;
 
     // 2 subaddress payment (subtractable)
-    acc0.second.emplace_back().first = CarrotPaymentProposalV1{ = {CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
-    }, true};
+    };
     acc0.second.push_back(acc0.second.front());
     acc0.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
@@ -1084,7 +1084,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_15)
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
-    }, true};
+    };
     acc1.second.push_back(acc1.second.front());
     acc1.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
@@ -1093,7 +1093,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_15)
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
-    }, true};
+    };
 
     // specify fee per weight
     tx_proposal.fee_per_weight = 314159;
@@ -1125,11 +1125,11 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_16)
     tx_proposal.self_sender_index = 2;
 
     // 2 subaddress payment (subtractable)
-    acc0.second.emplace_back().first = CarrotPaymentProposalV1{ = {CarrotPaymentProposalV1{
+    acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
-    }, true};
+    };
     acc0.second.push_back(acc0.second.front());
     acc0.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
@@ -1138,7 +1138,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_16)
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
-    }, true};
+    };
     acc1.second.push_back(acc1.second.front());
     acc1.second.back().first.randomness = gen_janus_anchor(); //mangle anchor_norm
 
@@ -1147,14 +1147,16 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_16)
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .randomness = gen_janus_anchor()
-    }, true};
+    };
 
     // 1 main address selfsend (subtractable)
-    tx_proposal.explicit_selfsend_proposals.emplace_back() = {CarrotPaymentProposalSelfSendV1{
-        .destination_address_spend_pubkey = acc2.first.carrot_account_spend_pubkey,
-        .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
-        .enote_type = CarrotEnoteType::PAYMENT,
-        // no internal messages for legacy self-sends
+    tx_proposal.explicit_selfsend_proposals.emplace_back() = {CarrotPaymentProposalVerifiableSelfSendV1{
+        .proposal = CarrotPaymentProposalSelfSendV1{
+            .destination_address_spend_pubkey = acc2.first.carrot_account_spend_pubkey,
+            .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+            .enote_type = CarrotEnoteType::PAYMENT,
+            // no internal messages for legacy self-sends
+        }
     }, true};
 
     // 1 subaddress selfsend (subtractable)
