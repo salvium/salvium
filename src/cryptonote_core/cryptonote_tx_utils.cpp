@@ -366,7 +366,7 @@ namespace cryptonote
       return false;
     }
     
-    if (carrot_found)
+    if (carrot_found || (!noncarrot_found && hard_fork_version >= HF_VERSION_CARROT))
     {
       // Ensure the TX version is correct
       tx.version = TRANSACTION_VERSION_CARROT;

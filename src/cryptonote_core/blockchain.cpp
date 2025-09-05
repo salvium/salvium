@@ -2094,6 +2094,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
           entry.P_change = audit_entry.first.P_change;
           entry.return_pubkey = audit_entry.first.return_pubkey;
           entry.origin_height = matured_audit_height;
+          entry.is_carrot = false;
           protocol_entries.push_back(entry);
         }
       }
