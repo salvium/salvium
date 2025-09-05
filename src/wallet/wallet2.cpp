@@ -10772,8 +10772,13 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
   boost::unique_lock<hw::device> hwdev_lock (hwdev);
   hw::reset_mode rst(hwdev);  
 
-  const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
-  if (do_carrot_tx_construction)
+  // Sanity check correct CN/Carrot address is being used
+  const uint8_t hf_version = get_current_hard_fork();
+  for (const auto &entry: dsts) {
+    THROW_WALLET_EXCEPTION_IF(entry.addr.m_is_carrot && hf_version < HF_VERSION_CARROT, error::wallet_internal_error, "Carrot address supplied, but Carrot not yet active");
+    THROW_WALLET_EXCEPTION_IF(!entry.addr.m_is_carrot && hf_version >= HF_VERSION_CARROT, error::wallet_internal_error, "CryptoNote address supplied, but Carrot is now active");
+  }
+  if (hf_version >= HF_VERSION_CARROT)
   {
     const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts, priority, extra, tx_type, subaddr_account, subaddr_indices, subtract_fee_from_outputs);
     std::vector<pending_tx> ptx_vector;
