@@ -1414,6 +1414,8 @@ bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t heigh
       CHECK_AND_ASSERT_MES(b.protocol_tx.version == 2, false, "protocol transaction has wrong version");
     }
     CHECK_AND_ASSERT_MES(b.protocol_tx.type == cryptonote::transaction_type::PROTOCOL, false, "protocol transaction has wrong type");
+  } else {
+    hf_version_submitted = hf_version;
   }
 
   // for v2 txes (ringct), we only accept empty rct signatures for protocol transactions,
