@@ -244,7 +244,6 @@
 #define HF_VERSION_AUDIT2                       8
 #define HF_VERSION_AUDIT2_PAUSE                 9
 #define HF_VERSION_CARROT                       10
-#define HF_VERSION_ENFORCE_CARROT               11
 
 #define HF_VERSION_REQUIRE_VIEW_TAGS            255
 #define HF_VERSION_ENABLE_CONVERT               255

@@ -1403,14 +1403,18 @@ bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t heigh
   CHECK_AND_ASSERT_MES(b.protocol_tx.vin[0].type() == typeid(txin_gen), false, "coinbase protocol transaction in the block has the wrong type");
   CHECK_AND_ASSERT_MES(b.protocol_tx.version > 1, false, "Invalid coinbase protocol transaction version");
 
-  if (hf_version >= HF_VERSION_ENFORCE_CARROT) {
-    CHECK_AND_ASSERT_MES(b.protocol_tx.version == TRANSACTION_VERSION_CARROT, false, "protocol transaction has wrong version");
-    CHECK_AND_ASSERT_MES(b.protocol_tx.type == cryptonote::transaction_type::PROTOCOL, false, "protocol transaction has wrong type");
-  } else if (hf_version >= HF_VERSION_CARROT) {
-    CHECK_AND_ASSERT_MES(b.protocol_tx.version == 2 || b.protocol_tx.version == TRANSACTION_VERSION_CARROT, false, "protocol transaction has wrong version");
+  // Work out what the HF version _was_ when the STAKE outputs were created
+  uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
+  uint8_t hf_version_submitted = get_ideal_hard_fork_version(height - stake_lock_period - 1);
+
+  if (hf_version >= HF_VERSION_CARROT) {
+    if (hf_version_submitted >= HF_VERSION_CARROT || b.protocol_tx.vout.size() == 0) {
+      CHECK_AND_ASSERT_MES(b.protocol_tx.version == TRANSACTION_VERSION_CARROT, false, "protocol transaction has wrong version");
+    } else {
+      CHECK_AND_ASSERT_MES(b.protocol_tx.version == 2, false, "protocol transaction has wrong version");
+    }
     CHECK_AND_ASSERT_MES(b.protocol_tx.type == cryptonote::transaction_type::PROTOCOL, false, "protocol transaction has wrong type");
   }
-
 
   // for v2 txes (ringct), we only accept empty rct signatures for protocol transactions,
   if (hf_version >= HF_VERSION_REJECT_SIGS_IN_COINBASE && b.protocol_tx.version >= 2)
@@ -1432,8 +1436,7 @@ bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t heigh
     return false;
   }
 
-  CHECK_AND_ASSERT_MES(check_output_types(b.protocol_tx, hf_version), false, "protocol transaction has invalid output type(s) in block " << get_block_hash(b));
-
+  CHECK_AND_ASSERT_MES(check_output_types(b.protocol_tx, hf_version_submitted), false, "protocol transaction has invalid output type(s) in block " << get_block_hash(b));
   return true;
 }
 //------------------------------------------------------------------
@@ -1520,7 +1523,6 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_AUDIT2:
   case HF_VERSION_AUDIT2_PAUSE:
   case HF_VERSION_CARROT:
-  case HF_VERSION_ENFORCE_CARROT:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
@@ -2092,6 +2094,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
           entry.P_change = audit_entry.first.P_change;
           entry.return_pubkey = audit_entry.first.return_pubkey;
           entry.origin_height = matured_audit_height;
+          entry.is_carrot = false;
           protocol_entries.push_back(entry);
         }
       }

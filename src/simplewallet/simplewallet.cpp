@@ -8747,7 +8747,14 @@ bool simple_wallet::stake(const std::vector<std::string> &args_)
   }
   
   std::vector<std::string> local_args;
-  local_args.push_back(m_wallet->get_subaddress_as_str({m_current_subaddress_account,0}));
+
+  carrot::AddressDeriveType derive_type;
+  if (m_wallet->use_fork_rules(HF_VERSION_CARROT, 0)) {
+    derive_type = carrot::AddressDeriveType::Carrot;
+  } else {
+    derive_type = carrot::AddressDeriveType::PreCarrot;
+  }
+  local_args.push_back(m_wallet->get_subaddress_as_str({{m_current_subaddress_account, 0}, derive_type, false}));
   local_args.insert(local_args.end(), args_.begin(), args_.end());
 
   if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
