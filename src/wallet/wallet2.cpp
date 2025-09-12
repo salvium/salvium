@@ -2928,6 +2928,7 @@ void wallet2::process_new_scanned_transaction(
         payment.m_timestamp    = ts;
         payment.m_coinbase     = miner_tx;
         payment.m_subaddr_index = i.first;
+        payment.m_tx_type      = tx.type;
         if (pool) {
           if (emplace_or_replace(m_unconfirmed_payments, payment_id, pool_payment_details{payment, double_spend_seen}))
             all_same = false;
