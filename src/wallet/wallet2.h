@@ -1419,8 +1419,6 @@ private:
       if (ver < 20)
         return;
       a & m_subaddresses.parent();
-      a & m_subaddresses_extended.parent();
-      a & m_return_output_info.parent();
       std::unordered_map<cryptonote::subaddress_index, crypto::public_key> dummy_subaddresses_inv;
       a & dummy_subaddresses_inv;
       a & m_subaddress_labels;
@@ -1461,9 +1459,13 @@ private:
       if(ver < 31)
       {
         m_background_sync_data = background_sync_data_t{};
+        m_subaddresses_extended = {};
+        m_return_output_info = {};
         return;
       }
       a & m_background_sync_data;
+      a & m_subaddresses_extended.parent();
+      a & m_return_output_info.parent();
     }
 
     BEGIN_SERIALIZE_OBJECT()
@@ -1487,8 +1489,6 @@ private:
       FIELD(m_scanned_pool_txs[0])
       FIELD(m_scanned_pool_txs[1])
       FIELD(m_subaddresses)
-      FIELD(m_subaddresses_extended)
-      FIELD(m_return_output_info)
       FIELD(m_subaddress_labels)
       FIELD(m_additional_tx_keys)
       FIELD(m_attributes)
@@ -1508,9 +1508,13 @@ private:
       if (version < 2)
       {
         m_background_sync_data = background_sync_data_t{};
+        m_subaddresses_extended = {};
+        m_return_output_info = {};
         return true;
       }
       FIELD(m_background_sync_data)
+      FIELD(m_subaddresses_extended)
+      FIELD(m_return_output_info)
     END_SERIALIZE()
 
     /*!

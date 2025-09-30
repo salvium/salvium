@@ -4520,6 +4520,7 @@ bool wallet2::clear()
   m_transfers.clear();
   m_transfers_indices.clear();
   m_locked_coins.clear();
+  m_salvium_txs.clear();
   m_key_images.clear();
   m_pub_keys.clear();
   m_unconfirmed_txs.clear();
@@ -4538,6 +4539,8 @@ bool wallet2::clear()
   m_pool_info_query_time = 0;
   m_skip_to_height = 0;
   m_background_sync_data = background_sync_data_t{};
+  m_subaddresses_extended.clear();
+  m_return_output_info.clear();
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -4547,6 +4550,7 @@ void wallet2::clear_soft(bool keep_key_images)
   m_transfers.clear();
   m_transfers_indices.clear();
   m_locked_coins.clear();
+  m_salvium_txs.clear();
   if (!keep_key_images)
     m_key_images.clear();
   m_pub_keys.clear();
@@ -4559,6 +4563,8 @@ void wallet2::clear_soft(bool keep_key_images)
   m_pool_info_query_time = 0;
   m_skip_to_height = 0;
   m_background_sync_data = background_sync_data_t{};
+  m_subaddresses_extended.clear();
+  m_return_output_info.clear();
 
   cryptonote::block b;
   generate_genesis(b);
