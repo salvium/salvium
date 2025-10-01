@@ -657,7 +657,8 @@ namespace tools
         info.address_index = index.minor;
         info.used = std::find_if(transfers.begin(), transfers.end(), [&](const tools::wallet2::transfer_details& td) { return td.m_subaddr_index == index; }) != transfers.end();
       }
-      res.address = m_wallet->get_subaddress_as_str({req.account_index, 0});
+      //res.address = m_wallet->get_subaddress_as_str({req.account_index, 0});
+      res.address = m_wallet->get_subaddress_as_str({{req.account_index, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
     }
     catch (const std::exception& e)
     {
@@ -700,6 +701,8 @@ namespace tools
         return false;
       }
 
+      bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+
       std::vector<std::string> addresses;
       std::vector<uint32_t>    address_indices;
 
@@ -710,7 +713,8 @@ namespace tools
         m_wallet->add_subaddress(req.account_index, req.label);
         uint32_t new_address_index = m_wallet->get_num_subaddresses(req.account_index) - 1;
         address_indices.push_back(new_address_index);
-        addresses.push_back(m_wallet->get_subaddress_as_str({req.account_index, new_address_index}));
+        //addresses.push_back(m_wallet->get_subaddress_as_str({req.account_index, new_address_index}));
+        addresses.push_back(m_wallet->get_subaddress_as_str({{req.account_index, new_address_index}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot}));
       }
 
       res.address = addresses[0];
@@ -806,7 +810,9 @@ namespace tools
     {
       m_wallet->add_subaddress_account(req.label);
       res.account_index = m_wallet->get_num_subaddress_accounts() - 1;
-      res.address = m_wallet->get_subaddress_as_str({res.account_index, 0});
+      //res.address = m_wallet->get_subaddress_as_str({res.account_index, 0});
+      bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+      res.address = m_wallet->get_subaddress_as_str({{res.account_index, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
     }
     catch (const std::exception& e)
     {

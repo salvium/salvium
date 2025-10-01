@@ -877,18 +877,18 @@ bool WalletImpl::setDevicePassphrase(const std::string &passphrase)
     return status() == Status_Ok;
 }
 
-std::string WalletImpl::address(uint32_t accountIndex, uint32_t addressIndex) const
+std::string WalletImpl::address(uint32_t accountIndex, uint32_t addressIndex, bool carrot) const
 {
-    return m_wallet->get_subaddress_as_str({accountIndex, addressIndex});
+  return m_wallet->get_subaddress_as_str({{accountIndex, addressIndex}, carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
 }
 
-std::string WalletImpl::integratedAddress(const std::string &payment_id) const
+std::string WalletImpl::integratedAddress(const std::string &payment_id, bool carrot) const
 {
     crypto::hash8 pid;
     if (!tools::wallet2::parse_short_payment_id(payment_id, pid)) {
         return "";
     }
-    return m_wallet->get_integrated_address_as_str(pid);
+    return m_wallet->get_integrated_address_as_str(pid, carrot);
 }
 
 std::string WalletImpl::secretViewKey() const
@@ -1588,7 +1588,8 @@ PendingTransaction* WalletImpl::restoreMultisigTransaction(const string& signDat
 PendingTransaction *WalletImpl::createStakeTransaction(uint64_t amount, uint32_t mixin_count, PendingTransaction::Priority priority, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
 {
   // Need to populate {dst_entr, payment_id, asset_type, is_return}
-  const string dst_addr = m_wallet->get_subaddress_as_str({subaddr_account, 0});//MY LOCAL (SUB)ADDRESS
+  const bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+  const string dst_addr = m_wallet->get_subaddress_as_str({{subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});//MY LOCAL (SUB)ADDRESS
   const string payment_id = "";
   const string asset_type = "SAL1";
   const bool is_return = false;
@@ -1605,7 +1606,8 @@ PendingTransaction *WalletImpl::createAuditTransaction(
     std::set<uint32_t> subaddr_indices
 ) {
     // Need to populate {dst_entr, payment_id, asset_type, is_return}
-    const string dst_addr = m_wallet->get_subaddress_as_str({subaddr_account, 0});//MY LOCAL (SUB)ADDRESS
+    const bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    const string dst_addr = m_wallet->get_subaddress_as_str({{subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});//MY LOCAL (SUB)ADDRESS
     const string payment_id = "";
     const string asset_type = "SAL";
     const bool is_return = false;

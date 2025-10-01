@@ -513,8 +513,8 @@ struct Wallet
     virtual const std::string& getPassword() const = 0;
     virtual bool setDevicePin(const std::string &pin) { (void)pin; return false; };
     virtual bool setDevicePassphrase(const std::string &passphrase) { (void)passphrase; return false; };
-    virtual std::string address(uint32_t accountIndex = 0, uint32_t addressIndex = 0) const = 0;
-    std::string mainAddress() const { return address(0, 0); }
+    virtual std::string address(uint32_t accountIndex = 0, uint32_t addressIndex = 0, bool carrot = true) const = 0;
+    std::string mainAddress(bool carrot = true) const { return address(0, 0, carrot); }
     virtual std::string path() const = 0;
     virtual NetworkType nettype() const = 0;
     bool mainnet() const { return nettype() == MAINNET; }
@@ -533,7 +533,7 @@ struct Wallet
      *                            generated
      * \return                  - 106 characters string representing integrated address
      */
-    virtual std::string integratedAddress(const std::string &payment_id) const = 0;
+    virtual std::string integratedAddress(const std::string &payment_id, bool carrot = true) const = 0;
     
    /*!
     * \brief secretViewKey     - returns secret view key

@@ -47,7 +47,7 @@ As with many development projects, the repository on GitHub is considered to be 
 
 ## Supporting the project
 
-Salvium is a 100% community-sponsored endeavor. If you want to join our efforts, the easiest thing you can do is support the project financially. Go to [https://salvium.io/donate/](https://salvium.io/donate/) for more information.
+Salvium is a 100% community-sponsored endeavor. If you want to join our efforts, the easiest thing you can do is support the project financially. Go to [https://salvium.io/donate](https://salvium.io/donate) for more information.
 
 ## License
 

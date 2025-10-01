@@ -1749,6 +1749,16 @@ namespace cryptonote
         LOG_PRINT_L2("  key images already seen");
         continue;
       }
+      if (version < HF_VERSION_CARROT && tx.version >= TRANSACTION_VERSION_CARROT)
+      {
+        LOG_PRINT_L2("  is a Carrot transaction - cannot be mined");
+        continue;
+      }
+      if (version >= HF_VERSION_CARROT && tx.version < TRANSACTION_VERSION_CARROT)
+      {
+        LOG_PRINT_L2("  is not a Carrot transaction - cannot be mined");
+        continue;
+      }
 
       bl.tx_hashes.push_back(sorted_it->second);
       total_weight += meta.weight;
