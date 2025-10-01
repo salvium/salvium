@@ -142,22 +142,20 @@ set(blockchain_scanner_private_headers)
 monero_private_headers(blockchain_scanner
 	  ${blockchain_scanner_private_headers})
 
-if (BUILD_AUDIT)
-  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp" AND NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp")
-    set(blockchain_audit_sources
-      blockchain_audit.cpp
-      threadpool_boost.cpp
-      )
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp" AND NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp")
+  set(blockchain_audit_sources
+    blockchain_audit.cpp
+    threadpool_boost.cpp
+    )
 
-    set(blockchain_audit_private_headers
-      threadpool_boost.h
-      )
+  set(blockchain_audit_private_headers
+    threadpool_boost.h
+    )
 
-    monero_private_headers(blockchain_audit
-   	  ${blockchain_audit_private_headers})
-  else()
-    message(STATUS "blockchain_audit.cpp not found - not building the audit tool")
-  endif()
+  monero_private_headers(blockchain_audit
+    ${blockchain_audit_private_headers})
+else()
+  message(STATUS "blockchain_audit.cpp not found - not building the audit tool")
 endif()
 
 monero_add_executable(blockchain_import
@@ -329,35 +327,33 @@ set_property(TARGET blockchain_scanner
 	OUTPUT_NAME "salvium-blockchain-scanner")
 install(TARGETS blockchain_scanner DESTINATION bin)
 
-if (BUILD_AUDIT)
-  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp" AND NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp")
-    monero_add_executable(blockchain_audit
-      ${blockchain_audit_sources}
-      ${blockchain_audit_private_headers})
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp" AND NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/blockchain_audit.cpp")
+  monero_add_executable(blockchain_audit
+    ${blockchain_audit_sources}
+    ${blockchain_audit_private_headers})
 
-    target_include_directories(blockchain_audit PRIVATE /usr/include/mysql-cppconn/jdbc)
+  target_include_directories(blockchain_audit PRIVATE /usr/include/mysql-cppconn/jdbc)
     
-    target_link_libraries(blockchain_audit
-      PRIVATE
-        wallet
-        crypto
-        cncrypto
-        cryptonote_core
-        blockchain_db
-        version
-        epee
-        mysqlcppconn
-        ${Boost_FILESYSTEM_LIBRARY}
-        ${Boost_SYSTEM_LIBRARY}
-        ${Boost_THREAD_LIBRARY}
-        ${CMAKE_THREAD_LIBS_INIT}
-        ${EXTRA_LIBRARIES})
+  target_link_libraries(blockchain_audit
+    PRIVATE
+      wallet
+      crypto
+      cncrypto
+      cryptonote_core
+      blockchain_db
+      version
+      epee
+      mysqlcppconn
+      ${Boost_FILESYSTEM_LIBRARY}
+      ${Boost_SYSTEM_LIBRARY}
+      ${Boost_THREAD_LIBRARY}
+      ${CMAKE_THREAD_LIBS_INIT}
+      ${EXTRA_LIBRARIES})
 
-    set_property(TARGET blockchain_audit
-  	  PROPERTY
-	  OUTPUT_NAME "salvium-blockchain-audit")
-    install(TARGETS blockchain_audit DESTINATION bin)
-  endif()
+  set_property(TARGET blockchain_audit
+    PROPERTY
+    OUTPUT_NAME "salvium-blockchain-audit")
+  install(TARGETS blockchain_audit DESTINATION bin)
 endif()
 
 monero_add_executable(blockchain_stats

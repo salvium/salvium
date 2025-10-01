@@ -30,6 +30,16 @@
 
 #include "cryptonote_basic/account.h"
 
+
+#include "cryptonote_basic/cryptonote_basic_impl.h"
+#include "cryptonote_basic/cryptonote_basic.h"
+#include "cryptonote_basic/subaddress_index.h"
+#include "cryptonote_basic/cryptonote_format_utils.h"
+
+#include "string_tools.h"
+
+using namespace cryptonote;
+
 TEST(account, encrypt_keys)
 {
   cryptonote::keypair recovery_key = cryptonote::keypair::generate(hw::get_device("default"));
@@ -68,4 +78,49 @@ TEST(account, encrypt_keys)
   ASSERT_EQ(account.get_keys().m_account_address, keys.m_account_address);
   ASSERT_EQ(account.get_keys().m_spend_secret_key, keys.m_spend_secret_key);
   ASSERT_EQ(account.get_keys().m_view_secret_key, keys.m_view_secret_key);
+}
+
+
+TEST(account, derive_output_key)
+{
+  const std::string secret_view = "";
+  const std::string addr = "";
+  address_parse_info address_info;
+  bool ok = get_account_address_from_str(address_info, network_type::MAINNET, addr);
+  ASSERT_TRUE(ok);
+
+  std::unordered_map<crypto::public_key, subaddress_index> subaddresses = {{
+    {address_info.address.m_spend_public_key, {0, 0}},
+  }};
+
+  // derive keys
+  std::vector<std::pair<crypto::public_key, crypto::public_key>> txkeys;
+  for (size_t i = 0; i < 16; i++) {
+    // tx key
+    keypair txkey = keypair::generate(hw::get_device("default"));
+
+    crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+    crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
+    ok = crypto::generate_key_derivation(address_info.address.m_view_public_key, txkey.sec, derivation);
+    ASSERT_TRUE(ok);
+
+    ok = crypto::derive_public_key(derivation, 0, address_info.address.m_spend_public_key, out_eph_public_key);
+    ASSERT_TRUE(ok);
+
+    txkeys.push_back({txkey.pub, out_eph_public_key});
+  }
+
+  // validate we can receive them
+  crypto::secret_key secret_view_key;
+  epee::string_tools::hex_to_pod(secret_view, secret_view_key);
+  size_t i = 0;
+  for (const auto& txkey : txkeys) {
+    crypto::key_derivation derivation;
+    hw::device *hw = &hw::get_device("default");
+
+    ASSERT_TRUE(hw->generate_key_derivation(txkey.first, secret_view_key, derivation));
+    ASSERT_TRUE(is_out_to_acc_precomp(subaddresses, txkey.second, derivation, std::vector<crypto::key_derivation>(), 0, *hw, boost::none));
+    i++;
+  }
+
 }

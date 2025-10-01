@@ -29,14 +29,18 @@
 #include "db_lmdb.h"
 
 #include <boost/filesystem.hpp>
+#include <boost/filesystem/fstream.hpp>
 #include <boost/format.hpp>
 #include <boost/circular_buffer.hpp>
 
 #include <memory>  // std::unique_ptr
 #include <cstring>  // memcpy
 
+#ifdef WIN32
+#include <winioctl.h>
+#endif
+
 #include "string_tools.h"
-#include "file_io_utils.h"
 #include "common/util.h"
 #include "common/pruning.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
@@ -294,6 +298,7 @@ const char* const LMDB_YIELD_TXS = "yield_txs";
 const char* const LMDB_YIELD_BLOCKS = "yield_blocks";
 const char* const LMDB_AUDIT_TXS = "audit_txs";
 const char* const LMDB_AUDIT_BLOCKS = "audit_blocks";
+const char* const LMDB_CARROT_YIELD_TXS = "carrot_yield_txs";
 
 const char zerokey[8] = {0};
 const MDB_val zerokval = { sizeof(zerokey), (void *)zerokey };
@@ -943,6 +948,43 @@ int BlockchainLMDB::get_yield_tx_info(const uint64_t height, std::vector<yield_t
   return 0;
 }
 
+int BlockchainLMDB::get_carrot_yield_tx_info(const uint64_t height, std::vector<yield_tx_info_carrot>& yti_container) const {
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+
+  // Clear the container
+  yti_container.clear();
+
+  // Query for the (presumably matured) YIELD_TX_INFO information
+  TXN_PREFIX_RDONLY();
+  RCURSOR(carrot_yield_txs);
+  
+  MDB_val v;
+  MDB_val_set(k, height);
+  MDB_cursor_op op = MDB_SET;
+  while (1)
+  {
+    int ret = mdb_cursor_get(m_cur_carrot_yield_txs, &k, &v, op);
+    op = MDB_NEXT_DUP;
+    if (ret == MDB_NOTFOUND)
+      break;
+    if (ret)
+      throw0(DB_ERROR(lmdb_error("Failed to enumerate yield TX info: ", ret).c_str()));
+
+    // Get the data
+    yield_tx_info_carrot *p = (yield_tx_info_carrot*)v.mv_data;
+    // Push result back into the container
+    yti_container.emplace_back(*p);
+    // Update the height retrospectively (because the DB stores the count of elements there to handle duplicates, because it's rubbish)
+    yti_container.back().block_height = height;
+  }
+
+  TXN_POSTFIX_RDONLY();
+
+  // Return success to caller
+  return 0;
+}
+
 void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t long_term_block_weight, const difficulty_type& cumulative_difficulty, const uint64_t& coins_generated, uint64_t num_rct_outs, oracle::asset_type_counts& cum_rct_by_asset_type, const crypto::hash& blk_hash, uint64_t slippage_total, uint64_t yield_total, uint64_t audit_total, const cryptonote::network_type nettype, cryptonote::yield_block_info& ybi, cryptonote::audit_block_info& abi)
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
@@ -1211,6 +1253,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   CURSOR(circ_supply_tally)
   CURSOR(yield_txs)
   CURSOR(audit_txs)
+  CURSOR(carrot_yield_txs)
 
   MDB_val_set(val_tx_id, tx_id);
   MDB_val_set(val_h, tx_hash);
@@ -1317,7 +1360,12 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
     write_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, final_burn_tally);
   }
   
-  if (tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::TRANSFER) {
+  if (tx.type == cryptonote::transaction_type::BURN ||
+      tx.type == cryptonote::transaction_type::CONVERT ||
+      tx.type == cryptonote::transaction_type::STAKE ||
+      tx.type == cryptonote::transaction_type::AUDIT ||
+      tx.type == cryptonote::transaction_type::TRANSFER) 
+  {
 
     // Get the current tally value for the source currency type
     MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
@@ -1386,10 +1434,44 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       write_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, final_burn_tally);
     }
   }
-  
-  // Is there yield_tx data to add?
-  if (tx.type == cryptonote::transaction_type::STAKE) {
 
+  // Is there yield_tx data to add?
+  if (tx.version >= TRANSACTION_VERSION_CARROT && tx.type == cryptonote::transaction_type::STAKE)
+  {
+    // Create the object we are going to write to the database
+    yield_tx_info_carrot yield_data;
+    yield_data.block_height = m_height;
+    yield_data.tx_hash = tx_hash;
+    yield_data.return_pubkey = tx.protocol_tx_data.return_pubkey;
+    yield_data.return_address = tx.protocol_tx_data.return_address;
+    yield_data.return_view_tag = tx.protocol_tx_data.return_view_tag;
+    yield_data.return_anchor_enc = tx.protocol_tx_data.return_anchor_enc;
+    yield_data.locked_coins = tx.amount_burnt;
+
+    // Because LMDB is shockingly bad at handling duplicates, we have resorted to using a counter of elements
+    // in the first element of the struct.
+    MDB_val data;
+    MDB_val_set(val_height, m_height);
+    result = mdb_cursor_get(m_cur_carrot_yield_txs, &val_height, &data, MDB_SET);
+    if (!result)
+    {
+      mdb_size_t num_elems = 0;
+      result = mdb_cursor_count(m_cur_carrot_yield_txs, &num_elems);
+      if (result)
+        throw0(DB_ERROR(std::string("Failed to get number of yield TXs for height: ").append(mdb_strerror(result)).c_str()));
+      yield_data.block_height = num_elems;
+    }
+    else if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to get output amount in db transaction: ", result).c_str()));
+    else
+     yield_data.block_height = 0;
+
+    // Now we know how many there are, write out the data to the DB
+    MDB_val_set(val_yield_tx_data, yield_data);
+    result = mdb_cursor_put(m_cur_carrot_yield_txs, &val_height, &val_yield_tx_data, MDB_APPENDDUP);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to add tx carrot yield data to db transaction: ", result).c_str()));
+  } else if (tx.type == cryptonote::transaction_type::STAKE) {
     // Create the object we are going to write to the database
     yield_tx_info yield_data;
     yield_data.block_height = m_height;
@@ -1440,7 +1522,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
     if (result)
       throw0(DB_ERROR(  lmdb_error("Failed to add tx yield data to db transaction: ", result).c_str()  ));
   }
-  
+
   // Is there audit_tx data to add?
   if (tx.type == cryptonote::transaction_type::AUDIT) {
 
@@ -1494,7 +1576,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
     if (result)
       throw0(DB_ERROR(  lmdb_error("Failed to add tx audit data to db transaction: ", result).c_str()  ));
   }
-  
+
   return tx_id;
 }
 
@@ -1518,6 +1600,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
   CURSOR(circ_supply_tally)
   CURSOR(yield_txs)
   CURSOR(audit_txs)
+  CURSOR(carrot_yield_txs)
 
   MDB_val_set(val_h, tx_hash);
 
@@ -1716,7 +1799,28 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
   }
   
   // Is there yield_tx data to remove?
-  if (tx.type == cryptonote::transaction_type::STAKE) {
+  if (tx.version >= TRANSACTION_VERSION_CARROT && tx.type == cryptonote::transaction_type::STAKE) {
+    // Remove any yield_tx data for this transaction
+    MDB_val_set(val_height, m_height);
+    MDB_val v;
+    MDB_cursor_op op = MDB_SET;
+    while (1) {
+      result = mdb_cursor_get(m_cur_carrot_yield_txs, &val_height, &v, op);
+      if (result == MDB_NOTFOUND) {
+        throw1(DB_ERROR("Failed to locate carrot yield tx for removal from db transaction"));
+      } else if (result) {
+        throw1(DB_ERROR(lmdb_error("Failed to locate carrot yield_tx data for removal: ", result).c_str()));
+      }
+      op = MDB_NEXT_DUP;
+      const yield_tx_info_carrot yti = *(const yield_tx_info_carrot*)v.mv_data;
+      if (yti.tx_hash == tx_hash) {
+        result = mdb_cursor_del(m_cur_carrot_yield_txs, 0);
+        if (result)
+          throw1(DB_ERROR(lmdb_error("Failed to add removal of carrot yield_tx data to db transaction: ", result).c_str()));
+        break;
+      }
+    }
+  } else if (tx.type == cryptonote::transaction_type::STAKE) {
     // Remove any yield_tx data for this transaction
     MDB_val_set(val_height, m_height);
     MDB_val v;
@@ -2083,6 +2187,54 @@ BlockchainLMDB::BlockchainLMDB(bool batch_transactions): BlockchainDB()
   m_hardfork = nullptr;
 }
 
+#ifdef WIN32
+static bool disable_ntfs_compression(const boost::filesystem::path& filepath)
+{
+  DWORD file_attributes = ::GetFileAttributesW(filepath.c_str());
+  if (file_attributes == INVALID_FILE_ATTRIBUTES)
+  {
+    MERROR("Failed to get " << filepath.string() << " file attributes. Error: " << ::GetLastError());
+    return false;
+  }
+  
+  if (!(file_attributes & FILE_ATTRIBUTE_COMPRESSED))
+    return true; // not compressed
+
+  LOG_PRINT_L1("Disabling NTFS compression for " << filepath.string());
+  HANDLE file_handle = ::CreateFileW(
+    filepath.c_str(),
+    GENERIC_READ | GENERIC_WRITE,
+    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+    nullptr,
+    OPEN_EXISTING,
+    boost::filesystem::is_directory(filepath) ? FILE_FLAG_BACKUP_SEMANTICS : 0, // Needed to open handles to directories
+    nullptr
+  );
+
+  if (file_handle == INVALID_HANDLE_VALUE)
+  {
+    MERROR("Failed to open handle: " << filepath.string() << ". Error: " << ::GetLastError());
+    return false;
+  }
+
+  USHORT compression_state = COMPRESSION_FORMAT_NONE;
+  DWORD bytes_returned;
+  BOOL ok = ::DeviceIoControl(
+    file_handle,
+    FSCTL_SET_COMPRESSION,
+    &compression_state,
+    sizeof(compression_state),
+    nullptr,
+    0,
+    &bytes_returned,
+    nullptr
+  );
+
+  ::CloseHandle(file_handle);
+  return ok;
+}
+#endif
+
 void BlockchainLMDB::open(const std::string& filename, const int db_flags)
 {
   int result;
@@ -2108,6 +2260,18 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
     LOG_PRINT_L0("Move " << CRYPTONOTE_BLOCKCHAINDATA_FILENAME << " and/or " << CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME << " to " << filename << ", or delete them, and then restart");
     throw DB_ERROR("Database could not be opened");
   }
+
+#ifdef WIN32
+  // ensure NTFS compression is disabled on the directory and database file to avoid corruption of the blockchain 
+  if (!disable_ntfs_compression(filename))
+    LOG_PRINT_L0("Failed to disable NTFS compression on folder: " << filename << ". Error: " << ::GetLastError());
+  boost::filesystem::path datafile(filename);
+  datafile /= CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
+  if (!boost::filesystem::exists(datafile))
+    boost::filesystem::ofstream(datafile).close(); // create the file to see if NTFS compression is enabled beforehand
+  if (!disable_ntfs_compression(datafile))
+    throw DB_ERROR("Database file is NTFS compressed and compression could not be disabled");
+#endif
 
   boost::optional<bool> is_hdd_result = tools::is_hdd(filename.c_str());
   if (is_hdd_result)
@@ -2220,9 +2384,11 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
 
   lmdb_db_open(txn, LMDB_YIELD_TXS, MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_yield_txs, "Failed to open db handle for m_yield_txs");
   lmdb_db_open(txn, LMDB_YIELD_BLOCKS, MDB_INTEGERKEY | MDB_CREATE, m_yield_blocks, "Failed to open db handle for m_yield_blocks");
-
+  
   lmdb_db_open(txn, LMDB_AUDIT_TXS, MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_audit_txs, "Failed to open db handle for m_audit_txs");
   lmdb_db_open(txn, LMDB_AUDIT_BLOCKS, MDB_INTEGERKEY | MDB_CREATE, m_audit_blocks, "Failed to open db handle for m_audit_blocks");
+
+  lmdb_db_open(txn, LMDB_CARROT_YIELD_TXS, MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_carrot_yield_txs, "Failed to open db handle for m_carrot_yield_txs");
 
   mdb_set_dupsort(txn, m_spent_keys, compare_hash32);
   mdb_set_dupsort(txn, m_block_heights, compare_hash32);
@@ -2248,6 +2414,7 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
 
   mdb_set_dupsort(txn, m_yield_txs, compare_uint64);
   mdb_set_dupsort(txn, m_audit_txs, compare_uint64);
+  mdb_set_dupsort(txn, m_carrot_yield_txs, compare_uint64);
   
   if (!(mdb_flags & MDB_RDONLY))
   {
@@ -2433,6 +2600,8 @@ void BlockchainLMDB::reset()
     throw0(DB_ERROR(lmdb_error("Failed to drop m_audit_txs: ", result).c_str()));
   if (auto result = mdb_drop(txn, m_audit_blocks, 0))
     throw0(DB_ERROR(lmdb_error("Failed to drop m_audit_blocks: ", result).c_str()));
+  if (auto result = mdb_drop(txn, m_carrot_yield_txs, 0))
+    throw0(DB_ERROR(lmdb_error("Failed to drop m_carrot_yield_txs: ", result).c_str()));
 
   // init with current version
   MDB_val_str(k, "version");
@@ -5472,12 +5641,11 @@ bool BlockchainLMDB::is_read_only() const
 
 uint64_t BlockchainLMDB::get_database_size() const
 {
-  uint64_t size = 0;
   boost::filesystem::path datafile(m_folder);
   datafile /= CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
-  if (!epee::file_io_utils::get_file_size(datafile.string(), size))
-    size = 0;
-  return size;
+  boost::system::error_code ec{};
+  const boost::uintmax_t size = boost::filesystem::file_size(datafile, ec);
+  return (ec ? 0 : static_cast<uint64_t>(size));
 }
 
 #define RENAME_DB(name) do { \

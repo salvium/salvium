@@ -163,6 +163,10 @@ namespace cryptonote
     command_line::add_arg(desc, arg_rpc_payment_difficulty);
     command_line::add_arg(desc, arg_rpc_payment_credits);
     command_line::add_arg(desc, arg_rpc_payment_allow_free_loopback);
+    command_line::add_arg(desc, arg_rpc_max_connections_per_public_ip);
+    command_line::add_arg(desc, arg_rpc_max_connections_per_private_ip);
+    command_line::add_arg(desc, arg_rpc_max_connections);
+    command_line::add_arg(desc, arg_rpc_response_soft_limit);
   }
   //------------------------------------------------------------------------------------------------------------------------------
   core_rpc_server::core_rpc_server(
@@ -369,11 +373,28 @@ namespace cryptonote
       }
     }
 
+    const auto max_connections_public = command_line::get_arg(vm, arg_rpc_max_connections_per_public_ip);
+    const auto max_connections_private = command_line::get_arg(vm, arg_rpc_max_connections_per_private_ip);
+    const auto max_connections = command_line::get_arg(vm, arg_rpc_max_connections);
+
+    if (max_connections < max_connections_public)
+    {
+      MFATAL(arg_rpc_max_connections_per_public_ip.name << " is bigger than " << arg_rpc_max_connections.name);
+      return false;
+    }
+    if (max_connections < max_connections_private)
+    {
+      MFATAL(arg_rpc_max_connections_per_private_ip.name << " is bigger than " << arg_rpc_max_connections.name);
+      return false;
+    }
+
     auto rng = [](size_t len, uint8_t *ptr){ return crypto::rand(len, ptr); };
     const bool inited = epee::http_server_impl_base<core_rpc_server, connection_context>::init(
       rng, std::move(port), std::move(bind_ip_str),
       std::move(bind_ipv6_str), std::move(rpc_config->use_ipv6), std::move(rpc_config->require_ipv4),
-      std::move(rpc_config->access_control_origins), std::move(http_login), std::move(rpc_config->ssl_options)
+      std::move(rpc_config->access_control_origins), std::move(http_login), std::move(rpc_config->ssl_options),
+      max_connections_public, max_connections_private, max_connections,
+      command_line::get_arg(vm, arg_rpc_response_soft_limit)
     );
 
     m_net_server.get_config_object().m_max_content_length = MAX_RPC_CONTENT_LENGTH;
@@ -1411,7 +1432,7 @@ namespace cryptonote
     RPC_TRACKER(start_mining);
     CHECK_CORE_READY();
     cryptonote::address_parse_info info;
-    if(!get_account_address_from_str(info, nettype(), req.miner_address))
+    if(!get_account_address_from_str(info, m_core.get_nettype(), req.miner_address))
     {
       res.status = "Failed, wrong address";
       LOG_PRINT_L0(res.status);
@@ -1420,6 +1441,17 @@ namespace cryptonote
     if (info.is_subaddress)
     {
       res.status = "Mining to subaddress isn't supported yet";
+      LOG_PRINT_L0(res.status);
+      return true;
+    }
+
+    const uint8_t version = m_core.get_blockchain_storage().get_current_hard_fork_version();
+    if (info.is_carrot && version < HF_VERSION_CARROT) {
+      res.status = "Mining to Carrot wallet address, but Carrot isn't supported yet";
+      LOG_PRINT_L0(res.status);
+      return true;
+    } else if (!info.is_carrot && version >= HF_VERSION_CARROT) {
+      res.status = "Mining to CryptoNote wallet address, but Carrot wallet address is required";
       LOG_PRINT_L0(res.status);
       return true;
     }
@@ -1934,6 +1966,17 @@ namespace cryptonote
     {
       error_resp.code = CORE_RPC_ERROR_CODE_MINING_TO_SUBADDRESS;
       error_resp.message = "Mining to subaddress is not supported yet";
+      return false;
+    }
+
+    const uint8_t version = m_core.get_blockchain_storage().get_current_hard_fork_version();
+    if (info.is_carrot && version < HF_VERSION_CARROT) {
+      error_resp.code = CORE_RPC_ERROR_CODE_INVALID_CLIENT;
+      error_resp.message = "Mining to Carrot wallet address, but Carrot isn't supported yet";
+      return false;
+    } else if (!info.is_carrot && version >= HF_VERSION_CARROT) {
+      error_resp.code = CORE_RPC_ERROR_CODE_INVALID_CLIENT;
+      error_resp.message = "Mining to CryptoNote wallet address, but Carrot wallet address is required";
       return false;
     }
 
@@ -2835,6 +2878,12 @@ namespace cryptonote
       }
       else
       {
+        if (!i->ip)
+        {
+          error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+          error_resp.message = "No ip/host supplied";
+          return false;
+        }
         na = epee::net_utils::ipv4_network_address{i->ip, 0};
       }
       if (i->ban)
@@ -3829,4 +3878,28 @@ namespace cryptonote
     , "Allow free access from the loopback address (ie, the local host)"
     , false
     };
+
+  const command_line::arg_descriptor<std::size_t> core_rpc_server::arg_rpc_max_connections_per_public_ip = {
+      "rpc-max-connections-per-public-ip"
+    , "Max RPC connections per public IP permitted"
+    , DEFAULT_RPC_MAX_CONNECTIONS_PER_PUBLIC_IP
+  };
+
+  const command_line::arg_descriptor<std::size_t> core_rpc_server::arg_rpc_max_connections_per_private_ip = {
+      "rpc-max-connections-per-private-ip"
+    , "Max RPC connections per private and localhost IP permitted"
+    , DEFAULT_RPC_MAX_CONNECTIONS_PER_PRIVATE_IP
+  };
+
+  const command_line::arg_descriptor<std::size_t> core_rpc_server::arg_rpc_max_connections = {
+      "rpc-max-connections"
+    , "Max RPC connections permitted"
+    , DEFAULT_RPC_MAX_CONNECTIONS
+  };
+
+  const command_line::arg_descriptor<std::size_t> core_rpc_server::arg_rpc_response_soft_limit = {
+      "rpc-response-soft-limit"
+    , "Max response bytes that can be queued, enforced at next response attempt"
+    , DEFAULT_RPC_SOFT_LIMIT_SIZE
+  };
 }  // namespace cryptonote

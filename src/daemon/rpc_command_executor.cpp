@@ -1064,7 +1064,7 @@ bool t_rpc_command_executor::print_transaction(crypto::hash transaction_hash,
       cryptonote::blobdata blob;
       std::string source = as_hex.empty() ? pruned_as_hex + prunable_as_hex : as_hex;
       bool pruned = !pruned_as_hex.empty() && prunable_as_hex.empty();
-      if (!string_tools::parse_hexstr_to_binbuff(source, blob))
+      if (!epee::string_tools::parse_hexstr_to_binbuff(source, blob))
       {
         tools::fail_msg_writer() << "Failed to parse tx to get json format";
       }
@@ -1352,10 +1352,10 @@ bool t_rpc_command_executor::print_transaction_pool_stats() {
   return true;
 }
 
-bool t_rpc_command_executor::start_mining(cryptonote::account_public_address address, uint64_t num_threads, cryptonote::network_type nettype, bool do_background_mining, bool ignore_battery) {
+bool t_rpc_command_executor::start_mining(cryptonote::account_public_address address, uint64_t num_threads, cryptonote::network_type nettype, bool do_background_mining, bool ignore_battery, bool is_carrot) {
   cryptonote::COMMAND_RPC_START_MINING::request req;
   cryptonote::COMMAND_RPC_START_MINING::response res;
-  req.miner_address = cryptonote::get_account_address_as_str(nettype, false, address);
+  req.miner_address = cryptonote::get_account_address_as_str(nettype, false, address, is_carrot);
   req.threads_count = num_threads;
   req.do_background_mining = do_background_mining;
   req.ignore_battery = ignore_battery;
@@ -1648,6 +1648,34 @@ bool t_rpc_command_executor::in_peers(bool set, uint32_t limit)
 	tools::msg_writer() << "Max number of in peers set to " << s << std::endl;
 
 	return true;
+}
+
+uint8_t t_rpc_command_executor::current_hard_fork_version()
+{
+    cryptonote::COMMAND_RPC_HARD_FORK_INFO::request req;
+    cryptonote::COMMAND_RPC_HARD_FORK_INFO::response res;
+    std::string fail_message = "Unsuccessful";
+    epee::json_rpc::error error_resp;
+
+    req.version = 0;
+
+    if (m_is_rpc)
+    {
+        if (!m_rpc_client->json_rpc_request(req, res, "hard_fork_info", fail_message.c_str()))
+        {
+            return 0;
+        }
+    }
+    else
+    {
+        if (!m_rpc_server->on_hard_fork_info(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
+        {
+            tools::fail_msg_writer() << make_error(fail_message, res.status);
+            return 0;
+        }
+    }
+
+    return res.version;
 }
 
 bool t_rpc_command_executor::hard_fork_info(uint8_t version)

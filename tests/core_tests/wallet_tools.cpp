@@ -13,7 +13,7 @@ using namespace cryptonote;
 void wallet_accessor_test::set_account(tools::wallet2 * wallet, cryptonote::account_base& account)
 {
   wallet->clear();
-  wallet->m_account = account;
+  // wallet->m_account = reinterpret_cast<carrot::carrot_and_legacy_account&>(account);
 
   wallet->m_key_device_type = account.get_device().get_type();
   wallet->m_account_public_address = account.get_keys().m_account_address;
@@ -31,7 +31,10 @@ void wallet_accessor_test::set_account(tools::wallet2 * wallet, cryptonote::acco
 
 void wallet_accessor_test::process_parsed_blocks(tools::wallet2 * wallet, uint64_t start_height, const std::vector<cryptonote::block_complete_entry> &blocks, const std::vector<tools::wallet2::parsed_block> &parsed_blocks, uint64_t& blocks_added)
 {
-  wallet->process_parsed_blocks(start_height, blocks, parsed_blocks, blocks_added);
+  if (wallet != nullptr) {
+    auto output_tracker_cache = wallet->create_output_tracker_cache();
+    wallet->process_parsed_blocks(start_height, blocks, parsed_blocks, blocks_added, output_tracker_cache);
+  }
 }
 
 void wallet_tools::process_transactions(tools::wallet2 * wallet, const std::vector<test_event_entry>& events, const cryptonote::block& blk_head, block_tracker &bt, const boost::optional<crypto::hash>& blk_tail)

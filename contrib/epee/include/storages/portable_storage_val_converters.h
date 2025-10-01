@@ -38,6 +38,7 @@
 
 #include <boost/numeric/conversion/bounds.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/numeric/conversion/bounds.hpp>
 #include <typeinfo>
 #include <iomanip>
 

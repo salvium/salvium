@@ -49,7 +49,7 @@ extern "C" {
 #include "crypto/crypto.h"
 
 #include "cryptonote_basic/cryptonote_basic.h"
-#include "cryptonote_protocol/enums.h"
+//#include "cryptonote_protocol/enums.h"
 
 #include "rctTypes.h"
 #include "rctOps.h"
@@ -85,11 +85,15 @@ namespace rct {
     clsag proveRctCLSAGSimple(const key &, const ctkeyV &, const ctkey &, const key &, const key &, unsigned int, hw::device &);
     bool verRctCLSAGSimple(const key &, const clsag &, const ctkeyV &, const key &);
 
+    tclsag TCLSAG_Gen(const key &message, const keyV & P, const key & x, const key & y, const keyV & C, const key & z, const keyV & C_nonzero, const key & C_offset, const unsigned int l, hw::device &hwdev);
+    tclsag proveRctTCLSAGSimple(const key &message, const ctkeyV &pubs, const key &x, const key &y, const key &mask, const key &a, const key &Cout, unsigned int index, hw::device &hwdev);
+    bool verRctTCLSAGSimple(const key &message, const tclsag &sig, const ctkeyV & pubs, const key & C_offset);
+
     zk_proof PRProof_Gen(const rct::key &difference);
     bool PRProof_Ver(const rct::key &C, const zk_proof &proof);
   
-    zk_proof SAProof_Gen(const key &P, const key &x_change, const key &key_yF);
-    bool SAProof_Ver(const zk_proof &proof, const key &P, const key &key_yF);
+    zk_proof SAProof_Gen(const key &P, const key &x_change, const key &y_change);
+    bool SAProof_Ver(const zk_proof &proof, const key &P);
   
     //proveRange and verRange
     //proveRange gives C, and mask such that \sumCi = C
@@ -134,6 +138,27 @@ namespace rct {
     //   must know the destination private key to find the correct amount, else will return a random number
     rctSig genRct(const key &message, const ctkeyV & inSk, const keyV & destinations, const std::vector<xmr_amount> & amounts, const ctkeyM &mixRing, const keyV &amount_keys, unsigned int index, ctkeyV &outSk, const RCTConfig &rct_config, hw::device &hwdev);
     rctSig genRct(const key &message, const ctkeyV & inSk, const ctkeyV  & inPk, const keyV & destinations, const std::vector<xmr_amount> & amounts, const keyV &amount_keys, const int mixin, const RCTConfig &rct_config, hw::device &hwdev);
+    void genRctSimpleCarrot(
+        const key &message,
+        const carrot_ctkeyV & inSk,
+        const keyV & destinations,
+        const cryptonote::transaction_type tx_type,
+        const std::string& in_asset_type,
+        const std::vector<std::string> & destination_asset_types,
+        const std::vector<xmr_amount> & inamounts,
+        const std::vector<xmr_amount> & outamounts,
+        xmr_amount txnFee,
+        const ctkeyM & mixRing,
+        const std::vector<unsigned int> & index,
+        const ctkeyV &outSk,
+        const RCTConfig &rct_config,
+        hw::device &hwdev,
+        const rct::salvium_data_t &salvium_data,
+        const key &x_change,
+        const key &y_change,
+        const size_t change_index,
+        rctSig &rv
+    );
     rctSig genRctSimple(
         const key & message,
         const ctkeyV & inSk,
@@ -185,6 +210,7 @@ namespace rct {
     xmr_amount decodeRctSimple(const rctSig & rv, const key & sk, unsigned int i, key & mask, hw::device &hwdev);
     xmr_amount decodeRctSimple(const rctSig & rv, const key & sk, unsigned int i, hw::device &hwdev);
     key get_pre_mlsag_hash(const rctSig &rv, hw::device &hwdev);
+    bool getCommitment(const cryptonote::transaction &tx, const std::size_t output_idx, rct::key &c_out);
 }
 #endif  /* RCTSIGS_H */
 

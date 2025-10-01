@@ -31,7 +31,7 @@
 #pragma once
 #include <array>
 #include <atomic>
-#include <boost/asio/io_service.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/thread.hpp>
 #include <boost/optional/optional_fwd.hpp>
@@ -103,7 +103,7 @@ namespace nodetool
 
   // hides boost::future and chrono stuff from mondo template file
   boost::optional<boost::asio::ip::tcp::socket>
-  socks_connect_internal(const std::atomic<bool>& stop_signal, boost::asio::io_service& service, const boost::asio::ip::tcp::endpoint& proxy, const epee::net_utils::network_address& remote);
+  socks_connect_internal(const std::atomic<bool>& stop_signal, boost::asio::io_context& service, const boost::asio::ip::tcp::endpoint& proxy, const epee::net_utils::network_address& remote);
 
 
   template<class base_type>
@@ -124,7 +124,8 @@ namespace nodetool
   template<class t_payload_net_handler>
   class node_server: public epee::levin::levin_commands_handler<p2p_connection_context_t<typename t_payload_net_handler::connection_context> >,
                      public i_p2p_endpoint<typename t_payload_net_handler::connection_context>,
-                     public epee::net_utils::i_connection_filter
+                     public epee::net_utils::i_connection_filter,
+                     public epee::net_utils::i_connection_limit
   {
     struct by_conn_id{};
     struct by_peer_id{};
@@ -179,7 +180,7 @@ namespace nodetool
         set_config_defaults();
       }
 
-      network_zone(boost::asio::io_service& public_service)
+      network_zone(boost::asio::io_context& public_service)
         : m_connect(nullptr),
           m_net_server(public_service, epee::net_utils::e_connection_type_P2P),
           m_seed_nodes(),
@@ -349,7 +350,10 @@ namespace nodetool
     virtual bool add_host_fail(const epee::net_utils::network_address &address, unsigned int score = 1);
     //----------------- i_connection_filter  --------------------------------------------------------
     virtual bool is_remote_host_allowed(const epee::net_utils::network_address &address, time_t *t = NULL);
+    //----------------- i_connection_limit  ---------------------------------------------------------
+    virtual bool is_host_limit(const epee::net_utils::network_address &address);
     //-----------------------------------------------------------------------------------------------
+
     bool parse_peer_from_string(epee::net_utils::network_address& pe, const std::string& node_addr, uint16_t default_port = 0);
     bool handle_command_line(
         const boost::program_options::variables_map& vm

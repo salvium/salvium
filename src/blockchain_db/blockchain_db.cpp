@@ -34,6 +34,7 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "profile_tools.h"
 #include "ringct/rctOps.h"
+#include "ringct/rctSigs.h"
 
 #include "lmdb/db_lmdb.h"
 
@@ -237,10 +238,13 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
       LOG_PRINT_L1("Failed to get output unlock time, aborting transaction addition");
       throw std::runtime_error("Unexpected error getting output unlock_time, aborting");
     }
-    if (miner_tx && tx.version == 2)
+    if (miner_tx && tx.version >= 2)
     {
       cryptonote::tx_out vout = tx.vout[i];
-      rct::key commitment = rct::zeroCommit(vout.amount);
+      // TODO: avoid multiple expensive zeroCommitVartime call here + get_outs_by_last_locked_block + ver_non_input_consensus
+      rct::key commitment;
+      if (!rct::getCommitment(tx, i, commitment))
+        throw std::runtime_error("Failed to get miner tx commitment, aborting");
       vout.amount = 0;
       amount_output_indices[i] = add_output(tx_hash, vout, i, unlock_time,
         &commitment);
@@ -296,7 +300,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
   blobdata protocol_bd = tx_to_blob(blk.protocol_tx);
   add_transaction(blk_hash, std::make_pair(blk.protocol_tx, blobdata_ref(protocol_bd)));
 
-  if (blk.miner_tx.version == 2)
+  if (blk.miner_tx.version >= 2)
   {
     num_rct_outs += blk.miner_tx.vout.size();
 
@@ -311,7 +315,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
 
   std::map<std::string, int64_t> slippage_counts;
   uint64_t audit_total = 0, yield_total = 0;
-  if (blk.protocol_tx.version == 2)
+  if (blk.protocol_tx.version >= 2)
   {
     num_rct_outs += blk.protocol_tx.vout.size();
 
@@ -356,16 +360,16 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
           slippage_counts[asset_type] = 0;
         slippage_counts[asset_type] += tx.first.amount_burnt;
       }
+    }
 
-      // Is this an AUDIT TX?
-      if (tx.first.type == cryptonote::transaction_type::AUDIT) {
-        audit_total += tx.first.amount_burnt;
-      }
-
-      // Is this a STAKE TX?
-      if (tx.first.type == cryptonote::transaction_type::STAKE) {
-        yield_total += tx.first.amount_burnt;
-      }
+    // Is this an AUDIT TX?
+    if (tx.first.type == cryptonote::transaction_type::AUDIT) {
+      audit_total += tx.first.amount_burnt;
+    }
+    
+    // Is this a STAKE TX?
+    if (tx.first.type == cryptonote::transaction_type::STAKE) {
+      yield_total += tx.first.amount_burnt;
     }
     ++tx_i;
   }

@@ -1,4 +1,4 @@
-# Salvium Zero v0.9.5
+# Salvium One v1.0.0
 
 Copyright (c) 2023-2024, Salvium
 Portions Copyright (c) 2014-2023, The Monero Project
@@ -47,7 +47,7 @@ As with many development projects, the repository on GitHub is considered to be 
 
 ## Supporting the project
 
-Salvium is a 100% community-sponsored endeavor. If you want to join our efforts, the easiest thing you can do is support the project financially. Go to [https://salvium.io/donate/](https://salvium.io/donate/) for more information.
+Salvium is a 100% community-sponsored endeavor. If you want to join our efforts, the easiest thing you can do is support the project financially. Go to [https://salvium.io/donate](https://salvium.io/donate) for more information.
 
 ## License
 
@@ -172,7 +172,7 @@ invokes cmake commands as needed.
 
     ```bash
     cd salvium
-    git checkout v0.9.5
+    git checkout v1.0.0
     make
     ```
 
@@ -251,7 +251,7 @@ Tested on a Raspberry Pi Zero with a clean install of minimal Raspbian Stretch (
     ```bash
     git clone https://github.com/salvium/salvium
     cd salvium
-    git checkout v0.9.5
+    git checkout v1.0.0
     ```
 
 * Build:
@@ -370,10 +370,10 @@ application.
     cd salvium
     ```
 
-* If you would like a specific [version/tag](https://github.com/salvium/salvium/tags), do a git checkout for that version. eg. 'v0.9.5'. If you don't care about the version and just want binaries from master, skip this step:
+* If you would like a specific [version/tag](https://github.com/salvium/salvium/tags), do a git checkout for that version. eg. 'v1.0.0'. If you don't care about the version and just want binaries from master, skip this step:
 
     ```bash
-    git checkout v0.9.5
+    git checkout v1.0.0
     ```
 
 * If you are on a 64-bit system, run:

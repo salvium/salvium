@@ -40,15 +40,6 @@
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "cn.block_queue"
 
-namespace std {
-  static_assert(sizeof(size_t) <= sizeof(boost::uuids::uuid), "boost::uuids::uuid too small");
-  template<> struct hash<boost::uuids::uuid> {
-    std::size_t operator()(const boost::uuids::uuid &_v) const {
-      return reinterpret_cast<const std::size_t &>(_v);
-    }
-  };
-}
-
 namespace cryptonote
 {
 
@@ -60,10 +51,10 @@ void block_queue::add_blocks(uint64_t height, std::vector<cryptonote::block_comp
   blocks.insert(span(height, std::move(bcel), connection_id, addr, rate, size));
   if (has_hashes)
   {
-    for (const crypto::hash &h: hashes)
+    for (std::size_t i = 0; i < hashes.size(); ++i)
     {
-      requested_hashes.insert(h);
-      have_blocks.insert(h);
+      requested_hashes.insert(hashes[i]);
+      have_blocks.emplace(hashes[i], height + i);
     }
     set_span_hashes(height, connection_id, hashes);
   }
@@ -227,6 +218,16 @@ bool block_queue::have(const crypto::hash &hash) const
   boost::unique_lock<boost::recursive_mutex> lock(mutex);
   return have_blocks.find(hash) != have_blocks.end();
 }
+
+std::uint64_t block_queue::have_height(const crypto::hash &hash) const
+{
+  boost::unique_lock<boost::recursive_mutex> lock(mutex);
+  const auto elem = have_blocks.find(hash);
+  if (elem == have_blocks.end())
+    return std::numeric_limits<std::uint64_t>::max();
+  return elem->second;
+}
+
 
 std::pair<uint64_t, uint64_t> block_queue::reserve_span(uint64_t first_block_height, uint64_t last_block_height, uint64_t max_blocks, const boost::uuids::uuid &connection_id, const epee::net_utils::network_address &addr, bool sync_pruned_blocks, uint32_t local_pruning_seed, uint32_t pruning_seed, uint64_t blockchain_height, const std::vector<std::pair<crypto::hash, uint64_t>> &block_hashes, boost::posix_time::ptime time)
 {
@@ -472,7 +473,7 @@ bool block_queue::has_spans(const boost::uuids::uuid &connection_id) const
 float block_queue::get_speed(const boost::uuids::uuid &connection_id) const
 {
   boost::unique_lock<boost::recursive_mutex> lock(mutex);
-  std::unordered_map<boost::uuids::uuid, float> speeds;
+  std::unordered_map<boost::uuids::uuid, float, boost::hash<boost::uuids::uuid>> speeds;
   for (const auto &span: blocks)
   {
     if (span.blocks.empty())
@@ -480,7 +481,7 @@ float block_queue::get_speed(const boost::uuids::uuid &connection_id) const
     // note that the average below does not average over the whole set, but over the
     // previous pseudo average and the latest rate: this gives much more importance
     // to the latest measurements, which is fine here
-    std::unordered_map<boost::uuids::uuid, float>::iterator i = speeds.find(span.connection_id);
+    const auto i = speeds.find(span.connection_id);
     if (i == speeds.end())
       speeds.insert(std::make_pair(span.connection_id, span.rate));
     else

@@ -58,6 +58,9 @@ const hardfork_t mainnet_hard_forks[] = {
   
   // version 9 starts from block 179200, which is on or around the 10th of March, 2025. Fork time finalised on 2025-02-24. No fork voting occurs for the v9 fork.
   { 9, 179200, 0, 1740393800 },
+
+  // version 10 Carrot - including treasury mint - starts from block 334750, which is on or around the 13th of October, 2025. Fork time finalised on 2025-09-29. No fork voting occurs for the v10 fork.
+  {10, 334750, 0, 1759142500 },
 };
 const size_t num_mainnet_hard_forks = sizeof(mainnet_hard_forks) / sizeof(mainnet_hard_forks[0]);
 const uint64_t mainnet_hard_fork_version_1_till = ((uint64_t)-1);
@@ -89,6 +92,9 @@ const hardfork_t testnet_hard_forks[] = {
 
   // version 9 (audit 1 complete, whitelist controlling payouts) starts from block 1000
   { 9, 1000, 0, 1739280000 },
+
+  // version 10 Carrot - including treasury mint - starts from block 1100
+  {10, 1100, 0, 1739780005 },
 };
 const size_t num_testnet_hard_forks = sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]);
 const uint64_t testnet_hard_fork_version_1_till = ((uint64_t)-1);

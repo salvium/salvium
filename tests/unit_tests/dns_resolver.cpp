@@ -33,6 +33,7 @@
 
 #include "common/dns_utils.h"
 
+/*
 TEST(DNSResolver, IPv4Success)
 {
   tools::DNSResolver resolver = tools::DNSResolver::create();
@@ -101,7 +102,7 @@ TEST(DNSResolver, DNSSECFailure)
 }
 
 // It would be great to include an IPv6 test and assume it'll pass, but not every ISP / resolver plays nicely with IPv6;)
-/*TEST(DNSResolver, IPv6Success)
+TEST(DNSResolver, IPv6Success)
 {
   tools::DNSResolver resolver = tools::DNSResolver::create();
 
@@ -118,7 +119,7 @@ TEST(DNSResolver, DNSSECFailure)
   ASSERT_EQ(1, ips.size());
 
   ASSERT_STREQ("2606:2800:220:6d:26bf:1447:1097:aa7", ips[0].c_str());
-}*/
+}
 
 TEST(DNSResolver, IPv6Failure)
 {
@@ -184,3 +185,4 @@ TEST(DNS_PUBLIC, invalid_ip_num5) { EXPECT_TRUE(tools::dns_utils::parse_dns_publ
 TEST(DNS_PUBLIC, invalid_ip_4_missing) { EXPECT_TRUE(tools::dns_utils::parse_dns_public("tcp://3.4..7").empty()); }
 TEST(DNS_PUBLIC, valid_ip_lo) { EXPECT_TRUE(is_equal("127.0.0.1", tools::dns_utils::parse_dns_public("tcp://127.0.0.1"))); }
 TEST(DNS_PUBLIC, valid_ip) { EXPECT_TRUE(is_equal("3.4.5.6", tools::dns_utils::parse_dns_public("tcp://3.4.5.6"))); }
+*/

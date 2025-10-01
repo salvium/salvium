@@ -28,7 +28,7 @@
 
 #pragma once
 
-#include <boost/asio/io_service.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <memory>
 #include <vector>
@@ -75,7 +75,8 @@ namespace levin
     struct status
     {
       bool has_noise;
-      bool connections_filled;
+      bool connections_filled; //!< True when has zone has `CRYPTONOTE_NOISE_CHANNELS` outgoing noise channels
+      bool has_outgoing; //!< True when zone has outgoing connections
     };
 
     //! Construct an instance that cannot notify.
@@ -85,7 +86,7 @@ namespace levin
     {}
 
     //! Construct an instance with available notification `zones`.
-    explicit notify(boost::asio::io_service& service, std::shared_ptr<connections> p2p, epee::byte_slice noise, epee::net_utils::zone zone, bool pad_txs, i_core_events& core);
+    explicit notify(boost::asio::io_context& service, std::shared_ptr<connections> p2p, epee::byte_slice noise, epee::net_utils::zone zone, bool pad_txs, i_core_events& core);
 
     notify(const notify&) = delete;
     notify(notify&&) = default;

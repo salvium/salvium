@@ -26,6 +26,9 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <boost/iterator/transform_iterator.hpp>
+
+#include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_core/blockchain.h"
 #include "cryptonote_core/tx_verification_utils.h"
 #include "ringct/rctSigs.h"
@@ -56,7 +59,10 @@ static bool expand_tx_and_ver_rct_non_sem(transaction& tx, const rct::ctkeyM& mi
     VER_ASSERT(rv.mixRing == mix_ring, "Failed to check ringct signatures: mismatched pubkeys/mixRing");
 
     // Check CLSAG/MLSAG size against transaction input
-    const size_t n_sigs = rct::is_rct_clsag(rv.type) ? rv.p.CLSAGs.size() : rv.p.MGs.size();
+    const size_t n_sigs = rct::is_rct_tclsag(rv.type) ? rv.p.TCLSAGs.size() : 
+    (
+        rct::is_rct_clsag(rv.type) ? rv.p.CLSAGs.size() : rv.p.MGs.size()
+    );
     VER_ASSERT(n_sigs == tx.vin.size(), "Failed to check ringct signatures: mismatched input sigs/vin sizes");
 
     // For each input, check that the key images were copied into the expanded RCT sig correctly
@@ -64,7 +70,12 @@ static bool expand_tx_and_ver_rct_non_sem(transaction& tx, const rct::ctkeyM& mi
     {
         const crypto::key_image& nth_vin_image = boost::get<txin_to_key>(tx.vin[n]).k_image;
 
-        if (rct::is_rct_clsag(rv.type))
+        if (rct::is_rct_tclsag(rv.type))
+        {
+            const bool ki_match = 0 == memcmp(&nth_vin_image, &rv.p.TCLSAGs[n].I, 32);
+            VER_ASSERT(ki_match, "Failed to check ringct signatures: mismatched TCLSAG key image");
+        }
+        else if (rct::is_rct_clsag(rv.type))
         {
             const bool ki_match = 0 == memcmp(&nth_vin_image, &rv.p.CLSAGs[n].I, 32);
             VER_ASSERT(ki_match, "Failed to check ringct signatures: mismatched CLSAG key image");
@@ -110,6 +121,52 @@ static crypto::hash calc_tx_mixring_hash(const transaction& tx, const rct::ctkey
 namespace cryptonote
 {
 
+bool collect_pubkeys_and_commitments(const transaction& tx, std::vector<rct::key> &pubkeys_and_commitments_inout)
+{
+    for (std::size_t i = 0; i < tx.vout.size(); ++i)
+    {
+        crypto::public_key output_pubkey;
+        if (!cryptonote::get_output_public_key(tx.vout[i], output_pubkey))
+            return false;
+        rct::key pubkey = rct::pk2rct(output_pubkey);
+
+        rct::key commitment;
+        if (!rct::getCommitment(tx, i, commitment))
+            return false;
+
+        pubkeys_and_commitments_inout.emplace_back(pubkey);
+        pubkeys_and_commitments_inout.emplace_back(commitment);
+    }
+
+    return true;
+}
+
+uint64_t get_transaction_weight_limit(const uint8_t hf_version)
+{
+    // from v2, limit a tx to 50% of the minimum block weight
+    if (hf_version >= 2)
+        return get_min_block_weight(hf_version) / 2 - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
+    else
+        return get_min_block_weight(hf_version) - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
+}
+
+bool are_transaction_output_pubkeys_sorted(const transaction_prefix &tx_prefix)
+{
+    crypto::public_key last_output_pubkey = crypto::null_pkey;
+    for (const tx_out &o : tx_prefix.vout) {
+      crypto::public_key output_pubkey;
+      if (!get_output_public_key(o, output_pubkey)) {
+        return false;
+      }
+      else if (!(output_pubkey > last_output_pubkey)) {
+        return false;
+      }
+      last_output_pubkey = output_pubkey;
+    }
+
+    return true;
+}
+
 bool ver_rct_non_semantics_simple_cached
 (
     transaction& tx,
@@ -130,7 +187,7 @@ bool ver_rct_non_semantics_simple_cached
     // mixring. Future versions of the protocol may differ in this regard, but if this assumptions
     // holds true in the future, enable the verification hash by modifying the `untested_tx`
     // condition below.
-    const bool untested_tx = tx.version > 3 || tx.rct_signatures.type > rct::RCTTypeSalviumOne;
+    const bool untested_tx = tx.version > 4 || tx.rct_signatures.type > rct::RCTTypeSalviumOne;
     VER_ASSERT(!untested_tx, "Unknown TX type. Make sure RCT cache works correctly with this type and then enable it in the code here.");
 
     // Don't cache older (or newer) rctSig types

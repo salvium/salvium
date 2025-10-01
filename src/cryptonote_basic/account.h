@@ -34,6 +34,13 @@
 #include "crypto/crypto.h"
 #include "serialization/keyvalue_serialization.h"
 
+#include "carrot_core/account_secrets.h"
+#include "carrot_core/address_utils.h"
+#include "carrot_core/destination.h"
+#include "carrot_core/device_ram_borrowed.h"
+#include "carrot_core/enote_utils.h"
+#include "carrot_impl/subaddress_index.h"
+
 namespace cryptonote
 {
 
@@ -46,6 +53,21 @@ namespace cryptonote
     hw::device *m_device = &hw::get_device("default");
     crypto::chacha_iv m_encryption_iv;
 
+    // carrot secret keys (minus k_v, which is shared with legacy k_v)
+    crypto::secret_key s_master;
+    crypto::secret_key k_prove_spend;
+    crypto::secret_key s_view_balance;
+    crypto::secret_key k_view_incoming;
+    crypto::secret_key k_generate_image;
+    crypto::secret_key s_generate_address;
+
+    // carrot public account address (K_s, K_v)
+    account_public_address m_carrot_account_address;
+
+    // carrot main address (K^0_s, K^0_v)
+    account_public_address m_carrot_main_address;
+
+    
     BEGIN_KV_SERIALIZE_MAP()
       KV_SERIALIZE(m_account_address)
       KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE(m_spend_secret_key)
@@ -82,6 +104,7 @@ namespace cryptonote
     bool make_multisig(const crypto::secret_key &view_secret_key, const crypto::secret_key &spend_secret_key, const crypto::public_key &spend_public_key, const std::vector<crypto::secret_key> &multisig_keys);
     const account_keys& get_keys() const;
     std::string get_public_address_str(network_type nettype) const;
+    std::string get_carrot_public_address_str(network_type nettype) const;
     std::string get_public_integrated_address_str(const crypto::hash8 &payment_id, network_type nettype) const;
 
     hw::device& get_device() const  {return m_keys.get_device();}
@@ -95,6 +118,7 @@ namespace cryptonote
     bool store(const std::string& file_path);
 
     void forget_spend_key();
+    void set_spend_key(const crypto::secret_key& spend_secret_key);
     const std::vector<crypto::secret_key> &get_multisig_keys() const { return m_keys.m_multisig_keys; }
 
     void encrypt_keys(const crypto::chacha_key &key) { m_keys.encrypt(key); }
@@ -116,7 +140,8 @@ namespace cryptonote
 
   private:
     void set_null();
-    account_keys m_keys;
+  protected:
     uint64_t m_creation_timestamp;
+    account_keys m_keys;
   };
 }

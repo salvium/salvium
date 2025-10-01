@@ -198,6 +198,7 @@ namespace rct {
             case RCTTypeCLSAG:
             case RCTTypeBulletproofPlus:
             case RCTTypeFullProofs:
+            case RCTTypeSalviumZero:
             case RCTTypeSalviumOne:
                 return true;
             default:
@@ -224,6 +225,7 @@ namespace rct {
         {
             case RCTTypeBulletproofPlus:
             case RCTTypeFullProofs:
+            case RCTTypeSalviumZero:
             case RCTTypeSalviumOne:
                 return true;
             default:
@@ -250,10 +252,43 @@ namespace rct {
             case RCTTypeCLSAG:
             case RCTTypeBulletproofPlus:
             case RCTTypeFullProofs:
+            case RCTTypeSalviumZero:
+                return true;
+            case RCTTypeSalviumOne:
+            default:
+                return false;
+        }
+    }
+
+    bool is_rct_tclsag(int type)
+    {
+        switch (type)
+        {
             case RCTTypeSalviumOne:
                 return true;
             default:
                 return false;
+        }
+    }
+
+    bool is_rct_short_amount(int type)
+    {
+        switch (type)
+        {
+            case RCTTypeBulletproof2:
+            case RCTTypeCLSAG:
+            case RCTTypeBulletproofPlus:
+            case RCTTypeFullProofs:
+            case RCTTypeSalviumZero:
+            case RCTTypeSalviumOne:
+                return true;
+            case RCTTypeNull:
+            case RCTTypeFull:
+            case RCTTypeSimple:
+            case RCTTypeBulletproof:
+                return false;
+            default:
+                CHECK_AND_ASSERT_THROW_MES(false, "unknown rct type = " << type);
         }
     }
 

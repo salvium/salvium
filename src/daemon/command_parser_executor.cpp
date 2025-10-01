@@ -374,6 +374,8 @@ bool t_command_parser_executor::start_mining(const std::vector<std::string>& arg
     return true;
   }
 
+  bool is_carrot = m_executor.current_hard_fork_version() >= HF_VERSION_CARROT;
+  
   cryptonote::address_parse_info info;
   cryptonote::network_type nettype = cryptonote::MAINNET;
   if(!cryptonote::get_account_address_from_str(info, cryptonote::MAINNET, args.front()))
@@ -418,6 +420,13 @@ bool t_command_parser_executor::start_mining(const std::vector<std::string>& arg
   if (info.is_subaddress)
   {
     tools::fail_msg_writer() << "subaddress for mining reward is not yet supported!" << std::endl;
+    return true;
+  }
+  if (info.is_carrot && !is_carrot) {
+    tools::fail_msg_writer() << "mining to Carrot wallet address, but Carrot isn't supported yet" << std::endl;
+    return true;
+  } else if (!info.is_carrot && is_carrot) {
+    tools::fail_msg_writer() << "mining to CryptoNote wallet address, but Carrot wallet address is required" << std::endl;
     return true;
   }
   if(nettype != cryptonote::MAINNET)
@@ -470,7 +479,7 @@ bool t_command_parser_executor::start_mining(const std::vector<std::string>& arg
     }
   }
 
-  m_executor.start_mining(info.address, threads_count, nettype, do_background_mining, ignore_battery);
+  m_executor.start_mining(info.address, threads_count, nettype, do_background_mining, ignore_battery, info.is_carrot);
 
   return true;
 }
@@ -696,6 +705,16 @@ bool t_command_parser_executor::ban(const std::vector<std::string>& args)
       std::ifstream ifs(ban_list_path.string());
       for (std::string line; std::getline(ifs, line); )
       {
+        // ignore comments after '#' character
+        const size_t pound_idx = line.find('#');
+        if (pound_idx != std::string::npos)
+          line.resize(pound_idx);
+
+        // trim whitespace and ignore empty lines
+        boost::trim(line);
+        if (line.empty())
+          continue;
+
         auto subnet = net::get_ipv4_subnet_address(line);
         if (subnet)
         {
