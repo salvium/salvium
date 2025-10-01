@@ -316,7 +316,7 @@ namespace
   const char* USAGE_RPC_PAYMENT_INFO("rpc_payment_info");
   const char* USAGE_START_MINING_FOR_RPC("start_mining_for_rpc [<number_of_threads>]");
   const char* USAGE_STOP_MINING_FOR_RPC("stop_mining_for_rpc");
-  const char* USAGE_SHOW_QR_CODE("show_qr_code [<subaddress_index>]");
+  const char* USAGE_SHOW_QR_CODE("show_qr_code [<subaddress_index>] [<address_type>]");
   const char* USAGE_VERSION("version");
   const char* USAGE_HELP("help [<command> | all]");
   const char* USAGE_APROPOS("apropos <keyword> [<keyword> ...]");
@@ -2558,7 +2558,8 @@ bool simple_wallet::stop_mining_for_rpc(const std::vector<std::string> &args)
 
 bool simple_wallet::show_qr_code(const std::vector<std::string> &args)
 {
-  uint32_t subaddress_index = 0;
+  uint32_t subaddress_index;
+  carrot::AddressDeriveType derive_type;
   if (args.size() >= 1)
   {
     if (!string_tools::get_xtype_from_string(subaddress_index, args[0]))
@@ -2571,6 +2572,29 @@ bool simple_wallet::show_qr_code(const std::vector<std::string> &args)
       fail_msg_writer() << tr("<subaddress_index> is out of bounds");
       return true;
     }
+  }
+  else
+  {
+  subaddress_index = 0; // Default to primary address
+  }
+  if (args.size() >= 2)
+  {
+    // Convert string to AddressDeriveType enum
+    if (args[1] == "carrot" || args[1] == "Carrot")
+    {
+      derive_type = carrot::AddressDeriveType::Carrot;
+    }
+    else if (args[1] == "precarrot" || args[1] == "PreCarrot")
+    {
+      derive_type = carrot::AddressDeriveType::PreCarrot;
+    }
+    else
+    {
+      fail_msg_writer() << tr("invalid derive type: must be 'carrot' or 'precarrot'");
+      return true;
+    }
+  } else {
+    derive_type = carrot::AddressDeriveType::Auto;
   }
 
 #ifdef _WIN32
@@ -2586,7 +2610,8 @@ bool simple_wallet::show_qr_code(const std::vector<std::string> &args)
   WTEXTON();
   try
   {
-    const std::string address = "salvium:" + m_wallet->get_subaddress_as_str({m_current_subaddress_account, subaddress_index});
+    const std::string address = "salvium:" + m_wallet->get_subaddress_as_str({m_current_subaddress_account, subaddress_index, derive_type, false});
+    message_writer() << "Showing QR code for address: " << address.c_str() << std::endl;
     const qrcodegen::QrCode qr = qrcodegen::QrCode::encodeText(address.c_str(), qrcodegen::QrCode::Ecc::LOW);
     for (int y = -2; y < qr.getSize() + 2; y+=2)
     {
@@ -9902,7 +9927,8 @@ bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vec
       if (payment_id.substr(16).find_first_not_of('0') == std::string::npos)
         payment_id = payment_id.substr(0,16);
       std::string note = m_wallet->get_tx_note(pd.m_tx_hash);
-      std::string destination = m_wallet->get_subaddress_as_str({{m_current_subaddress_account, pd.m_subaddr_index.minor}, pd.m_is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
+      //todo
+      std::string destination = m_wallet->get_subaddress_as_str({m_current_subaddress_account, pd.m_subaddr_index.minor});
       const std::string type =
         pd.m_tx_type == cryptonote::transaction_type::STAKE ? "stake" :
         pd.m_coinbase ? tr("block") : tr("in");
@@ -10082,7 +10108,7 @@ bool simple_wallet::show_transfers(const std::vector<std::string> &args_)
   LOCK_IDLE_SCOPE();
 
   std::vector<transfer_view> all_transfers;
-
+  // todo: derive_type can be different for different txs.
   if (!get_transfers(local_args, all_transfers))
     return true;
 
