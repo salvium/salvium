@@ -496,9 +496,10 @@ private:
       bool m_coinbase;
       cryptonote::subaddress_index m_subaddr_index;
       cryptonote::transaction_type m_tx_type;
+      bool m_is_carrot;
 
       BEGIN_SERIALIZE_OBJECT()
-        VERSION_FIELD(0)
+        VERSION_FIELD(1)
         FIELD(m_tx_hash)
         VARINT_FIELD(m_amount)
         FIELD(m_asset_type)
@@ -510,6 +511,11 @@ private:
         FIELD(m_coinbase)
         FIELD(m_subaddr_index)
         VARINT_FIELD(m_tx_type)
+        if (version < 1) {
+          m_is_carrot = false;
+          return true;
+        }
+        FIELD(m_is_carrot)
       END_SERIALIZE()
     };
 
@@ -2293,7 +2299,7 @@ BOOST_CLASS_VERSION(tools::wallet2::transfer_details, 12)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_info, 1)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_info::LR, 0)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_tx_set, 1)
-BOOST_CLASS_VERSION(tools::wallet2::payment_details, 5)
+BOOST_CLASS_VERSION(tools::wallet2::payment_details, 6)
 BOOST_CLASS_VERSION(tools::wallet2::pool_payment_details, 1)
 BOOST_CLASS_VERSION(tools::wallet2::unconfirmed_transfer_details, 8)
 BOOST_CLASS_VERSION(tools::wallet2::confirmed_transfer_details, 6)
@@ -2622,6 +2628,12 @@ namespace boost
       a & x.m_amounts;
       a & x.m_asset_type;
       a & x.m_tx_type;
+      if (ver < 6)
+      {
+        x.m_is_carrot = false;
+        return;
+      }
+      a & x.m_is_carrot;
     }
 
     template <class Archive>

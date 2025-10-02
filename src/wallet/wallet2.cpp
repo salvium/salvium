@@ -1584,11 +1584,23 @@ crypto::public_key wallet2::get_subaddress_spend_public_key(const cryptonote::su
   return hwdev.get_subaddress_spend_public_key(m_account.get_keys(), index);
 }
 //----------------------------------------------------------------------------------------------------
-std::string wallet2::get_subaddress_as_str(const carrot::subaddress_index_extended& subaddr) const
+std::string wallet2::get_subaddress_as_str(const carrot::subaddress_index_extended& subaddr_const) const
 {
-  carrot::CarrotDestinationV1 address = m_account.subaddress(subaddr);
+  // Make a non-const copy of subaddr
+  carrot::subaddress_index_extended subaddr(subaddr_const);
+
+  // Handle "auto" - the account class doesn't know the HF version, so this is the cleanest solution
+  if (subaddr.derive_type == carrot::AddressDeriveType::Auto) {
+
+    // Get the HF version
+    uint32_t hf_version = 0;//get_current_hard_fork();
+
+    // Change the non-const derivation type
+    subaddr.derive_type = (hf_version >= HF_VERSION_CARROT) ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot;
+  }
 
   // Build the cryptonote::account_public_address
+  carrot::CarrotDestinationV1 address = m_account.subaddress(subaddr);
   account_public_address addr{address.address_spend_pubkey, address.address_view_pubkey};
   addr.m_is_carrot = subaddr.derive_type == carrot::AddressDeriveType::Carrot;
 
@@ -2936,6 +2948,7 @@ void wallet2::process_new_scanned_transaction(
         payment.m_coinbase     = miner_tx;
         payment.m_subaddr_index = i.first;
         payment.m_tx_type      = tx.type;
+        payment.m_is_carrot    = (tx.version >= TRANSACTION_VERSION_CARROT);
         if (pool) {
           if (emplace_or_replace(m_unconfirmed_payments, payment_id, pool_payment_details{payment, double_spend_seen}))
             all_same = false;
