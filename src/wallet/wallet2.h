@@ -496,9 +496,10 @@ private:
       bool m_coinbase;
       cryptonote::subaddress_index m_subaddr_index;
       cryptonote::transaction_type m_tx_type;
+      bool m_is_carrot;
 
       BEGIN_SERIALIZE_OBJECT()
-        VERSION_FIELD(0)
+        VERSION_FIELD(1)
         FIELD(m_tx_hash)
         VARINT_FIELD(m_amount)
         FIELD(m_asset_type)
@@ -510,6 +511,11 @@ private:
         FIELD(m_coinbase)
         FIELD(m_subaddr_index)
         VARINT_FIELD(m_tx_type)
+        if (version < 1) {
+          m_is_carrot = false;
+          return true;
+        }
+        FIELD(m_is_carrot)
       END_SERIALIZE()
     };
 
@@ -1197,6 +1203,7 @@ private:
     std::vector<crypto::public_key> get_subaddress_spend_public_keys(uint32_t account, uint32_t begin, uint32_t end) const;
     //std::string get_subaddress_as_str(const cryptonote::subaddress_index& index) const;
     std::string get_subaddress_as_str(const carrot::subaddress_index_extended& index) const;
+    std::string get_subaddress_as_str(const carrot::subaddress_index_extended& index, const uint64_t height) const;
     std::string get_address_as_str() const { return get_subaddress_as_str({0, 0}); }
     std::string get_integrated_address_as_str(const crypto::hash8& payment_id, bool carrot = true) const;
     void add_subaddress_account(const std::string& label);
@@ -1661,6 +1668,7 @@ private:
     size_t get_num_transfer_details() const { return m_transfers.size(); }
     const transfer_details &get_transfer_details(size_t idx) const;
 
+    uint8_t estimate_current_hard_fork(const uint64_t height = 0) const;
     uint8_t get_current_hard_fork();
     void get_hard_fork_info(uint8_t version, uint64_t &earliest_height);
     bool use_fork_rules(uint8_t version, int64_t early_blocks = 0);
@@ -2293,7 +2301,7 @@ BOOST_CLASS_VERSION(tools::wallet2::transfer_details, 12)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_info, 1)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_info::LR, 0)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_tx_set, 1)
-BOOST_CLASS_VERSION(tools::wallet2::payment_details, 5)
+BOOST_CLASS_VERSION(tools::wallet2::payment_details, 6)
 BOOST_CLASS_VERSION(tools::wallet2::pool_payment_details, 1)
 BOOST_CLASS_VERSION(tools::wallet2::unconfirmed_transfer_details, 8)
 BOOST_CLASS_VERSION(tools::wallet2::confirmed_transfer_details, 6)
@@ -2622,6 +2630,12 @@ namespace boost
       a & x.m_amounts;
       a & x.m_asset_type;
       a & x.m_tx_type;
+      if (ver < 6)
+      {
+        x.m_is_carrot = false;
+        return;
+      }
+      a & x.m_is_carrot;
     }
 
     template <class Archive>
