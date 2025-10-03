@@ -6472,7 +6472,7 @@ bool simple_wallet::show_balance_unlocked(bool detailed)
     if (!detailed || balance_per_subaddress.empty())
       continue;
     success_msg_writer() << tr("Balance per address:");
-    success_msg_writer() << boost::format("%15s %21s %21s %7s %21s") % tr("Address") % tr("Balance") % tr("Unlocked balance") % tr("Outputs") % tr("Label");
+    success_msg_writer() << boost::format("%16s  %21s %21s %7s %21s") % tr("Address") % tr("Balance") % tr("Unlocked balance") % tr("Outputs") % tr("Label");
     std::vector<tools::wallet2::transfer_details> transfers;
     m_wallet->get_transfers(transfers);
     for (const auto& i : balance_per_subaddress)
@@ -6480,9 +6480,9 @@ bool simple_wallet::show_balance_unlocked(bool detailed)
       carrot::subaddress_index_extended subaddr = {{m_current_subaddress_account, i.first},
                                                    is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot};
       cryptonote::subaddress_index subaddr_index = {m_current_subaddress_account, i.first};
-      std::string address_str = m_wallet->get_subaddress_as_str(subaddr).substr(0, 6);
+      std::string address_str = m_wallet->get_subaddress_as_str(subaddr).substr(0, 8);
       uint64_t num_unspent_outputs = std::count_if(transfers.begin(), transfers.end(), [&subaddr_index](const tools::wallet2::transfer_details& td) { return !td.m_spent && td.m_subaddr_index == subaddr_index; });
-      success_msg_writer() << boost::format(tr("%8u %6s %21s %21s %7u %21s")) % i.first % address_str % print_money(i.second) % print_money(unlocked_balance_per_subaddress[i.first].first) % num_unspent_outputs % m_wallet->get_subaddress_label(subaddr_index);
+      success_msg_writer() << boost::format(tr("%8u %8s %21s %21s %7u %21s")) % i.first % address_str % print_money(i.second) % print_money(unlocked_balance_per_subaddress[i.first].first) % num_unspent_outputs % m_wallet->get_subaddress_label(subaddr_index);
     }
   }
   return true;
@@ -10105,7 +10105,7 @@ bool simple_wallet::show_transfers(const std::vector<std::string> &args_)
       {
         if (!destinations.empty())
           destinations += ", ";
-        destinations += (transfer.direction == "in" ? output.first.substr(0, 6) : output.first) + ":" + print_money(output.second);
+        destinations += ((transfer.direction == "in" || transfer.direction == "block") ? output.first.substr(0, 8) : output.first) + ":" + print_money(output.second);
       }
     }
 
@@ -10631,7 +10631,7 @@ std::string simple_wallet::get_prompt() const
 {
   if (m_locked)
     return std::string("[") + tr("locked due to inactivity") + "]";
-  std::string addr_start = m_wallet->get_subaddress_as_str({m_current_subaddress_account, 0}).substr(0, 6);
+  std::string addr_start = m_wallet->get_subaddress_as_str({m_current_subaddress_account, 0}).substr(0, 8);
   std::string prompt = std::string("[") + tr("wallet") + " " + addr_start;
   if (!m_wallet->check_connection(NULL))
     prompt += tr(" (no daemon)");
@@ -10854,7 +10854,7 @@ void simple_wallet::print_accounts(const std::string& tag)
     success_msg_writer() << tr("Accounts with tag: ") << tag;
     success_msg_writer() << tr("Tag's description: ") << account_tags.first.find(tag)->second;
   }
-  success_msg_writer() << boost::format(" %22s      %21s %21s %6s %21s") % tr("Account") % tr("Balance") % tr("Unlocked balance") % tr("Asset") % tr("Label");
+  success_msg_writer() << boost::format(" %18s %21s %21s %6s %21s") % tr("Account") % tr("Balance") % tr("Unlocked balance") % tr("Asset") % tr("Label");
   std::map<std::string, std::pair<uint64_t, uint64_t>> total_balances;
   std::vector<std::string> asset_types_in_wallet = m_wallet->list_asset_types();
   for (const auto& asset: asset_types_in_wallet) {
@@ -10868,11 +10868,10 @@ void simple_wallet::print_accounts(const std::string& tag)
       auto unlocked_balance = m_wallet->unlocked_balance(account_index, asset, false);
       if (balance == 0)
         continue;
-      success_msg_writer() << boost::format(tr(" %c%8u %8s %8s %21s %21s %6s %21s"))
+      success_msg_writer() << boost::format(tr(" %c%8u %8s %21s %21s %6s %21s"))
         % (m_current_subaddress_account == account_index ? '*' : ' ')
         % account_index
-        % m_wallet->get_subaddress_as_str({{account_index, 0}, carrot::AddressDeriveType::PreCarrot}).substr(0, 8)
-        % m_wallet->get_subaddress_as_str({{account_index, 0}, carrot::AddressDeriveType::Carrot}).substr(0, 8)
+        % m_wallet->get_subaddress_as_str({{account_index, 0}, carrot::AddressDeriveType::Auto}).substr(0, 8)
         % print_money(balance)
         % print_money(unlocked_balance)
         % asset
@@ -10885,7 +10884,7 @@ void simple_wallet::print_accounts(const std::string& tag)
   }
   success_msg_writer() << tr("------------------------------------------------------------------------------------------------------");
   for (const auto& it: total_balances)
-    success_msg_writer() << boost::format(tr("%22s       %21s %21s %6s")) % "Total" % print_money(it.second.first) % print_money(it.second.second) % it.first;
+    success_msg_writer() << boost::format(tr("%18s  %21s %21s %6s")) % "Total" % print_money(it.second.first) % print_money(it.second.second) % it.first;
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::print_address(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
