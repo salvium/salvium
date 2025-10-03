@@ -2558,7 +2558,7 @@ bool simple_wallet::stop_mining_for_rpc(const std::vector<std::string> &args)
 
 bool simple_wallet::show_qr_code(const std::vector<std::string> &args)
 {
-  uint32_t subaddress_index;
+  uint32_t subaddress_index = 0;
   carrot::AddressDeriveType derive_type;
   if (args.size() >= 1)
   {
@@ -2572,10 +2572,6 @@ bool simple_wallet::show_qr_code(const std::vector<std::string> &args)
       fail_msg_writer() << tr("<subaddress_index> is out of bounds");
       return true;
     }
-  }
-  else
-  {
-  subaddress_index = 0; // Default to primary address
   }
   if (args.size() >= 2)
   {
@@ -9927,8 +9923,7 @@ bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vec
       if (payment_id.substr(16).find_first_not_of('0') == std::string::npos)
         payment_id = payment_id.substr(0,16);
       std::string note = m_wallet->get_tx_note(pd.m_tx_hash);
-      //todo
-      std::string destination = m_wallet->get_subaddress_as_str({m_current_subaddress_account, pd.m_subaddr_index.minor});
+      std::string destination = m_wallet->get_subaddress_as_str({{m_current_subaddress_account, pd.m_subaddr_index.minor}, pd.m_is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
       const std::string type =
         pd.m_tx_type == cryptonote::transaction_type::STAKE ? "stake" :
         pd.m_coinbase ? tr("block") : tr("in");
@@ -10108,7 +10103,7 @@ bool simple_wallet::show_transfers(const std::vector<std::string> &args_)
   LOCK_IDLE_SCOPE();
 
   std::vector<transfer_view> all_transfers;
-  // todo: derive_type can be different for different txs.
+
   if (!get_transfers(local_args, all_transfers))
     return true;
 
