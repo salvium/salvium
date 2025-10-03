@@ -439,7 +439,7 @@ namespace tools
     entry.subaddr_index = pd.m_subaddr_index;
     entry.subaddr_indices.push_back(pd.m_subaddr_index);
     //entry.address = m_wallet->get_subaddress_as_str(pd.m_subaddr_index);
-    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    bool is_carrot = m_wallet->estimate_current_hard_fork(entry.height) >= HF_VERSION_CARROT;
     entry.address = m_wallet->get_subaddress_as_str({{pd.m_subaddr_index.major, pd.m_subaddr_index.minor}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
     set_confirmations(entry, m_wallet->get_blockchain_current_height(), m_wallet->get_last_block_reward(), pd.m_unlock_time);
   }
@@ -473,7 +473,7 @@ namespace tools
     for (uint32_t i: pd.m_subaddr_indices)
       entry.subaddr_indices.push_back({pd.m_subaddr_account, i});
     //entry.address = m_wallet->get_subaddress_as_str({pd.m_subaddr_account, 0});
-    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    bool is_carrot = m_wallet->estimate_current_hard_fork(entry.height) >= HF_VERSION_CARROT;
     entry.address = m_wallet->get_subaddress_as_str({{pd.m_subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
     set_confirmations(entry, m_wallet->get_blockchain_current_height(), m_wallet->get_last_block_reward(), pd.m_unlock_time);
   }
@@ -508,7 +508,7 @@ namespace tools
     for (uint32_t i: pd.m_subaddr_indices)
       entry.subaddr_indices.push_back({pd.m_subaddr_account, i});
     //entry.address = m_wallet->get_subaddress_as_str({pd.m_subaddr_account, 0});
-    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    bool is_carrot = m_wallet->estimate_current_hard_fork(entry.height) >= HF_VERSION_CARROT;
     entry.address = m_wallet->get_subaddress_as_str({{pd.m_subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
     set_confirmations(entry, m_wallet->get_blockchain_current_height(), m_wallet->get_last_block_reward(), pd.m_tx.unlock_time);
   }
@@ -533,7 +533,7 @@ namespace tools
     entry.subaddr_index = pd.m_subaddr_index;
     entry.subaddr_indices.push_back(pd.m_subaddr_index);
     //entry.address = m_wallet->get_subaddress_as_str(pd.m_subaddr_index);
-    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    bool is_carrot = m_wallet->estimate_current_hard_fork(entry.height) >= HF_VERSION_CARROT;
     entry.address = m_wallet->get_subaddress_as_str({{pd.m_subaddr_index.major, pd.m_subaddr_index.minor}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
     set_confirmations(entry, m_wallet->get_blockchain_current_height(), m_wallet->get_last_block_reward(), pd.m_unlock_time);
   }
@@ -542,8 +542,8 @@ namespace tools
   {
     if (!m_wallet) return not_open(er);
 
-    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
-
+    bool is_carrot = m_wallet->estimate_current_hard_fork() >= HF_VERSION_CARROT;
+    
     std::vector<std::string> assets_in_wallet = m_wallet->list_asset_types();
     std::string asset_type = req.asset_type.empty() ? "SAL1" : boost::algorithm::to_upper_copy(req.asset_type);
     // verify that the asset is in the list of in-wallet assets
@@ -627,8 +627,6 @@ namespace tools
   {
     if (!m_wallet) return not_open(er);
 
-    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
-
     try
     {
       THROW_WALLET_EXCEPTION_IF(req.account_index >= m_wallet->get_num_subaddress_accounts(), error::account_index_outofbound);
@@ -651,14 +649,14 @@ namespace tools
         res.addresses.resize(res.addresses.size() + 1);
         auto& info = res.addresses.back();
         const cryptonote::subaddress_index index = {req.account_index, i};
-        //info.address = m_wallet->get_subaddress_as_str(index);
-        info.address = m_wallet->get_subaddress_as_str({{req.account_index, i}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
+        info.address = m_wallet->get_subaddress_as_str({req.account_index, i});
+        info.address_cn = req.cryptonote ? m_wallet->get_subaddress_as_str({{req.account_index, i}, carrot::AddressDeriveType::PreCarrot}) : "";
+        info.address_carrot = req.carrot ? m_wallet->get_subaddress_as_str({{req.account_index, i}, carrot::AddressDeriveType::Carrot}) : "";
         info.label = m_wallet->get_subaddress_label(index);
         info.address_index = index.minor;
         info.used = std::find_if(transfers.begin(), transfers.end(), [&](const tools::wallet2::transfer_details& td) { return td.m_subaddr_index == index; }) != transfers.end();
       }
-      //res.address = m_wallet->get_subaddress_as_str({req.account_index, 0});
-      res.address = m_wallet->get_subaddress_as_str({{req.account_index, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
+      res.address = m_wallet->get_subaddress_as_str({req.account_index, 0});
     }
     catch (const std::exception& e)
     {
@@ -701,8 +699,6 @@ namespace tools
         return false;
       }
 
-      bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
-
       std::vector<std::string> addresses;
       std::vector<uint32_t>    address_indices;
 
@@ -713,8 +709,7 @@ namespace tools
         m_wallet->add_subaddress(req.account_index, req.label);
         uint32_t new_address_index = m_wallet->get_num_subaddresses(req.account_index) - 1;
         address_indices.push_back(new_address_index);
-        //addresses.push_back(m_wallet->get_subaddress_as_str({req.account_index, new_address_index}));
-        addresses.push_back(m_wallet->get_subaddress_as_str({{req.account_index, new_address_index}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot}));
+        addresses.push_back(m_wallet->get_subaddress_as_str({req.account_index, new_address_index}));
       }
 
       res.address = addresses[0];
@@ -750,8 +745,6 @@ namespace tools
   {
     if (!m_wallet) return not_open(er);
 
-    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
-    
     try
     {
       res.total_balance = 0;
@@ -772,8 +765,7 @@ namespace tools
           continue;
         wallet_rpc::COMMAND_RPC_GET_ACCOUNTS::subaddress_account_info info;
         info.account_index = subaddr_index.major;
-        //info.base_address = m_wallet->get_subaddress_as_str(subaddr_index);
-        info.base_address = m_wallet->get_subaddress_as_str({{subaddr_index.major, subaddr_index.minor}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
+        info.base_address = m_wallet->get_subaddress_as_str({{subaddr_index.major, 0}, carrot::AddressDeriveType::Auto});
 
         //for (const auto& asset: asset_types) {
           info.balance = m_wallet->balance(subaddr_index.major, "SAL1", req.strict_balances);
@@ -810,9 +802,7 @@ namespace tools
     {
       m_wallet->add_subaddress_account(req.label);
       res.account_index = m_wallet->get_num_subaddress_accounts() - 1;
-      //res.address = m_wallet->get_subaddress_as_str({res.account_index, 0});
-      bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
-      res.address = m_wallet->get_subaddress_as_str({{res.account_index, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
+      res.address = m_wallet->get_subaddress_as_str({res.account_index, 0});
     }
     catch (const std::exception& e)
     {
@@ -2109,8 +2099,6 @@ namespace tools
   {
     if (!m_wallet) return not_open(er);
 
-    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
-    
     crypto::hash payment_id;
     crypto::hash8 payment_id8;
     cryptonote::blobdata payment_id_blob;
@@ -2151,7 +2139,7 @@ namespace tools
       rpc_payment.unlock_time  = payment.m_unlock_time;
       rpc_payment.locked       = !m_wallet->is_transfer_unlocked(payment.m_unlock_time, payment.m_block_height);
       rpc_payment.subaddr_index = payment.m_subaddr_index;
-      //rpc_payment.address      = m_wallet->get_subaddress_as_str(payment.m_subaddr_index);
+      bool is_carrot           = m_wallet->estimate_current_hard_fork(payment.m_block_height) >= HF_VERSION_CARROT;
       rpc_payment.address      = m_wallet->get_subaddress_as_str({{payment.m_subaddr_index.major, payment.m_subaddr_index.minor}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
       res.payments.push_back(rpc_payment);
     }
@@ -2163,8 +2151,6 @@ namespace tools
   {
     res.payments.clear();
 
-    bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
-    
     if (!m_wallet) return not_open(er);
 
     /* If the payment ID list is empty, we get payments to any payment ID (or lack thereof) */
@@ -2182,7 +2168,7 @@ namespace tools
         rpc_payment.block_height = payment.second.m_block_height;
         rpc_payment.unlock_time  = payment.second.m_unlock_time;
         rpc_payment.subaddr_index = payment.second.m_subaddr_index;
-        //rpc_payment.address      = m_wallet->get_subaddress_as_str(payment.second.m_subaddr_index);
+        bool is_carrot           = m_wallet->estimate_current_hard_fork(payment.second.m_block_height) >= HF_VERSION_CARROT;
         rpc_payment.address      = m_wallet->get_subaddress_as_str({{payment.second.m_subaddr_index.major, payment.second.m_subaddr_index.minor}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
         rpc_payment.locked       = !m_wallet->is_transfer_unlocked(payment.second.m_unlock_time, payment.second.m_block_height);
         res.payments.push_back(std::move(rpc_payment));
@@ -2238,7 +2224,7 @@ namespace tools
         rpc_payment.block_height = payment.m_block_height;
         rpc_payment.unlock_time  = payment.m_unlock_time;
         rpc_payment.subaddr_index = payment.m_subaddr_index;
-        //rpc_payment.address      = m_wallet->get_subaddress_as_str(payment.m_subaddr_index);
+        bool is_carrot = m_wallet->estimate_current_hard_fork(payment.m_block_height) >= HF_VERSION_CARROT;
         rpc_payment.address      = m_wallet->get_subaddress_as_str({{payment.m_subaddr_index.major, payment.m_subaddr_index.minor}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
         rpc_payment.locked       = !m_wallet->is_transfer_unlocked(payment.m_unlock_time, payment.m_block_height);
         res.payments.push_back(std::move(rpc_payment));
