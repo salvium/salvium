@@ -67,7 +67,6 @@ namespace wallet_rpc
       bool all_accounts;
       bool all_assets;
       bool strict;
-      bool carrot_first;
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(address_indices)
@@ -75,7 +74,6 @@ namespace wallet_rpc
         KV_SERIALIZE_OPT(all_accounts, false);
         KV_SERIALIZE_OPT(all_assets, false);
         KV_SERIALIZE_OPT(strict, false);
-        KV_SERIALIZE_OPT(carrot_first, false);
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<request_t> request;
@@ -85,7 +83,6 @@ namespace wallet_rpc
       uint32_t account_index;
       uint32_t address_index;
       std::string address;
-      std::string address_alt;
       uint64_t balance;
       uint64_t unlocked_balance;
       std::string label;
@@ -97,7 +94,6 @@ namespace wallet_rpc
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(address_index)
         KV_SERIALIZE(address)
-        KV_SERIALIZE(address_alt)
         KV_SERIALIZE(balance)
         KV_SERIALIZE(unlocked_balance)
         KV_SERIALIZE(label)
@@ -143,10 +139,13 @@ namespace wallet_rpc
     {
       uint32_t account_index;
       std::vector<uint32_t> address_index;
-      bool carrot_first;
+      bool carrot;
+      bool cryptonote;
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(address_index)
+        KV_SERIALIZE_OPT(carrot, true);
+        KV_SERIALIZE_OPT(cryptonote, true);
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<request_t> request;
@@ -154,14 +153,16 @@ namespace wallet_rpc
     struct address_info
     {
       std::string address;
-      std::string address_alt;
+      std::string address_cn;
+      std::string address_carrot;
       std::string label;
       uint32_t address_index;
       bool used;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(address)
-        KV_SERIALIZE(address_alt)
+        KV_SERIALIZE(address_cn)
+        KV_SERIALIZE(address_carrot)
         KV_SERIALIZE(label)
         KV_SERIALIZE(address_index)
         KV_SERIALIZE(used)
@@ -171,12 +172,10 @@ namespace wallet_rpc
     struct response_t
     {
       std::string address;                  // to remain compatible with older RPC format
-      std::string address_alt;
       std::vector<address_info> addresses;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(address)
-        KV_SERIALIZE(address_alt)
         KV_SERIALIZE(addresses)
       END_KV_SERIALIZE_MAP()
     };

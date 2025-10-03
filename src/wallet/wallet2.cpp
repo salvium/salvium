@@ -12326,10 +12326,10 @@ void wallet2::device_show_address(uint32_t account_index, uint32_t address_index
   hwdev.display_address(subaddress_index{account_index, address_index}, payment_id);
 }
 //----------------------------------------------------------------------------------------------------
-uint8_t wallet2::estimate_current_hard_fork() const
+uint8_t wallet2::estimate_current_hard_fork(const uint64_t height) const
 {
   // Get the last-seen top height by the wallet
-  uint64_t guessed_height = m_blockchain.size();
+  uint64_t guessed_height = (height > 0) ? height : m_blockchain.size();
 
   // Get the correct hardfork table, based on current net type
   const hardfork_t *hfs = 
