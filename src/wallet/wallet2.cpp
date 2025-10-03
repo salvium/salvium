@@ -1584,11 +1584,24 @@ crypto::public_key wallet2::get_subaddress_spend_public_key(const cryptonote::su
   return hwdev.get_subaddress_spend_public_key(m_account.get_keys(), index);
 }
 //----------------------------------------------------------------------------------------------------
-std::string wallet2::get_subaddress_as_str(const carrot::subaddress_index_extended& subaddr) const
+std::string wallet2::get_subaddress_as_str(const carrot::subaddress_index_extended& subaddr_const) const
 {
-  carrot::CarrotDestinationV1 address = m_account.subaddress(subaddr);
+  // Make a non-const copy of subaddr
+  carrot::subaddress_index_extended subaddr(subaddr_const);
+
+  // Handle "auto" - the account class doesn't know the HF version, so this is the cleanest solution
+  if (subaddr.derive_type == carrot::AddressDeriveType::Auto) {
+
+    // Get the HF version
+    uint32_t hf_version = estimate_current_hard_fork();
+    THROW_WALLET_EXCEPTION_IF(hf_version == 0, error::wallet_internal_error, "unable to estimate the current hard fork - cannot generate subaddress as string");
+
+    // Change the non-const derivation type
+    subaddr.derive_type = (hf_version >= HF_VERSION_CARROT) ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot;
+  }
 
   // Build the cryptonote::account_public_address
+  carrot::CarrotDestinationV1 address = m_account.subaddress(subaddr);
   account_public_address addr{address.address_spend_pubkey, address.address_view_pubkey};
   addr.m_is_carrot = subaddr.derive_type == carrot::AddressDeriveType::Carrot;
 
@@ -2936,6 +2949,7 @@ void wallet2::process_new_scanned_transaction(
         payment.m_coinbase     = miner_tx;
         payment.m_subaddr_index = i.first;
         payment.m_tx_type      = tx.type;
+        payment.m_is_carrot    = (tx.version >= TRANSACTION_VERSION_CARROT);
         if (pool) {
           if (emplace_or_replace(m_unconfirmed_payments, payment_id, pool_payment_details{payment, double_spend_seen}))
             all_same = false;
@@ -12310,6 +12324,31 @@ void wallet2::device_show_address(uint32_t account_index, uint32_t address_index
 
   auto & hwdev = get_account().get_device();
   hwdev.display_address(subaddress_index{account_index, address_index}, payment_id);
+}
+//----------------------------------------------------------------------------------------------------
+uint8_t wallet2::estimate_current_hard_fork() const
+{
+  // Get the last-seen top height by the wallet
+  uint64_t guessed_height = m_blockchain.size();
+
+  // Get the correct hardfork table, based on current net type
+  const hardfork_t *hfs = 
+    (m_nettype == cryptonote::MAINNET) ? mainnet_hard_forks :
+    (m_nettype == cryptonote::TESTNET) ? testnet_hard_forks :
+    stagenet_hard_forks;
+  size_t hfs_count = 
+    (m_nettype == cryptonote::MAINNET) ? num_mainnet_hard_forks :
+    (m_nettype == cryptonote::TESTNET) ? num_testnet_hard_forks :
+    num_stagenet_hard_forks;
+  
+  // Iterate over the hard fork table, to see what the current fork is for the guessed height
+  for (size_t i = hfs_count-1; i>=0; --i) {
+    if (hfs[i].height <= guessed_height)
+      return hfs[i].version;
+  }
+
+  // return "no value found" to the caller
+  return 0;
 }
 //----------------------------------------------------------------------------------------------------
 uint8_t wallet2::get_current_hard_fork()
