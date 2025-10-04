@@ -10942,7 +10942,7 @@ bool simple_wallet::print_address(const std::vector<std::string> &args/* = std::
         % (index == 0 ? tr("Primary address") : m_wallet->get_subaddress_label({m_current_subaddress_account, index}))
         % (used ? tr("(used)") : "");
     } else {
-      success_msg_writer() << boost::format(tr("%8u %96s %21s %6s\n         %96s\n"))
+      success_msg_writer() << boost::format(tr("%8u CN     %96s %21s %6s\n         Carrot %96s\n"))
         % index
         % m_wallet->get_subaddress_as_str({{m_current_subaddress_account, index}, carrot::AddressDeriveType::PreCarrot})
         % (index == 0 ? tr("Primary address") : m_wallet->get_subaddress_label({m_current_subaddress_account, index}))
@@ -10960,15 +10960,19 @@ bool simple_wallet::print_address(const std::vector<std::string> &args/* = std::
   else if (local_args[0] == "all")
   {
     local_args.erase(local_args.begin());
-    if (local_args.size() == 0) 
+    if (local_args.size() == 0) {
+      message_writer(console_color_green, true) << tr("   INDEX TYPE   ADDRESS"); 
       for (; index < m_wallet->get_num_subaddresses(m_current_subaddress_account); ++index)
         print_address_sub(index);
-    else if (local_args[0] == "cn")
+    } else if (local_args[0] == "cn") {
+      message_writer(console_color_green, true) << tr("   INDEX ADDRESS"); 
       for (; index < m_wallet->get_num_subaddresses(m_current_subaddress_account); ++index)
         print_address_sub(index, true, false);
-    else
+    } else {
+      message_writer(console_color_green, true) << tr("   INDEX ADDRESS"); 
       for (; index < m_wallet->get_num_subaddresses(m_current_subaddress_account); ++index)
         print_address_sub(index, false, true);
+    }
   }
   else if (local_args[0] == "new")
   {
