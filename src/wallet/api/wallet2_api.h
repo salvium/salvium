@@ -565,6 +565,30 @@ struct Wallet
      */
     virtual std::string publicMultisigSignerKey() const = 0;
 
+   /*!
+    * \brief secretViewBalance   - returns Carrot "view balance" secret
+    * \return                    - Carrot s_vb
+    */
+    virtual std::string secretViewBalance() const = 0;
+
+   /*!
+    * \brief secretProveSpend    - returns Carrot "prove spend" secret
+    * \return                    - Carrot secret k_ps
+    */
+    virtual std::string secretProveSpend() const = 0;
+
+   /*!
+    * \brief secretGenerateAddress - returns Carrot "generate address" secret
+    * \return                      - Carrot secret s_ga
+    */
+    virtual std::string secretGenerateAddress() const = 0;
+
+   /*!
+    * \brief secretGenerateImage - returns Carrot "generate key image" secret
+    * \return                    - Carrot secret k_gi
+    */
+    virtual std::string secretGenerateImage() const = 0;
+
     /*!
      * \brief stop - interrupts wallet refresh() loop once (doesn't stop background refresh thread)
      */
