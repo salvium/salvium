@@ -900,10 +900,16 @@ bool simple_wallet::viewkey(const std::vector<std::string> &args/* = std::vector
     std::cout << "secret: On device. Not available" << std::endl;
   } else {
     SCOPED_WALLET_UNLOCK();
-    printf("secret: ");
-    print_secret_key(m_wallet->get_account().get_keys().m_view_secret_key);
-    putchar('\n');
+    uint32_t hf_version = m_wallet->estimate_current_hard_fork();
+    if (hf_version >= HF_VERSION_CARROT) {
+      printf("secret: ");
+      print_secret_key(m_wallet->get_account().get_keys().s_view_balance);
+    } else {
+      printf("secret: ");
+      print_secret_key(m_wallet->get_account().get_keys().m_view_secret_key);
+    }
   }
+  putchar('\n');
   std::cout << "CN public: " << string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_account_address.m_view_public_key) << std::endl;
   std::cout << "Carrot public: " << string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_carrot_account_address.m_view_public_key) << std::endl;
 
@@ -924,10 +930,16 @@ bool simple_wallet::spendkey(const std::vector<std::string> &args/* = std::vecto
     std::cout << "secret: On device. Not available" << std::endl;
   } else {
     SCOPED_WALLET_UNLOCK();
-    printf("secret: ");
-    print_secret_key(m_wallet->get_account().get_keys().m_spend_secret_key);
-    putchar('\n');
+    uint32_t hf_version = m_wallet->estimate_current_hard_fork();
+    if (hf_version >= HF_VERSION_CARROT) {
+      printf("secret: ");
+      print_secret_key(m_wallet->get_account().get_keys().k_prove_spend);
+    } else {
+      printf("secret: ");
+      print_secret_key(m_wallet->get_account().get_keys().s_master);
+    }
   }
+      putchar('\n');
   std::cout << "CN public: " << string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_account_address.m_spend_public_key) << std::endl;
   std::cout << "Carrot public: " << string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_carrot_account_address.m_spend_public_key) << std::endl;
 
