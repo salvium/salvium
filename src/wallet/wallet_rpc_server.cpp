@@ -2355,6 +2355,55 @@ namespace tools
           epee::wipeable_string key = epee::to_hex::wipeable_string(m_wallet->get_account().get_keys().m_spend_secret_key);
           res.key = std::string(key.data(), key.size());
       }
+      else if(req.key_type.compare("s_master") == 0)
+      {
+          if (m_wallet->watch_only())
+          {
+            er.code = WALLET_RPC_ERROR_CODE_WATCH_ONLY;
+            er.message = "The wallet is watch-only. Cannot retrieve s_master key.";
+            return false;
+          }
+          CHECK_IF_BACKGROUND_SYNCING();
+          epee::wipeable_string key = epee::to_hex::wipeable_string(m_wallet->get_account().get_keys().s_master);
+          res.key = std::string(key.data(), key.size());
+      }
+      else if(req.key_type.compare("k_prove_spend") == 0)
+      {
+          if (m_wallet->watch_only())
+          {
+            er.code = WALLET_RPC_ERROR_CODE_WATCH_ONLY;
+            er.message = "The wallet is watch-only. Cannot retrieve k_prove_spend key.";
+            return false;
+          }
+          CHECK_IF_BACKGROUND_SYNCING();
+          epee::wipeable_string key = epee::to_hex::wipeable_string(m_wallet->get_account().get_keys().k_prove_spend);
+          res.key = std::string(key.data(), key.size());
+      }
+      else if(req.key_type.compare("s_view_balance") == 0)
+      {
+          epee::wipeable_string key = epee::to_hex::wipeable_string(m_wallet->get_account().get_keys().s_view_balance);
+          res.key = std::string(key.data(), key.size());
+      }
+      else if(req.key_type.compare("s_view_balance") == 0)
+      {
+          epee::wipeable_string key = epee::to_hex::wipeable_string(m_wallet->get_account().get_keys().s_view_balance);
+          res.key = std::string(key.data(), key.size());
+      }
+      else if(req.key_type.compare("k_view_incoming") == 0)
+      {
+          epee::wipeable_string key = epee::to_hex::wipeable_string(m_wallet->get_account().get_keys().k_view_incoming);
+          res.key = std::string(key.data(), key.size());
+      }
+      else if(req.key_type.compare("k_generate_image") == 0)
+      {
+          epee::wipeable_string key = epee::to_hex::wipeable_string(m_wallet->get_account().get_keys().k_generate_image);
+          res.key = std::string(key.data(), key.size());
+      }
+      else if(req.key_type.compare("s_generate_address") == 0)
+      {
+          epee::wipeable_string key = epee::to_hex::wipeable_string(m_wallet->get_account().get_keys().s_generate_address);
+          res.key = std::string(key.data(), key.size());
+      }
       else
       {
           er.message = "key_type " + req.key_type + " not found";
