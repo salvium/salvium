@@ -559,6 +559,18 @@ struct Wallet
     */
     virtual std::string publicSpendKey() const = 0;
 
+   /*!
+    * \brief allCarrotKeys    - returns all Carrot keys
+    * [0] - s_master
+    * [1] - k_prove_spend
+    * [2] - s_view_balance
+    * [3] - k_view_incoming
+    * [4] - k_generate_image
+    * [5] - s_generate_address
+    * \return                 - vector of all Carrot keys
+    */
+    virtual std::vector<std::string> carrotKeys() const = 0;
+
     /*!
      * \brief publicMultisigSignerKey - returns public signer key
      * \return                        - public multisignature signer key or empty string if wallet is not multisig

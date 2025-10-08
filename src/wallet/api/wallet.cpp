@@ -920,6 +920,18 @@ std::string WalletImpl::publicSpendKey() const
     return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_account_address.m_spend_public_key);
 }
 
+std::vector<std::string> WalletImpl::carrotKeys() const
+{
+    return {
+    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_carrot_account_address.s_master),
+    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_carrot_account_address.k_prove_spend),
+    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_carrot_account_address.s_view_balance),
+    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_carrot_account_address.k_view_incoming),
+    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_carrot_account_address.k_generate_image),
+    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_carrot_account_address.s_generate_address)
+    };
+}
+
 std::string WalletImpl::publicMultisigSignerKey() const
 {
     try {
