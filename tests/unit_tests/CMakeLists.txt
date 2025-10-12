@@ -61,6 +61,7 @@ set(unit_tests_sources
   json_serialization.cpp
   check_output_types.cpp
   protocol_tx.cpp
+  node_cryptofork.cpp
   get_xtype_from_string.cpp
   hashchain.cpp
   hmac_keccak.cpp
