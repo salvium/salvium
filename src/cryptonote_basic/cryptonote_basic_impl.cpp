@@ -155,10 +155,9 @@ namespace cryptonote {
       network_type nettype
     , bool subaddress
     , account_public_address const & adr
-    , bool is_carrot
     )
   {
-    uint64_t address_prefix = is_carrot
+    uint64_t address_prefix = adr.m_is_carrot
       ? (subaddress ? get_config(nettype).CARROT_PUBLIC_SUBADDRESS_BASE58_PREFIX : get_config(nettype).CARROT_PUBLIC_ADDRESS_BASE58_PREFIX)
       : (subaddress ? get_config(nettype).CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX : get_config(nettype).CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
 
@@ -169,10 +168,9 @@ namespace cryptonote {
       network_type nettype
     , account_public_address const & adr
     , crypto::hash8 const & payment_id
-    , bool is_carrot
     )
   {
-    uint64_t integrated_address_prefix = is_carrot ? get_config(nettype).CARROT_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX : get_config(nettype).CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
+    uint64_t integrated_address_prefix = adr.m_is_carrot ? get_config(nettype).CARROT_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX : get_config(nettype).CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
 
     integrated_address iadr = {
       adr, payment_id

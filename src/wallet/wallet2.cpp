@@ -1606,7 +1606,7 @@ std::string wallet2::get_subaddress_as_str(const carrot::subaddress_index_extend
   addr.m_is_carrot = subaddr.derive_type == carrot::AddressDeriveType::Carrot;
 
   // change this code into base 58
-  return cryptonote::get_account_address_as_str(m_nettype, address.is_subaddress, addr, addr.m_is_carrot);
+  return cryptonote::get_account_address_as_str(m_nettype, address.is_subaddress, addr);
 }
 //----------------------------------------------------------------------------------------------------
 std::string wallet2::get_integrated_address_as_str(const crypto::hash8& payment_id, bool carrot) const
@@ -1618,7 +1618,7 @@ std::string wallet2::get_integrated_address_as_str(const crypto::hash8& payment_
   account_public_address addr{address.address_spend_pubkey, address.address_view_pubkey};
   addr.m_is_carrot = carrot;
   
-  return cryptonote::get_account_integrated_address_as_str(m_nettype, addr, payment_id, carrot);
+  return cryptonote::get_account_integrated_address_as_str(m_nettype, addr, payment_id);
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::add_subaddress_account(const std::string& label)
