@@ -7824,7 +7824,7 @@ void wallet2::commit_tx(pending_tx& ptx)
       amount_in += m_transfers[idx].amount();
   }
   add_unconfirmed_tx(ptx.tx, amount_in, dests, payment_id, ptx.change_dts.amount, subaddr_account, subaddr_indices);
-  if (store_tx_info() && ptx.tx_key != crypto::null_skey)
+  if (store_tx_info() && (ptx.tx_key != crypto::null_skey || ptx.additional_tx_keys.size() != 0))
   {
     m_tx_keys[txid] = ptx.tx_key;
     m_additional_tx_keys[txid] = ptx.additional_tx_keys;
@@ -12582,8 +12582,8 @@ bool wallet2::get_tx_key_cached(const crypto::hash &txid, crypto::secret_key &tx
   if (i == m_tx_keys.end())
     return false;
   tx_key = i->second;
-  if (tx_key == crypto::null_skey)
-    return false;
+  //if (tx_key == crypto::null_skey)
+  //  return false;
   const auto j = m_additional_tx_keys.find(txid);
   if (j != m_additional_tx_keys.end())
     additional_tx_keys = j->second;
