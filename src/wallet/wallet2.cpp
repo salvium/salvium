@@ -11843,8 +11843,13 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
     } else {
       THROW_WALLET_EXCEPTION_IF(true, error::wallet_internal_error, "Unsupported input type for return_payment");
     }
-    const mx25519_pubkey origin_tx_shared_secret_unctx = carrot::raw_byte_convert<mx25519_pubkey>(main_derivations[0]);
+    THROW_WALLET_EXCEPTION_IF(!main_derivations.size() && !additional_derivations.size(), error::wallet_internal_error, "No derivations found");
+    THROW_WALLET_EXCEPTION_IF(!main_derivations.size() && additional_derivations.size() < td_origin.m_internal_output_index + 1, error::wallet_internal_error, "No derivations found");
 
+    const key_derivation derivation = (main_derivations.size() == 1) ? main_derivations[0] : additional_derivations[td_origin.m_internal_output_index];
+    const mx25519_pubkey origin_tx_shared_secret_unctx = carrot::raw_byte_convert<mx25519_pubkey>(derivation);
+    
+    
     // 4. compute m_return
     crypto::public_key output_key;
     carrot::encrypted_return_pubkey_t m_return;
@@ -11874,7 +11879,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
 
     // 6. compute the change index
     crypto::secret_key z_i;
-    derivation_to_scalar(main_derivations[0], td_origin.m_internal_output_index, z_i);
+    derivation_to_scalar(derivation, td_origin.m_internal_output_index, z_i);
     struct {
       char domain_separator[8];
       crypto::secret_key output_index_key;
@@ -11898,6 +11903,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
     cryptonote::account_public_address address;
     address.m_spend_public_key = change_key;
     address.m_view_public_key = return_pub;
+    address.m_is_carrot = true;
 
     return create_transactions_from(address, cryptonote::transaction_type::RETURN, asset_type, is_subaddress, outputs, transfers_indices, unused_dust_indices, fake_outs_count, unlock_time, priority, extra);
   }
