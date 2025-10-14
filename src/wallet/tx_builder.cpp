@@ -1360,11 +1360,16 @@ wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionPropos
     ptx.change_dts = change_dts;
     ptx.selected_transfers = std::move(selected_transfers);
     ptx.key_images = key_images_string.str();
-    ptx.tx_key = shared_ephemeral_pubkey ? ephemeral_privkeys.at(0) : crypto::null_skey;
-    if (shared_ephemeral_pubkey)
-        ptx.additional_tx_keys = std::move(ephemeral_privkeys);
-    else
-        ptx.additional_tx_keys.clear();
+    if (ephemeral_privkeys.size() == 1) {
+      ptx.tx_key = ephemeral_privkeys.at(0);
+      ptx.additional_tx_keys.clear();
+    } else if (ephemeral_privkeys.size() == 2 && shared_ephemeral_pubkey) {
+      ptx.tx_key = (ephemeral_privkeys.at(0) == crypto::null_skey) ? ephemeral_privkeys.at(1) : ephemeral_privkeys.at(0);
+      ptx.additional_tx_keys.clear();
+    } else {
+      ptx.tx_key = crypto::null_skey;
+      ptx.additional_tx_keys = std::move(ephemeral_privkeys);
+    }
     ptx.dests = std::move(dests);
     ptx.multisig_sigs = {};
     ptx.multisig_tx_key_entropy = {};
