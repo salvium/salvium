@@ -11645,6 +11645,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
   const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
   if (do_carrot_tx_construction)
   {
+    // Sanity checks
+    THROW_WALLET_EXCEPTION_IF(!address.m_is_carrot, error::wallet_internal_error, "CryptoNote address supplied, but Carrot is now active");
+    
     const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep_all(*this, below, address, is_subaddress, outputs, priority, extra, tx_type, subaddr_account, subaddr_indices);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
@@ -11653,6 +11656,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
     return ptx_vector;
   }
 
+  // Sanity checks
+  THROW_WALLET_EXCEPTION_IF(address.m_is_carrot, error::wallet_internal_error, "Carrot address supplied, but Carrot not yet active");
+  
   std::vector<size_t> unused_transfers_indices;
   std::vector<size_t> unused_dust_indices;
   const bool use_per_byte_fee = true;
@@ -11735,6 +11741,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_single(const crypt
   const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
   if (do_carrot_tx_construction)
   {
+    // Sanity checks
+    THROW_WALLET_EXCEPTION_IF(!address.m_is_carrot, error::wallet_internal_error, "CryptoNote address supplied, but Carrot is now active");
+    
     const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(*this, {ki}, address, is_subaddress, outputs, priority, extra, tx_type);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
@@ -11743,6 +11752,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_single(const crypt
     //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
     return ptx_vector;
   }
+
+  // Sanity checks
+  THROW_WALLET_EXCEPTION_IF(address.m_is_carrot, error::wallet_internal_error, "Carrot address supplied, but Carrot not yet active");
 
   std::vector<size_t> unused_transfers_indices;
   std::vector<size_t> unused_dust_indices;
