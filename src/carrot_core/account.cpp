@@ -398,8 +398,11 @@ void carrot_and_legacy_account::set_carrot_keys(const AddressDeriveType default_
 //----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::insert_subaddresses(const std::unordered_map<crypto::public_key, subaddress_index_extended>& subaddress_map_cn)
 {
-    for (const auto &p : subaddress_map_cn)
-        subaddress_map.insert({p.first, {{p.second.index.major, p.second.index.minor}, p.second.derive_type, p.second.is_return_spend_key}});
+  for (const auto &p : subaddress_map_cn) {
+    const subaddress_index_extended subaddr_index{{p.second.index.major, p.second.index.minor}, p.second.derive_type, p.second.is_return_spend_key};
+    const CarrotDestinationV1 addr = subaddress(subaddr_index);
+    subaddress_map.insert({addr.address_spend_pubkey, subaddr_index});
+  }
 }
 //----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::insert_return_output_info(const std::unordered_map<crypto::public_key, return_output_info_t>& roi_map)

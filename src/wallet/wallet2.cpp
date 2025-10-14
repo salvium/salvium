@@ -1651,6 +1651,7 @@ bool wallet2::should_expand(const cryptonote::subaddress_index &index) const
 void wallet2::expand_subaddresses(const cryptonote::subaddress_index& index)
 {
   hw::device &hwdev = m_account.get_device();
+  std::unordered_map<crypto::public_key, carrot::subaddress_index_extended> new_addresses;
   if (m_subaddress_labels.size() <= index.major)
   {
     // add new accounts
@@ -1664,6 +1665,7 @@ void wallet2::expand_subaddresses(const cryptonote::subaddress_index& index)
       {
          const crypto::public_key &D = pkeys[index2.minor];
          m_subaddresses[D] = index2;
+         new_addresses.insert({D, {{index2.major, index2.minor}, carrot::AddressDeriveType::Carrot, false}});
       }
     }
     m_subaddress_labels.resize(index.major + 1, {"Untitled account"});
@@ -1681,9 +1683,12 @@ void wallet2::expand_subaddresses(const cryptonote::subaddress_index& index)
     {
        const crypto::public_key &D = pkeys[index2.minor - begin];
        m_subaddresses[D] = index2;
+       new_addresses.insert({D, {{index2.major, index2.minor}, carrot::AddressDeriveType::Carrot, false}});
     }
     m_subaddress_labels[index.major].resize(index.minor + 1);
   }
+  // Add to the Carrot account
+  m_account.insert_subaddresses(new_addresses);
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::create_one_off_subaddress(const cryptonote::subaddress_index& index)
