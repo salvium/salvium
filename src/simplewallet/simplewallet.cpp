@@ -5335,7 +5335,7 @@ boost::optional<epee::wipeable_string> simple_wallet::new_wallet(const boost::pr
       .m_is_carrot = true
     };
     message_writer(console_color_white, true) << tr("Generated new Carrot wallet: ")
-                                              << cryptonote::get_account_address_as_str(m_wallet->nettype(), false, carrot_address, true);
+                                              << cryptonote::get_account_address_as_str(m_wallet->nettype(), false, carrot_address);
     PAUSE_READLINE();
     std::cout << tr("View key: ");
     print_secret_key(m_wallet->get_account().get_keys().m_view_secret_key);
@@ -11231,9 +11231,9 @@ bool simple_wallet::address_book(const std::vector<std::string> &args/* = std::v
       success_msg_writer() << tr("Index: ") << i;
       std::string address;
       if (row.m_has_payment_id)
-        address = cryptonote::get_account_integrated_address_as_str(m_wallet->nettype(), row.m_address, row.m_payment_id, row.m_is_carrot);
+        address = cryptonote::get_account_integrated_address_as_str(m_wallet->nettype(), row.m_address, row.m_payment_id);
       else
-        address = get_account_address_as_str(m_wallet->nettype(), row.m_is_subaddress, row.m_address, row.m_is_carrot);
+        address = get_account_address_as_str(m_wallet->nettype(), row.m_is_subaddress, row.m_address);
       success_msg_writer() << tr("Address: ") << address;
       success_msg_writer() << tr("Description: ") << row.m_description << "\n";
     }
