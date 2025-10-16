@@ -1572,10 +1572,12 @@ cryptonote::account_public_address wallet2::get_subaddress(const cryptonote::sub
 //----------------------------------------------------------------------------------------------------
 boost::optional<cryptonote::subaddress_index> wallet2::get_subaddress_index(const cryptonote::account_public_address& address) const
 {
-  auto index = m_subaddresses.find(address.m_spend_public_key);
-  if (index == m_subaddresses.end())
+  const auto subaddress_map = m_account.get_subaddress_map_ref();
+  auto carrot_index = subaddress_map.find(address.m_spend_public_key);
+  if (carrot_index == subaddress_map.end())
     return boost::none;
-  return index->second;
+  cryptonote::subaddress_index index{carrot_index->second.index.major, carrot_index->second.index.minor};
+  return index;
 }
 //----------------------------------------------------------------------------------------------------
 crypto::public_key wallet2::get_subaddress_spend_public_key(const cryptonote::subaddress_index& index) const
@@ -5628,7 +5630,8 @@ void wallet2::create_keys_file(const std::string &wallet_, bool watch_only, cons
 
     if (create_address_file)
     {
-      r = save_to_file(m_wallet_file + ".address.txt", m_account.get_public_address_str(m_nettype), true);
+      std::string addresses = m_account.get_public_address_str(m_nettype) + "\n" + m_account.get_carrot_public_address_str(m_nettype) + "\n";
+      r = save_to_file(m_wallet_file + ".address.txt", addresses, true);
       if(!r) MERROR("String with address text not saved");
     }
   }
@@ -6611,7 +6614,9 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
     {
       THROW_WALLET_EXCEPTION_IF(true, error::file_read_error, m_keys_file);
     }
-    LOG_PRINT_L0("Loaded wallet keys file, with public address: " << m_account.get_public_address_str(m_nettype));
+    LOG_PRINT_L0("Loaded wallet keys file, with public addresses: ");
+    LOG_PRINT_L0("      CN : " << m_account.get_public_address_str(m_nettype));
+    LOG_PRINT_L0("  Carrot : " << m_account.get_carrot_public_address_str(m_nettype));
     lock_keys_file();
   }
   else if (!load_keys_buf(keys_buf, password))
