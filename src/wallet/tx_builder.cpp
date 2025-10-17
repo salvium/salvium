@@ -149,7 +149,7 @@ static cryptonote::tx_destination_entry make_tx_destination_entry(
 {
     cryptonote::tx_destination_entry dest = cryptonote::tx_destination_entry(payment_proposal.amount,
         {payment_proposal.destination.address_spend_pubkey, payment_proposal.destination.address_view_pubkey, /*m_is_carrot*/true},
-        payment_proposal.destination.is_subaddress);
+        payment_proposal.destination.is_subaddress,  false, true);
     dest.is_integrated = payment_proposal.destination.payment_id != carrot::null_payment_id;
     return dest;
 }
@@ -167,7 +167,7 @@ static cryptonote::tx_destination_entry make_tx_destination_entry(
 
    return cryptonote::tx_destination_entry(payment_proposal.proposal.amount,
        {payment_proposal.proposal.destination_address_spend_pubkey, address_view_pubkey, /*m_is_carrot*/true},
-       payment_proposal.subaddr_index.index.is_subaddress());
+       payment_proposal.subaddr_index.index.is_subaddress(), false, true);
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
