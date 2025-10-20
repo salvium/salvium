@@ -349,7 +349,7 @@ std::vector<cryptonote::tx_source_entry> get_sources(
     w.get_outs(outs, selected_transfers, fake_outputs_count, true, valid_public_keys_cache); // may throw
 
     LOG_PRINT_L2("preparing outputs");
-    size_t i = 0, out_index = 0;
+    size_t out_index = 0;
     std::vector<cryptonote::tx_source_entry> sources;
     for(size_t idx: selected_transfers)
     {
@@ -390,7 +390,6 @@ std::vector<cryptonote::tx_source_entry> get_sources(
             oe.second.mask = std::get<2>(outs[out_index][n]);
             src.outputs.push_back(oe);
         }
-        ++i;
 
         //paste real transaction to the random index
         auto it_to_replace = std::find_if(src.outputs.begin(), src.outputs.end(), [&](const tx_output_entry& a)
@@ -1097,14 +1096,14 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     const auto &sources = tx_proposal.sources;
 
     // inputs
-    uint64_t amount_in = 0;
+    // uint64_t amount_in = 0;
     rct::carrot_ctkeyV inSk;
     inSk.reserve(sources.size());
     std::vector<uint64_t> inamounts;
     std::vector<unsigned int> index;
     for (const auto& src: sources)
     {
-        amount_in += src.amount;
+        // amount_in += src.amount;
         inamounts.push_back(src.amount);
         index.push_back(src.real_output);
 
@@ -1153,7 +1152,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     }
 
     // outputs
-    uint64_t amount_out = 0;
+    // uint64_t amount_out = 0;
     std::vector<uint64_t> outamounts;
     rct::keyV destinations;
     std::vector<std::string> destination_asset_types;
@@ -1163,7 +1162,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         destinations.push_back(rct::pk2rct(oep.enote.onetime_address));
         destination_asset_types.push_back(oep.enote.asset_type);
         outamounts.push_back(oep.amount);
-        amount_out += oep.amount;
+        // amount_out += oep.amount;
 
         rct::ctkey key;
         key.mask = rct::sk2rct(oep.amount_blinding_factor);

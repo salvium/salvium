@@ -976,11 +976,11 @@ size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_heig
   if (start_height_opt) {
     start_height = *start_height_opt;
   } else {
-    bool found = false;
+    // bool found;
     for (size_t i=0; i<num_mainnet_hard_forks; ++i) {
       if (version == mainnet_hard_forks[i].version) {
         start_height = mainnet_hard_forks[i].height;
-        found = true;
+        //found = true;
         break;
       }
     }
@@ -2123,7 +2123,6 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   */
   
   // Time to construct the protocol_tx
-  uint64_t protocol_fee = 0;
   address_parse_info treasury_address_info;
   ok = cryptonote::get_account_address_from_str(treasury_address_info, m_nettype, get_config(m_nettype).TREASURY_ADDRESS);
   CHECK_AND_ASSERT_MES(ok, false, "Failed to obtain treasury address info");
@@ -2954,7 +2953,7 @@ bool Blockchain::get_pricing_record(oracle::pricing_record &pr, std::map<std::st
 
   bool r = false;
   const uint64_t height = get_current_blockchain_height();
-  const uint8_t hf_version = m_hardfork->get_current_version();
+  // const uint8_t hf_version = m_hardfork->get_current_version();
 
   epee::net_utils::http::http_simple_client http_client;
   COMMAND_RPC_GET_PRICING_RECORD::request req = AUTO_VAL_INIT(req);
@@ -4518,8 +4517,7 @@ void Blockchain::get_dynamic_base_fee_estimate_2021_scaling(uint64_t grace_block
 //------------------------------------------------------------------
 uint64_t Blockchain::get_dynamic_base_fee_estimate(uint64_t grace_blocks) const
 {
-  const uint8_t version = get_current_hard_fork_version();
-  const uint64_t db_height = m_db->height();
+  // const uint64_t db_height = m_db->height();
 
   if (grace_blocks >= CRYPTONOTE_REWARD_BLOCKS_WINDOW)
     grace_blocks = CRYPTONOTE_REWARD_BLOCKS_WINDOW - 1;
@@ -4670,7 +4668,7 @@ bool Blockchain::calculate_audit_payouts(const uint64_t start_height, std::vecto
   // Get the AUDIT TX information for matured staked coins
   std::vector<cryptonote::yield_tx_info> audit_entries;
   // We get the audit_tx_info from the block where they entered the chain
-  int audit_tx_result = m_db->get_audit_tx_info(start_height, audit_entries);
+  m_db->get_audit_tx_info(start_height, audit_entries);
   if (!audit_entries.size()) {
 
     // Report error and abort
@@ -4723,7 +4721,7 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
   // Get the YIELD TX information for matured staked coins
   std::vector<cryptonote::yield_tx_info_carrot> yield_entries;
   // We get the yield_tx_info from the block _before_ they started to accrue yield
-  int yield_tx_result = m_db->get_carrot_yield_tx_info(start_height, yield_entries);
+  m_db->get_carrot_yield_tx_info(start_height, yield_entries);
   if (!yield_entries.size()) {
 
     // Report error and abort
@@ -4789,7 +4787,7 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
   // Get the YIELD TX information for matured staked coins
   std::vector<cryptonote::yield_tx_info> yield_entries;
   // We get the yield_tx_info from the block _before_ they started to accrue yield
-  int yield_tx_result = m_db->get_yield_tx_info(start_height, yield_entries);
+  m_db->get_yield_tx_info(start_height, yield_entries);
   if (!yield_entries.size()) {
 
     // Report error and abort
@@ -5406,7 +5404,7 @@ leave:
 
       // Update the YBI cache data
       uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
-      uint64_t ybi_cache_expected_size = std::min(new_height, yield_lock_period);
+      // uint64_t ybi_cache_expected_size = std::min(new_height, yield_lock_period);
       if (new_height > yield_lock_period) {
         if (m_yield_block_info_cache.count(new_height - yield_lock_period - 2) != 0) {
           m_yield_block_info_cache.erase(new_height - yield_lock_period - 2);
@@ -5524,7 +5522,7 @@ uint64_t Blockchain::get_next_long_term_block_weight(uint64_t block_weight) cons
   const uint64_t db_height = m_db->height();
   const uint64_t nblocks = std::min<uint64_t>(m_long_term_block_weights_window, db_height);
 
-  const uint8_t hf_version = get_current_hard_fork_version();
+  // const uint8_t hf_version = get_current_hard_fork_version();
 
   if (db_height < CRYPTONOTE_LONG_TERM_BLOCK_WEIGHT_WINDOW_SIZE)
     return block_weight;
@@ -6171,7 +6169,7 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
         } while(0); \
 
   // generate sorted tables for all amounts and absolute offsets
-  size_t tx_index = 0, block_index = 0;
+  size_t tx_index = 0; //, block_index = 0;
   for (const auto &entry : blocks_entry)
   {
     if (m_cancel)
@@ -6242,7 +6240,7 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
 
       }
     }
-    ++block_index;
+    //++block_index;
   }
 
   // sort and remove duplicate absolute_offsets in offset_map

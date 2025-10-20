@@ -3125,7 +3125,6 @@ namespace cryptonote
 
     CHECK_PAYMENT(req, res, COST_PER_FEE_ESTIMATE);
 
-    const uint8_t version = m_core.get_blockchain_storage().get_current_hard_fork_version();
     m_core.get_blockchain_storage().get_dynamic_base_fee_estimate_2021_scaling(req.grace_blocks, res.fees);
     res.fee = res.fees[0];
     res.quantization_mask = Blockchain::get_fee_quantization_mask();
