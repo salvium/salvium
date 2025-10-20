@@ -129,10 +129,12 @@ namespace cryptonote
     std::string asset_type;
     bool is_subaddress;
     bool is_integrated;
+    bool is_carrot;
     bool is_change;
     bool is_return;
 
     tx_destination_entry() : amount(0), slippage_limit(0), addr(AUTO_VAL_INIT(addr)), is_subaddress(false), is_integrated(false), is_change(false), is_return(false) { }
+    tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress, bool is_return, bool is_carrot) : amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(false), is_carrot(is_carrot) { }
     tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress) : amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(false) { }
     tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress, bool is_return) : amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(is_return) { }
     tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress) : original(o), amount(a), slippage_limit(0), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(false) { }
@@ -144,7 +146,7 @@ namespace cryptonote
     tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress) : original(o), amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(false) { }
     tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress, bool is_return) : original(o), amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false), is_change(false), is_return(is_return) { }
     */
-    std::string address(network_type nettype, const crypto::hash &payment_id) const
+    std::string address(network_type nettype, const crypto::hash &payment_id)
     {
       if (!original.empty())
       {
@@ -156,6 +158,7 @@ namespace cryptonote
         return get_account_integrated_address_as_str(nettype, addr, reinterpret_cast<const crypto::hash8 &>(payment_id));
       }
 
+      addr.m_is_carrot = is_carrot;
       return get_account_address_as_str(nettype, is_subaddress, addr);
     }
 
@@ -168,6 +171,7 @@ namespace cryptonote
       FIELD(is_integrated)
       FIELD(is_change)
       FIELD(is_return)
+      FIELD(is_carrot)
     END_SERIALIZE()
   };
 

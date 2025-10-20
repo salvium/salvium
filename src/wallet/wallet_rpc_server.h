@@ -269,8 +269,8 @@ namespace tools
 
       // helpers
       void fill_transfer_entry(tools::wallet_rpc::transfer_entry &entry, const crypto::hash &txid, const crypto::hash &payment_id, const tools::wallet2::payment_details &pd);
-      void fill_transfer_entry(tools::wallet_rpc::transfer_entry &entry, const crypto::hash &txid, const tools::wallet2::confirmed_transfer_details &pd);
-      void fill_transfer_entry(tools::wallet_rpc::transfer_entry &entry, const crypto::hash &txid, const tools::wallet2::unconfirmed_transfer_details &pd);
+      void fill_transfer_entry(tools::wallet_rpc::transfer_entry &entry, const crypto::hash &txid, tools::wallet2::confirmed_transfer_details &pd);
+      void fill_transfer_entry(tools::wallet_rpc::transfer_entry &entry, const crypto::hash &txid, tools::wallet2::unconfirmed_transfer_details &pd);
       void fill_transfer_entry(tools::wallet_rpc::transfer_entry &entry, const crypto::hash &payment_id, const tools::wallet2::pool_payment_details &pd);
       bool not_open(epee::json_rpc::error& er);
       void handle_rpc_exception(const std::exception_ptr& e, epee::json_rpc::error& er, int default_error_code);

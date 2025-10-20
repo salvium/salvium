@@ -7248,6 +7248,7 @@ bool simple_wallet::transfer_main(
     de.asset_type = dest_asset;
     de.is_subaddress = info.is_subaddress;
     de.is_integrated = info.has_payment_id;
+    de.is_carrot = info.is_carrot;
 
     if (info.has_payment_id || !payment_id_uri.empty())
     {
@@ -9958,14 +9959,14 @@ bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vec
   if (out || burnt || staked) {
     std::list<std::pair<crypto::hash, tools::wallet2::confirmed_transfer_details>> payments;
     m_wallet->get_payments_out(payments, min_height, max_height, m_current_subaddress_account, subaddr_indices);
-    for (std::list<std::pair<crypto::hash, tools::wallet2::confirmed_transfer_details>>::const_iterator i = payments.begin(); i != payments.end(); ++i) {
-      const tools::wallet2::confirmed_transfer_details &pd = i->second;
+    for (std::list<std::pair<crypto::hash, tools::wallet2::confirmed_transfer_details>>::iterator i = payments.begin(); i != payments.end(); ++i) {
+      tools::wallet2::confirmed_transfer_details &pd = i->second;
       if (!out && !staked && pd.m_tx.type != cryptonote::transaction_type::BURN) continue;
       if (!out && !burnt && pd.m_tx.type != cryptonote::transaction_type::STAKE) continue;
       uint64_t change = pd.m_change == (uint64_t)-1 ? 0 : pd.m_change; // change may not be known
       uint64_t fee = pd.m_amount_in - pd.m_amount_out;
       std::vector<std::pair<std::string, uint64_t>> destinations;
-      for (const auto &d: pd.m_dests) {
+      for (auto &d: pd.m_dests) {
         destinations.push_back({d.address(m_wallet->nettype(), pd.m_payment_id), d.amount});
       }
       std::string payment_id = string_tools::pod_to_hex(i->second.m_payment_id);
@@ -10046,12 +10047,12 @@ bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vec
   if (pending || failed) {
     std::list<std::pair<crypto::hash, tools::wallet2::unconfirmed_transfer_details>> upayments;
     m_wallet->get_unconfirmed_payments_out(upayments, m_current_subaddress_account, subaddr_indices);
-    for (std::list<std::pair<crypto::hash, tools::wallet2::unconfirmed_transfer_details>>::const_iterator i = upayments.begin(); i != upayments.end(); ++i) {
-      const tools::wallet2::unconfirmed_transfer_details &pd = i->second;
+    for (std::list<std::pair<crypto::hash, tools::wallet2::unconfirmed_transfer_details>>::iterator i = upayments.begin(); i != upayments.end(); ++i) {
+      tools::wallet2::unconfirmed_transfer_details &pd = i->second;
       uint64_t amount = pd.m_amount_in;
       uint64_t fee = amount - pd.m_amount_out;
       std::vector<std::pair<std::string, uint64_t>> destinations;
-      for (const auto &d: pd.m_dests) {
+      for (auto &d: pd.m_dests) {
         destinations.push_back({d.address(m_wallet->nettype(), pd.m_payment_id), d.amount});
       }
       std::string payment_id = string_tools::pod_to_hex(i->second.m_payment_id);
@@ -11806,14 +11807,14 @@ bool simple_wallet::show_transfer(const std::vector<std::string> &args)
 
   std::list<std::pair<crypto::hash, tools::wallet2::confirmed_transfer_details>> payments_out;
   m_wallet->get_payments_out(payments_out, 0, (uint64_t)-1, m_current_subaddress_account);
-  for (std::list<std::pair<crypto::hash, tools::wallet2::confirmed_transfer_details>>::const_iterator i = payments_out.begin(); i != payments_out.end(); ++i) {
+  for (std::list<std::pair<crypto::hash, tools::wallet2::confirmed_transfer_details>>::iterator i = payments_out.begin(); i != payments_out.end(); ++i) {
     if (i->first == txid)
     {
-      const tools::wallet2::confirmed_transfer_details &pd = i->second;
+      tools::wallet2::confirmed_transfer_details &pd = i->second;
       uint64_t change = pd.m_change == (uint64_t)-1 ? 0 : pd.m_change; // change may not be known
       uint64_t fee = pd.m_amount_in - pd.m_amount_out;
       std::string dests;
-      for (const auto &d: pd.m_dests) {
+      for (auto &d: pd.m_dests) {
         if (!dests.empty())
           dests += ", ";
         dests +=  d.address(m_wallet->nettype(), pd.m_payment_id) + ": " + print_money(d.amount);
