@@ -152,7 +152,7 @@ bool wallet2::search_for_rpc_payment(uint64_t credits_target, uint32_t n_threads
     {
       tpool.submit(&waiter, [&, i] {
         *(uint32_t*)(hashing_blob.data() + 39) = SWAP32LE(local_nonce-i);
-        const uint8_t major_version = hashing_blob[0];
+        // const uint8_t major_version = hashing_blob[0];
         crypto::rx_slow_hash(seed_hash.data, hashing_blob.data(), hashing_blob.size(), hash[i].data);
       });
     }

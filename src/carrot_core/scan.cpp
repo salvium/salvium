@@ -488,7 +488,6 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
             input_context,
             s_sender_receiver);
     
-        bool normal_change_found = true;
         if (!try_scan_carrot_enote_internal_burnt(enote,
             s_sender_receiver,
             sender_extension_g_out,

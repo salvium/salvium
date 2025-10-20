@@ -214,11 +214,9 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
 #define MAX_RINGS	0xffffffff
 
   struct tm prevtm = {0}, currtm;
-  uint64_t prevsz = 0, currsz = 0;
-  uint64_t prevtxs = 0, currtxs = 0;
-  uint64_t currblks = 0;
-  uint32_t txhr[24] = {0};
-  unsigned int i;
+  // uint64_t currsz = 0;
+  // uint64_t currtxs = 0;
+  // uint64_t currblks = 0;
 
   const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(net_type).AUDIT_HARD_FORKS;
   
@@ -246,9 +244,7 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
       prevtm = currtm;
     }
 skip:
-    currsz += bd.size();
-    uint64_t coinbase_amount;
-    uint64_t tx_fee_amount = 0;
+    // currsz += bd.size();
     std::set<std::string> used_assets, miner_tx_assets, protocol_tx_assets;
     std::map<size_t, std::vector<std::string>> used_tx_versions;
     used_assets.insert("SAL");
@@ -325,10 +321,11 @@ skip:
         std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "invalid TX detected" << delimiter << std::endl;
         continue;
       }
-      currsz += bd.size();
-      if (db->get_prunable_tx_blob(tx_id, bd))
-        currsz += bd.size();
-      currtxs++;
+      // currsz += bd.size();
+      // if (db->get_prunable_tx_blob(tx_id, bd))
+        // currsz += bd.size();
+      // currtxs++;
+      db->get_prunable_tx_blob(tx_id, bd);
 
       if (tx.type != cryptonote::transaction_type::TRANSFER &&
           tx.type != cryptonote::transaction_type::BURN &&
@@ -374,7 +371,7 @@ skip:
       }
     }
     
-    currblks++;
+    // currblks++;
 
     if (stop_requested)
       break;
