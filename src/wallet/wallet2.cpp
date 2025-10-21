@@ -1572,10 +1572,12 @@ cryptonote::account_public_address wallet2::get_subaddress(const cryptonote::sub
 //----------------------------------------------------------------------------------------------------
 boost::optional<cryptonote::subaddress_index> wallet2::get_subaddress_index(const cryptonote::account_public_address& address) const
 {
-  auto index = m_subaddresses.find(address.m_spend_public_key);
-  if (index == m_subaddresses.end())
+  const auto subaddress_map = m_account.get_subaddress_map_ref();
+  auto carrot_index = subaddress_map.find(address.m_spend_public_key);
+  if (carrot_index == subaddress_map.end())
     return boost::none;
-  return index->second;
+  cryptonote::subaddress_index index{carrot_index->second.index.major, carrot_index->second.index.minor};
+  return index;
 }
 //----------------------------------------------------------------------------------------------------
 crypto::public_key wallet2::get_subaddress_spend_public_key(const cryptonote::subaddress_index& index) const
@@ -1606,7 +1608,7 @@ std::string wallet2::get_subaddress_as_str(const carrot::subaddress_index_extend
   addr.m_is_carrot = subaddr.derive_type == carrot::AddressDeriveType::Carrot;
 
   // change this code into base 58
-  return cryptonote::get_account_address_as_str(m_nettype, address.is_subaddress, addr, addr.m_is_carrot);
+  return cryptonote::get_account_address_as_str(m_nettype, address.is_subaddress, addr);
 }
 //----------------------------------------------------------------------------------------------------
 std::string wallet2::get_integrated_address_as_str(const crypto::hash8& payment_id, bool carrot) const
@@ -1618,7 +1620,7 @@ std::string wallet2::get_integrated_address_as_str(const crypto::hash8& payment_
   account_public_address addr{address.address_spend_pubkey, address.address_view_pubkey};
   addr.m_is_carrot = carrot;
   
-  return cryptonote::get_account_integrated_address_as_str(m_nettype, addr, payment_id, carrot);
+  return cryptonote::get_account_integrated_address_as_str(m_nettype, addr, payment_id);
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::add_subaddress_account(const std::string& label)
@@ -1651,6 +1653,7 @@ bool wallet2::should_expand(const cryptonote::subaddress_index &index) const
 void wallet2::expand_subaddresses(const cryptonote::subaddress_index& index)
 {
   hw::device &hwdev = m_account.get_device();
+  std::unordered_map<crypto::public_key, carrot::subaddress_index_extended> new_addresses;
   if (m_subaddress_labels.size() <= index.major)
   {
     // add new accounts
@@ -1664,6 +1667,7 @@ void wallet2::expand_subaddresses(const cryptonote::subaddress_index& index)
       {
          const crypto::public_key &D = pkeys[index2.minor];
          m_subaddresses[D] = index2;
+         new_addresses.insert({D, {{index2.major, index2.minor}, carrot::AddressDeriveType::PreCarrot, false}});
       }
     }
     m_subaddress_labels.resize(index.major + 1, {"Untitled account"});
@@ -1681,9 +1685,12 @@ void wallet2::expand_subaddresses(const cryptonote::subaddress_index& index)
     {
        const crypto::public_key &D = pkeys[index2.minor - begin];
        m_subaddresses[D] = index2;
+       new_addresses.insert({D, {{index2.major, index2.minor}, carrot::AddressDeriveType::PreCarrot, false}});
     }
     m_subaddress_labels[index.major].resize(index.minor + 1);
   }
+  // Add to the Carrot account
+  m_account.insert_subaddresses(new_addresses);
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::create_one_off_subaddress(const cryptonote::subaddress_index& index)
@@ -5623,7 +5630,8 @@ void wallet2::create_keys_file(const std::string &wallet_, bool watch_only, cons
 
     if (create_address_file)
     {
-      r = save_to_file(m_wallet_file + ".address.txt", m_account.get_public_address_str(m_nettype), true);
+      std::string addresses = m_account.get_public_address_str(m_nettype) + "\n" + m_account.get_carrot_public_address_str(m_nettype) + "\n";
+      r = save_to_file(m_wallet_file + ".address.txt", addresses, true);
       if(!r) MERROR("String with address text not saved");
     }
   }
@@ -6606,7 +6614,9 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
     {
       THROW_WALLET_EXCEPTION_IF(true, error::file_read_error, m_keys_file);
     }
-    LOG_PRINT_L0("Loaded wallet keys file, with public address: " << m_account.get_public_address_str(m_nettype));
+    LOG_PRINT_L0("Loaded wallet keys file, with public addresses: ");
+    LOG_PRINT_L0("      CN : " << m_account.get_public_address_str(m_nettype));
+    LOG_PRINT_L0("  Carrot : " << m_account.get_carrot_public_address_str(m_nettype));
     lock_keys_file();
   }
   else if (!load_keys_buf(keys_buf, password))
@@ -6653,6 +6663,8 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
   if (get_num_subaddress_accounts() == 0)
     add_subaddress_account(tr("Primary account"));
 
+  m_account.generate_subaddress_map(get_subaddress_lookahead());
+  
   // populate account subaddress list
   if (!m_subaddresses.empty())
   {
@@ -7824,7 +7836,7 @@ void wallet2::commit_tx(pending_tx& ptx)
       amount_in += m_transfers[idx].amount();
   }
   add_unconfirmed_tx(ptx.tx, amount_in, dests, payment_id, ptx.change_dts.amount, subaddr_account, subaddr_indices);
-  if (store_tx_info() && ptx.tx_key != crypto::null_skey)
+  if (store_tx_info() && (ptx.tx_key != crypto::null_skey || ptx.additional_tx_keys.size() != 0))
   {
     m_tx_keys[txid] = ptx.tx_key;
     m_additional_tx_keys[txid] = ptx.additional_tx_keys;
@@ -11645,6 +11657,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
   const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
   if (do_carrot_tx_construction)
   {
+    // Sanity checks
+    THROW_WALLET_EXCEPTION_IF(!address.m_is_carrot, error::wallet_internal_error, "CryptoNote address supplied, but Carrot is now active");
+    
     const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep_all(*this, below, address, is_subaddress, outputs, priority, extra, tx_type, subaddr_account, subaddr_indices);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
@@ -11653,6 +11668,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
     return ptx_vector;
   }
 
+  // Sanity checks
+  THROW_WALLET_EXCEPTION_IF(address.m_is_carrot, error::wallet_internal_error, "Carrot address supplied, but Carrot not yet active");
+  
   std::vector<size_t> unused_transfers_indices;
   std::vector<size_t> unused_dust_indices;
   const bool use_per_byte_fee = true;
@@ -11735,6 +11753,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_single(const crypt
   const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
   if (do_carrot_tx_construction)
   {
+    // Sanity checks
+    THROW_WALLET_EXCEPTION_IF(!address.m_is_carrot, error::wallet_internal_error, "CryptoNote address supplied, but Carrot is now active");
+    
     const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep(*this, {ki}, address, is_subaddress, outputs, priority, extra, tx_type);
     std::vector<pending_tx> ptx_vector;
     ptx_vector.reserve(tx_proposals.size());
@@ -11743,6 +11764,9 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_single(const crypt
     //   ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
     return ptx_vector;
   }
+
+  // Sanity checks
+  THROW_WALLET_EXCEPTION_IF(address.m_is_carrot, error::wallet_internal_error, "Carrot address supplied, but Carrot not yet active");
 
   std::vector<size_t> unused_transfers_indices;
   std::vector<size_t> unused_dust_indices;
@@ -11831,8 +11855,13 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
     } else {
       THROW_WALLET_EXCEPTION_IF(true, error::wallet_internal_error, "Unsupported input type for return_payment");
     }
-    const mx25519_pubkey origin_tx_shared_secret_unctx = carrot::raw_byte_convert<mx25519_pubkey>(main_derivations[0]);
+    THROW_WALLET_EXCEPTION_IF(!main_derivations.size() && !additional_derivations.size(), error::wallet_internal_error, "No derivations found");
+    THROW_WALLET_EXCEPTION_IF(!main_derivations.size() && additional_derivations.size() < td_origin.m_internal_output_index + 1, error::wallet_internal_error, "No derivations found");
 
+    const key_derivation derivation = (main_derivations.size() == 1) ? main_derivations[0] : additional_derivations[td_origin.m_internal_output_index];
+    const mx25519_pubkey origin_tx_shared_secret_unctx = carrot::raw_byte_convert<mx25519_pubkey>(derivation);
+    
+    
     // 4. compute m_return
     crypto::public_key output_key;
     carrot::encrypted_return_pubkey_t m_return;
@@ -11862,7 +11891,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
 
     // 6. compute the change index
     crypto::secret_key z_i;
-    derivation_to_scalar(main_derivations[0], td_origin.m_internal_output_index, z_i);
+    derivation_to_scalar(derivation, td_origin.m_internal_output_index, z_i);
     struct {
       char domain_separator[8];
       crypto::secret_key output_index_key;
@@ -11886,6 +11915,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
     cryptonote::account_public_address address;
     address.m_spend_public_key = change_key;
     address.m_view_public_key = return_pub;
+    address.m_is_carrot = true;
 
     return create_transactions_from(address, cryptonote::transaction_type::RETURN, asset_type, is_subaddress, outputs, transfers_indices, unused_dust_indices, fake_outs_count, unlock_time, priority, extra);
   }
@@ -12570,8 +12600,8 @@ bool wallet2::get_tx_key_cached(const crypto::hash &txid, crypto::secret_key &tx
   if (i == m_tx_keys.end())
     return false;
   tx_key = i->second;
-  if (tx_key == crypto::null_skey)
-    return false;
+  //if (tx_key == crypto::null_skey)
+  //  return false;
   const auto j = m_additional_tx_keys.find(txid);
   if (j != m_additional_tx_keys.end())
     additional_tx_keys = j->second;

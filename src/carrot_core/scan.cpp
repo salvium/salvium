@@ -519,7 +519,7 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
             crypto::secret_key sum_g;
             sc_add(to_bytes(sum_g), to_bytes(sender_extension_g_out), to_bytes(k_return));
             crypto::key_image key_image = account.derive_key_image(
-                account.get_keys().m_carrot_account_address.m_spend_public_key,
+                address_spend_pubkey_out, // THIS WAS WRONG!!! -> account.get_keys().m_carrot_account_address.m_spend_public_key,
                 sum_g,
                 sender_extension_t_out,
                 K_r
@@ -527,7 +527,7 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
 
             crypto::secret_key x, y;
             account.try_searching_for_opening_for_onetime_address(
-                account.get_keys().m_carrot_account_address.m_spend_public_key,
+                address_spend_pubkey_out, // THIS WAS WRONG!!! -> account.get_keys().m_carrot_account_address.m_spend_public_key,
                 sum_g,
                 sender_extension_t_out,
                 x,

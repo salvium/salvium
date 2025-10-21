@@ -3354,9 +3354,9 @@ namespace tools
         const auto &entry = ab[idx];
         std::string address;
         if (entry.m_has_payment_id)
-          address = cryptonote::get_account_integrated_address_as_str(m_wallet->nettype(), entry.m_address, entry.m_payment_id, entry.m_is_carrot);
+          address = cryptonote::get_account_integrated_address_as_str(m_wallet->nettype(), entry.m_address, entry.m_payment_id);
         else
-          address = get_account_address_as_str(m_wallet->nettype(), entry.m_is_subaddress, entry.m_address, entry.m_is_carrot);
+          address = get_account_address_as_str(m_wallet->nettype(), entry.m_is_subaddress, entry.m_address);
         res.entries.push_back(wallet_rpc::COMMAND_RPC_GET_ADDRESS_BOOK_ENTRY::entry{idx, address, entry.m_description});
       }
     }

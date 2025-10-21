@@ -77,7 +77,7 @@ std::optional<AdditionalOutputType> get_additional_output_type(const size_t num_
         }
         else if (!need_change_output)
         {
-            return AdditionalOutputType::DUMMY;
+            return AdditionalOutputType::CHANGE_UNIQUE;
         }
         else // num_selfsend == 1 && need_change_output
         {

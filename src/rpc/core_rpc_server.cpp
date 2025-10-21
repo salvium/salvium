@@ -1879,12 +1879,29 @@ namespace cryptonote
     }
     blobdata block_blob = t_serializable_object_to_blob(b);
     crypto::public_key tx_pub_key = cryptonote::get_tx_pub_key_from_extra(b.miner_tx);
+    const std::vector<crypto::public_key> additional_tx_pub_keys = cryptonote::get_additional_tx_pub_keys_from_extra(b.miner_tx);
     if(tx_pub_key == crypto::null_pkey)
     {
-      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
-      error_resp.message = "Internal error: failed to create block template";
-      LOG_ERROR("Failed to get tx pub key in coinbase extra");
-      return false;
+      // Check for Carrot treasury payout
+      const uint8_t hf_version = m_core.get_blockchain_storage().get_current_hard_fork_version();
+      if (hf_version >= HF_VERSION_CARROT && b.miner_tx.vout.size() == 2) {
+
+        const auto treasury_payout_data = get_config(nettype()).TREASURY_SAL1_MINT_OUTPUT_DATA;
+        const bool treasury_payout_exists = (treasury_payout_data.count(height) == 1);
+        if (!treasury_payout_exists) {
+          error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
+          error_resp.message = "Internal error: failed to create block template (missing treasury payout)";
+          LOG_ERROR("Failed to get tx pub key in coinbase extra (missing treasury payout)");
+          return false;
+        }
+        tx_pub_key = additional_tx_pub_keys.back();
+        
+      } else {      
+        error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
+        error_resp.message = "Internal error: failed to create block template";
+        LOG_ERROR("Failed to get tx pub key in coinbase extra");
+        return false;
+      }
     }
 
     uint64_t next_height;
