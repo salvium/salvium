@@ -211,8 +211,15 @@ int main(int argc, char* argv[])
     throw std::runtime_error("Failed to initialize a database");
   }
 
-  const std::string filename = (boost::filesystem::path(opt_data_dir) / db->get_db_name()).string();
-  LOG_PRINT_L0("Loading blockchain from folder " << filename << " ...");
+  boost::filesystem::path folder(opt_data_dir);
+  if (opt_stagenet) {
+    folder /= std::to_string(STAGENET_VERSION);
+  } else if (opt_testnet) {
+    folder /= std::to_string(TESTNET_VERSION);
+  }
+  folder /= db->get_db_name();
+  LOG_PRINT_L0("Loading blockchain from folder " << folder << " ...");
+  const std::string filename = folder.string();
 
   try
   {
