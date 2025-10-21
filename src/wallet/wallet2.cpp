@@ -13044,8 +13044,9 @@ void wallet2::check_tx_key_helper(const cryptonote::transaction &tx, const crypt
 {
   received = 0;
 
+  const bool use_additional_derivations = !additional_derivations.empty() && address.m_is_carrot;
   const auto enote_scan_infos = wallet::view_incoming_scan_transaction_as_sender(tx,
-                                                                                 {&derivation, 1},
+                                                                                 use_additional_derivations ? epee::span<const crypto::key_derivation>{} : epee::span<const crypto::key_derivation>{&derivation, 1},
                                                                                  epee::to_span(additional_derivations),
                                                                                  address);
 
