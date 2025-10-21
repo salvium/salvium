@@ -1176,6 +1176,13 @@ namespace cryptonote
     bool calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& yield_payouts);
 
     /**
+     * calculate the yield payouts
+     *
+     * @return TRUE if the payouts were calculated successfully, FALSE otherwise
+     */
+    bool calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info_carrot, uint64_t>>& yield_payouts);
+
+    /**
      * @brief get the ABI entry for a particular height from the cache
      *
      * Retrieve the ABI entry for the specified height from the local cache.
@@ -1500,7 +1507,7 @@ namespace cryptonote
      * 
      * @return bool indicating payout valid, and the index of the output within miner transaction outputs.
      */
-    std::tuple<bool, size_t> validate_treasury_payout(const transaction& tx, const uint64_t payout_index, uint8_t hf_version) const;
+    std::tuple<bool, size_t> validate_treasury_payout(const transaction& tx, const std::tuple<std::string, std::string, std::string, std::string>& treasury_data, uint8_t hf_version) const;
 
     /**
      * @brief sanity checks a miner transaction before validating an entire block

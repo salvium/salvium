@@ -166,9 +166,15 @@ uint64_t PendingTransactionImpl::amount() const
 {
     uint64_t result = 0;
     for (const auto &ptx : m_pending_tx)   {
+      if (ptx.tx.type == cryptonote::transaction_type::AUDIT ||
+          ptx.tx.type == cryptonote::transaction_type::BURN ||
+          ptx.tx.type == cryptonote::transaction_type::STAKE) {
+        result += ptx.tx.amount_burnt;
+      } else {
         for (const auto &dest : ptx.dests) {
             result += dest.amount;
         }
+      }
     }
     return result;
 }
@@ -200,7 +206,13 @@ std::vector<uint32_t> PendingTransactionImpl::subaddrAccount() const
 {
     std::vector<uint32_t> result;
     for (const auto& ptx : m_pending_tx)
-        result.push_back(ptx.construction_data.subaddr_account);
+    {
+        const auto *pre_carrot_constr_data = std::get_if<tools::wallet2::tx_construction_data>(&ptx.construction_data);
+        if (nullptr != pre_carrot_constr_data)
+            result.push_back(pre_carrot_constr_data->subaddr_account);
+        else
+            result.push_back(ptx.subaddr_account);
+    }
     return result;
 }
 
@@ -208,7 +220,13 @@ std::vector<std::set<uint32_t>> PendingTransactionImpl::subaddrIndices() const
 {
     std::vector<std::set<uint32_t>> result;
     for (const auto& ptx : m_pending_tx)
-        result.push_back(ptx.construction_data.subaddr_indices);
+    {
+        const auto *pre_carrot_constr_data = std::get_if<tools::wallet2::tx_construction_data>(&ptx.construction_data);
+        if (nullptr != pre_carrot_constr_data)
+            result.push_back(pre_carrot_constr_data->subaddr_indices);
+        else
+            result.push_back(ptx.subaddr_indices);
+    }
     return result;
 }
 

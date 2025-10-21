@@ -62,7 +62,7 @@ bool AddressBookImpl::addRow(const std::string &dst_addr , const std::string &pa
     return false;
   }
 
-  bool r =  m_wallet->m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : NULL,description,info.is_subaddress);
+  bool r =  m_wallet->m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : NULL,description,info.is_subaddress,info.is_carrot);
   if (r)
     refresh();
   else
@@ -81,7 +81,7 @@ bool AddressBookImpl::setDescription(std::size_t index, const std::string &descr
 
     tools::wallet2::address_book_row entry = ab[index];
     entry.m_description = description;
-    bool r =  m_wallet->m_wallet->set_address_book_row(index, entry.m_address, entry.m_has_payment_id ? &entry.m_payment_id : nullptr, entry.m_description, entry.m_is_subaddress);
+    bool r =  m_wallet->m_wallet->set_address_book_row(index, entry.m_address, entry.m_has_payment_id ? &entry.m_payment_id : nullptr, entry.m_description, entry.m_is_subaddress,entry.m_is_carrot);
     if (r)
         refresh();
     else

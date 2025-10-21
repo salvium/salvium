@@ -33,6 +33,7 @@
 #include "device_default.hpp"
 #include "int-util.h"
 #include "crypto/wallet/crypto.h"
+#include "crypto/generators.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/subaddress_index.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
@@ -424,6 +425,19 @@ namespace hw {
             return true;
         }
 
+        bool device_default::clsag_prepare_carrot(const rct::key &p, const rct::key &z, rct::key &I, rct::key &D, const rct::key &H, rct::key &a, rct::key &aG, rct::key &b, rct::key &bT, rct::key &aH) {
+            rct::skpkGen(a,aG); // aG = a*G
+            rct::scalarmultKey(aH,H,a); // aH = a*H
+            rct::scalarmultKey(I,H,p); // I = p*H
+            rct::scalarmultKey(D,H,z); // D = z*H
+
+            // bT = b*T
+            rct::skGen(b);
+            bT = rct::scalarmultKey(rct::pk2rct(crypto::get_T()), b);
+
+            return true;
+        }
+
         bool device_default::clsag_hash(const rct::keyV &data, rct::key &hash) {
             hash = rct::hash_to_scalar(data);
             return true;
@@ -432,13 +446,25 @@ namespace hw {
         bool device_default::clsag_sign(const rct::key &c, const rct::key &a, const rct::key &p, const rct::key &z, const rct::key &mu_P, const rct::key &mu_C, rct::key &s) {
             rct::key s0_p_mu_P;
             sc_mul(s0_p_mu_P.bytes,mu_P.bytes,p.bytes);
+            
             rct::key s0_add_z_mu_C;
-            sc_muladd(s0_add_z_mu_C.bytes,mu_C.bytes,z.bytes,s0_p_mu_P.bytes);
-            sc_mulsub(s.bytes,c.bytes,s0_add_z_mu_C.bytes,a.bytes);
+            sc_muladd(s0_add_z_mu_C.bytes, mu_C.bytes, z.bytes, s0_p_mu_P.bytes);
+            sc_mulsub(s.bytes, c.bytes, s0_add_z_mu_C.bytes, a.bytes);
 
             return true;
         }
 
+        // In device_default.cpp (implementation)
+        bool device_default::clsag_sign_y(const rct::key &c, const rct::key &b, const rct::key &y, const rct::key &mu_P, rct::key &s) {
+          rct::key y_mu_P;
+          sc_mul(y_mu_P.bytes, mu_P.bytes, y.bytes); // y_mu_P = y * mu_P
+          
+          // s = b - c * (y * mu_P)
+          // This is equivalent to: sc_sub(s.bytes, b.bytes, temp.bytes); where temp = c * y_mu_P
+          sc_mulsub(s.bytes, c.bytes, y_mu_P.bytes, b.bytes);
+          return true;
+        }
+      
         bool device_default::close_tx() {
             return true;
         }

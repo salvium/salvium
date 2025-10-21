@@ -82,7 +82,8 @@ using namespace cryptonote;
         setStatusError(tr("View only wallet cannot use background sync")); \
         return false; \
     } \
-    if (m_wallet->multisig()) \
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()}; \
+    if (ms_status.multisig_is_active) \
     { \
         setStatusError(tr("Multisig wallet cannot use background sync")); \
         return false; \
@@ -119,12 +120,12 @@ namespace {
             throw runtime_error("Wallet is not initialized yet");
         }
 
-        bool ready;
-        if (!wallet->multisig(&ready)) {
+        const multisig::multisig_account_status ms_status{wallet->get_multisig_status()};
+        if (!ms_status.multisig_is_active) {
             throw runtime_error("Wallet is not multisig");
         }
 
-        if (!ready) {
+        if (!ms_status.is_ready) {
             throw runtime_error("Multisig wallet is not finalized yet");
         }
     }
@@ -137,12 +138,12 @@ namespace {
             throw runtime_error("Wallet is not initialized yet");
         }
 
-        bool ready;
-        if (!wallet->multisig(&ready)) {
+        const multisig::multisig_account_status ms_status{wallet->get_multisig_status()};
+        if (!ms_status.multisig_is_active) {
             throw runtime_error("Wallet is not multisig");
         }
 
-        if (ready) {
+        if (ms_status.is_ready) {
             throw runtime_error("Multisig wallet is already finalized");
         }
     }
@@ -876,38 +877,62 @@ bool WalletImpl::setDevicePassphrase(const std::string &passphrase)
     return status() == Status_Ok;
 }
 
-std::string WalletImpl::address(uint32_t accountIndex, uint32_t addressIndex) const
+std::string WalletImpl::address(uint32_t accountIndex, uint32_t addressIndex, bool carrot) const
 {
-    return m_wallet->get_subaddress_as_str({accountIndex, addressIndex});
+  return m_wallet->get_subaddress_as_str({{accountIndex, addressIndex}, carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});
 }
 
-std::string WalletImpl::integratedAddress(const std::string &payment_id) const
+std::string WalletImpl::integratedAddress(const std::string &payment_id, bool carrot) const
 {
     crypto::hash8 pid;
     if (!tools::wallet2::parse_short_payment_id(payment_id, pid)) {
         return "";
     }
-    return m_wallet->get_integrated_address_as_str(pid);
+    return m_wallet->get_integrated_address_as_str(pid, carrot);
 }
 
 std::string WalletImpl::secretViewKey() const
 {
+  uint32_t hf_version = m_wallet->estimate_current_hard_fork();
+  if (hf_version >= HF_VERSION_CARROT)
+    return epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().k_view_incoming)));
+  else
     return epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().m_view_secret_key)));
 }
 
 std::string WalletImpl::publicViewKey() const
 {
+  uint32_t hf_version = m_wallet->estimate_current_hard_fork();
+  if (hf_version >= HF_VERSION_CARROT)
+    return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_carrot_account_address.m_view_public_key);
+  else
     return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_account_address.m_view_public_key);
 }
 
 std::string WalletImpl::secretSpendKey() const
 {
-    return epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().m_spend_secret_key)));
+  return epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().m_spend_secret_key)));
 }
 
 std::string WalletImpl::publicSpendKey() const
 {
+  uint32_t hf_version = m_wallet->estimate_current_hard_fork();
+  if (hf_version >= HF_VERSION_CARROT)
+    return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_carrot_account_address.m_spend_public_key);
+  else
     return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().m_account_address.m_spend_public_key);
+}
+
+std::vector<std::string> WalletImpl::carrotKeys() const
+{
+    return {
+    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().s_master),
+    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().k_prove_spend),
+    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().s_view_balance),
+    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().k_view_incoming),
+    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().k_generate_image),
+    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().s_generate_address)
+    };
 }
 
 std::string WalletImpl::publicMultisigSignerKey() const
@@ -918,6 +943,26 @@ std::string WalletImpl::publicMultisigSignerKey() const
     } catch (const std::exception&) {
         return "";
     }
+}
+
+std::string WalletImpl::secretViewBalance() const
+{
+  return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().s_view_balance);
+}
+
+std::string WalletImpl::secretProveSpend() const
+{
+  return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().k_prove_spend);
+}
+
+std::string WalletImpl::secretGenerateAddress() const
+{
+  return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().s_generate_address);
+}
+
+std::string WalletImpl::secretGenerateImage() const
+{
+  return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().k_generate_image);
 }
 
 std::string WalletImpl::path() const
@@ -1441,7 +1486,11 @@ MultisigState WalletImpl::multisig() const {
     MultisigState state;
     if (checkBackgroundSync("cannot use multisig"))
         return state;
-    state.isMultisig = m_wallet->multisig(&state.isReady, &state.threshold, &state.total);
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+    state.isMultisig = ms_status.multisig_is_active;
+    state.isReady = ms_status.is_ready;
+    state.threshold = ms_status.threshold;
+    state.total = ms_status.total;
 
     return state;
 }
@@ -1466,7 +1515,8 @@ string WalletImpl::makeMultisig(const vector<string>& info, const uint32_t thres
     try {
         clearStatus();
 
-        if (m_wallet->multisig()) {
+        const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+        if (ms_status.multisig_is_active) {
             throw runtime_error("Wallet is already multisig");
         }
 
@@ -1582,7 +1632,8 @@ PendingTransaction* WalletImpl::restoreMultisigTransaction(const string& signDat
 PendingTransaction *WalletImpl::createStakeTransaction(uint64_t amount, uint32_t mixin_count, PendingTransaction::Priority priority, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
 {
   // Need to populate {dst_entr, payment_id, asset_type, is_return}
-  const string dst_addr = m_wallet->get_subaddress_as_str({subaddr_account, 0});//MY LOCAL (SUB)ADDRESS
+  const bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+  const string dst_addr = m_wallet->get_subaddress_as_str({{subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});//MY LOCAL (SUB)ADDRESS
   const string payment_id = "";
   const string asset_type = "SAL1";
   const bool is_return = false;
@@ -1599,7 +1650,8 @@ PendingTransaction *WalletImpl::createAuditTransaction(
     std::set<uint32_t> subaddr_indices
 ) {
     // Need to populate {dst_entr, payment_id, asset_type, is_return}
-    const string dst_addr = m_wallet->get_subaddress_as_str({subaddr_account, 0});//MY LOCAL (SUB)ADDRESS
+    const bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
+    const string dst_addr = m_wallet->get_subaddress_as_str({{subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});//MY LOCAL (SUB)ADDRESS
     const string payment_id = "";
     const string asset_type = "SAL";
     const bool is_return = false;
@@ -2307,8 +2359,8 @@ std::string WalletImpl::signMultisigParticipant(const std::string &message) cons
 {
     clearStatus();
 
-    bool ready = false;
-    if (!m_wallet->multisig(&ready) || !ready) {
+    const multisig::multisig_account_status ms_status{m_wallet->get_multisig_status()};
+    if (!ms_status.multisig_is_active || !ms_status.is_ready) {
         m_status = Status_Error;
         m_errorString = tr("The wallet must be in multisig ready state");
         return {};

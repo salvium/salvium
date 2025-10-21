@@ -28,6 +28,8 @@
 // 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
+std::string generate_random_wallet_name();
+
 bool transactions_flow_test(std::string& working_folder, 
                             std::string path_source_wallet, 
                             std::string path_target_wallet, 

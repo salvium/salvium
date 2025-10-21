@@ -37,20 +37,24 @@ using namespace epee;
 #include "common/command_line.h"
 #include "common/util.h"
 #include "transactions_flow_test.h"
+#include "stake_tx.h"
 
 namespace po = boost::program_options;
 
 namespace
 {
   const command_line::arg_descriptor<bool> arg_test_transactions_flow = {"test_transactions_flow", ""};
+  const command_line::arg_descriptor<bool> arg_test_stake_tx = {"test_stake_tx", "Test stake transactions"};
 
   const command_line::arg_descriptor<std::string> arg_working_folder  = {"working-folder", "", "."};
   const command_line::arg_descriptor<std::string> arg_source_wallet   = {"source-wallet",  "", "", true};
   const command_line::arg_descriptor<std::string> arg_dest_wallet     = {"dest-wallet",    "", "", true};
   const command_line::arg_descriptor<std::string> arg_daemon_addr_a   = {"daemon-addr-a",  "", "127.0.0.1:8080"};
   const command_line::arg_descriptor<std::string> arg_daemon_addr_b   = {"daemon-addr-b",  "", "127.0.0.1:8082"};
+  const command_line::arg_descriptor<std::string> arg_daemon_addr_stake = {"daemon-addr-stake",  "", "127.0.0.1:29081"};
 
   const command_line::arg_descriptor<uint64_t> arg_transfer_amount = {"transfer_amount",   "", 60000000000000};
+  const command_line::arg_descriptor<uint64_t> arg_stake_amount = {"stake_amount", "Amount to stake", 100000000};
   const command_line::arg_descriptor<size_t> arg_mix_in_factor     = {"mix-in-factor",     "", 15};
   const command_line::arg_descriptor<size_t> arg_tx_count          = {"tx-count",          "", 100};
   const command_line::arg_descriptor<size_t> arg_tx_per_second     = {"tx-per-second",     "", 20};
@@ -71,14 +75,17 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_options, command_line::arg_help);
 
   command_line::add_arg(desc_options, arg_test_transactions_flow);
+  command_line::add_arg(desc_options, arg_test_stake_tx);
 
   command_line::add_arg(desc_options, arg_working_folder);
   command_line::add_arg(desc_options, arg_source_wallet);
   command_line::add_arg(desc_options, arg_dest_wallet);
   command_line::add_arg(desc_options, arg_daemon_addr_a);
   command_line::add_arg(desc_options, arg_daemon_addr_b);
+  command_line::add_arg(desc_options, arg_daemon_addr_stake);
 
   command_line::add_arg(desc_options, arg_transfer_amount);
+  command_line::add_arg(desc_options, arg_stake_amount);
   command_line::add_arg(desc_options, arg_mix_in_factor);
   command_line::add_arg(desc_options, arg_tx_count);
   command_line::add_arg(desc_options, arg_tx_per_second);
@@ -125,6 +132,23 @@ int main(int argc, char* argv[])
     std::cin >> s;
     
     return 1;
+  }
+  else if (command_line::get_arg(vm, arg_test_stake_tx))
+  {
+    std::string working_folder = command_line::get_arg(vm, arg_working_folder);
+    std::string wallet_name;
+    if(command_line::has_arg(vm, arg_source_wallet))
+      wallet_name = command_line::get_arg(vm, arg_source_wallet);
+    std::string daemon_addr_stake = command_line::get_arg(vm, arg_daemon_addr_stake);
+    uint64_t amount_to_stake = command_line::get_arg(vm, arg_stake_amount);
+
+    if(!stake_transaction_test(working_folder, wallet_name, daemon_addr_stake, amount_to_stake))
+      return 1;
+    
+    std::string s;
+    std::cin >> s;
+    
+    return 0;
   }
   else
   {

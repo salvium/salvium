@@ -139,9 +139,13 @@ namespace wallet_rpc
     {
       uint32_t account_index;
       std::vector<uint32_t> address_index;
+      bool carrot;
+      bool cryptonote;
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(address_index)
+        KV_SERIALIZE_OPT(carrot, true);
+        KV_SERIALIZE_OPT(cryptonote, true);
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<request_t> request;
@@ -149,12 +153,16 @@ namespace wallet_rpc
     struct address_info
     {
       std::string address;
+      std::string address_cn;
+      std::string address_carrot;
       std::string label;
       uint32_t address_index;
       bool used;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(address)
+        KV_SERIALIZE(address_cn)
+        KV_SERIALIZE(address_carrot)
         KV_SERIALIZE(label)
         KV_SERIALIZE(address_index)
         KV_SERIALIZE(used)
@@ -2392,12 +2400,14 @@ namespace wallet_rpc
     struct response_t
     {
       bool multisig;
+      bool kex_is_done;
       bool ready;
       uint32_t threshold;
       uint32_t total;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(multisig)
+        KV_SERIALIZE(kex_is_done)
         KV_SERIALIZE(ready)
         KV_SERIALIZE(threshold)
         KV_SERIALIZE(total)
@@ -2542,6 +2552,35 @@ namespace wallet_rpc
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(address)
+        KV_SERIALIZE(multisig_info)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  struct COMMAND_RPC_GET_MULTISIG_KEY_EXCHANGE_BOOSTER
+  {
+    struct request_t
+    {
+      std::string password;
+      std::vector<std::string> multisig_info;
+      uint32_t threshold;
+      uint32_t num_signers;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(password)
+        KV_SERIALIZE(multisig_info)
+        KV_SERIALIZE(threshold)
+        KV_SERIALIZE(num_signers)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    struct response_t
+    {
+      std::string multisig_info;
+
+      BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(multisig_info)
       END_KV_SERIALIZE_MAP()
     };

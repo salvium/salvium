@@ -110,7 +110,11 @@ namespace cryptonote
   uint64_t get_transaction_weight_clawback(const transaction &tx, size_t n_padded_outputs)
   {
     const rct::rctSig &rv = tx.rct_signatures;
-    const bool plus = (rv.type == rct::RCTTypeBulletproofPlus || rv.type == rct::RCTTypeFullProofs);
+    const bool plus = (
+      rv.type == rct::RCTTypeBulletproofPlus ||
+      rv.type == rct::RCTTypeFullProofs ||
+      /*rv.type == rct::RCTTypeSalviumZero ||*/
+      rv.type == rct::RCTTypeSalviumOne);
     const uint64_t bp_base = (32 * ((plus ? 6 : 9) + 7 * 2)) / 2; // notional size of a 2 output proof, normalized to 1 proof (ie, divided by 2)
     const size_t n_outputs = tx.vout.size();
     if (n_padded_outputs <= 2)
@@ -464,6 +468,118 @@ namespace cryptonote
     hwdev.generate_key_image(in_ephemeral.pub, in_ephemeral.sec, ki);
     return true;
   }
+  /*
+  //---------------------------------------------------------------
+  bool generate_key_image_helper(const account_keys& ack, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::public_key& tx_public_key, const std::vector<crypto::public_key>& additional_tx_public_keys, size_t real_output_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev)
+  {
+    crypto::key_derivation recv_derivation = AUTO_VAL_INIT(recv_derivation);
+    bool r = hwdev.generate_key_derivation(tx_public_key, ack.m_view_secret_key, recv_derivation);
+    if (!r)
+    {
+      MWARNING("key image helper: failed to generate_key_derivation(" << tx_public_key << ", <viewkey>)");
+      memcpy(&recv_derivation, rct::identity().bytes, sizeof(recv_derivation));
+    }
+
+    std::vector<crypto::key_derivation> additional_recv_derivations;
+    for (size_t i = 0; i < additional_tx_public_keys.size(); ++i)
+    {
+      crypto::key_derivation additional_recv_derivation = AUTO_VAL_INIT(additional_recv_derivation);
+      r = hwdev.generate_key_derivation(additional_tx_public_keys[i], ack.m_view_secret_key, additional_recv_derivation);
+      if (!r)
+      {
+        MWARNING("key image helper: failed to generate_key_derivation(" << additional_tx_public_keys[i] << ", <viewkey>)");
+      }
+      else
+      {
+        additional_recv_derivations.push_back(additional_recv_derivation);
+      }
+    }
+
+    boost::optional<subaddress_receive_info> subaddr_recv_info = is_out_to_acc_precomp(subaddresses, out_key, recv_derivation, additional_recv_derivations, real_output_index,hwdev);
+    CHECK_AND_ASSERT_MES(subaddr_recv_info, false, "key image helper: given output pubkey doesn't seem to belong to this address");
+
+    return generate_key_image_helper_precomp(ack, out_key, subaddr_recv_info->derivation, real_output_index, subaddr_recv_info->index, in_ephemeral, ki, hwdev);
+  }
+  //---------------------------------------------------------------
+  bool generate_key_image_helper_precomp(const account_keys& ack, const crypto::public_key& out_key, const crypto::key_derivation& recv_derivation, size_t real_output_index, const subaddress_index& received_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev)
+  {
+    if (hwdev.compute_key_image(ack, out_key, recv_derivation, real_output_index, received_index, in_ephemeral, ki))
+    {
+      return true;
+    }
+
+    if (ack.m_spend_secret_key == crypto::null_skey)
+    {
+      // for watch-only wallet, simply copy the known output pubkey
+      in_ephemeral.pub = out_key;
+      in_ephemeral.sec = crypto::null_skey;
+    }
+    else
+    {
+      // derive secret key with subaddress - step 1: original CN derivation
+      crypto::secret_key scalar_step1;
+      crypto::secret_key spend_skey = crypto::null_skey;
+
+      if (ack.m_multisig_keys.empty())
+      {
+        // if not multisig, use normal spend skey
+        spend_skey = ack.m_spend_secret_key;
+      }
+      else
+      {
+        // if multisig, use sum of multisig privkeys (local account's share of aggregate spend key)
+        for (const auto &multisig_key : ack.m_multisig_keys)
+        {
+          sc_add((unsigned char*)spend_skey.data,
+            (const unsigned char*)multisig_key.data,
+            (const unsigned char*)spend_skey.data);
+        }
+      }
+
+      // computes Hs(a*R || idx) + b
+      hwdev.derive_secret_key(recv_derivation, real_output_index, spend_skey, scalar_step1);
+
+      // step 2: add Hs(a || index_major || index_minor)
+      crypto::secret_key subaddr_sk;
+      crypto::secret_key scalar_step2;
+      if (received_index.is_zero())
+      {
+        scalar_step2 = scalar_step1;    // treat index=(0,0) as a special case representing the main address
+      }
+      else
+      {
+        subaddr_sk = hwdev.get_subaddress_secret_key(ack.m_view_secret_key, received_index);
+        hwdev.sc_secret_add(scalar_step2, scalar_step1,subaddr_sk);
+      }
+
+      in_ephemeral.sec = scalar_step2;
+
+      if (ack.m_multisig_keys.empty())
+      {
+        // when not in multisig, we know the full spend secret key, so the output pubkey can be obtained by scalarmultBase
+        CHECK_AND_ASSERT_MES(hwdev.secret_key_to_public_key(in_ephemeral.sec, in_ephemeral.pub), false, "Failed to derive public key");
+      }
+      else
+      {
+        // when in multisig, we only know the partial spend secret key. but we do know the full spend public key, so the output pubkey can be obtained by using the standard CN key derivation
+        CHECK_AND_ASSERT_MES(hwdev.derive_public_key(recv_derivation, real_output_index, ack.m_account_address.m_spend_public_key, in_ephemeral.pub), false, "Failed to derive public key");
+        // and don't forget to add the contribution from the subaddress part
+        if (!received_index.is_zero())
+        {
+          crypto::public_key subaddr_pk;
+          CHECK_AND_ASSERT_MES(hwdev.secret_key_to_public_key(subaddr_sk, subaddr_pk), false, "Failed to derive public key");
+          add_public_key(in_ephemeral.pub, in_ephemeral.pub, subaddr_pk);
+        }
+      }
+
+      CHECK_AND_ASSERT_MES(in_ephemeral.pub == out_key,
+           false, "key image helper precomp: given output pubkey doesn't match the derived one");
+    }
+
+    hwdev.generate_key_image(in_ephemeral.pub, in_ephemeral.sec, ki);
+    return true;
+  }
+  */
   //---------------------------------------------------------------
   uint64_t power_integral(uint64_t a, uint64_t b)
   {
@@ -530,7 +646,7 @@ namespace cryptonote
   {
     CHECK_AND_ASSERT_MES(tx.pruned, std::numeric_limits<uint64_t>::max(), "get_pruned_transaction_weight does not support non pruned txes");
     CHECK_AND_ASSERT_MES(tx.version >= 2, std::numeric_limits<uint64_t>::max(), "get_pruned_transaction_weight does not support v1 txes");
-    CHECK_AND_ASSERT_MES(tx.rct_signatures.type == rct::RCTTypeBulletproof2 || tx.rct_signatures.type == rct::RCTTypeCLSAG || tx.rct_signatures.type == rct::RCTTypeBulletproofPlus || tx.rct_signatures.type == rct::RCTTypeFullProofs,
+    CHECK_AND_ASSERT_MES(tx.rct_signatures.type == rct::RCTTypeBulletproof2 || tx.rct_signatures.type == rct::RCTTypeCLSAG || tx.rct_signatures.type == rct::RCTTypeBulletproofPlus || tx.rct_signatures.type == rct::RCTTypeFullProofs || tx.rct_signatures.type == rct::RCTTypeSalviumZero || tx.rct_signatures.type == rct::RCTTypeSalviumOne,
         std::numeric_limits<uint64_t>::max(), "Unsupported rct_signatures type in get_pruned_transaction_weight");
     CHECK_AND_ASSERT_MES(!tx.vin.empty(), std::numeric_limits<uint64_t>::max(), "empty vin");
     CHECK_AND_ASSERT_MES(tx.vin[0].type() == typeid(cryptonote::txin_to_key), std::numeric_limits<uint64_t>::max(), "empty vin");
@@ -1165,10 +1281,13 @@ namespace cryptonote
   {
     // before HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_key
     // after HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_tagged_key
+    // after HF_VERSION_FCMP_PLUS_PLUS, outputs with public keys are of type txout_to_carrot_v1
     if (out.target.type() == typeid(txout_to_key))
       output_public_key = boost::get< txout_to_key >(out.target).key;
     else if (out.target.type() == typeid(txout_to_tagged_key))
       output_public_key = boost::get< txout_to_tagged_key >(out.target).key;
+    else if (out.target.type() == typeid(txout_to_carrot_v1))
+      output_public_key = boost::get< txout_to_carrot_v1 >(out.target).key;
     else
     {
       LOG_ERROR("Unexpected output target type found: " << out.target.type().name());
@@ -1193,6 +1312,8 @@ namespace cryptonote
       output_asset_type = boost::get< txout_to_key>(out.target).asset_type;
     else if (out.target.type() == typeid(txout_to_tagged_key))
       output_asset_type = boost::get< txout_to_tagged_key >(out.target).asset_type;
+    else if (out.target.type() == typeid(txout_to_carrot_v1))
+      output_asset_type = boost::get<txout_to_carrot_v1>(out.target).asset_type;
     else
     {
       LOG_ERROR("Unexpected output target type found: " << out.target.type().name() << " - cannot retrieve output_asset_type");
@@ -1210,6 +1331,8 @@ namespace cryptonote
       output_unlock_time = boost::get< txout_to_key>(out.target).unlock_time;
     else if (out.target.type() == typeid(txout_to_tagged_key))
       output_unlock_time = boost::get< txout_to_tagged_key >(out.target).unlock_time;
+    else if (out.target.type() == typeid(txout_to_carrot_v1))
+      output_unlock_time = 0;
     else
     {
       LOG_ERROR("Unexpected output target type found: " << out.target.type().name() << " - cannot retrieve output_unlock_time");
@@ -1255,28 +1378,29 @@ namespace cryptonote
     if (tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::STAKE) {
       CHECK_AND_ASSERT_MES(tx.vout.size() == 1, false, "audit and stake transactions should have 1 output");
     }
-    
+
     for (const auto &o: tx.vout)
     {
-      if (hf_version > HF_VERSION_REQUIRE_VIEW_TAGS)
-      {
-        // from v15, require outputs have view tags
-        CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
-          << o.target.type().name() << ", expected txout_to_tagged_key in transaction");
+      if (hf_version >= HF_VERSION_CARROT) {
+        if (tx.type != cryptonote::transaction_type::PROTOCOL) {
+          CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_carrot_v1), false, "wrong variant type: "
+            << o.target.type().name() << ", expected txout_to_carrot_v1 in transaction id=" << get_transaction_hash(tx));
+        } else {
+          CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key) || 
+                              o.target.type() == typeid(txout_to_tagged_key) || 
+                              o.target.type() == typeid(txout_to_carrot_v1), false, "wrong variant type: "
+          << o.target.type().name() << ", expected txout_to_key or txout_to_tagged_key or txout_to_carrot_v1 in protocol transaction");
+          // require all outputs in a tx be of the same type
+          CHECK_AND_ASSERT_MES(o.target.type() == tx.vout[0].target.type(), false, "non-matching variant types: "
+                              << o.target.type().name() << " and " << tx.vout[0].target.type().name() << ", "
+                              << "expected matching variant types in protocol transaction");
+        }
       }
-      else if (hf_version < HF_VERSION_VIEW_TAGS)
-      {
-        // require outputs to be of type txout_to_key
-        CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key), false, "wrong variant type: "
-          << o.target.type().name() << ", expected txout_to_key in transaction");
-      }
-      else  //(hf_version == HF_VERSION_VIEW_TAGS || hf_version == HF_VERSION_VIEW_TAGS+1)
-      {
+      else {
         // require outputs be of type txout_to_key OR txout_to_tagged_key
         // to allow grace period before requiring all to be txout_to_tagged_key
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key) || o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
           << o.target.type().name() << ", expected txout_to_key or txout_to_tagged_key in transaction");
-
         // require all outputs in a tx be of the same type
         CHECK_AND_ASSERT_MES(o.target.type() == tx.vout[0].target.type(), false, "non-matching variant types: "
           << o.target.type().name() << " and " << tx.vout[0].target.type().name() << ", "
@@ -1367,7 +1491,14 @@ namespace cryptonote
     return false;
   }
   //---------------------------------------------------------------
-  boost::optional<subaddress_receive_info> is_out_to_acc_precomp(const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::key_derivation& derivation, const std::vector<crypto::key_derivation>& additional_derivations, size_t output_index, hw::device &hwdev, const boost::optional<crypto::view_tag>& view_tag_opt)
+  boost::optional<subaddress_receive_info> is_out_to_acc_precomp(
+    const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses,
+    const crypto::public_key& out_key,
+    const crypto::key_derivation& derivation,
+    const epee::span<const crypto::key_derivation> additional_derivations,
+    size_t output_index,
+    hw::device &hwdev,
+    const boost::optional<crypto::view_tag>& view_tag_opt)
   {
     // try the shared tx pubkey
     crypto::public_key subaddress_spendkey;
@@ -1402,6 +1533,24 @@ namespace cryptonote
       }
     }
     return boost::none;
+  }
+  //---------------------------------------------------------------
+  boost::optional<subaddress_receive_info> is_out_to_acc_precomp(
+    const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses,
+    const crypto::public_key& out_key,
+    const crypto::key_derivation& derivation,
+    const std::vector<crypto::key_derivation>& additional_derivations,
+    size_t output_index,
+    hw::device &hwdev,
+    const boost::optional<crypto::view_tag>& view_tag_opt)
+  {
+    return is_out_to_acc_precomp(subaddresses,
+      out_key,
+      derivation,
+      epee::to_span(additional_derivations),
+      output_index,
+      hwdev,
+      view_tag_opt);
   }
   //---------------------------------------------------------------
   bool lookup_acc_outs(const account_keys& acc, const transaction& tx, std::vector<size_t>& outs, uint64_t& money_transfered)

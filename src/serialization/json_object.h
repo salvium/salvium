@@ -218,6 +218,9 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_to_scripthash& 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::txin_to_key& txin);
 void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_to_key& txin);
 
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::protocol_tx_data_t& ptd);
+void fromJsonValue(const rapidjson::Value& val, cryptonote::protocol_tx_data_t& ptd);
+
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::txout_target_v& txout);
 void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_target_v& txout);
 
@@ -232,6 +235,9 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_to_key& txout)
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::txout_to_tagged_key& txout);
 void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_to_tagged_key& txout);
+
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::txout_to_carrot_v1& txout);
+void fromJsonValue(const rapidjson::Value& val, cryptonote::txout_to_carrot_v1& txout);
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::tx_out& txout);
 void fromJsonValue(const rapidjson::Value& val, cryptonote::tx_out& txout);
@@ -306,6 +312,9 @@ void fromJsonValue(const rapidjson::Value& val, rct::mgSig& sig);
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::clsag& sig);
 void fromJsonValue(const rapidjson::Value& val, rct::clsag& sig);
+
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::tclsag& sig);
+void fromJsonValue(const rapidjson::Value& val, rct::tclsag& sig);
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const rct::zk_proof& p);
 void fromJsonValue(const rapidjson::Value& val, rct::zk_proof& p);

@@ -35,6 +35,8 @@
 #include "string_tools.h"
 using namespace epee;
 
+#include "carrot_core/payment_proposal.h"
+#include "carrot_impl/format_utils.h"
 #include "common/apply_permutation.h"
 #include "cryptonote_tx_utils.h"
 #include "cryptonote_config.h"
@@ -335,47 +337,70 @@ namespace cryptonote
   }
   */
   //---------------------------------------------------------------
-  std::tuple<bool, uint64_t> check_treasury_payout(
-    network_type nettype,
-    uint64_t height,
-    const std::vector<hardfork_t>& hardforks,
-    const uint8_t hf_version
-  ) {
-    if (hf_version >= HF_VERSION_TREASURY_SAL1_MINT) {
-      // find the hardfork height
-      const auto& hf = std::find_if(hardforks.begin(), hardforks.end(), [](const hardfork_t& hf) {
-        return hf.version == HF_VERSION_TREASURY_SAL1_MINT;
-      });
-
-      // since we are at least at the hard fork HF_VERSION_TREASURY_SAL1_MINT, we assume height >= hf->height
-      const auto diff = height - hf->height;
-      const auto mint_period = get_config(nettype).TREASURY_SAL1_MINT_PERIOD;
-
-      // pay per period
-      if (diff % mint_period == 0) {
-        const auto payout_index = diff / mint_period;
-        if (payout_index < TREASURY_SAL1_MINT_COUNT) {
-          return {true, payout_index};
-        }
-      }
-    }
-
-    return {false, 0};
-  }
-  //---------------------------------------------------------------
   bool construct_protocol_tx(
     const size_t height,
     transaction& tx,
     std::vector<protocol_data_entry>& protocol_data,
-    const uint8_t hf_version
+    const uint8_t hard_fork_version
   ) {
 
     // Clear the TX contents
     tx.set_null();
+    tx.version = 2;
+    bool carrot_found = false;
+    bool noncarrot_found = false;
     tx.type = cryptonote::transaction_type::PROTOCOL;
 
-    // Force the TX type to 2
-    tx.version = 2;
+    // Scan the protocol_data to make sure all or none are Carrot
+    for (auto const& entry: protocol_data) {
+      if (entry.is_carrot) carrot_found = true;
+      else noncarrot_found = true;
+    }
+    
+    if (carrot_found && noncarrot_found) {
+      LOG_ERROR("Cannot mix Carrot and non-Carrot outputs in the same protocol transaction");
+      return false;
+    }
+    if (carrot_found && hard_fork_version < HF_VERSION_CARROT) {
+      LOG_ERROR("Carrot outputs found in CryptoNote protocol transaction");
+      return false;
+    }
+    
+    if (carrot_found || (!noncarrot_found && hard_fork_version >= HF_VERSION_CARROT))
+    {
+      // Ensure the TX version is correct
+      tx.version = TRANSACTION_VERSION_CARROT;
+      try
+      {
+        // Create a vector of enotes
+        std::vector<carrot::CarrotCoinbaseEnoteV1> enotes;
+        enotes.reserve(protocol_data.size());
+
+        // Iterate over the protocol_data we received, creating an enote for each entry
+        for (auto const& entry: protocol_data) {
+          // Build the proposal
+          carrot::CarrotCoinbaseEnoteV1 e;
+          e.onetime_address = entry.return_address;
+          e.amount = entry.amount_burnt;
+          e.asset_type = entry.destination_asset;
+          e.view_tag = entry.return_view_tag;
+          e.anchor_enc = entry.return_anchor_enc;
+          e.block_index = height;
+          memcpy(e.enote_ephemeral_pubkey.data, entry.return_pubkey.data, sizeof(crypto::public_key));
+          enotes.push_back(e);
+        }
+        tx = store_carrot_to_coinbase_transaction_v1(enotes, std::string{}, cryptonote::transaction_type::PROTOCOL, height);
+        tx.amount_burnt = 0;
+        tx.invalidate_hashes();
+      }
+      catch (const std::exception &e)
+      {
+        MERROR("Failed to construct Carrot protocol transaction: " << e.what());
+        return false;
+      }
+
+      return true;
+    }
 
     keypair txkey = keypair::generate(hw::get_device("default"));
     add_tx_pub_key_to_extra(tx, txkey.pub);
@@ -386,14 +411,29 @@ namespace cryptonote
     std::vector<crypto::public_key> additional_tx_public_keys;
     for (auto const& entry: protocol_data) {
       if (entry.type == cryptonote::transaction_type::STAKE) {
+
         // PAYOUT
         LOG_PRINT_L2("Yield TX payout submitted " << entry.amount_burnt << entry.source_asset);
+  
+        if (entry.is_carrot) {
+          tx_out out;
+          out.amount = entry.amount_burnt;
+          out.target = txout_to_carrot_v1 {
+            .key = entry.return_address,
+            .asset_type = entry.destination_asset,
+            .view_tag = entry.return_view_tag,
+            .encrypted_janus_anchor = entry.return_anchor_enc,
+          };
 
-        // Create the TX output for this refund
-        tx_out out;
-        cryptonote::set_tx_out(entry.amount_burnt, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
-        additional_tx_public_keys.push_back(entry.return_pubkey);
-        tx.vout.push_back(out);
+          additional_tx_public_keys.push_back(entry.return_pubkey);
+          tx.vout.push_back(out);
+        } else {
+          // Create the TX output for this refund
+          tx_out out;
+          cryptonote::set_tx_out(entry.amount_burnt, entry.destination_asset, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, entry.return_address, false, crypto::view_tag{}, out);
+          additional_tx_public_keys.push_back(entry.return_pubkey);
+          tx.vout.push_back(out);
+        }
       } else if (entry.type == cryptonote::transaction_type::AUDIT) {
         // PAYOUT
         LOG_PRINT_L2("Audit TX payout submitted " << entry.amount_burnt << entry.source_asset);
@@ -424,18 +464,8 @@ namespace cryptonote
     tx.type = cryptonote::transaction_type::MINER;
 
     // check for treasury payouts
-    auto[treasury_payout_exist, treasury_payout_index] = check_treasury_payout(nettype, height, hardforks, hard_fork_version);
-
-    keypair txkey = keypair::generate(hw::get_device("default"));
-    add_tx_pub_key_to_extra(tx, txkey.pub);
-    if(!extra_nonce.empty())
-      if(!add_extra_nonce_to_tx_extra(tx.extra, extra_nonce))
-        return false;
-    if (!sort_tx_extra(tx.extra, tx.extra))
-      return false;
-
-    txin_gen in;
-    in.height = height;
+    const auto treasury_payout_data = get_config(nettype).TREASURY_SAL1_MINT_OUTPUT_DATA;
+    const bool treasury_payout_exists = (treasury_payout_data.count(height) == 1);
 
     uint64_t block_reward;
     if(!get_block_reward(median_weight, current_block_weight, already_generated_coins, block_reward, hard_fork_version))
@@ -449,6 +479,90 @@ namespace cryptonote
       ", fee " << fee);
 #endif
     block_reward += fee;
+
+    const bool do_carrot = hard_fork_version >= HF_VERSION_CARROT;
+    if (do_carrot)
+    {
+      try
+      {
+        // Build the miner payout
+        carrot::CarrotDestinationV1 destination;
+        carrot::make_carrot_main_address_v1(miner_address.m_spend_public_key,
+          miner_address.m_view_public_key,
+          destination);
+
+        CHECK_AND_ASSERT_THROW_MES(!destination.is_subaddress,
+                                   "make_single_enote_carrot_coinbase_transaction_v1: subaddress are not allowed in miner transactions");
+        CHECK_AND_ASSERT_THROW_MES(destination.payment_id == carrot::null_payment_id,
+                                   "make_single_enote_carrot_coinbase_transaction_v1: integrated addresses are not allowed in miner transactions");
+
+        uint64_t stake_reward = block_reward / 5;
+
+        const carrot::CarrotPaymentProposalV1 payment_proposal{
+          .destination = destination,
+          .amount = block_reward - stake_reward,
+          .asset_type = "SAL1",
+          .randomness = carrot::gen_janus_anchor()
+        };
+
+        std::vector<carrot::CarrotCoinbaseEnoteV1> enotes(treasury_payout_exists ? 2 : 1);
+        carrot::get_coinbase_output_proposal_v1(payment_proposal, height, enotes.front());
+
+        // Check to see if there needs to be a treasury payout
+        if (treasury_payout_exists) {
+
+          // Convert the strings into meaningful data
+          const auto [tx_public_key_str, onetime_address_str, anchor_enc_str, view_tag_str] = treasury_payout_data.at(height);
+          mx25519_pubkey tx_public_key;
+          CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(tx_public_key_str, tx_public_key), "fail to deserialize treasury tx public key");
+          crypto::public_key onetime_address;
+          CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(onetime_address_str, onetime_address), "fail to deserialize treasury tx onetime address");
+          carrot::encrypted_janus_anchor_t anchor_enc;
+          CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(anchor_enc_str, anchor_enc), "fail to deserialize treasury tx anchor_enc");
+          carrot::view_tag_t view_tag;
+          CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(view_tag_str, view_tag), "fail to deserialize treasury tx view_tag");
+          
+          // Manually produce an enote for the treasury payout using the hardcoded keys
+          carrot::CarrotCoinbaseEnoteV1 &treasury_enote = enotes.back();
+          treasury_enote.onetime_address = onetime_address;
+          treasury_enote.amount = TREASURY_SAL1_MINT_AMOUNT;
+          treasury_enote.asset_type = "SAL1";
+          treasury_enote.anchor_enc = anchor_enc;
+          treasury_enote.view_tag = view_tag;
+          treasury_enote.enote_ephemeral_pubkey = tx_public_key;
+          treasury_enote.block_index = height;
+        
+          // sort enotes by K_o
+          if (enotes[0].onetime_address > enotes[1].onetime_address) {
+            std::swap(enotes[0], enotes[1]);
+          }
+        }
+
+        tx = carrot::store_carrot_to_coinbase_transaction_v1(enotes, extra_nonce, cryptonote::transaction_type::MINER, height);
+
+        tx.amount_burnt = stake_reward;
+        tx.invalidate_hashes();
+      }
+      catch (const std::exception &e)
+      {
+        MERROR("Failed to construct Carrot coinbase transaction: " << e.what());
+        return false;
+      }
+
+      return true;
+    }
+
+    keypair txkey = keypair::generate(hw::get_device("default"));
+    add_tx_pub_key_to_extra(tx, txkey.pub);
+    if(!extra_nonce.empty())
+      if(!add_extra_nonce_to_tx_extra(tx.extra, extra_nonce))
+        return false;
+    if (!sort_tx_extra(tx.extra, tx.extra))
+      return false;
+
+    txin_gen in;
+    in.height = height;
+
     uint64_t summary_amounts = 0;
     CHECK_AND_ASSERT_MES(1 <= max_outs, false, "max_out must be non-zero");
 
@@ -482,7 +596,7 @@ namespace cryptonote
       case HF_VERSION_AUDIT1_PAUSE:
       case HF_VERSION_AUDIT2:
       case HF_VERSION_AUDIT2_PAUSE:
-      case HF_VERSION_TREASURY_SAL1_MINT:
+      case HF_VERSION_CARROT:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;
@@ -496,7 +610,7 @@ namespace cryptonote
       std::string asset_type = "SAL";
       if (hard_fork_version >= HF_VERSION_SALVIUM_ONE_PROOFS)
         asset_type = "SAL1";
-      cryptonote::set_tx_out(amount, asset_type, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, !treasury_payout_exist, view_tag, out);    
+      cryptonote::set_tx_out(amount, asset_type, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, out_eph_public_key, use_view_tags, view_tag, out);    
       tx.vout.push_back(out);
 
     } else {
@@ -508,27 +622,6 @@ namespace cryptonote
     }
 
     CHECK_AND_ASSERT_MES(summary_amounts == block_reward, false, "Failed to construct miner tx, summary_amounts = " << summary_amounts << " not equal block_reward = " << block_reward);
-
-    // add the treasury payout if needed
-    if (treasury_payout_exist) {
-      std::vector<crypto::public_key> additional_tx_public_keys = {txkey.pub};
-      const auto output_keys = get_config(nettype).TREASURY_SAL1_MINT_OUTPUT_KEYS;
-      const auto keys = output_keys[treasury_payout_index];
-
-      crypto::public_key tx_key;
-      CHECK_AND_ASSERT_MES(epee::string_tools::hex_to_pod(keys.first, tx_key), false, "fail to deserialize treasury tx key");
-      crypto::public_key output_key;
-      CHECK_AND_ASSERT_MES(epee::string_tools::hex_to_pod(keys.second, output_key), false, "fail to deserialize treasury output key");
-
-      // Create the TX output for this payout
-      tx_out out;
-      cryptonote::set_tx_out(TREASURY_SAL1_MINT_AMOUNT, "SAL1", CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, output_key, false, crypto::view_tag{}, out);
-      tx.vout.push_back(out);
-
-      // add tx pub key to tx extra
-      additional_tx_public_keys.push_back(tx_key);
-      add_additional_tx_pub_keys_to_extra(tx.extra, additional_tx_public_keys);
-    }
 
     tx.version = 2;
     tx.vin.push_back(in);
@@ -759,12 +852,12 @@ namespace cryptonote
       salvium_data.enc_view_privkey_str = encrypt_pvk(sender_account_keys.m_view_secret_key, PK);
 
       // And now the rest of the structure
-      salvium_data.salvium_data_type = rct::SalviumAudit;
+      salvium_data.salvium_data_type = rct::SalviumZeroAudit;
       salvium_data.input_verification_data.reserve(sources.size());
       salvium_data.spend_pubkey = sender_account_keys.m_account_address.m_spend_public_key;
       
     } else {
-      salvium_data.salvium_data_type = rct::SalviumNormal;
+      salvium_data.salvium_data_type = rct::SalviumZero;
     }
     uint64_t summary_inputs_money = 0;
     //fill inputs
@@ -1276,7 +1369,10 @@ namespace cryptonote
   {
     hw::device &hwdev = sender_account_keys.get_device();
     hwdev.open_tx(tx_key);
-    try {
+    auto auto_close_tx = epee::misc_utils::create_scope_leave_handler([&hwdev](){
+      hwdev.close_tx();
+    });
+    {
       // figure out if we need to make additional tx pubkeys
       size_t num_stdaddresses = 0;
       size_t num_subaddresses = 0;
@@ -1296,9 +1392,6 @@ namespace cryptonote
       bool r = construct_tx_with_tx_key(sender_account_keys, subaddresses, sources, destinations, hf_version, source_asset, dest_asset, tx_type, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, rct, rct_config, shuffle_outs, use_view_tags);
       hwdev.close_tx();
       return r;
-    } catch(...) {
-      hwdev.close_tx();
-      throw;
     }
   }
   //---------------------------------------------------------------

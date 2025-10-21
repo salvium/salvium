@@ -34,6 +34,7 @@
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <vector>
 #include <boost/uuid/uuid.hpp>
 
 #define CRYPTONOTE_DNS_TIMEOUT_MS                       20000
@@ -43,9 +44,10 @@
 #define CRYPTONOTE_MAX_TX_PER_BLOCK                     0x10000000
 #define CRYPTONOTE_PUBLIC_ADDRESS_TEXTBLOB_VER          0
 #define CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW            60
-#define CURRENT_TRANSACTION_VERSION                     3
+#define CURRENT_TRANSACTION_VERSION                     4
 #define TRANSACTION_VERSION_2_OUTS                      2
 #define TRANSACTION_VERSION_N_OUTS                      3
+#define TRANSACTION_VERSION_CARROT                      4
 #define CURRENT_BLOCK_MAJOR_VERSION                     1
 #define CURRENT_BLOCK_MINOR_VERSION                     1
 #define CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT              60*60*2
@@ -86,8 +88,8 @@
 #define PREMINE_AMOUNT_UPFRONT                          ((uint64_t)650000000000000ull)  // 3.4% of MONEY_SUPPLY
 #define PREMINE_AMOUNT_MONTHLY                          ((uint64_t)65000000000000ull)   // 8.6%/24 of MONEY_SUPPLY 
 
-#define TREASURY_SAL1_MINT_AMOUNT                       ((uint64_t)65000000000000ull) // 650K
-#define TREASURY_SAL1_MINT_COUNT                        16                            // 16 times
+#define TREASURY_SAL1_MINT_AMOUNT                       ((uint64_t)130000000000000ull)  // 1.3M
+#define TREASURY_SAL1_MINT_COUNT                        8                               // 8 times
 
 #define DIFFICULTY_TARGET_V2                            120  // seconds
 #define DIFFICULTY_TARGET_V1                            60  // seconds - before first fork
@@ -241,14 +243,14 @@
 #define HF_VERSION_AUDIT1_PAUSE                 7
 #define HF_VERSION_AUDIT2                       8
 #define HF_VERSION_AUDIT2_PAUSE                 9
-#define HF_VERSION_TREASURY_SAL1_MINT           10
+#define HF_VERSION_CARROT                       10
 
 #define HF_VERSION_REQUIRE_VIEW_TAGS            255
 #define HF_VERSION_ENABLE_CONVERT               255
 #define HF_VERSION_ENABLE_ORACLE                255
 #define HF_VERSION_SLIPPAGE_YIELD               255
 
-#define TESTNET_VERSION                         14
+#define TESTNET_VERSION                         15
 #define STAGENET_VERSION                        1
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
@@ -260,6 +262,9 @@
 
 #define BULLETPROOF_MAX_OUTPUTS                 16
 #define BULLETPROOF_PLUS_MAX_OUTPUTS            16
+
+#define FCMP_PLUS_PLUS_MAX_INPUTS               8
+#define FCMP_PLUS_PLUS_MAX_OUTPUTS              8
 
 #define CRYPTONOTE_PRUNING_STRIPE_SIZE          4096 // the smaller, the smoother the increase
 #define CRYPTONOTE_PRUNING_LOG_STRIPES          3 // the higher, the more space saved
@@ -288,6 +293,9 @@ namespace config
   uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 0x3ef318; // SaLv
   uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0x55ef318; // SaLvi
   uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0xf5ef318; // SaLvs
+  uint64_t const CARROT_PUBLIC_ADDRESS_BASE58_PREFIX = 0x180c96; // SC1
+  uint64_t const CARROT_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0x2ccc96; // SC1i
+  uint64_t const CARROT_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0x314c96; // SC1s
   uint16_t const P2P_DEFAULT_PORT = 19080;
   uint16_t const RPC_DEFAULT_PORT = 19081;
   uint16_t const ZMQ_RPC_DEFAULT_PORT = 19082;
@@ -309,24 +317,16 @@ namespace config
 
   std::string const TREASURY_ADDRESS = "SaLvdZR6w1A21sf2Wh6jYEh1wzY4GSbT7RX6FjyPsnLsffWLrzFQeXUXJcmBLRWDzZC2YXeYe5t7qKsnrg9FpmxmEcxPHsEYfqA";
 
-  // treasury payout {tx-key, output-key} pairs
-  const std::vector<std::pair<std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_KEYS = {
-    {"a1bdd1da651fbbb845232816e1aa2d4ff29b790f10bbd4f574a012f1199e15a4", "b0733ab6f251b16458efa9ebb3fb99bd54d43173b5768fe9ffc42e0fe46ae3a8"},
-    {"47996eccbcc078b06d0f6ece37bf3a700c2bd60adfdd898b22096f16a9ad315c", "fd6bcceb4799ee067d59b97a6f66a0f9a70f134220259d3b4d6a2278ba4aca4c"},
-    {"a3e6754a849b80c21a77e6065fefdae29eeeabf17c407453356244a00545bdb8", "3d395454df1452d715d27190e022b20395871c99af578f7251c3f9752e0274a6"},
-    {"0d5e97a910e0f9c606ad9c711b6595aaed142d857cde2efa519112b9a29240d5", "56c29e28bdcf4f20b4b45906b93ae7c4bf9ee82e18cd45543cb69a14ce5efb88"},
-    {"495fa363de88915aa8b74818c4b80715a882a688b4f7127ab7cd3b6885f3567a", "d42dfe0da5579c82e8255eba8c0a17170023f14a6a5030da6abf9f10abb52cbb"},
-    {"85ea10ec40390e4f406446fb519e974d89536154045c6df28bb3b538b254e20d", "0ce2b7dd3a8ce8b596889dac8081a62f98fd70f1f043944ab4ac592c3c59e77b"},
-    {"40f201b38a319dda81e7201e57fea7924067a4a332ed71b8e51ec29ac2d67310", "8289aa6963b98d1034e94eae55d8be6b33d0a88f14f174ebcbaec70837986c7c"},
-    {"c5a648cc7846341357b7b4653a58f9eb4800d88b5de587bceec7a5c28f98d05a", "3f308a203845d88e5e728fcebcdcea1f90e2f424d461617993c672a6138ad2d8"},
-    {"4c51d6550b8eeb6cc8f0d395cc83a5f90ec2a4d86501b3f68da48d618ccf5711", "53f0bd8cebeefb3a88fffa5d7f6ad43d4712608ded561732467ca499df940454"},
-    {"ce2f5d82118fed03d5e269e285fc16189a6cd34f38999e5c055a5dea5fce61bc", "f7fc6948b194d9bd6f2df6ecb83f04e6c8d1a2556a63fedb310a4631fe1bfc42"},
-    {"6248028fd77fb02b5c6ea72dea10b417891a2da7aaf9565aed382e063b4981a3", "63986e1177499bdb23cd49afb519ec18f38cb1b0c386220b376d8ffdc2e37890"},
-    {"6adcb695aa5d6d01133c68900f29e501e9549816e827ea0c164bbc78f3534dd6", "6a440ccb18f5e703e8000de3865ac40d4c18f081270d32eef377dc831f28d8d0"},
-    {"b97a4d2259480f34f20e41c489ab5c2e5ae9ee84d8672a7eff8012f2260e121e", "e6eb9147ff40e22209d321d0f1bfbfe20acf5ceb6b9d0bfb13688ad28aa1232e"},
-    {"4fd214602a36902f22d16927244c456e8cc5a406a9570131f138a028214ffdf0", "34060b8bd96009b9b298280ebd84fa9587fa8c9df6fb5ad0270fb6cd2098885c"},
-    {"9d60178ec6d6599d7a31298f2559fb9c3111f2c70494b3a1638db877ea55b808", "7985ed03856a929663e954738d0938713407717835f760c7ca4d54844a128c91"},
-    {"cd65718eab234bf419332e53bd2f48e2ade70af48c5e126ab5080321e1493dfc", "581cb4cca7a0a029ee2cac51dfc00a0c3a657d2eaf67ed3c6ae7bacc11b4f007"},
+  // treasury payout {tx-key, output-key, anchor_enc, vie_tag} tuples
+  const std::map<uint64_t, std::tuple<std::string, std::string, std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_DATA = {
+    {334750, {"1b2cd3ff56aa77c0cbab0473bfb96697ebdd0b25ad230136bfe41d5dc1ef265f","718cf02eabca157fd7ad7f8537db217624bfe1ca99dd09e758357e7000a5e57a","789cca3def51fb879eb7fbca271869b7","79bd0c"}},
+    {356350, {"b51acbf35265d09f3cfb83dcabde2746991ddf0d30b5a4ecc34043b349a77031","9dc0d2e9534cdccf83494687c55c67c8c1b29834acf97cce53124a08a9549231","588ebc2918d06c009a18a28a8ab76694","ab8c23"}},
+    {377950, {"771c6865980493846cbb049b34f72b937878cf799ae1126775df35064cf53526","60d340613c7721aeb03f2de1b56e2916d6cb023cc668acaca00e1606e0bb7f64","198bb0e5880c8abf8108158284ca7637","9b93f2"}},
+    {399550, {"d9159f9bb654230382a69bb7a739c14f9d506c21dba5be9f4cdf66126ed1b24e","c3b34e7f9977f31f659abd9306b650416a674ed7bcfb8c75b257040a1a06b8b9","6f0de181716e0a9e100228d58f11d42c","4c87fd"}},
+    {421150, {"1e2ab1ae204e7a9375f5b57fed2524e2d1a4702c4bbc6d420eb65d92af44c60c","826ecca0e2837860a6d2be89a410ff6aab22c5f5a66bd0a318de3abe646aa26a","bad663aa8253c40d00de0a2d1dfca60f","4a04d7"}},
+    {442750, {"18267940a2b37c82850f3fb83d935281ee5cc436b0797ec10ca26c9cc3c0ef01","77bdec7bbc4cabd84cc8cf0666e1fdfe299480b9b2a4cf52cc959d728fa899ab","a8807121e33471cf18aa82af4826c9a7","d35d35"}},
+    {464350, {"9ab50223bfecec2508e8233540dc13c3fc7e15a8d77ecb90939afee96859724d","675a1b3f2a2cd2bd0e7ec073c426125d95e12ad13e541bf019925c481c2bca15","591d2f2331832c347654ab255ad97e2d","d87c9c"}},
+    {485950, {"c0d7299fe0b873687e7319f1a0d1f67712ef3ccf6a579d96c5f99743add6f029","dd3d17b5145b56377e023c169ae858cdf48bd6c23e8b2a77e02765ce316e3ca7","6a9e74df01762e2b32db1dc4d69dc3e9","75debe"}}
   };
 
   // Hash domain separators
@@ -354,6 +354,7 @@ namespace config
   const constexpr char HASH_KEY_MULTISIG_TX_PRIVKEYS_SEED[] = "multisig_tx_privkeys_seed";
   const constexpr char HASH_KEY_MULTISIG_TX_PRIVKEYS[] = "multisig_tx_privkeys";
   const constexpr char HASH_KEY_TXHASH_AND_MIXRING[] = "txhash_and_mixring";
+  const constexpr char HASH_KEY_SA_PROOF[] = "SPARC_sa_proof_domain_separator";
 
   // Multisig
   const uint32_t MULTISIG_MAX_SIGNERS{16};
@@ -391,6 +392,9 @@ namespace config
     uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 0x15beb318; // SaLvT
     uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0xd055eb318; // SaLvTi
     uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0xa59eb318; // SaLvTs
+    uint64_t const CARROT_PUBLIC_ADDRESS_BASE58_PREFIX = 0x254c96; // SC1T
+    uint64_t const CARROT_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0x1ac50c96; // SC1Ti
+    uint64_t const CARROT_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0x3c54c96; // SC1Ts
     uint16_t const P2P_DEFAULT_PORT = 29080;
     uint16_t const RPC_DEFAULT_PORT = 29081;
     uint16_t const ZMQ_RPC_DEFAULT_PORT = 29082;
@@ -417,24 +421,16 @@ namespace config
 
     std::string const TREASURY_ADDRESS = "SaLvTyLFta9BiAXeUfFkKvViBkFt4ay5nEUBpWyDKewYggtsoxBbtCUVqaBjtcCDyY1euun8Giv7LLEgvztuurLo5a6Km1zskZn36";
 
-    // treasury payout {tx-key, output-key} pairs
-    const std::vector<std::pair<std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_KEYS = {
-      {"a1bdd1da651fbbb845232816e1aa2d4ff29b790f10bbd4f574a012f1199e15a4", "b0733ab6f251b16458efa9ebb3fb99bd54d43173b5768fe9ffc42e0fe46ae3a8"},
-      {"47996eccbcc078b06d0f6ece37bf3a700c2bd60adfdd898b22096f16a9ad315c", "fd6bcceb4799ee067d59b97a6f66a0f9a70f134220259d3b4d6a2278ba4aca4c"},
-      {"a3e6754a849b80c21a77e6065fefdae29eeeabf17c407453356244a00545bdb8", "3d395454df1452d715d27190e022b20395871c99af578f7251c3f9752e0274a6"},
-      {"0d5e97a910e0f9c606ad9c711b6595aaed142d857cde2efa519112b9a29240d5", "56c29e28bdcf4f20b4b45906b93ae7c4bf9ee82e18cd45543cb69a14ce5efb88"},
-      {"495fa363de88915aa8b74818c4b80715a882a688b4f7127ab7cd3b6885f3567a", "d42dfe0da5579c82e8255eba8c0a17170023f14a6a5030da6abf9f10abb52cbb"},
-      {"85ea10ec40390e4f406446fb519e974d89536154045c6df28bb3b538b254e20d", "0ce2b7dd3a8ce8b596889dac8081a62f98fd70f1f043944ab4ac592c3c59e77b"},
-      {"40f201b38a319dda81e7201e57fea7924067a4a332ed71b8e51ec29ac2d67310", "8289aa6963b98d1034e94eae55d8be6b33d0a88f14f174ebcbaec70837986c7c"},
-      {"c5a648cc7846341357b7b4653a58f9eb4800d88b5de587bceec7a5c28f98d05a", "3f308a203845d88e5e728fcebcdcea1f90e2f424d461617993c672a6138ad2d8"},
-      {"4c51d6550b8eeb6cc8f0d395cc83a5f90ec2a4d86501b3f68da48d618ccf5711", "53f0bd8cebeefb3a88fffa5d7f6ad43d4712608ded561732467ca499df940454"},
-      {"ce2f5d82118fed03d5e269e285fc16189a6cd34f38999e5c055a5dea5fce61bc", "f7fc6948b194d9bd6f2df6ecb83f04e6c8d1a2556a63fedb310a4631fe1bfc42"},
-      {"6248028fd77fb02b5c6ea72dea10b417891a2da7aaf9565aed382e063b4981a3", "63986e1177499bdb23cd49afb519ec18f38cb1b0c386220b376d8ffdc2e37890"},
-      {"6adcb695aa5d6d01133c68900f29e501e9549816e827ea0c164bbc78f3534dd6", "6a440ccb18f5e703e8000de3865ac40d4c18f081270d32eef377dc831f28d8d0"},
-      {"b97a4d2259480f34f20e41c489ab5c2e5ae9ee84d8672a7eff8012f2260e121e", "e6eb9147ff40e22209d321d0f1bfbfe20acf5ceb6b9d0bfb13688ad28aa1232e"},
-      {"4fd214602a36902f22d16927244c456e8cc5a406a9570131f138a028214ffdf0", "34060b8bd96009b9b298280ebd84fa9587fa8c9df6fb5ad0270fb6cd2098885c"},
-      {"9d60178ec6d6599d7a31298f2559fb9c3111f2c70494b3a1638db877ea55b808", "7985ed03856a929663e954738d0938713407717835f760c7ca4d54844a128c91"},
-      {"cd65718eab234bf419332e53bd2f48e2ade70af48c5e126ab5080321e1493dfc", "581cb4cca7a0a029ee2cac51dfc00a0c3a657d2eaf67ed3c6ae7bacc11b4f007"},
+    // treasury payout {tx-key, output-key, anchor_enc, vie_tag} tuples
+    const std::map<uint64_t, std::tuple<std::string, std::string, std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_DATA = {
+      {1100, {"71336a480440ed24a53b2cfd5a5292d1e618c3e843637227883ea2cc42fb346f","a135f59a05ea9e33539e4502b187b4789cc7fba79616c6902a902cc6601f0359","7f1c6970232254a9b13f7f063df2a853","62073c"}},
+      {1120, {"2cc49b182addc0106b601c9876c01a4b06532c05f9dd9179b2c4f47e5c7c0d74","fd62e59324389f37d0bb628a39f413c11be34d572ec3a40f465e008b9dfd5e0c","fbf8584222e299bb748009eaf2177123","b76a8d"}},
+      {1140, {"50f1dd5244bb6fdc62b5a18b868a4dc9e9ad15f4a7a54e5a98084a3a5213c846","942de90a3347df3e962d9b0a2745f8aedb265a8caf73aabef9aa713f4ec3e493","933702e29d680bf21ad559a2d3243621","dae32b"}},
+      {1160, {"114a1fef3a03c81b3b6308fb4e51db42d86945d8f71ee8798749a4aa2d8bfe57","fd77f0289b7e25ae68c86f4cd2c72ac0211a4d0e7a31c84b8d58a33bbd3c511b","d8048bb76b9313768a4c69100cba6d43","46b0a3"}},
+      {1180, {"cf7fe9d97a7a4cb881bff1d37bb6981bcb0691649c465d660522a43f14b32849","b76908d56108e7111374f60993e9411def7bb2899118f20f49e67a801936a1ad","f203a5acd48f93f1451d32d70716e585","d72097"}},
+      {1200, {"415e8fa4fb6bed8bc59591883f5e098dde6179e980eccfc4cbb3a64c4168cf47","5426c588d7c5750c76b526ef268b45f7414e2ddea40218ee92d123564c5114c4","fb1926bbef8c70ebd796ae77dffca07d","351edf"}},
+      {1220, {"1f47cce00e8e1c77cb3ff007491d261dae75de5bbfdbe0f4913d74a8503aaa5e","4d8aac299306989aa169982d89457852a1bab858c668c9b740d96b682bb1961b","d8c0be7926ce704290cfd8d5e0500f33","750003"}},
+      {1240, {"3afd93c684638d54e68f5d8d417863035f12482251feea5cf7515725a2bb0f4f","7895e6baded473b093b57993ae3497a47b0ea78cf35b37d1387f226f445d9018","76a0c37e6f3d9d508c4bce1d7162514e","09e146"}}
     };
   }
 
@@ -443,6 +439,9 @@ namespace config
     uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 0x149eb318; // SaLvS
     uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0xf343eb318; // SaLvSi
     uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0x2d47eb318; // SaLvSs
+    uint64_t const CARROT_PUBLIC_ADDRESS_BASE58_PREFIX = 0x24cc96; // SC1S
+    uint64_t const CARROT_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0x1a848c96; // SC1Si
+    uint64_t const CARROT_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0x384cc96; // SC1Ss
     uint16_t const P2P_DEFAULT_PORT = 39080;
     uint16_t const RPC_DEFAULT_PORT = 39081;
     uint16_t const ZMQ_RPC_DEFAULT_PORT = 39082;
@@ -466,24 +465,24 @@ namespace config
 
     std::string const TREASURY_ADDRESS = "fuLMowH85abK8nz9BBMEem7MAfUbQu4aSHHUV9j5Z86o6Go9Lv2U5ZQiJCWPY9R9HA8p5idburazjAhCqDngLo7fYPCD9ciM9ee1A";
 
-    // treasury payout {tx-key, output-key} pairs
-    const std::vector<std::pair<std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_KEYS = {
-      {"a1bdd1da651fbbb845232816e1aa2d4ff29b790f10bbd4f574a012f1199e15a4", "b0733ab6f251b16458efa9ebb3fb99bd54d43173b5768fe9ffc42e0fe46ae3a8"},
-      {"47996eccbcc078b06d0f6ece37bf3a700c2bd60adfdd898b22096f16a9ad315c", "fd6bcceb4799ee067d59b97a6f66a0f9a70f134220259d3b4d6a2278ba4aca4c"},
-      {"a3e6754a849b80c21a77e6065fefdae29eeeabf17c407453356244a00545bdb8", "3d395454df1452d715d27190e022b20395871c99af578f7251c3f9752e0274a6"},
-      {"0d5e97a910e0f9c606ad9c711b6595aaed142d857cde2efa519112b9a29240d5", "56c29e28bdcf4f20b4b45906b93ae7c4bf9ee82e18cd45543cb69a14ce5efb88"},
-      {"495fa363de88915aa8b74818c4b80715a882a688b4f7127ab7cd3b6885f3567a", "d42dfe0da5579c82e8255eba8c0a17170023f14a6a5030da6abf9f10abb52cbb"},
-      {"85ea10ec40390e4f406446fb519e974d89536154045c6df28bb3b538b254e20d", "0ce2b7dd3a8ce8b596889dac8081a62f98fd70f1f043944ab4ac592c3c59e77b"},
-      {"40f201b38a319dda81e7201e57fea7924067a4a332ed71b8e51ec29ac2d67310", "8289aa6963b98d1034e94eae55d8be6b33d0a88f14f174ebcbaec70837986c7c"},
-      {"c5a648cc7846341357b7b4653a58f9eb4800d88b5de587bceec7a5c28f98d05a", "3f308a203845d88e5e728fcebcdcea1f90e2f424d461617993c672a6138ad2d8"},
-      {"4c51d6550b8eeb6cc8f0d395cc83a5f90ec2a4d86501b3f68da48d618ccf5711", "53f0bd8cebeefb3a88fffa5d7f6ad43d4712608ded561732467ca499df940454"},
-      {"ce2f5d82118fed03d5e269e285fc16189a6cd34f38999e5c055a5dea5fce61bc", "f7fc6948b194d9bd6f2df6ecb83f04e6c8d1a2556a63fedb310a4631fe1bfc42"},
-      {"6248028fd77fb02b5c6ea72dea10b417891a2da7aaf9565aed382e063b4981a3", "63986e1177499bdb23cd49afb519ec18f38cb1b0c386220b376d8ffdc2e37890"},
-      {"6adcb695aa5d6d01133c68900f29e501e9549816e827ea0c164bbc78f3534dd6", "6a440ccb18f5e703e8000de3865ac40d4c18f081270d32eef377dc831f28d8d0"},
-      {"b97a4d2259480f34f20e41c489ab5c2e5ae9ee84d8672a7eff8012f2260e121e", "e6eb9147ff40e22209d321d0f1bfbfe20acf5ceb6b9d0bfb13688ad28aa1232e"},
-      {"4fd214602a36902f22d16927244c456e8cc5a406a9570131f138a028214ffdf0", "34060b8bd96009b9b298280ebd84fa9587fa8c9df6fb5ad0270fb6cd2098885c"},
-      {"9d60178ec6d6599d7a31298f2559fb9c3111f2c70494b3a1638db877ea55b808", "7985ed03856a929663e954738d0938713407717835f760c7ca4d54844a128c91"},
-      {"cd65718eab234bf419332e53bd2f48e2ade70af48c5e126ab5080321e1493dfc", "581cb4cca7a0a029ee2cac51dfc00a0c3a657d2eaf67ed3c6ae7bacc11b4f007"},
+    // treasury payout {tx-key, output-key, anchor_enc, view_tag} tuples
+    const std::map<uint64_t, std::tuple<std::string, std::string, std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_DATA = {
+      {1000000ULL, {"a1bdd1da651fbbb845232816e1aa2d4ff29b790f10bbd4f574a012f1199e15a4", "b0733ab6f251b16458efa9ebb3fb99bd54d43173b5768fe9ffc42e0fe46ae3a8", "00", "00"}},
+      {1020000ULL, {"47996eccbcc078b06d0f6ece37bf3a700c2bd60adfdd898b22096f16a9ad315c", "fd6bcceb4799ee067d59b97a6f66a0f9a70f134220259d3b4d6a2278ba4aca4c", "00", "00"}},
+      {1040000ULL, {"a3e6754a849b80c21a77e6065fefdae29eeeabf17c407453356244a00545bdb8", "3d395454df1452d715d27190e022b20395871c99af578f7251c3f9752e0274a6", "00", "00"}},
+      {1060000ULL, {"0d5e97a910e0f9c606ad9c711b6595aaed142d857cde2efa519112b9a29240d5", "56c29e28bdcf4f20b4b45906b93ae7c4bf9ee82e18cd45543cb69a14ce5efb88", "00", "00"}},
+      {1080000ULL, {"495fa363de88915aa8b74818c4b80715a882a688b4f7127ab7cd3b6885f3567a", "d42dfe0da5579c82e8255eba8c0a17170023f14a6a5030da6abf9f10abb52cbb", "00", "00"}},
+      {1100000ULL, {"85ea10ec40390e4f406446fb519e974d89536154045c6df28bb3b538b254e20d", "0ce2b7dd3a8ce8b596889dac8081a62f98fd70f1f043944ab4ac592c3c59e77b", "00", "00"}},
+      {1120000ULL, {"40f201b38a319dda81e7201e57fea7924067a4a332ed71b8e51ec29ac2d67310", "8289aa6963b98d1034e94eae55d8be6b33d0a88f14f174ebcbaec70837986c7c", "00", "00"}},
+      {1140000ULL, {"c5a648cc7846341357b7b4653a58f9eb4800d88b5de587bceec7a5c28f98d05a", "3f308a203845d88e5e728fcebcdcea1f90e2f424d461617993c672a6138ad2d8", "00", "00"}},
+      {1160000ULL, {"4c51d6550b8eeb6cc8f0d395cc83a5f90ec2a4d86501b3f68da48d618ccf5711", "53f0bd8cebeefb3a88fffa5d7f6ad43d4712608ded561732467ca499df940454", "00", "00"}},
+      {1180000ULL, {"ce2f5d82118fed03d5e269e285fc16189a6cd34f38999e5c055a5dea5fce61bc", "f7fc6948b194d9bd6f2df6ecb83f04e6c8d1a2556a63fedb310a4631fe1bfc42", "00", "00"}},
+      {1200000ULL, {"6248028fd77fb02b5c6ea72dea10b417891a2da7aaf9565aed382e063b4981a3", "63986e1177499bdb23cd49afb519ec18f38cb1b0c386220b376d8ffdc2e37890", "00", "00"}},
+      {1220000ULL, {"6adcb695aa5d6d01133c68900f29e501e9549816e827ea0c164bbc78f3534dd6", "6a440ccb18f5e703e8000de3865ac40d4c18f081270d32eef377dc831f28d8d0", "00", "00"}},
+      {1240000ULL, {"b97a4d2259480f34f20e41c489ab5c2e5ae9ee84d8672a7eff8012f2260e121e", "e6eb9147ff40e22209d321d0f1bfbfe20acf5ceb6b9d0bfb13688ad28aa1232e", "00", "00"}},
+      {1260000ULL, {"4fd214602a36902f22d16927244c456e8cc5a406a9570131f138a028214ffdf0", "34060b8bd96009b9b298280ebd84fa9587fa8c9df6fb5ad0270fb6cd2098885c", "00", "00"}},
+      {1280000ULL, {"9d60178ec6d6599d7a31298f2559fb9c3111f2c70494b3a1638db877ea55b808", "7985ed03856a929663e954738d0938713407717835f760c7ca4d54844a128c91", "00", "00"}},
+      {1300000ULL, {"cd65718eab234bf419332e53bd2f48e2ade70af48c5e126ab5080321e1493dfc", "581cb4cca7a0a029ee2cac51dfc00a0c3a657d2eaf67ed3c6ae7bacc11b4f007", "00", "00"}},
     };
   }
 }
@@ -503,6 +502,9 @@ namespace cryptonote
     uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
     uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
     uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX;
+    uint64_t const CARROT_PUBLIC_ADDRESS_BASE58_PREFIX;
+    uint64_t const CARROT_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
+    uint64_t const CARROT_PUBLIC_SUBADDRESS_BASE58_PREFIX;
     uint16_t const P2P_DEFAULT_PORT;
     uint16_t const RPC_DEFAULT_PORT;
     uint16_t const ZMQ_RPC_DEFAULT_PORT;
@@ -515,7 +517,7 @@ namespace cryptonote
     uint64_t TREASURY_SAL1_MINT_PERIOD;
     std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> const AUDIT_HARD_FORKS;
     std::string TREASURY_ADDRESS;
-    std::vector<std::pair<std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_KEYS;
+    std::map<uint64_t, std::tuple<std::string, std::string, std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_DATA;
   };
   inline const config_t& get_config(network_type nettype)
   {
@@ -523,6 +525,9 @@ namespace cryptonote
       ::config::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
       ::config::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
       ::config::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
+      ::config::CARROT_PUBLIC_ADDRESS_BASE58_PREFIX,
+      ::config::CARROT_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
+      ::config::CARROT_PUBLIC_SUBADDRESS_BASE58_PREFIX,
       ::config::P2P_DEFAULT_PORT,
       ::config::RPC_DEFAULT_PORT,
       ::config::ZMQ_RPC_DEFAULT_PORT,
@@ -535,12 +540,15 @@ namespace cryptonote
       ::config::TREASURY_SAL1_MINT_PERIOD,
       ::config::AUDIT_HARD_FORKS,
       ::config::TREASURY_ADDRESS,
-      ::config::TREASURY_SAL1_MINT_OUTPUT_KEYS
+      ::config::TREASURY_SAL1_MINT_OUTPUT_DATA
     };
     static const config_t testnet = {
       ::config::testnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
       ::config::testnet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
       ::config::testnet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
+      ::config::testnet::CARROT_PUBLIC_ADDRESS_BASE58_PREFIX,
+      ::config::testnet::CARROT_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
+      ::config::testnet::CARROT_PUBLIC_SUBADDRESS_BASE58_PREFIX,
       ::config::testnet::P2P_DEFAULT_PORT,
       ::config::testnet::RPC_DEFAULT_PORT,
       ::config::testnet::ZMQ_RPC_DEFAULT_PORT,
@@ -553,12 +561,15 @@ namespace cryptonote
       ::config::testnet::TREASURY_SAL1_MINT_PERIOD,
       ::config::testnet::AUDIT_HARD_FORKS,
       ::config::testnet::TREASURY_ADDRESS,
-      ::config::testnet::TREASURY_SAL1_MINT_OUTPUT_KEYS
+      ::config::testnet::TREASURY_SAL1_MINT_OUTPUT_DATA
     };
     static const config_t stagenet = {
       ::config::stagenet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
       ::config::stagenet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
       ::config::stagenet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
+      ::config::stagenet::CARROT_PUBLIC_ADDRESS_BASE58_PREFIX,
+      ::config::stagenet::CARROT_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
+      ::config::stagenet::CARROT_PUBLIC_SUBADDRESS_BASE58_PREFIX,
       ::config::stagenet::P2P_DEFAULT_PORT,
       ::config::stagenet::RPC_DEFAULT_PORT,
       ::config::stagenet::ZMQ_RPC_DEFAULT_PORT,
@@ -571,7 +582,7 @@ namespace cryptonote
       ::config::stagenet::TREASURY_SAL1_MINT_PERIOD,
       ::config::stagenet::AUDIT_HARD_FORKS,
       ::config::stagenet::TREASURY_ADDRESS,
-      ::config::stagenet::TREASURY_SAL1_MINT_OUTPUT_KEYS
+      ::config::stagenet::TREASURY_SAL1_MINT_OUTPUT_DATA
     };
     switch (nettype)
     {

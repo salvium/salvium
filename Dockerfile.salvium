@@ -1,0 +1,35 @@
+# Use Ubuntu 24.04 as base
+FROM ubuntu:24.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake pkg-config git imagemagick libcap-dev librsvg2-bin libz-dev \
+    g++-mingw-w64-x86-64 clang gcc-arm-none-eabi binutils-x86-64-linux-gnu libtiff-tools \
+    libssl-dev libzmq3-dev libunbound-dev libsodium-dev libunwind8-dev liblzma-dev \
+    libreadline-dev libexpat1-dev libpgm-dev qttools5-dev-tools libhidapi-dev libusb-1.0-0-dev \
+    libprotobuf-dev protobuf-compiler libudev-dev libboost-all-dev python3 ccache doxygen graphviz \
+    ca-certificates curl zip libtool gperf \
+ && rm -rf /var/lib/apt/lists/*
+
+# Clone the develop branch
+WORKDIR /opt
+RUN git clone --recursive -b develop https://github.com/salvium/salvium.git
+WORKDIR /opt/salvium
+
+# make the script runnable
+RUN chmod +x make_releases.sh
+
+# Make sure the output folder exists
+RUN mkdir ~/releases
+    
+# Expose the releases directory for copying zip files to the host
+VOLUME ["~/releases"]
+
+ENTRYPOINT ["/opt/salvium/make_releases.sh"]
+
+
+# To access the generated zip files on your host, run the container with:
+#   docker run -v ~/releases:/root/releases <image>
+# This will copy the zip files to your host's ~/salvium-releases directory.

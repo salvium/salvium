@@ -37,6 +37,7 @@
 #include "ringct/rctTypes.h"
 #include "ringct/rctSigs.h"
 #include "ringct/rctOps.h"
+#include "crypto/generators.h"
 #include "device/device.hpp"
 #include "string_tools.h"
 
@@ -297,6 +298,190 @@ TEST(ringct, CLSAG)
 
   // check it's still good, in case we failed to restore
   ASSERT_TRUE(rct::verRctCLSAGSimple(message,clsag,pubs,Cout));
+}
+
+TEST(ringct, TCLSAG)
+{
+  const size_t N = 16;
+  const size_t idx = 5;
+  ctkeyV pubs;
+  key x, y, t, t2, u;
+  const key message = identity();
+  ctkey backup;
+  tclsag tclsag;
+  key backup_key;
+
+  for (size_t i = 0; i < N; ++i)
+  {
+    key sk;
+    ctkey tmp;
+
+    skpkGen(sk, tmp.dest);
+    skpkGen(sk, tmp.mask);
+
+    pubs.push_back(tmp);
+  }
+
+  // Set P[idx]
+  x = skGen();
+  y = skGen();
+  addKeys2(pubs[idx].dest, x, y, rct::pk2rct(crypto::get_T()));
+
+  // Set C[idx]
+  t = skGen();
+  u = skGen();
+  addKeys2(pubs[idx].mask,t,u,H);
+
+  // Set commitment offset
+  key Cout;
+  t2 = skGen();
+  addKeys2(Cout,t2,u,H);
+
+  // bad message
+  tclsag = rct::proveRctTCLSAGSimple(zero(), pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+
+  // bad index at creation
+  try
+  {
+    tclsag = rct::proveRctTCLSAGSimple(message, pubs, x, y, t, t2, Cout, (idx + 1) % N, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  }
+  catch (...) { /* either exception, or failure to verify above */ }
+
+  // bad C at creation
+  backup = pubs[idx];
+  pubs[idx].mask = scalarmultBase(skGen());
+  try
+  {
+    tclsag = rct::proveRctTCLSAGSimple(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  }
+  catch (...) { /* either exception, or failure to verify above */ }
+  pubs[idx] = backup;
+
+  // bad x at creation
+  backup_key = x;
+  skGen(x);
+  try
+  {
+    tclsag = rct::proveRctTCLSAGSimple(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  }
+  catch (...) { /* either exception, or failure to verify above */ }
+  x = backup_key;
+
+  // bad y at creation
+  backup_key = y;
+  skGen(y);
+  try
+  {
+    tclsag = rct::proveRctTCLSAGSimple(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  }
+  catch (...) { /* either exception, or failure to verify above */ }
+  y = backup_key;
+
+  // bad P at creation
+  backup = pubs[idx];
+  pubs[idx].dest = scalarmultBase(skGen());
+  try
+  {
+    tclsag = rct::proveRctTCLSAGSimple(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  }
+  catch (...) { /* either exception, or failure to verify above */ }
+  pubs[idx] = backup;
+
+  // generate the signature
+  tclsag = rct::proveRctTCLSAGSimple(message, pubs, x, y, t, t2, Cout, idx, hw::get_device("default"));
+  ASSERT_TRUE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+
+  // empty sx
+  auto sbackup = tclsag.sx;
+  tclsag.sx.clear();
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.sx = sbackup;
+
+  // too few sx elements
+  backup_key = tclsag.sx.back();
+  tclsag.sx.pop_back();
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.sx.push_back(backup_key);
+
+  // too many sx elements
+  tclsag.sx.push_back(skGen());
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.sx.pop_back();
+
+  // bad sx in tclsag at verification
+  for (auto &sx: tclsag.sx)
+  {
+    backup_key = sx;
+    sx = skGen();
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+    sx = backup_key;
+  }
+
+  // empty sy
+  sbackup = tclsag.sy;
+  tclsag.sy.clear();
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.sy = sbackup;
+
+  // too few sy elements
+  backup_key = tclsag.sy.back();
+  tclsag.sy.pop_back();
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.sy.push_back(backup_key);
+
+  // too many sy elements
+  tclsag.sy.push_back(skGen());
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.sy.pop_back();
+
+  // bad sy in tclsag at verification
+  for (auto &sy: tclsag.sy)
+  {
+    backup_key = sy;
+    sy = skGen();
+    ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+    sy = backup_key;
+  }
+
+  // bad c1 in tclsag at verification
+  backup_key = tclsag.c1;
+  tclsag.c1 = skGen();
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.c1 = backup_key;
+
+  // bad I in tclsag at verification
+  backup_key = tclsag.I;
+  tclsag.I = scalarmultBase(skGen());
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.I = backup_key;
+
+  // bad D in tclsag at verification
+  backup_key = tclsag.D;
+  tclsag.D = scalarmultBase(skGen());
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.D = backup_key;
+
+  // D not in main subgroup in tclsag at verification
+  backup_key = tclsag.D;
+  rct::key foo;
+  ASSERT_TRUE(epee::string_tools::hex_to_pod("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa", foo));
+  tclsag.D = rct::addKeys(tclsag.D, foo);
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  tclsag.D = backup_key;
+
+  // swapped I and D in tclsag at verification
+  std::swap(tclsag.I, tclsag.D);
+  ASSERT_FALSE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
+  std::swap(tclsag.I, tclsag.D);
+
+  // check it's still good, in case we failed to restore
+  ASSERT_TRUE(rct::verRctTCLSAGSimple(message,tclsag,pubs,Cout));
 }
 
 TEST(ringct, range_proofs)

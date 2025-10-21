@@ -513,8 +513,8 @@ struct Wallet
     virtual const std::string& getPassword() const = 0;
     virtual bool setDevicePin(const std::string &pin) { (void)pin; return false; };
     virtual bool setDevicePassphrase(const std::string &passphrase) { (void)passphrase; return false; };
-    virtual std::string address(uint32_t accountIndex = 0, uint32_t addressIndex = 0) const = 0;
-    std::string mainAddress() const { return address(0, 0); }
+    virtual std::string address(uint32_t accountIndex = 0, uint32_t addressIndex = 0, bool carrot = true) const = 0;
+    std::string mainAddress(bool carrot = true) const { return address(0, 0, carrot); }
     virtual std::string path() const = 0;
     virtual NetworkType nettype() const = 0;
     bool mainnet() const { return nettype() == MAINNET; }
@@ -533,7 +533,7 @@ struct Wallet
      *                            generated
      * \return                  - 106 characters string representing integrated address
      */
-    virtual std::string integratedAddress(const std::string &payment_id) const = 0;
+    virtual std::string integratedAddress(const std::string &payment_id, bool carrot = true) const = 0;
     
    /*!
     * \brief secretViewKey     - returns secret view key
@@ -559,11 +559,47 @@ struct Wallet
     */
     virtual std::string publicSpendKey() const = 0;
 
+   /*!
+    * \brief allCarrotKeys    - returns all Carrot keys
+    * [0] - s_master
+    * [1] - k_prove_spend
+    * [2] - s_view_balance
+    * [3] - k_view_incoming
+    * [4] - k_generate_image
+    * [5] - s_generate_address
+    * \return                 - vector of all Carrot keys
+    */
+    virtual std::vector<std::string> carrotKeys() const = 0;
+
     /*!
      * \brief publicMultisigSignerKey - returns public signer key
      * \return                        - public multisignature signer key or empty string if wallet is not multisig
      */
     virtual std::string publicMultisigSignerKey() const = 0;
+
+   /*!
+    * \brief secretViewBalance   - returns Carrot "view balance" secret
+    * \return                    - Carrot s_vb
+    */
+    virtual std::string secretViewBalance() const = 0;
+
+   /*!
+    * \brief secretProveSpend    - returns Carrot "prove spend" secret
+    * \return                    - Carrot secret k_ps
+    */
+    virtual std::string secretProveSpend() const = 0;
+
+   /*!
+    * \brief secretGenerateAddress - returns Carrot "generate address" secret
+    * \return                      - Carrot secret s_ga
+    */
+    virtual std::string secretGenerateAddress() const = 0;
+
+   /*!
+    * \brief secretGenerateImage - returns Carrot "generate key image" secret
+    * \return                    - Carrot secret k_gi
+    */
+    virtual std::string secretGenerateImage() const = 0;
 
     /*!
      * \brief stop - interrupts wallet refresh() loop once (doesn't stop background refresh thread)

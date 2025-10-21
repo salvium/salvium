@@ -53,8 +53,10 @@
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "wallet.simplewallet"
-// Hardcode Monero's donation address (see #1447)
-constexpr const char SALVIUM_DONATION_ADDR[] = "888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H";
+
+// Hardcode Salvium's donation address (pre-Carrot and post-Carrot)
+constexpr const char SALVIUM_DONATION_ADDR[] = "SaLvdVvjgeffnxRDFoEEgeSt3jVcU49W7byT6nawvJFVio9XR7V53tU4mdo3HjjKno2WApvqxmcmKLZyoeSZZQ6jVqSGj1TLsNL";
+constexpr const char SALVIUM_DONATION_ADDR_CARROT[] = "SC11sFBPrGmNuT8AiTPUW479BwkdPJwBxdjKEhZ96yDfFg3B4mawgcpE1YfCAa1zwzUiRTMP9eqB54av48ALhzUu1Q5QoPGUfh";
 
 /*!
  * \namespace cryptonote
@@ -99,14 +101,18 @@ namespace cryptonote
 
     boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm, const crypto::secret_key& recovery_key,
         bool recover, bool two_random, const std::string &old_language);
-    boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm, const cryptonote::account_public_address& address,
-        const boost::optional<crypto::secret_key>& spendkey, const crypto::secret_key& viewkey);
+    boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm,
+                                                      const cryptonote::account_public_address& address,
+                                                      const boost::optional<crypto::secret_key>& spendkey,
+                                                      const crypto::secret_key& viewkey
+                                                      );
     boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm,
         const epee::wipeable_string &multisig_keys, const epee::wipeable_string &seed_pass, const std::string &old_language);
     boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm);
     boost::optional<epee::wipeable_string> open_wallet(const boost::program_options::variables_map& vm);
     bool close_wallet();
 
+    bool carrot_keys(const std::vector<std::string> &args = std::vector<std::string>());
     bool viewkey(const std::vector<std::string> &args = std::vector<std::string>());
     bool spendkey(const std::vector<std::string> &args = std::vector<std::string>());
     bool seed(const std::vector<std::string> &args = std::vector<std::string>());
@@ -427,6 +433,7 @@ namespace cryptonote
     std::string m_generate_new;
     std::string m_generate_from_device;
     std::string m_generate_from_view_key;
+    std::string m_generate_from_svb_key;
     std::string m_generate_from_spend_key;
     std::string m_generate_from_keys;
     std::string m_generate_from_multisig_keys;
