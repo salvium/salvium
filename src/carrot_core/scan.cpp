@@ -387,12 +387,11 @@ bool try_scan_carrot_enote_external_sender(const CarrotEnoteV1 &enote,
     CarrotEnoteType &enote_type_out,
     const bool check_pid)
 {
-  epee::span<const crypto::public_key> main_address_spend_pubkeys;
-  if (destination.is_subaddress)
-    main_address_spend_pubkeys = {};
-  else
-    main_address_spend_pubkeys = {&destination.address_spend_pubkey, 1};
-    
+    epee::span<const crypto::public_key> main_address_spend_pubkeys;
+    if (destination.is_subaddress)
+        main_address_spend_pubkeys = {};
+    else
+        main_address_spend_pubkeys = {&destination.address_spend_pubkey, 1};
     crypto::public_key recovered_address_spend_pubkey;
     payment_id_t recovered_payment_id;
     CarrotEnoteType recovered_enote_type;
