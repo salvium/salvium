@@ -151,6 +151,7 @@ static cryptonote::tx_destination_entry make_tx_destination_entry(
         {payment_proposal.destination.address_spend_pubkey, payment_proposal.destination.address_view_pubkey, /*m_is_carrot*/true},
         payment_proposal.destination.is_subaddress);
     dest.is_integrated = payment_proposal.destination.payment_id != carrot::null_payment_id;
+    dest.asset_type = payment_proposal.asset_type;
     return dest;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -165,9 +166,11 @@ static cryptonote::tx_destination_entry make_tx_destination_entry(
             address_view_pubkey),
         "make_tx_destination_entry: view-key multiplication failed");
 
-   return cryptonote::tx_destination_entry(payment_proposal.proposal.amount,
+   cryptonote::tx_destination_entry dest = cryptonote::tx_destination_entry(payment_proposal.proposal.amount,
        {payment_proposal.proposal.destination_address_spend_pubkey, address_view_pubkey, /*m_is_carrot*/true},
        payment_proposal.subaddr_index.index.is_subaddress());
+    dest.asset_type = payment_proposal.proposal.asset_type;
+    return dest;
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------

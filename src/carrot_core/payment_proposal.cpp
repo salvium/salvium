@@ -219,6 +219,7 @@ bool operator==(const CarrotPaymentProposalV1 &a, const CarrotPaymentProposalV1 
 {
     return a.destination == b.destination &&
            a.amount      == b.amount &&
+           a.asset_type  == b.asset_type &&
            a.randomness  == b.randomness;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -228,6 +229,7 @@ bool operator==(const CarrotPaymentProposalSelfSendV1 &a, const CarrotPaymentPro
            a.amount                           == b.amount &&
            a.enote_type                       == b.enote_type &&
            a.internal_message                 == b.internal_message &&
+           a.asset_type                       == b.asset_type &&
            0 == memcmp(&a.enote_ephemeral_pubkey, &b.enote_ephemeral_pubkey, sizeof(mx25519_pubkey));
 }
 //-------------------------------------------------------------------------------------------------------------------

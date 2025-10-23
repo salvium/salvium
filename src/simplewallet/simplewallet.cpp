@@ -10116,7 +10116,9 @@ bool simple_wallet::show_transfers(const std::vector<std::string> &args_)
       transfer.type == "burnt"  ? console_color_yellow :
       transfer.type == "stake"  ? console_color_cyan :
       transfer.type == "yield"  ? console_color_magenta :
-      transfer.confirmed ? ((transfer.direction == "in" || transfer.direction == "block") ? console_color_green : console_color_white) : console_color_default;
+      transfer.confirmed ?
+      ((transfer.direction == "in" || transfer.direction == "block") ?
+       (transfer.asset_type == "SAL" ? console_color_green : console_color_blue) : console_color_white) : console_color_default;
 
     std::string destinations = "-";
     if (!transfer.outputs.empty())
