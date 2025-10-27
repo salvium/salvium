@@ -1291,7 +1291,8 @@ wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionPropos
     carrot::encrypted_payment_id_t encrypted_payment_id;
     std::vector<std::pair<bool, std::size_t>> sorted_payment_proposal_indices;
     carrot::get_output_enote_proposals_from_proposal_v1(tx_proposal,
-        /*s_view_balance_dev=*/nullptr,
+        &account.s_view_balance_dev,
+        ///*s_view_balance_dev=*/nullptr,
         &account.k_view_incoming_dev,
         output_enote_proposals,
         encrypted_payment_id,
