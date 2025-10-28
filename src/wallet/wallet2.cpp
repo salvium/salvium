@@ -12999,14 +12999,43 @@ bool wallet2::check_spend_proof(const crypto::hash &txid, const std::string &mes
 void wallet2::check_tx_key(const crypto::hash &txid, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const cryptonote::account_public_address &address, uint64_t &received, bool &in_pool, uint64_t &confirmations)
 {
   crypto::key_derivation derivation;
-  THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(address.m_view_public_key, tx_key, derivation), error::wallet_internal_error,
-    "Failed to generate key derivation from supplied parameters");
-
   std::vector<crypto::key_derivation> additional_derivations;
-  additional_derivations.resize(additional_tx_keys.size());
-  for (size_t i = 0; i < additional_tx_keys.size(); ++i)
-    THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(address.m_view_public_key, additional_tx_keys[i], additional_derivations[i]), error::wallet_internal_error,
+  if (address.m_is_carrot)
+  {
+    // For Carrot enotes, use X25519 scalar multiplication
+    mx25519_pubkey s_sender_receiver_unctx;
+    bool success = carrot::make_carrot_uncontextualized_shared_key_sender(
+      tx_key,
+      address.m_view_public_key,
+      s_sender_receiver_unctx);
+    THROW_WALLET_EXCEPTION_IF(!success, error::wallet_internal_error,
+      "Failed to generate X25519 key derivation from supplied parameters (main)");
+    derivation = carrot::raw_byte_convert<crypto::key_derivation>(s_sender_receiver_unctx);
+
+    additional_derivations.resize(additional_tx_keys.size());
+    for (size_t i = 0; i < additional_tx_keys.size(); ++i)
+    {
+      mx25519_pubkey additional_s_sender_receiver_unctx;
+      success = carrot::make_carrot_uncontextualized_shared_key_sender(
+        additional_tx_keys[i],
+        address.m_view_public_key,
+        additional_s_sender_receiver_unctx);
+      THROW_WALLET_EXCEPTION_IF(!success, error::wallet_internal_error,
+        "Failed to generate X25519 key derivation from supplied parameters (additional)");
+      additional_derivations[i] = carrot::raw_byte_convert<crypto::key_derivation>(additional_s_sender_receiver_unctx);
+    }
+  }
+  else
+  {
+    // For legacy enotes, use Edwards curve multiplication
+    THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(address.m_view_public_key, tx_key, derivation), error::wallet_internal_error,
       "Failed to generate key derivation from supplied parameters");
+
+    additional_derivations.resize(additional_tx_keys.size());
+    for (size_t i = 0; i < additional_tx_keys.size(); ++i)
+      THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(address.m_view_public_key, additional_tx_keys[i], additional_derivations[i]), error::wallet_internal_error,
+        "Failed to generate key derivation from supplied parameters");
+  }
 
   check_tx_key_helper(txid, derivation, additional_derivations, address, received, in_pool, confirmations);
 }
@@ -13015,8 +13044,9 @@ void wallet2::check_tx_key_helper(const cryptonote::transaction &tx, const crypt
 {
   received = 0;
 
+  const bool use_additional_derivations = !additional_derivations.empty() && address.m_is_carrot;
   const auto enote_scan_infos = wallet::view_incoming_scan_transaction_as_sender(tx,
-                                                                                 {&derivation, 1},
+                                                                                 use_additional_derivations ? epee::span<const crypto::key_derivation>{} : epee::span<const crypto::key_derivation>{&derivation, 1},
                                                                                  epee::to_span(additional_derivations),
                                                                                  address);
 

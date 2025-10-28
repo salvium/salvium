@@ -82,6 +82,8 @@ struct CarrotPaymentProposalSelfSendV1 final
     std::optional<mx25519_pubkey> enote_ephemeral_pubkey;
     /// anchor: arbitrary, pre-encrypted message for _internal_ selfsends
     std::optional<janus_anchor_t> internal_message;
+    /// asset type
+    std::string asset_type;
 };
 
 struct RCTOutputEnoteProposal

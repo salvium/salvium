@@ -275,7 +275,8 @@ void make_carrot_transaction_proposal_v1_transfer(
         .proposal = CarrotPaymentProposalSelfSendV1{
             .destination_address_spend_pubkey = change_address_spend_pubkey,
             .amount = 0,
-            .enote_type = add_payment_type_selfsend ? CarrotEnoteType::PAYMENT : CarrotEnoteType::CHANGE
+            .enote_type = add_payment_type_selfsend ? CarrotEnoteType::PAYMENT : CarrotEnoteType::CHANGE,
+            .asset_type = "SAL1"
         },
         .subaddr_index = change_address_index
     });
