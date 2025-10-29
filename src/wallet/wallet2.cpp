@@ -5464,14 +5464,31 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
   }
   const cryptonote::account_keys& keys = m_account.get_keys();
   hw::device &hwdev = m_account.get_device();
-  r = r && hwdev.verify_keys(keys.m_view_secret_key,  keys.m_account_address.m_view_public_key);
+  if (m_watch_only) {
+
+    // Check to see if this is a Carrot SVB wallet
+    crypto::secret_key kv_recomputed;
+    carrot::make_carrot_viewincoming_key(keys.s_view_balance, kv_recomputed);
+    THROW_WALLET_EXCEPTION_IF(keys.k_view_incoming != kv_recomputed, error::wallet_internal_error, "cannot compute viable wallet");
+    
+    // assume Carrot SVB wallet
+    m_account.create_from_svb_key(keys.m_carrot_account_address, keys.s_view_balance);
+
+    // Now verify that the account address has a public view key that matches k_view_incoming
+    r = r && hwdev.verify_keys(keys.k_view_incoming,  keys.m_carrot_main_address.m_view_public_key);
+
+  } else {
+    // Assume normal wallet
+    r = r && hwdev.verify_keys(keys.m_view_secret_key,  keys.m_account_address.m_view_public_key);
+  }
   if (!m_watch_only && !m_multisig && hwdev.device_protocol() != hw::device::PROTOCOL_COLD && !m_is_background_wallet)
     r = r && hwdev.verify_keys(keys.m_spend_secret_key, keys.m_account_address.m_spend_public_key);
   THROW_WALLET_EXCEPTION_IF(!r, error::wallet_files_doesnt_correspond, m_keys_file, m_wallet_file);
 
   if (r)
   {
-    m_account.set_carrot_keys();
+    if (!m_watch_only)
+      m_account.set_carrot_keys();
 
     if (!m_is_background_wallet)
       setup_keys(password);
@@ -5561,7 +5578,7 @@ bool wallet2::verify_password(const std::string& keys_file_name, const epee::wip
     encrypted_secret_keys = field_encrypted_secret_keys;
   }
 
-  cryptonote::account_base account_data_check;
+  carrot::carrot_and_legacy_account account_data_check;
 
   r = epee::serialization::load_t_from_binary(account_data_check, account_data);
 
@@ -5569,7 +5586,14 @@ bool wallet2::verify_password(const std::string& keys_file_name, const epee::wip
     account_data_check.decrypt_keys(key);
 
   const cryptonote::account_keys& keys = account_data_check.get_keys();
-  r = r && hwdev.verify_keys(keys.m_view_secret_key,  keys.m_account_address.m_view_public_key);
+  if (no_spend_key) {
+    // assume Carrot SVB wallet
+    account_data_check.create_from_svb_key(keys.m_carrot_account_address, keys.s_view_balance);
+    // Now verify that the account address has a public view key that matches k_view_incoming
+    r = r && hwdev.verify_keys(keys.k_view_incoming,  keys.m_carrot_main_address.m_view_public_key);
+  } else {
+    r = r && hwdev.verify_keys(keys.m_view_secret_key,  keys.m_account_address.m_view_public_key);
+  }
   if(!no_spend_key)
     r = r && hwdev.verify_keys(keys.m_spend_secret_key, keys.m_account_address.m_spend_public_key);
   spend_key_out = (!no_spend_key && r) ? keys.m_spend_secret_key : crypto::null_skey;
@@ -6826,10 +6850,17 @@ void wallet2::load_wallet_cache(const bool use_fs, const std::string& cache_buf)
         ar >> *this;
       }
     }
-    THROW_WALLET_EXCEPTION_IF(
-      m_account_public_address.m_spend_public_key != m_account.get_keys().m_account_address.m_spend_public_key ||
-      m_account_public_address.m_view_public_key  != m_account.get_keys().m_account_address.m_view_public_key,
-      error::wallet_files_doesnt_correspond, m_keys_file, m_wallet_file);
+    if (m_watch_only) {
+      THROW_WALLET_EXCEPTION_IF(
+        m_account_public_address.m_spend_public_key != m_account.get_keys().m_carrot_main_address.m_spend_public_key ||
+        m_account_public_address.m_view_public_key  != m_account.get_keys().m_carrot_main_address.m_view_public_key,
+        error::wallet_files_doesnt_correspond, m_keys_file, m_wallet_file);
+    } else {
+      THROW_WALLET_EXCEPTION_IF(
+        m_account_public_address.m_spend_public_key != m_account.get_keys().m_account_address.m_spend_public_key ||
+        m_account_public_address.m_view_public_key  != m_account.get_keys().m_account_address.m_view_public_key,
+        error::wallet_files_doesnt_correspond, m_keys_file, m_wallet_file);
+    }
   }
 }
 //----------------------------------------------------------------------------------------------------

@@ -337,7 +337,7 @@ void carrot_and_legacy_account::set_keys(const cryptonote::account_keys& keys, b
 }
 //----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::create_from_svb_key(const cryptonote::account_public_address& address, const crypto::secret_key& svb_key)
-{   
+{
   // top level keys
   m_keys.s_master = crypto::null_skey;
   make_carrot_provespend_key(m_keys.s_master, m_keys.k_prove_spend);
@@ -359,7 +359,17 @@ void carrot_and_legacy_account::create_from_svb_key(const cryptonote::account_pu
   k_view_incoming_dev.view_key_scalar_mult_ed25519(crypto::get_G(),
                                                    m_keys.m_carrot_main_address.m_view_public_key
                                                    );
-    
+
+  // Store fields for Carrot
+  m_keys.m_spend_secret_key = crypto::null_skey;
+  m_keys.m_view_secret_key  = crypto::null_skey;
+  m_keys.m_account_address  = {crypto::null_pkey, crypto::null_pkey, false};
+
+  // Update ALL addresses to be Carrot-only
+  m_keys.m_carrot_account_address.m_is_carrot = true;
+  m_keys.m_carrot_main_address.m_is_carrot = true;
+  
+  // Set the default derive type for addresses
   this->default_derive_type = AddressDeriveType::Carrot;
 }
 //----------------------------------------------------------------------------------------------------------------------
