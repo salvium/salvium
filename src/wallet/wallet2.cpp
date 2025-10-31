@@ -3400,7 +3400,10 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
   {
     if (tx.vout.empty())
     {
-      MWARNING("Skipping tx without any outputs: " << get_transaction_hash(tx) << ", height: " << m_blockchain.size());
+      if (tx.type == cryptonote::transaction_type::PROTOCOL)
+        MDEBUG("Skipping protocol tx without any outputs: " << get_transaction_hash(tx) << ", height: " << m_blockchain.size());
+      else
+        MWARNING("Skipping tx without any outputs: " << get_transaction_hash(tx) << ", height: " << m_blockchain.size());
       return;
     }
 

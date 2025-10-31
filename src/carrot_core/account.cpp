@@ -288,7 +288,7 @@ void carrot_and_legacy_account::generate_subaddress_map(const std::pair<size_t, 
 
     for (uint32_t major_index = 0; major_index <= lookahead_size.first; ++major_index)
     {
-        for (uint32_t minor_index = 0; minor_index <= lookahead_size.first; ++minor_index)
+        for (uint32_t minor_index = 0; minor_index <= lookahead_size.second; ++minor_index)
         {
             for (const AddressDeriveType derive_type : derive_types)
             {
