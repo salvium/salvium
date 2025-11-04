@@ -3636,7 +3636,8 @@ simple_wallet::simple_wallet()
   m_cmd_binder.set_handler("account",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::account, _1),
                            tr(USAGE_ACCOUNT),
-                           tr("If no arguments are specified, the wallet shows all the existing accounts along with their balances.\n"
+                           tr("If no arguments are specified, the wallet shows all the existing accounts (that have balances) along with their balances.\n"
+                              "If the \"all\" argument is specified, the wallet shows all the existing accounts, even if they have zero balances.\n"
                               "If the \"new\" argument is specified, the wallet creates a new account with its label initialized by the provided label text (which can be empty).\n"
                               "If the \"switch\" argument is specified, the wallet switches to the account specified by <index>.\n"
                               "If the \"label\" argument is specified, the wallet sets the label of the account specified by <index> to the provided label text.\n"
