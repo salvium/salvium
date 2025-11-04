@@ -237,6 +237,7 @@ namespace
   const char* USAGE_SIGN_TRANSFER("sign_transfer [export_raw] [<filename>]");
   const char* USAGE_SET_LOG("set_log <level>|{+,-,}<categories>");
   const char* USAGE_ACCOUNT("account\n"
+                            "  account all\n"
                             "  account new <label text with white spaces allowed>\n"
                             "  account switch <index> \n"
                             "  account label <index> <label text with white spaces allowed>\n"
@@ -10696,12 +10697,21 @@ bool simple_wallet::account(const std::vector<std::string> &args/* = std::vector
   {
     // print all the existing accounts
     LOCK_IDLE_SCOPE();
-    print_accounts();
+    print_accounts(false);
     return true;
   }
 
   std::vector<std::string> local_args = args;
   std::string command = local_args[0];
+  
+  if (command == "all")
+  {
+    // print all accounts including zero balance
+    LOCK_IDLE_SCOPE();
+    print_accounts(true);
+    return true;
+  }
+  
   local_args.erase(local_args.begin());
   if (command == "new")
   {
@@ -10833,20 +10843,20 @@ bool simple_wallet::account(const std::vector<std::string> &args/* = std::vector
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-void simple_wallet::print_accounts()
+void simple_wallet::print_accounts(bool show_all)
 {
   const std::pair<std::map<std::string, std::string>, std::vector<std::string>>& account_tags = m_wallet->get_account_tags();
   size_t num_untagged_accounts = m_wallet->get_num_subaddress_accounts();
   for (const std::pair<const std::string, std::string>& p : account_tags.first)
   {
     const std::string& tag = p.first;
-    print_accounts(tag);
+    print_accounts(tag, show_all);
     num_untagged_accounts -= std::count(account_tags.second.begin(), account_tags.second.end(), tag);
     success_msg_writer() << "";
   }
 
   if (num_untagged_accounts > 0)
-    print_accounts("");
+    print_accounts("", show_all);
 
   if (num_untagged_accounts < m_wallet->get_num_subaddress_accounts()) {
     std::map<std::string, uint64_t> balances = m_wallet->balance_all(false);
@@ -10858,7 +10868,7 @@ void simple_wallet::print_accounts()
   }
 }
 //----------------------------------------------------------------------------------------------------
-void simple_wallet::print_accounts(const std::string& tag)
+void simple_wallet::print_accounts(const std::string& tag, bool show_all)
 {
   const std::pair<std::map<std::string, std::string>, std::vector<std::string>>& account_tags = m_wallet->get_account_tags();
   if (tag.empty())
@@ -10887,7 +10897,7 @@ void simple_wallet::print_accounts(const std::string& tag)
 
       auto balance = m_wallet->balance(account_index, asset, false);
       auto unlocked_balance = m_wallet->unlocked_balance(account_index, asset, false);
-      if (balance == 0)
+      if (!show_all && balance == 0)
         continue;
       success_msg_writer() << boost::format(tr(" %c%8u %8s %21s %21s %6s %21s"))
         % (m_current_subaddress_account == account_index ? '*' : ' ')
