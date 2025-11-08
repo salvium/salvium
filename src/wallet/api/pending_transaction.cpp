@@ -165,10 +165,20 @@ bool PendingTransactionImpl::commit(const std::string &filename, bool overwrite)
 uint64_t PendingTransactionImpl::amount() const
 {
     uint64_t result = 0;
-    for (const auto &ptx : m_pending_tx)   {
-        for (const auto &dest : ptx.dests) {
-            result += dest.amount;
+    for (const auto &ptx : m_pending_tx) {
+        const auto txType = ptx.tx.type;
+        const bool isNotStandardTransfer =
+            txType == cryptonote::transaction_type::STAKE ||
+            txType == cryptonote::transaction_type::BURN  ||
+            txType == cryptonote::transaction_type::AUDIT;
+
+        if (isNotStandardTransfer && ptx.tx.amount_burnt > 0) {
+            result += ptx.tx.amount_burnt;
+            continue;
         }
+
+        for (const auto &dest : ptx.dests)
+            result += dest.amount;
     }
     return result;
 }
