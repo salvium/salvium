@@ -99,7 +99,12 @@ public:
     std::string publicViewKey() const override;
     std::string secretSpendKey() const override;
     std::string publicSpendKey() const override;
+    std::vector<std::string> carrotKeys() const override;
     std::string publicMultisigSignerKey() const override;
+    std::string secretViewBalance() const override;
+    std::string secretProveSpend() const override;
+    std::string secretGenerateAddress() const override;
+    std::string secretGenerateImage() const override;
     std::string path() const override;
     void stop() override;
     bool store(const std::string &path) override;

@@ -166,9 +166,15 @@ uint64_t PendingTransactionImpl::amount() const
 {
     uint64_t result = 0;
     for (const auto &ptx : m_pending_tx)   {
+      if (ptx.tx.type == cryptonote::transaction_type::AUDIT ||
+          ptx.tx.type == cryptonote::transaction_type::BURN ||
+          ptx.tx.type == cryptonote::transaction_type::STAKE) {
+        result += ptx.tx.amount_burnt;
+      } else {
         for (const auto &dest : ptx.dests) {
             result += dest.amount;
         }
+      }
     }
     return result;
 }

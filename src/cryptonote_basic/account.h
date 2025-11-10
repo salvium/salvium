@@ -75,6 +75,11 @@ namespace cryptonote
       KV_SERIALIZE_CONTAINER_POD_AS_BLOB(m_multisig_keys)
       const crypto::chacha_iv default_iv{{0, 0, 0, 0, 0, 0, 0, 0}};
       KV_SERIALIZE_VAL_POD_AS_BLOB_OPT(m_encryption_iv, default_iv)
+      if (m_account_address.m_spend_public_key == crypto::null_pkey) {
+        KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE(s_view_balance)
+        KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE(k_view_incoming)
+        KV_SERIALIZE(m_carrot_account_address)
+      }        
     END_KV_SERIALIZE_MAP()
 
     void encrypt(const crypto::chacha_key &key);
