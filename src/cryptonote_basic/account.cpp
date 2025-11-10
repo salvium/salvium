@@ -89,12 +89,24 @@ DISABLE_VS_WARNINGS(4244 4345)
   void account_keys::xor_with_key_stream(const crypto::chacha_key &key)
   {
     // encrypt a large enough byte stream with chacha20
-    epee::wipeable_string key_stream = get_key_stream(key, m_encryption_iv, sizeof(crypto::secret_key) * (2 + m_multisig_keys.size()));
+    epee::wipeable_string key_stream = get_key_stream(key, m_encryption_iv, sizeof(crypto::secret_key) * (8 + m_multisig_keys.size()));
     const char *ptr = key_stream.data();
     for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
       m_spend_secret_key.data[i] ^= *ptr++;
     for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
       m_view_secret_key.data[i] ^= *ptr++;
+    for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
+      s_master.data[i] ^= *ptr++;
+    for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
+      k_prove_spend.data[i] ^= *ptr++;
+    for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
+      s_view_balance.data[i] ^= *ptr++;
+    for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
+      k_view_incoming.data[i] ^= *ptr++;
+    for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
+      k_generate_image.data[i] ^= *ptr++;
+    for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
+      s_generate_address.data[i] ^= *ptr++;
     for (crypto::secret_key &k: m_multisig_keys)
     {
       for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
@@ -116,11 +128,20 @@ DISABLE_VS_WARNINGS(4244 4345)
   void account_keys::encrypt_viewkey(const crypto::chacha_key &key)
   {
     // encrypt a large enough byte stream with chacha20
-    epee::wipeable_string key_stream = get_key_stream(key, m_encryption_iv, sizeof(crypto::secret_key) * 2);
+    epee::wipeable_string key_stream = get_key_stream(key, m_encryption_iv, sizeof(crypto::secret_key) * 8);
     const char *ptr = key_stream.data();
-    ptr += sizeof(crypto::secret_key);
+    ptr += sizeof(crypto::secret_key);        // Skip m_spend_secret_key
     for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
       m_view_secret_key.data[i] ^= *ptr++;
+    ptr += (2 * sizeof(crypto::secret_key));  // Skip s_master, k_prove_spend
+    for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
+      s_view_balance.data[i] ^= *ptr++;
+    for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
+      k_view_incoming.data[i] ^= *ptr++;
+    for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
+      k_generate_image.data[i] ^= *ptr++;
+    for (size_t i = 0; i < sizeof(crypto::secret_key); ++i)
+      s_generate_address.data[i] ^= *ptr++;
   }
   //-----------------------------------------------------------------
   void account_keys::decrypt_viewkey(const crypto::chacha_key &key)

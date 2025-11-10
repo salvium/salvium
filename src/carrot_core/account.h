@@ -144,6 +144,11 @@ namespace carrot
         const crypto::secret_key &sender_extension_t,
         const crypto::public_key &onetime_address) const;
 
+    crypto::key_image derive_key_image_view_only(const crypto::public_key &address_spend_pubkey,
+        const crypto::secret_key &sender_extension_g,
+        const crypto::secret_key &sender_extension_t,
+        const crypto::public_key &onetime_address) const;
+
     void generate_subaddress_map(const std::pair<size_t, size_t>& lookahead_size);
 
     crypto::secret_key generate(

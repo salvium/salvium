@@ -973,7 +973,14 @@ std::optional<crypto::key_image> try_derive_enote_key_image(
     // x = k_s + k^j_subext + k^g_o
     rct::key x;
     if (enote_scan_info.is_carrot) {
-      return acc.derive_key_image(enote_scan_info.address_spend_pubkey,
+        // if we don't have the s_master key, derive view-only key image
+        if (acc.get_keys().s_master == crypto::null_skey) {
+            return acc.derive_key_image_view_only(enote_scan_info.address_spend_pubkey,
+                                      enote_scan_info.sender_extension_g,
+                                      enote_scan_info.sender_extension_t,
+                                      rct::rct2pk(onetime_address));
+        }
+        return acc.derive_key_image(enote_scan_info.address_spend_pubkey,
                                   enote_scan_info.sender_extension_g,
                                   enote_scan_info.sender_extension_t,
                                   rct::rct2pk(onetime_address));
