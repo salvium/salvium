@@ -282,6 +282,55 @@ crypto::key_image carrot_and_legacy_account::derive_key_image(const crypto::publ
     return L;
 }
 //----------------------------------------------------------------------------------------------------------------------
+crypto::key_image carrot_and_legacy_account::derive_key_image_view_only(const crypto::public_key &address_spend_pubkey,
+    const crypto::secret_key &sender_extension_g,                                                                                       
+    const crypto::secret_key &sender_extension_t,
+    const crypto::public_key &onetime_address) const               
+{                                           
+    const auto it = subaddress_map.find(address_spend_pubkey);                                                                          
+    CHECK_AND_ASSERT_THROW_MES(it != subaddress_map.cend(),                                                                             
+                               "carrot and legacy account: derive key image view only: cannot find subaddress");
+
+    const bool is_subaddress = it->second.index.is_subaddress();
+    const uint32_t major_index = it->second.index.major;
+    const uint32_t minor_index = it->second.index.minor;           
+                                                                                                                                        
+    const cryptonote::account_keys &keys = get_keys();
+
+    crypto::secret_key address_index_generator;
+    crypto::secret_key subaddress_scalar;       
+    crypto::secret_key subaddress_extension;    
+    crypto::secret_key address_privkey_g;                                                                                               
+    crypto::secret_key x;
+                                                                    
+    CHECK_AND_ASSERT_THROW_MES(it->second.derive_type == AddressDeriveType::Carrot,
+                               "carrot and legacy account: derive key image view only: not a Carrot address");
+                                                                    
+    // s^j_gen = H_32[s_ga](j_major, j_minor) 
+    make_carrot_index_extension_generator(keys.s_generate_address, major_index, minor_index, address_index_generator);
+                                                                    
+    if (is_subaddress)                                                                                                                  
+    {                                                                                                                                   
+      // k^j_subscal = H_n(K_s, j_major, j_minor, s^j_gen)
+      make_carrot_subaddress_scalar(keys.m_carrot_account_address.m_spend_public_key, address_index_generator, major_index, minor_index, subaddress_scalar);
+    }                                           
+    else                                                                                                                                
+    {                                                                                                                                   
+      // k^j_subscal = 1
+      sc_1(to_bytes(subaddress_scalar));
+    }                                                                                                                                   
+                                                                                                                                        
+    // k^g_a = k_gi * k^j_subscal                                                                                                       
+    sc_mul(to_bytes(address_privkey_g), to_bytes(keys.k_generate_image), to_bytes(subaddress_scalar));
+                                                                    
+    // x = k^{j,g}_addr + k^g_o                                                                                                         
+    sc_add(to_bytes(x), to_bytes(address_privkey_g), to_bytes(sender_extension_g));
+                                                                    
+    crypto::key_image L;                                 
+    crypto::generate_key_image(onetime_address, x, L);
+    return L;                                          
+}
+//----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::generate_subaddress_map(const std::pair<size_t, size_t>& lookahead_size)
 {
     const std::vector<AddressDeriveType> derive_types{AddressDeriveType::Carrot, AddressDeriveType::PreCarrot};

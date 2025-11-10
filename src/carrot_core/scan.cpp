@@ -525,37 +525,37 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
             crypto::public_key K_r = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(enote.onetime_address)));
 
             // Is this a watch-only wallet?
-            if (watch_only) {
+            // if (watch_only) {
 
-              // HERE BE DRAGONS!!!
-              // SRCG: test whether this will even work for return_payment detection
-              account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, crypto::key_image{}, crypto::null_skey, crypto::null_skey}}});
-              // LAND AHOY!!!
+            // HERE BE DRAGONS!!!
+            // SRCG: test whether this will even work for return_payment detection
+            account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, crypto::key_image{}, crypto::null_skey, crypto::null_skey}}});
+            // LAND AHOY!!!
               
-            } else {
+            // } else {
               
-              // calculate the key image for the return output
-              crypto::secret_key sum_g;
-              sc_add(to_bytes(sum_g), to_bytes(sender_extension_g_out), to_bytes(k_return));
-              crypto::key_image key_image = account.derive_key_image(
-                                                                     address_spend_pubkey_out, // THIS WAS WRONG!!! -> account.get_keys().m_carrot_account_address.m_spend_public_key,
-                                                                     sum_g,
-                                                                     sender_extension_t_out,
-                                                                     K_r
-                                                                     );
+            //   // calculate the key image for the return output
+            //   crypto::secret_key sum_g;
+            //   sc_add(to_bytes(sum_g), to_bytes(sender_extension_g_out), to_bytes(k_return));
+            //   crypto::key_image key_image = account.derive_key_image(
+            //                                                          address_spend_pubkey_out, // THIS WAS WRONG!!! -> account.get_keys().m_carrot_account_address.m_spend_public_key,
+            //                                                          sum_g,
+            //                                                          sender_extension_t_out,
+            //                                                          K_r
+            //                                                          );
               
-              crypto::secret_key x, y;
-              account.try_searching_for_opening_for_onetime_address(
-                                                                    address_spend_pubkey_out, // THIS WAS WRONG!!! -> account.get_keys().m_carrot_account_address.m_spend_public_key,
-                                                                    sum_g,
-                                                                    sender_extension_t_out,
-                                                                    x,
-                                                                    y
-                                                                    );
+            //   crypto::secret_key x, y;
+            //   account.try_searching_for_opening_for_onetime_address(
+            //                                                         address_spend_pubkey_out, // THIS WAS WRONG!!! -> account.get_keys().m_carrot_account_address.m_spend_public_key,
+            //                                                         sum_g,
+            //                                                         sender_extension_t_out,
+            //                                                         x,
+            //                                                         y
+            //                                                         );
               
-              // save the input context & change output key
-              account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, key_image, x, y}}});
-            }
+            //   // save the input context & change output key
+            //   account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, key_image, x, y}}});
+            // }
         }
 
         // janus protection checks are not needed for internal scans

@@ -2439,7 +2439,7 @@ void wallet2::scan_key_image(const wallet::enote_view_incoming_scan_info_t &enot
 {
   ki_out = std::nullopt;
 
-  if (m_multisig || m_background_syncing || m_watch_only) // no complete spend privkey
+  if (m_multisig || m_background_syncing) // no complete spend privkey
     return;
 
   // if keys are encrypted, ask for password
