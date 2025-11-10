@@ -176,9 +176,9 @@ void TransactionHistoryImpl::refresh()
         uint64_t change = pd.m_change == (uint64_t)-1 ? 0 : pd.m_change; // change may not be known
         uint64_t fee = pd.m_amount_in - pd.m_amount_out;
         uint64_t amount = pd.m_amount_in - change - fee;
-        if (ptx.tx.type == cryptonote::transaction_type::AUDIT ||
-            ptx.tx.type == cryptonote::transaction_type::BURN ||
-            ptx.tx.type == cryptonote::transaction_type::STAKE) {
+        if (pd.m_tx.type == cryptonote::transaction_type::AUDIT ||
+            pd.m_tx.type == cryptonote::transaction_type::BURN ||
+            pd.m_tx.type == cryptonote::transaction_type::STAKE) {
           amount = pd.m_tx.amount_burnt;
           if (fee > amount) fee -= amount;
         }
@@ -221,9 +221,9 @@ void TransactionHistoryImpl::refresh()
         uint64_t change = pd.m_change == (uint64_t)-1 ? 0 : pd.m_change; // change may not be known
         uint64_t fee = pd.m_amount_in - pd.m_amount_out;
         uint64_t amount = pd.m_amount_in - change - fee;
-        if (ptx.tx.type == cryptonote::transaction_type::AUDIT ||
-            ptx.tx.type == cryptonote::transaction_type::BURN ||
-            ptx.tx.type == cryptonote::transaction_type::STAKE) {
+        if (pd.m_tx.type == cryptonote::transaction_type::AUDIT ||
+            pd.m_tx.type == cryptonote::transaction_type::BURN ||
+            pd.m_tx.type == cryptonote::transaction_type::STAKE) {
           amount = pd.m_tx.amount_burnt;
           if (fee > amount) fee -= amount;
         }
