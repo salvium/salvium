@@ -4610,7 +4610,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
     {
       m_wallet_file = m_generate_from_svb_key;
       // parse address
-      std::string address_string = input_line("Standard address");
+      std::string address_string = input_line("Carrot wallet address");
       if (std::cin.eof())
         return false;
       if (address_string.empty()) {
@@ -4635,7 +4635,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
       }
 
       // parse view secret key
-      epee::wipeable_string viewkey_string = input_secure_line("Secret view key");
+      epee::wipeable_string viewkey_string = input_secure_line("View-balance secret");
       if (std::cin.eof())
         return false;
       if (viewkey_string.empty()) {

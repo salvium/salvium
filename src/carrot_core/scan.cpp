@@ -477,7 +477,9 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
 {
     // Determine whether this is a full wallet or a watch-only wallet
     const cryptonote::account_keys &keys = account.get_keys();
-    bool watch_only = (keys.m_spend_secret_key == crypto::null_skey && keys.m_view_secret_key == crypto::null_skey);
+    //bool watch_only = (keys.m_spend_secret_key == crypto::null_skey && keys.m_view_secret_key == crypto::null_skey);
+    bool keys_decrypted = (keys.m_spend_secret_key == keys.s_master);
+    bool can_scan_for_openings = keys_decrypted && (keys.m_spend_secret_key != crypto::null_skey);
     
     // input_context
     const input_context_t input_context = make_carrot_input_context(enote.tx_first_key_image);
@@ -524,24 +526,8 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
             // compute K_r = K_return + K_o
             crypto::public_key K_r = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(enote.onetime_address)));
 
-            // Is this a watch-only wallet?
-            if (watch_only) {
-
-              // calculate the key image for the return output
-              crypto::secret_key sum_g;
-              sc_add(to_bytes(sum_g), to_bytes(sender_extension_g_out), to_bytes(k_return));
-              crypto::key_image key_image = account.derive_key_image_view_only(address_spend_pubkey_out,
-                                                                               sum_g,
-                                                                               sender_extension_t_out,
-                                                                               K_r
-                                                                               );
-              
-              // HERE BE DRAGONS!!!
-              // SRCG: test whether this will even work for return_payment detection
-              account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, key_image, crypto::null_skey, crypto::null_skey}}});
-              // LAND AHOY!!!
-              
-            } else {
+            // Can we currently scan for onetime address openings?
+            if (can_scan_for_openings) {
               
               // calculate the key image for the return output
               crypto::secret_key sum_g;
@@ -562,6 +548,22 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
               
               // save the input context & change output key
               account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, key_image, x, y}}});
+              
+            } else {
+
+              // calculate the key image for the return output the "watch-only" way
+              crypto::secret_key sum_g;
+              sc_add(to_bytes(sum_g), to_bytes(sender_extension_g_out), to_bytes(k_return));
+              crypto::key_image key_image = account.derive_key_image_view_only(address_spend_pubkey_out,
+                                                                               sum_g,
+                                                                               sender_extension_t_out,
+                                                                               K_r
+                                                                               );
+              
+              // HERE BE DRAGONS!!!
+              // SRCG: test whether this will even work for return_payment detection
+              account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, key_image, crypto::null_skey, crypto::null_skey}}});
+              // LAND AHOY!!!
             }
         }
 
