@@ -534,7 +534,8 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
 
             // HERE BE DRAGONS!!!
             // SRCG: test whether this will even work for return_payment detection
-            account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, key_image, sum_g, sender_extension_t_out}}});
+            account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, address_spend_pubkey_out, key_image, sum_g, sender_extension_t_out}}});
+            //account.insert_return_output_info({{K_r, {input_context, output_key, address_spend_pubkey_out, key_image, sum_g, sender_extension_t_out}}});
             // LAND AHOY!!!
         }
 
