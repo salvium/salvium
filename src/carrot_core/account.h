@@ -49,8 +49,8 @@ namespace carrot
         crypto::public_key K_o; // output onetime address
         crypto::public_key K_change; // change output onetime address
         crypto::key_image key_image;
-        crypto::secret_key x;
-        crypto::secret_key y;
+        crypto::secret_key sum_g;
+        crypto::secret_key sender_extension_t;
 
         return_output_info_t() {
             // Default constructor for serialization
@@ -58,8 +58,8 @@ namespace carrot
             K_o = crypto::public_key();
             K_change = crypto::public_key();
             key_image = crypto::key_image();
-            x = crypto::secret_key();
-            y = crypto::secret_key();
+            sum_g = crypto::secret_key();
+            sender_extension_t = crypto::secret_key();
         }
 
         return_output_info_t(
@@ -67,22 +67,22 @@ namespace carrot
             const crypto::public_key &K_o,
             const crypto::public_key &K_change,
             const crypto::key_image &key_image,
-            const crypto::secret_key &x,
-            const crypto::secret_key &y):
+            const crypto::secret_key &sum_g,
+            const crypto::secret_key &sender_extension_t):
             input_context(input_context),
             K_o(K_o),
             K_change(K_change),
             key_image(key_image),
-            x(x),
-            y(y) {}
+            sum_g(sum_g),
+            sender_extension_t(sender_extension_t) {}
 
         BEGIN_SERIALIZE_OBJECT()
             FIELD(input_context)
             FIELD(K_o)
             FIELD(K_change)
             FIELD(key_image)
-            FIELD(x)
-            FIELD(y)
+            FIELD(sum_g)
+            FIELD(sender_extension_t)
         END_SERIALIZE()
     };
 
@@ -189,8 +189,8 @@ namespace boost
             x.K_o = crypto::public_key();
             x.K_change = crypto::public_key();
             x.key_image = crypto::key_image();
-            x.x = crypto::secret_key();
-            x.y = crypto::secret_key();
+            x.sum_g = crypto::secret_key();
+            x.sender_extension_t = crypto::secret_key();
         }
 
         template <class Archive>
@@ -200,8 +200,8 @@ namespace boost
             a & x.K_o;
             a & x.K_change;
             a & x.key_image;
-            a & x.x;
-            a & x.y;
+            a & x.sum_g;
+            a & x.sender_extension_t;
         }
     }
 }
