@@ -5615,6 +5615,12 @@ boost::optional<epee::wipeable_string> simple_wallet::open_wallet(const boost::p
         m_wallet->rewrite(m_wallet_file, password);
       }
     }
+
+    if (m_wallet->force_rescan()) {
+      m_wallet->force_rescan(false);
+      refresh_main(m_wallet->get_refresh_from_block_height(), ResetSoft);
+    }
+    
   }
   catch (const std::exception& e)
   {
