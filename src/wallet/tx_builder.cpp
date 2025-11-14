@@ -818,8 +818,14 @@ bool get_address_openings_x_y(
     if (return_output_map.find(rct::rct2pk(src.outputs[src.real_output].second.dest)) != return_output_map.end())
     {
         const auto &return_output = return_output_map.at(rct::rct2pk(src.outputs[src.real_output].second.dest));
-        x_out = return_output.x;
-        y_out = return_output.y;
+        bool r = w.get_account().try_searching_for_opening_for_onetime_address(
+                                                                               return_output.K_spend_pubkey,
+                                                                               return_output.sum_g,
+                                                                               return_output.sender_extension_t,
+                                                                               x_out,
+                                                                               y_out
+                                                                               );
+        CHECK_AND_ASSERT_THROW_MES(r, "Failed to obtain openings for onetime address (return_payment)");
         return true;
     }
 

@@ -5615,6 +5615,12 @@ boost::optional<epee::wipeable_string> simple_wallet::open_wallet(const boost::p
         m_wallet->rewrite(m_wallet_file, password);
       }
     }
+
+    if (m_wallet->force_rescan()) {
+      m_wallet->force_rescan(false);
+      refresh_main(m_wallet->get_refresh_from_block_height(), ResetSoft);
+    }
+    
   }
   catch (const std::exception& e)
   {
@@ -6450,6 +6456,10 @@ bool simple_wallet::refresh_main(uint64_t start_height, enum ResetType reset, bo
 bool simple_wallet::refresh(const std::vector<std::string>& args)
 {
   uint64_t start_height = 0;
+  if (m_wallet->force_rescan()) {
+    m_wallet->force_rescan(false);
+    return refresh_main(start_height, ResetSoft);
+  }
   if(!args.empty()){
     try
     {
