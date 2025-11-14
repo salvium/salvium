@@ -91,6 +91,34 @@ namespace carrot
         END_SERIALIZE()
     };
 
+    // Old return_output_info_t format (for deserializing version 2 wallet caches)
+    struct return_output_info_retired_t {
+        input_context_t input_context;
+        crypto::public_key K_o;
+        crypto::public_key K_change;
+        crypto::key_image key_image;
+        crypto::secret_key x;
+        crypto::secret_key y;
+
+        return_output_info_retired_t() {
+            input_context = input_context_t();
+            K_o = crypto::public_key();
+            K_change = crypto::public_key();
+            key_image = crypto::key_image();
+            x = crypto::secret_key();
+            y = crypto::secret_key();
+        }
+
+        BEGIN_SERIALIZE_OBJECT()
+            FIELD(input_context)
+            FIELD(K_o)
+            FIELD(K_change)
+            FIELD(key_image)
+            FIELD(x)
+            FIELD(y)
+        END_SERIALIZE()
+    };
+
 
   class carrot_and_legacy_account : public cryptonote::account_base
   {

@@ -6450,6 +6450,10 @@ bool simple_wallet::refresh_main(uint64_t start_height, enum ResetType reset, bo
 bool simple_wallet::refresh(const std::vector<std::string>& args)
 {
   uint64_t start_height = 0;
+  if (m_wallet->force_rescan()) {
+    m_wallet->force_rescan(false);
+    return refresh_main(start_height, ResetSoft);
+  }
   if(!args.empty()){
     try
     {

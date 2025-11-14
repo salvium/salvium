@@ -1477,7 +1477,7 @@ private:
 
     BEGIN_SERIALIZE_OBJECT()
       MAGIC_FIELD("monero wallet cache")
-      VERSION_FIELD(2)
+      VERSION_FIELD(3)
       FIELD(m_blockchain)
       FIELD(m_transfers)
       FIELD(m_transfers_indices)
@@ -1521,6 +1521,14 @@ private:
       }
       FIELD(m_background_sync_data)
       FIELD(m_subaddresses_extended)
+      if (version == 2)
+      {
+        serializable_unordered_map<crypto::public_key, carrot::return_output_info_retired_t> old_roi;
+        FIELD(old_roi)
+        m_return_output_info = {};
+        m_force_rescan = true;
+        return true;
+      }
       FIELD(m_return_output_info)
     END_SERIALIZE()
 
@@ -1555,6 +1563,8 @@ private:
     void set_default_priority(uint32_t p) { m_default_priority = p; }
     bool auto_refresh() const { return m_auto_refresh; }
     void auto_refresh(bool r) { m_auto_refresh = r; }
+    bool force_rescan() const { return m_force_rescan; }
+    void force_rescan(bool r) { m_force_rescan = r; }
     AskPasswordType ask_password() const { return m_ask_password; }
     void ask_password(AskPasswordType ask) { m_ask_password = ask; }
     void set_min_output_count(uint32_t count) { m_min_output_count = count; }
@@ -2200,6 +2210,7 @@ private:
     uint32_t m_default_priority;
     RefreshType m_refresh_type;
     bool m_auto_refresh;
+    bool m_force_rescan = false;
     bool m_first_refresh_done;
     uint64_t m_refresh_from_block_height;
     // If m_refresh_from_block_height is explicitly set to zero we need this to differentiate it from the case that
