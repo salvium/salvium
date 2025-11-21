@@ -13332,10 +13332,23 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
 
   // check if this address actually received any funds
   crypto::key_derivation derivation;
-  THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[0], rct::rct2sk(rct::I), derivation), error::wallet_internal_error, "Failed to generate key derivation");
   std::vector<crypto::key_derivation> additional_derivations(num_sigs - 1);
-  for (size_t i = 1; i < num_sigs; ++i)
-    THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[i], rct::rct2sk(rct::I), additional_derivations[i - 1]), error::wallet_internal_error, "Failed to generate key derivation");
+  
+  if (address.m_is_carrot)
+  {
+    // For carrot addresses, shared_secret is already in x25519 format and can be used directly as derivation
+    memcpy(&derivation, &shared_secret[0], sizeof(crypto::key_derivation));
+    for (size_t i = 1; i < num_sigs; ++i)
+      memcpy(&additional_derivations[i - 1], &shared_secret[i], sizeof(crypto::key_derivation));
+  }
+  else
+  {
+    // For regular addresses, generate key derivation from shared secret
+    THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[0], rct::rct2sk(rct::I), derivation), error::wallet_internal_error, "Failed to generate key derivation");
+    for (size_t i = 1; i < num_sigs; ++i)
+      THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[i], rct::rct2sk(rct::I), additional_derivations[i - 1]), error::wallet_internal_error, "Failed to generate key derivation");
+  }
+  
   uint64_t received;
   check_tx_key_helper(tx, derivation, additional_derivations, address, received);
   // SRCG: if this returns 0 received, but it's an AUDIT TX, then that is EXPECTED
@@ -13486,15 +13499,28 @@ bool wallet2::check_tx_proof(const cryptonote::transaction &tx, const cryptonote
 
   if (std::any_of(good_signature.begin(), good_signature.end(), [](int i) { return i > 0; }))
   {
-    // obtain key derivation by multiplying scalar 1 to the shared secret
+    // obtain key derivation by multiplying scalar 1 to the shared secret (or use directly for carrot)
     crypto::key_derivation derivation;
-    if (good_signature[0])
-      THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[0], rct::rct2sk(rct::I), derivation), error::wallet_internal_error, "Failed to generate key derivation");
-
     std::vector<crypto::key_derivation> additional_derivations(num_sigs - 1);
-    for (size_t i = 1; i < num_sigs; ++i)
-      if (good_signature[i])
-        THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[i], rct::rct2sk(rct::I), additional_derivations[i - 1]), error::wallet_internal_error, "Failed to generate key derivation");
+    
+    if (address.m_is_carrot)
+    {
+      // For carrot addresses, shared_secret is already in x25519 format and can be used directly as derivation
+      if (good_signature[0])
+        memcpy(&derivation, &shared_secret[0], sizeof(crypto::key_derivation));
+      for (size_t i = 1; i < num_sigs; ++i)
+        if (good_signature[i])
+          memcpy(&additional_derivations[i - 1], &shared_secret[i], sizeof(crypto::key_derivation));
+    }
+    else
+    {
+      // For regular addresses, generate key derivation from shared secret
+      if (good_signature[0])
+        THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[0], rct::rct2sk(rct::I), derivation), error::wallet_internal_error, "Failed to generate key derivation");
+      for (size_t i = 1; i < num_sigs; ++i)
+        if (good_signature[i])
+          THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[i], rct::rct2sk(rct::I), additional_derivations[i - 1]), error::wallet_internal_error, "Failed to generate key derivation");
+    }
 
     check_tx_key_helper(tx, derivation, additional_derivations, address, received);
     return true;

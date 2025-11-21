@@ -543,7 +543,7 @@ namespace crypto {
       ge_frombytes_vartime(&D_p3, &dbg_D);
       mx25519_pubkey D_x25519;
       ge_p3_to_x25519(D_x25519.data, &D_p3);
-      assert((uint8_t *)D.data == D_x25519.data);
+      assert(memcmp(D.data, D_x25519.data, 32) == 0);
     }
 #endif
 
