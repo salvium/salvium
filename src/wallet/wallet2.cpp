@@ -13209,7 +13209,7 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
   hw::device &hwdev = m_account.get_device();
   rct::key  aP;
   // determine if the address is found in the subaddress hash table (i.e. whether the proof is outbound or inbound)
-  const bool is_out = m_subaddresses.count(address.m_spend_public_key) == 0;
+  const bool is_out = m_account.get_subaddress_map_ref().count(address.m_spend_public_key) == 0;
 
   const crypto::hash txid = cryptonote::get_transaction_hash(tx);
   std::string prefix_data((const char*)&txid, sizeof(crypto::hash));
@@ -13220,19 +13220,15 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
   std::vector<crypto::public_key> shared_secret;
   std::vector<crypto::signature> sig;
   std::string sig_str;
-  
-  // Carrot proof
-  if (address.m_is_carrot)
+
+  if (is_out)
   {
-    std::vector<crypto::key_derivation> derivations;
-    
-    if (is_out)
+    const size_t num_sigs = 1 + additional_tx_keys.size();
+    shared_secret.resize(num_sigs);
+    sig.resize(num_sigs);
+
+    if (address.m_is_carrot)
     {
-      // Sender has tx_key
-      const size_t num_derivs = 1 + additional_tx_keys.size();
-      derivations.resize(num_derivs);
-      
-      // Main derivation
       mx25519_pubkey s_sender_receiver_unctx;
       bool success = carrot::make_carrot_uncontextualized_shared_key_sender(
         tx_key,
@@ -13240,48 +13236,19 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
         s_sender_receiver_unctx);
       THROW_WALLET_EXCEPTION_IF(!success, error::wallet_internal_error,
         "Failed to generate X25519 key derivation for carrot proof (main)");
-      derivations[0] = carrot::raw_byte_convert<crypto::key_derivation>(s_sender_receiver_unctx);
-      
-      // Additional derivations
-      for (size_t i = 0; i < additional_tx_keys.size(); ++i)
-      {
-        mx25519_pubkey additional_s_sender_receiver_unctx;
-        success = carrot::make_carrot_uncontextualized_shared_key_sender(
-          additional_tx_keys[i],
-          address.m_view_public_key,
-          additional_s_sender_receiver_unctx);
-        THROW_WALLET_EXCEPTION_IF(!success, error::wallet_internal_error,
-          "Failed to generate X25519 key derivation for carrot proof (additional)");
-        derivations[i + 1] = carrot::raw_byte_convert<crypto::key_derivation>(additional_s_sender_receiver_unctx);
-      }
-      
-      sig_str = std::string("CarrotOutProofV1");
+      aP = carrot::raw_byte_convert<rct::key>(s_sender_receiver_unctx);
+    } else {
+      hwdev.scalarmultKey(aP, rct::pk2rct(address.m_view_public_key), rct::sk2rct(tx_key));
     }
-    else
-    {
-      // view key can be used
-      
-      sig_str = std::string("CarrotInProofV1");
-    }
-    
-    // derivation encoding
-    for (size_t i = 0; i < derivations.size(); ++i)
-      sig_str += tools::base58::encode(std::string((const char *)&derivations[i], sizeof(crypto::key_derivation)));
-    
-    return sig_str;
-  }
-  
-  // Legacy proof
-  if (is_out)
-  {
-    const size_t num_sigs = 1 + additional_tx_keys.size();
-    shared_secret.resize(num_sigs);
-    sig.resize(num_sigs);
-
-    hwdev.scalarmultKey(aP, rct::pk2rct(address.m_view_public_key), rct::sk2rct(tx_key));
     shared_secret[0] = rct::rct2pk(aP);
     crypto::public_key tx_pub_key;
-    if (is_subaddress)
+    if (is_subaddress && !address.m_is_carrot)
+    {
+      hwdev.scalarmultKey(aP, rct::pk2rct(address.m_spend_public_key), rct::sk2rct(tx_key));
+      tx_pub_key = rct2pk(aP);
+      hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], tx_key, sig[0]);
+    }
+    else if (is_subaddress && address.m_is_carrot)
     {
       hwdev.scalarmultKey(aP, rct::pk2rct(address.m_spend_public_key), rct::sk2rct(tx_key));
       tx_pub_key = rct2pk(aP);
@@ -13290,27 +13257,42 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
     else
     {
       hwdev.secret_key_to_public_key(tx_key, tx_pub_key);
-      hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], tx_key, sig[0]);
+      if (address.m_is_carrot) {
+        hwdev.generate_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], tx_key, sig[0]);
+      } else {
+        hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], tx_key, sig[0]);
+      }
     }
+
     for (size_t i = 1; i < num_sigs; ++i)
     {
       hwdev.scalarmultKey(aP, rct::pk2rct(address.m_view_public_key), rct::sk2rct(additional_tx_keys[i - 1]));
       shared_secret[i] = rct::rct2pk(aP);
-      if (is_subaddress)
+      if (is_subaddress && !address.m_is_carrot)
       {
         hwdev.scalarmultKey(aP, rct::pk2rct(address.m_spend_public_key), rct::sk2rct(additional_tx_keys[i - 1]));
         tx_pub_key = rct2pk(aP);
         hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
       }
+      else if (is_subaddress && address.m_is_carrot)
+      {
+        hwdev.scalarmultKey(aP, rct::pk2rct(address.m_spend_public_key), rct::sk2rct(additional_tx_keys[i - 1]));
+        tx_pub_key = rct2pk(aP);
+        hwdev.generate_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
+      }
       else
       {
         hwdev.secret_key_to_public_key(additional_tx_keys[i - 1], tx_pub_key);
-        hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
+        if (address.m_is_carrot) {
+          hwdev.generate_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
+        } else {
+          hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
+        }
       }
     }
     sig_str = std::string("OutProofV2");
   }
-  else
+  else // is_out == false
   {
     crypto::public_key tx_pub_key = get_tx_pub_key_from_extra(tx);
     THROW_WALLET_EXCEPTION_IF(tx_pub_key == null_pkey, error::wallet_internal_error, "Tx pubkey was not found");
@@ -13320,7 +13302,7 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
     shared_secret.resize(num_sigs);
     sig.resize(num_sigs);
 
-    const crypto::secret_key& a = m_account.get_keys().m_view_secret_key;
+    const crypto::secret_key& a = address.m_is_carrot ? m_account.get_keys().k_view_incoming : m_account.get_keys().m_view_secret_key;
     hwdev.scalarmultKey(aP, rct::pk2rct(tx_pub_key), rct::sk2rct(a));
     shared_secret[0] =  rct2pk(aP);
     if (is_subaddress)
@@ -13424,44 +13406,6 @@ bool wallet2::check_tx_proof(const crypto::hash &txid, const cryptonote::account
 
 bool wallet2::check_tx_proof(const cryptonote::transaction &tx, const cryptonote::account_public_address &address, bool is_subaddress, const std::string &message, const std::string &sig_str, uint64_t &received) const
 {
-
-  //
-  if (sig_str.substr(0, 6) == "Carrot")
-  {
-    THROW_WALLET_EXCEPTION_IF(!address.m_is_carrot, error::wallet_internal_error,
-      "Carrot proof provided but address is not a carrot address");
-     const bool is_out = sig_str.substr(6, 3) == "Out";
-     std::vector<crypto::key_derivation> derivations(1);
-     const std::string header = is_out ? "CarrotOutProofV1" : "CarrotInProofV1";
-     const size_t header_len = header.size();
-     THROW_WALLET_EXCEPTION_IF(sig_str.size() < header_len || sig_str.substr(0, header_len) != header, error::wallet_internal_error,
-       "Signature header check error");
-    const size_t deriv_len = tools::base58::encode(std::string((const char *)&derivations[0], sizeof(crypto::key_derivation))).size();
-    const size_t num_derivs = (sig_str.size() - header_len) / deriv_len;
-    derivations.resize(num_derivs);
-    
-    // Decode all derivations from base58
-    for (size_t i = 0; i < num_derivs; ++i)
-    {
-      std::string deriv_decoded;
-      const size_t offset = header_len + i * deriv_len;
-      THROW_WALLET_EXCEPTION_IF(!tools::base58::decode(sig_str.substr(offset, deriv_len), deriv_decoded), error::wallet_internal_error,
-        "Derivation decoding error");
-      THROW_WALLET_EXCEPTION_IF(sizeof(crypto::key_derivation) != deriv_decoded.size(), error::wallet_internal_error,
-        "Derivation decoding error");
-      memcpy(&derivations[i], deriv_decoded.data(), sizeof(crypto::key_derivation));
-    }
-
-    std::vector<crypto::key_derivation> additional_derivations(derivations.begin() + 1, derivations.end());
-    check_tx_key_helper(tx, derivations[0], additional_derivations, address, received);
-
-    return true;
-  }  
-
-    // Legacy proof handling
-  THROW_WALLET_EXCEPTION_IF(address.m_is_carrot, error::wallet_internal_error,
-    "Legacy proof provided but address is a carrot address");
-
   // InProofV1, InProofV2, OutProofV1, OutProofV2
   const bool is_out = sig_str.substr(0, 3) == "Out";
   const std::string header = is_out ? sig_str.substr(0,10) : sig_str.substr(0,9);
