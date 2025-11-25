@@ -13195,7 +13195,7 @@ std::string wallet2::get_tx_proof(const crypto::hash &txid, const cryptonote::ac
     // determine if the address is found in the subaddress hash table (i.e. whether the proof is outbound or inbound)
     crypto::secret_key tx_key = crypto::null_skey;
     std::vector<crypto::secret_key> additional_tx_keys;
-    const bool is_out = m_subaddresses.count(address.m_spend_public_key) == 0;
+    const bool is_out = m_account.get_subaddress_map_ref().count(address.m_spend_public_key) == 0;
     if (is_out)
     {
       THROW_WALLET_EXCEPTION_IF(!get_tx_key(txid, tx_key, additional_tx_keys), error::wallet_internal_error, "Tx secret key wasn't found in the wallet file.");
@@ -13208,6 +13208,24 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
 {
   hw::device &hwdev = m_account.get_device();
   rct::key  aP;
+  
+  // Lambda helper to select between carrot and normal tx proof generation
+  auto generate_proof_fn = [&](
+    const crypto::hash &prefix_hash, 
+    const crypto::public_key &R,
+    const crypto::public_key &A,
+    const boost::optional<crypto::public_key> &B,
+    const crypto::public_key &D,
+    const crypto::secret_key &r, 
+    crypto::signature &sig)
+  {
+    if (address.m_is_carrot) {
+      hwdev.generate_carrot_tx_proof(prefix_hash, R, A, B, D, r, sig);
+    } else {
+      hwdev.generate_tx_proof(prefix_hash, R, A, B, D, r, sig);
+    }
+  };
+  
   // determine if the address is found in the subaddress hash table (i.e. whether the proof is outbound or inbound)
   const bool is_out = m_account.get_subaddress_map_ref().count(address.m_spend_public_key) == 0;
 
@@ -13241,53 +13259,31 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
       hwdev.scalarmultKey(aP, rct::pk2rct(address.m_view_public_key), rct::sk2rct(tx_key));
     }
     shared_secret[0] = rct::rct2pk(aP);
+    
     crypto::public_key tx_pub_key;
-    if (is_subaddress && !address.m_is_carrot)
-    {
+    if (is_subaddress){
       hwdev.scalarmultKey(aP, rct::pk2rct(address.m_spend_public_key), rct::sk2rct(tx_key));
       tx_pub_key = rct2pk(aP);
-      hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], tx_key, sig[0]);
-    }
-    else if (is_subaddress && address.m_is_carrot)
-    {
-      hwdev.scalarmultKey(aP, rct::pk2rct(address.m_spend_public_key), rct::sk2rct(tx_key));
-      tx_pub_key = rct2pk(aP);
-      hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], tx_key, sig[0]);
-    }
-    else
-    {
+      generate_proof_fn(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], tx_key, sig[0]);
+    } else {
       hwdev.secret_key_to_public_key(tx_key, tx_pub_key);
-      if (address.m_is_carrot) {
-        hwdev.generate_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], tx_key, sig[0]);
-      } else {
-        hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], tx_key, sig[0]);
-      }
+      generate_proof_fn(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], tx_key, sig[0]);
     }
 
     for (size_t i = 1; i < num_sigs; ++i)
     {
       hwdev.scalarmultKey(aP, rct::pk2rct(address.m_view_public_key), rct::sk2rct(additional_tx_keys[i - 1]));
       shared_secret[i] = rct::rct2pk(aP);
-      if (is_subaddress && !address.m_is_carrot)
+      if (is_subaddress)
       {
         hwdev.scalarmultKey(aP, rct::pk2rct(address.m_spend_public_key), rct::sk2rct(additional_tx_keys[i - 1]));
         tx_pub_key = rct2pk(aP);
-        hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
-      }
-      else if (is_subaddress && address.m_is_carrot)
-      {
-        hwdev.scalarmultKey(aP, rct::pk2rct(address.m_spend_public_key), rct::sk2rct(additional_tx_keys[i - 1]));
-        tx_pub_key = rct2pk(aP);
-        hwdev.generate_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
+        generate_proof_fn(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
       }
       else
       {
         hwdev.secret_key_to_public_key(additional_tx_keys[i - 1], tx_pub_key);
-        if (address.m_is_carrot) {
-          hwdev.generate_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
-        } else {
-          hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
-        }
+        generate_proof_fn(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
       }
     }
     sig_str = std::string("OutProofV2");
@@ -13303,27 +13299,41 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
     sig.resize(num_sigs);
 
     const crypto::secret_key& a = address.m_is_carrot ? m_account.get_keys().k_view_incoming : m_account.get_keys().m_view_secret_key;
-    hwdev.scalarmultKey(aP, rct::pk2rct(tx_pub_key), rct::sk2rct(a));
+    if (address.m_is_carrot)
+    {
+      mx25519_pubkey s_sender_receiver_unctx;
+      bool success = carrot::make_carrot_uncontextualized_shared_key_receiver(
+        a,
+        carrot::raw_byte_convert<mx25519_pubkey>(tx_pub_key),
+        s_sender_receiver_unctx);
+      THROW_WALLET_EXCEPTION_IF(!success, error::wallet_internal_error,
+        "Failed to generate X25519 key derivation for carrot proof (main)");
+      aP = carrot::raw_byte_convert<rct::key>(s_sender_receiver_unctx);
+    } else {
+      hwdev.scalarmultKey(aP, rct::pk2rct(tx_pub_key), rct::sk2rct(a));
+    }
     shared_secret[0] =  rct2pk(aP);
+
     if (is_subaddress)
     {
-      hwdev.generate_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, address.m_spend_public_key, shared_secret[0], a, sig[0]);
+      generate_proof_fn(prefix_hash, address.m_view_public_key, tx_pub_key, address.m_spend_public_key, shared_secret[0], a, sig[0]);
     }
     else
     {
-      hwdev.generate_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, boost::none, shared_secret[0], a, sig[0]);
+      generate_proof_fn(prefix_hash, address.m_view_public_key, tx_pub_key, boost::none, shared_secret[0], a, sig[0]);
     }
+
     for (size_t i = 1; i < num_sigs; ++i)
     {
       hwdev.scalarmultKey(aP,rct::pk2rct(additional_tx_pub_keys[i - 1]), rct::sk2rct(a));
       shared_secret[i] = rct2pk(aP);
       if (is_subaddress)
       {
-        hwdev.generate_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i - 1], address.m_spend_public_key, shared_secret[i], a, sig[i]);
+        generate_proof_fn(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i - 1], address.m_spend_public_key, shared_secret[i], a, sig[i]);
       }
       else
       {
-        hwdev.generate_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i - 1], boost::none, shared_secret[i], a, sig[i]);
+        generate_proof_fn(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i - 1], boost::none, shared_secret[i], a, sig[i]);
       }
     }
     sig_str = std::string("InProofV2");

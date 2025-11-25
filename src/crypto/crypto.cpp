@@ -543,7 +543,17 @@ namespace crypto {
       ge_frombytes_vartime(&D_p3, &dbg_D);
       mx25519_pubkey D_x25519;
       ge_p3_to_x25519(D_x25519.data, &D_p3);
-      assert(memcmp(D.data, D_x25519.data, 32) == 0);
+      if (memcmp(D.data, D_x25519.data, 32) != 0) {
+        // try with x25519 curve
+        mx25519_pubkey A_x25519;
+        memcpy(&A_x25519, &A, sizeof(mx25519_pubkey));
+        mx25519_scmul_key(get_mx25519_impl(),
+          &A_x25519,
+          reinterpret_cast<const mx25519_privkey*>(&r),
+          &D_x25519);
+
+        assert(memcmp(D.data, D_x25519.data, 32) == 0);
+      }
     }
 #endif
 
