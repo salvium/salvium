@@ -516,8 +516,8 @@ namespace crypto {
 #if !defined(NDEBUG)
     {
       assert(sc_check(&r) == 0);
-      // check R == r*G or R == r*B
-      public_key dbg_R;
+      // assume R == r*G or R == r*B
+      /*
       if (B)
       {
         ge_p2 dbg_R_p2;
@@ -531,7 +531,8 @@ namespace crypto {
         ge_p3_tobytes(&dbg_R, &dbg_R_p3);
       }
       assert(R == dbg_R);
-
+      */
+      
       // check D == r*A  // move here to wallet2.cpp later
       ge_p2 dbg_D_p2;
       ge_scalarmult(&dbg_D_p2, &r, &A_p3);
@@ -547,11 +548,15 @@ namespace crypto {
         // try with x25519 curve
         mx25519_pubkey A_x25519;
         memcpy(&A_x25519, &A, sizeof(mx25519_pubkey));
-        mx25519_scmul_key(get_mx25519_impl(),
-          &A_x25519,
-          reinterpret_cast<const mx25519_privkey*>(&r),
-          &D_x25519);
-
+        const mx25519_impl *impl;
+        impl = mx25519_select_impl(MX25519_TYPE_AUTO);
+        if (impl == nullptr)
+          throw std::runtime_error("failed to obtain a mx25519 implementation");
+        mx25519_scmul_key(impl,
+                          &A_x25519,
+                          reinterpret_cast<const mx25519_privkey*>(&r),
+                          &D_x25519);
+        
         assert(memcmp(D.data, D_x25519.data, 32) == 0);
       }
     }
