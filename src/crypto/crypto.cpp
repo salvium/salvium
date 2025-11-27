@@ -579,26 +579,38 @@ namespace crypto {
     else
         buf.B = zero;
     cn_fast_hash(config::HASH_KEY_TXPROOF_V2, sizeof(config::HASH_KEY_TXPROOF_V2)-1, buf.sep);
+
+    // Compute in Ed25519 (where scalar mult is easy), then convert to x25519
+    // (homomorphic property)
     
     if (B)
     {
-      // compute X = k*B
-      ge_p2 X_p2;
-      ge_scalarmult(&X_p2, &k, &B_p3);
-      ge_tobytes(&buf.X, &X_p2);
+      //SUBADDRESS: compute X = k*ConvertPointE(B)
+      ge_p3 kB_p3;
+      ge_scalarmult_p3(&kB_p3, &k, &B_p3);  
+      mx25519_pubkey X_x25519;
+      ge_p3_to_x25519(X_x25519.data, &kB_p3);  // x_x25519 = ConvertPointE(k*B)
+      memcpy(&buf.X, &X_x25519, sizeof(mx25519_pubkey));
     }
     else
     {
-      // compute X = k*G
-      ge_p3 X_p3;
-      ge_scalarmult_base(&X_p3, &k);
-      ge_p3_tobytes(&buf.X, &X_p3);
+      //MAIN ADDRESS: compute X = k*ConvertPointE(G)
+      ge_p3 kG_p3;
+      ge_scalarmult_base(&kG_p3, &k);
+      mx25519_pubkey X_x25519;
+      ge_p3_to_x25519(X_x25519.data, &kG_p3);  // x_x25519 = ConvertPointE(k*G)
+      
+      memcpy(&buf.X, &X_x25519, sizeof(mx25519_pubkey));
     }
     
-    // compute Y = k*A
-    ge_p2 Y_p2;
-    ge_scalarmult(&Y_p2, &k, &A_p3);
-    ge_tobytes(&buf.Y, &Y_p2);
+    // compute Y = k*ConvertPointE(A) - (A is recipient's view public key in Ed25519)
+    ge_p3 kA_p3;
+    ge_scalarmult_p3(&kA_p3, &k, &A_p3); 
+    
+    mx25519_pubkey Y_x25519;
+    ge_p3_to_x25519(Y_x25519.data, &kA_p3); // Y_x25519 = ConvertPointE(k*A)
+    
+    memcpy(&buf.Y, &Y_x25519, sizeof(mx25519_pubkey));
 
     // sig.c = Hs(Msg || D || X || Y || sep || R || A || B) 
     hash_to_scalar(&buf, sizeof(buf), sig.c);
@@ -607,6 +619,35 @@ namespace crypto {
     sc_mulsub(&sig.r, &sig.c, &unwrap(r), &k);
 
     memwipe(&k, sizeof(k));
+    
+#if !defined(NDEBUG)
+    // We need to reconstruct R and D in Ed25519 format for verification
+    // (The verifier function expects Ed25519 input and converts to X25519 internally)
+    public_key R_ed, D_ed;
+    
+    if (B)
+    {
+      // SUBADDRESS
+      ge_p2 R_ed_p2;
+      ge_scalarmult(&R_ed_p2, &unwrap(r), &B_p3);  // R_ed_p2 = r * B
+      ge_tobytes(&R_ed, &R_ed_p2);
+    }
+    else
+    {
+      // MAIN ADDRESS
+      ge_p3 R_ed_p3; 
+      ge_scalarmult_base(&R_ed_p3, &unwrap(r));  // R_ed_p3 = r * G
+      ge_p3_tobytes(&R_ed, &R_ed_p3);
+    }
+    
+    // Compute D_ed = r * A (in Ed25519)
+    ge_p2 D_ed_p2;
+    ge_scalarmult(&D_ed_p2, &unwrap(r), &A_p3);
+    ge_tobytes(&D_ed, &D_ed_p2);
+    
+    bool proof_valid = check_carrot_tx_proof(prefix_hash, R_ed, A, B, D_ed, sig);
+    assert(proof_valid);
+#endif
   }
 
   // Verify a proof: either v1 (version == 1) or v2 (version == 2)
@@ -709,6 +750,125 @@ namespace crypto {
     else return false;
 
     // test if c2 == sig.c
+    sc_sub(&c2, &c2, &sig.c);
+    return sc_isnonzero(&c2) == 0;
+  }
+
+  // R and D must be provided in Ed25519 format (not X25519!)
+  bool crypto_ops::check_carrot_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const signature &sig) {    
+    ge_p3 R_p3;
+    ge_p3 A_p3;
+    ge_p3 B_p3;
+    ge_p3 D_p3;
+    if (ge_frombytes_vartime(&R_p3, &R) != 0) return false;
+    if (ge_frombytes_vartime(&A_p3, &A) != 0) return false;
+    if (B && ge_frombytes_vartime(&B_p3, &*B) != 0) return false;
+    if (ge_frombytes_vartime(&D_p3, &D) != 0) return false;
+    if (sc_check(&sig.c) != 0 || sc_check(&sig.r) != 0) return false;
+    // compute sig.c*R
+    ge_p3 cR_p3;
+    {
+      ge_p2 cR_p2;
+      ge_scalarmult(&cR_p2, &sig.c, &R_p3);
+      public_key cR;
+      ge_tobytes(&cR, &cR_p2);
+      if (ge_frombytes_vartime(&cR_p3, &cR) != 0) return false;
+    }
+    ge_p1p1 X_p1p1;
+    if (B)
+    {
+      // compute X = sig.c*R + sig.r*B
+      ge_p2 rB_p2;
+      ge_scalarmult(&rB_p2, &sig.r, &B_p3);
+      public_key rB;
+      ge_tobytes(&rB, &rB_p2);
+      ge_p3 rB_p3;
+      if (ge_frombytes_vartime(&rB_p3, &rB) != 0) return false;
+      ge_cached rB_cached;
+      ge_p3_to_cached(&rB_cached, &rB_p3);
+      ge_add(&X_p1p1, &cR_p3, &rB_cached);
+    }
+    else
+    {
+      // compute X = sig.c*R + sig.r*G
+      ge_p3 rG_p3;
+      ge_scalarmult_base(&rG_p3, &sig.r);
+      ge_cached rG_cached;
+      ge_p3_to_cached(&rG_cached, &rG_p3);
+      ge_add(&X_p1p1, &cR_p3, &rG_cached);
+    }
+    //convert X' from Ed25519 to X25519 // ge_scalarmult_p3 can be used here 
+    ge_p2 X_ed_p2;
+    ge_p1p1_to_p2(&X_ed_p2, &X_p1p1);
+    public_key X_ed;
+    ge_tobytes(&X_ed, &X_ed_p2);
+    ge_p3 X_ed_p3;
+    if (ge_frombytes_vartime(&X_ed_p3, &X_ed) != 0) return false;  // Should never fail
+    mx25519_pubkey X_x25519;
+    ge_p3_to_x25519(X_x25519.data, &X_ed_p3);
+
+    // compute sig.c*D
+    ge_p2 cD_p2;
+    ge_scalarmult(&cD_p2, &sig.c, &D_p3);
+
+    // compute sig.r*A
+    ge_p2 rA_p2;
+    ge_scalarmult(&rA_p2, &sig.r, &A_p3);
+
+    /// compute Y = sig.c*D + sig.r*A
+    public_key cD;
+    public_key rA;
+    ge_tobytes(&cD, &cD_p2);
+    ge_tobytes(&rA, &rA_p2);
+    ge_p3 cD_p3;
+    ge_p3 rA_p3;
+    if (ge_frombytes_vartime(&cD_p3, &cD) != 0) return false;
+    if (ge_frombytes_vartime(&rA_p3, &rA) != 0) return false;
+    ge_cached rA_cached;
+    ge_p3_to_cached(&rA_cached, &rA_p3);
+    ge_p1p1 Y_p1p1;
+    ge_add(&Y_p1p1, &cD_p3, &rA_cached);
+    ge_p2 Y_ed_p2;
+    ge_p1p1_to_p2(&Y_ed_p2, &Y_p1p1);
+    
+    // ge_scalarmult_p3 can be used here
+    public_key Y_ed;
+    ge_tobytes(&Y_ed, &Y_ed_p2);
+    ge_p3 Y_ed_p3;
+    if (ge_frombytes_vartime(&Y_ed_p3, &Y_ed) != 0) return false;
+    mx25519_pubkey Y_x25519;
+    ge_p3_to_x25519(Y_x25519.data, &Y_ed_p3);
+
+    //convert R and D fron Ed25519 to X25519 for hash
+    mx25519_pubkey R_x25519;
+    mx25519_pubkey D_x25519;
+    ge_p3_to_x25519(R_x25519.data, &R_p3);
+    ge_p3_to_x25519(D_x25519.data, &D_p3);
+
+    
+    static const ec_point zero = {{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }};
+    s_comm_2 buf;
+    buf.msg = prefix_hash;
+    
+    // Copy X25519 versions of D and R into buffer
+    memcpy(&buf.D, &D_x25519, sizeof(mx25519_pubkey));  
+    memcpy(&buf.R, &R_x25519, sizeof(mx25519_pubkey));
+    buf.A = A; // A stays in Ed25519
+    
+    if (B)
+        buf.B = *B;
+    else
+        buf.B = zero;
+    
+    cn_fast_hash(config::HASH_KEY_TXPROOF_V2, sizeof(config::HASH_KEY_TXPROOF_V2)-1, buf.sep);
+    
+    // Copy X25519 versions of reconstructed commitments into buffer
+    memcpy(&buf.X, &X_x25519, sizeof(mx25519_pubkey));
+    memcpy(&buf.Y, &Y_x25519, sizeof(mx25519_pubkey));
+
+    // Recompute challenge and verify
+    ec_scalar c2;
+    hash_to_scalar(&buf, sizeof(s_comm_2), c2);
     sc_sub(&c2, &c2, &sig.c);
     return sc_isnonzero(&c2) == 0;
   }

@@ -13320,7 +13320,7 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
         }
       }        
     }
-    sig_str = std::string("OutProofV2");
+    sig_str = address.m_is_carrot ? std::string("OutProofV3") : std::string("OutProofV2");
   }
   else // is_out == false
   {
@@ -13370,9 +13370,60 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
         generate_proof_fn(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i - 1], boost::none, shared_secret[i], a, sig[i]);
       }
     }
-    sig_str = std::string("InProofV2");
+    sig_str = address.m_is_carrot ? std::string("InProofV3") : std::string("InProofV2");
   }
   const size_t num_sigs = shared_secret.size();
+
+  // For V3 (carrot) proofs, we need to store Ed25519 versions of R and D for verification
+  std::vector<crypto::public_key> R_ed25519(num_sigs);
+  std::vector<crypto::public_key> D_ed25519(num_sigs);
+  
+  if (address.m_is_carrot)
+  {
+    if (is_out)
+    {
+      //Compute R_ed = tx_key * B (or G) and D_ed = tx_key * A
+      ge_p3 B_p3;
+      if (is_subaddress)
+      {
+        // R_ed = tx_key * B
+        ge_frombytes_vartime(&B_p3, reinterpret_cast<const unsigned char*>(&address.m_spend_public_key));
+        ge_p2 R_p2;
+        ge_scalarmult(&R_p2, reinterpret_cast<const unsigned char*>(&tx_key), &B_p3);
+        ge_tobytes(reinterpret_cast<unsigned char*>(&R_ed25519[0]), &R_p2);
+      }
+      else
+      {
+        // R_ed = tx_key * G
+        crypto::secret_key_to_public_key(tx_key, R_ed25519[0]);
+      }
+      
+      // D_ed = tx_key * A
+      ge_p3 A_p3;
+      ge_frombytes_vartime(&A_p3, reinterpret_cast<const unsigned char*>(&address.m_view_public_key));
+      ge_p2 D_p2;
+      ge_scalarmult(&D_p2, reinterpret_cast<const unsigned char*>(&tx_key), &A_p3);
+      ge_tobytes(reinterpret_cast<unsigned char*>(&D_ed25519[0]), &D_p2);
+      
+      // Additional outputs
+      for (size_t i = 1; i < num_sigs; ++i)
+      {
+        if (is_subaddress)
+        {
+          ge_p2 R_p2_add;
+          ge_scalarmult(&R_p2_add, reinterpret_cast<const unsigned char*>(&additional_tx_keys[i-1]), &B_p3);
+          ge_tobytes(reinterpret_cast<unsigned char*>(&R_ed25519[i]), &R_p2_add);
+        }
+        else
+        {
+          crypto::secret_key_to_public_key(additional_tx_keys[i-1], R_ed25519[i]);
+        }
+        ge_p2 D_p2_add;
+        ge_scalarmult(&D_p2_add, reinterpret_cast<const unsigned char*>(&additional_tx_keys[i-1]), &A_p3);
+        ge_tobytes(reinterpret_cast<unsigned char*>(&D_ed25519[i]), &D_p2_add);
+      }
+    }
+  }
 
   // check if this address actually received any funds
   crypto::key_derivation derivation;
@@ -13400,9 +13451,15 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
   
   // concatenate all signature strings
   for (size_t i = 0; i < num_sigs; ++i)
-    sig_str +=
-      tools::base58::encode(std::string((const char *)&shared_secret[i], sizeof(crypto::public_key))) +
-      tools::base58::encode(std::string((const char *)&sig[i], sizeof(crypto::signature)));
+  {
+    sig_str += tools::base58::encode(std::string((const char *)&shared_secret[i], sizeof(crypto::public_key)));
+    if (address.m_is_carrot)
+    {
+      sig_str += tools::base58::encode(std::string((const char *)&R_ed25519[i], sizeof(crypto::public_key)));
+      sig_str += tools::base58::encode(std::string((const char *)&D_ed25519[i], sizeof(crypto::public_key)));
+    }
+    sig_str += tools::base58::encode(std::string((const char *)&sig[i], sizeof(crypto::signature)));
+  }
   return sig_str;
 }
 
@@ -13463,40 +13520,91 @@ bool wallet2::check_tx_proof(const crypto::hash &txid, const cryptonote::account
 
 bool wallet2::check_tx_proof(const cryptonote::transaction &tx, const cryptonote::account_public_address &address, bool is_subaddress, const std::string &message, const std::string &sig_str, uint64_t &received) const
 {
-  // InProofV1, InProofV2, OutProofV1, OutProofV2
+  // InProofV1, InProofV2, InProofV3, OutProofV1, OutProofV2, OutProofV3
   const bool is_out = sig_str.substr(0, 3) == "Out";
   const std::string header = is_out ? sig_str.substr(0,10) : sig_str.substr(0,9);
-  int version = 2; // InProofV2
+  int version = 3; // Default to V3
+  
+  // Check for V1 or V2
   if (is_out && sig_str.substr(8,2) == "V1") version = 1; // OutProofV1
-  else if (is_out) version = 2; // OutProofV2
-  else if (sig_str.substr(7,2) == "V1") version = 1; // InProofV1
+  else if (is_out && sig_str.substr(8,2) == "V2") version = 2; // OutProofV2
+  else if (!is_out && sig_str.substr(7,2) == "V1") version = 1; // InProofV1
+  else if (!is_out && sig_str.substr(7,2) == "V2") version = 2; // InProofV2
+  
+  // Validate version matches address type
+  if (version == 3 && !address.m_is_carrot) {
+    MERROR("V3 proof provided but address is not a carrot address");
+    return false;
+  }
+  if (version != 3 && address.m_is_carrot) {
+    MERROR("Carrot address provided but proof is not V3");
+    return false;
+  }
 
   const size_t header_len = header.size();
   THROW_WALLET_EXCEPTION_IF(sig_str.size() < header_len || sig_str.substr(0, header_len) != header, error::wallet_internal_error,
     "Signature header check error");
 
   // decode base58
+  // for V3: shared_secret + R_ed25519 + D_ed25519 + signature
   std::vector<crypto::public_key> shared_secret(1);
+  std::vector<crypto::public_key> R_ed25519(1);  // for V3
+  std::vector<crypto::public_key> D_ed25519(1);  // for V3
   std::vector<crypto::signature> sig(1);
   const size_t pk_len = tools::base58::encode(std::string((const char *)&shared_secret[0], sizeof(crypto::public_key))).size();
   const size_t sig_len = tools::base58::encode(std::string((const char *)&sig[0], sizeof(crypto::signature))).size();
-  const size_t num_sigs = (sig_str.size() - header_len) / (pk_len + sig_len);
-  THROW_WALLET_EXCEPTION_IF(sig_str.size() != header_len + num_sigs * (pk_len + sig_len), error::wallet_internal_error,
+  
+  size_t per_sig_len;
+  if (version == 3)
+    per_sig_len = pk_len + pk_len + pk_len + sig_len;
+  else
+    per_sig_len = pk_len + sig_len;
+    
+  const size_t num_sigs = (sig_str.size() - header_len) / per_sig_len;
+  THROW_WALLET_EXCEPTION_IF(sig_str.size() != header_len + num_sigs * per_sig_len, error::wallet_internal_error,
     "Wrong signature size");
   shared_secret.resize(num_sigs);
+  if (version == 3)
+  {
+    R_ed25519.resize(num_sigs);
+    D_ed25519.resize(num_sigs);
+  }
   sig.resize(num_sigs);
   for (size_t i = 0; i < num_sigs; ++i)
   {
     std::string pk_decoded;
+    std::string R_decoded;
+    std::string D_decoded;
     std::string sig_decoded;
-    const size_t offset = header_len + i * (pk_len + sig_len);
+    size_t offset = header_len + i * per_sig_len;
     THROW_WALLET_EXCEPTION_IF(!tools::base58::decode(sig_str.substr(offset, pk_len), pk_decoded), error::wallet_internal_error,
       "Signature decoding error");
-    THROW_WALLET_EXCEPTION_IF(!tools::base58::decode(sig_str.substr(offset + pk_len, sig_len), sig_decoded), error::wallet_internal_error,
-      "Signature decoding error");
-    THROW_WALLET_EXCEPTION_IF(sizeof(crypto::public_key) != pk_decoded.size() || sizeof(crypto::signature) != sig_decoded.size(), error::wallet_internal_error,
+    THROW_WALLET_EXCEPTION_IF(sizeof(crypto::public_key) != pk_decoded.size(), error::wallet_internal_error,
       "Signature decoding error");
     memcpy(&shared_secret[i], pk_decoded.data(), sizeof(crypto::public_key));
+    offset += pk_len;
+    
+    // Decode R_ed25519 and D_ed25519 for V3
+    if (version == 3)
+    {
+      THROW_WALLET_EXCEPTION_IF(!tools::base58::decode(sig_str.substr(offset, pk_len), R_decoded), error::wallet_internal_error,
+        "R_ed25519 decoding error");
+      THROW_WALLET_EXCEPTION_IF(sizeof(crypto::public_key) != R_decoded.size(), error::wallet_internal_error,
+        "R_ed25519 decoding error");
+      memcpy(&R_ed25519[i], R_decoded.data(), sizeof(crypto::public_key));
+      offset += pk_len;
+      
+      THROW_WALLET_EXCEPTION_IF(!tools::base58::decode(sig_str.substr(offset, pk_len), D_decoded), error::wallet_internal_error,
+        "D_ed25519 decoding error");
+      THROW_WALLET_EXCEPTION_IF(sizeof(crypto::public_key) != D_decoded.size(), error::wallet_internal_error,
+        "D_ed25519 decoding error");
+      memcpy(&D_ed25519[i], D_decoded.data(), sizeof(crypto::public_key));
+      offset += pk_len;
+    }
+    THROW_WALLET_EXCEPTION_IF(!tools::base58::decode(sig_str.substr(offset, sig_len), sig_decoded), error::wallet_internal_error,
+      "Signature decoding error");
+    THROW_WALLET_EXCEPTION_IF(sizeof(crypto::signature) != sig_decoded.size(), error::wallet_internal_error,
+      "Signature decoding error");
     memcpy(&sig[i], sig_decoded.data(), sizeof(crypto::signature));
   }
 
@@ -13516,28 +13624,52 @@ bool wallet2::check_tx_proof(const cryptonote::transaction &tx, const cryptonote
   std::vector<int> good_signature(num_sigs, 0);
   if (is_out)
   {
-    good_signature[0] = is_subaddress ?
-      crypto::check_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], sig[0], version) :
-      crypto::check_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], sig[0], version);
-
-    for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
+    if (version == 3)
     {
-      good_signature[i + 1] = is_subaddress ?
-        crypto::check_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, address.m_spend_public_key, shared_secret[i + 1], sig[i + 1], version) :
-        crypto::check_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, boost::none, shared_secret[i + 1], sig[i + 1], version);
+      // Use R_ed25519 and D_ed25519 for verification
+      good_signature[0] = is_subaddress ?
+        crypto::check_carrot_tx_proof(prefix_hash, R_ed25519[0], address.m_view_public_key, address.m_spend_public_key, D_ed25519[0], sig[0]) :
+        crypto::check_carrot_tx_proof(prefix_hash, R_ed25519[0], address.m_view_public_key, boost::none, D_ed25519[0], sig[0]);
+
+      for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
+      {
+        good_signature[i + 1] = is_subaddress ?
+          crypto::check_carrot_tx_proof(prefix_hash, R_ed25519[i + 1], address.m_view_public_key, address.m_spend_public_key, D_ed25519[i + 1], sig[i + 1]) :
+          crypto::check_carrot_tx_proof(prefix_hash, R_ed25519[i + 1], address.m_view_public_key, boost::none, D_ed25519[i + 1], sig[i + 1]);
+      }
+    }
+    else
+    {
+      good_signature[0] = is_subaddress ?
+        crypto::check_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], sig[0], version) :
+        crypto::check_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], sig[0], version);
+
+      for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
+      {
+        good_signature[i + 1] = is_subaddress ?
+          crypto::check_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, address.m_spend_public_key, shared_secret[i + 1], sig[i + 1], version) :
+          crypto::check_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, boost::none, shared_secret[i + 1], sig[i + 1], version);
+      }
     }
   }
   else
   {
-    good_signature[0] = is_subaddress ?
-      crypto::check_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, address.m_spend_public_key, shared_secret[0], sig[0], version) :
-      crypto::check_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, boost::none, shared_secret[0], sig[0], version);
-
-    for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
+    if (version == 3)
     {
-      good_signature[i + 1] = is_subaddress ?
-        crypto::check_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i], address.m_spend_public_key, shared_secret[i + 1], sig[i + 1], version) :
-        crypto::check_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i], boost::none, shared_secret[i + 1], sig[i + 1], version);
+      //to-do
+    }
+    else
+    {
+      good_signature[0] = is_subaddress ?
+        crypto::check_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, address.m_spend_public_key, shared_secret[0], sig[0], version) :
+        crypto::check_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, boost::none, shared_secret[0], sig[0], version);
+
+      for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
+      {
+        good_signature[i + 1] = is_subaddress ?
+          crypto::check_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i], address.m_spend_public_key, shared_secret[i + 1], sig[i + 1], version) :
+          crypto::check_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i], boost::none, shared_secret[i + 1], sig[i + 1], version);
+      }
     }
   }
 
