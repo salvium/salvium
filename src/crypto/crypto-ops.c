@@ -104,6 +104,21 @@ void fe_1(fe h) {
   h[9] = 0;
 }
 
+int fe_equal(const fe a, const fe b)
+{
+  fe t;
+  fe_sub(t, a, b);
+  return fe_isnonzero(t) == 0;
+}
+
+void ge_from_xy(ge_p3 *out, const fe x, const fe y)
+{
+    fe_1(out->Z);        // Z = 1
+    fe_copy(out->X, x);  // X = x
+    fe_copy(out->Y, y);  // Y = y
+    fe_mul(out->T, x, y); // T = x*y
+}
+
 /* From fe_add.c */
 
 /*
@@ -365,7 +380,7 @@ int fe_isnegative(const fe f) {
 
 /* From fe_isnonzero.c, modified */
 
-static int fe_isnonzero(const fe f) {
+int fe_isnonzero(const fe f) {
   unsigned char s[32];
   fe_tobytes(s, f);
   return (((int) (s[0] | s[1] | s[2] | s[3] | s[4] | s[5] | s[6] | s[7] | s[8] |
@@ -3965,6 +3980,114 @@ int edwards_bytes_to_x25519_vartime(unsigned char *xbytes, const unsigned char *
   edwardsYZ_to_x25519(xbytes, Y, Z);
 
   return 0;
+}
+
+// Precomputed sqrt(-1) from Monero (fe_sqrtm1 in crypto-ops-data.c)
+extern const fe fe_sqrtm1;
+extern const fe fe_sqrt_m486664;
+
+// Function to recover v from u (returns 0 on success, -1 if not on curve)
+int fe_sqrt_mont(fe v_out, const fe u_in) {
+  fe rhs;
+  fe t0, t1, t2;
+  fe candidate, c2, check;
+
+  // Compute rhs = u^3 + A u^2 + u, A=486662
+  fe A_fe;
+  fe_frombytes_vartime(A_fe, (const unsigned char[]){0x06, 0x6D, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});  // Correct little-endian 486662
+
+  fe_sq(t0, u_in);                      // t0 = u^2
+  fe_mul(t1, t0, u_in);                 // t1 = u^3
+  fe_mul(t2, t0, A_fe);                 // t2 = A u^2
+  fe_add(rhs, t1, t2);                  // u^3 + A u^2
+  fe_add(rhs, rhs, u_in);               // + u
+
+  // The exponentiation chain for (p+3)/8
+  fe_1(t1);
+  fe_sq(t0, t1);
+  fe_mul(t0, t0, t1);
+  fe_sq(candidate, t0);
+  fe_mul(candidate, candidate, t1);
+  fe_mul(candidate, candidate, rhs);
+  fe_pow22523(candidate, candidate);
+  fe_mul(candidate, candidate, t0);
+  fe_mul(candidate, candidate, rhs);
+
+  // Check c^2 == rhs or -rhs
+  fe_sq(c2, candidate);
+  fe_sub(check, c2, rhs);
+  if (fe_isnonzero(check)) {
+    fe_add(check, c2, rhs);
+    if (fe_isnonzero(check)) {
+      return -1;                        // Not a quadratic residue
+    }
+    fe_mul(candidate, candidate, fe_sqrtm1);  // Adjust with sqrt(-1)
+  }
+
+  // Output v (principal root; flip to -v if needed for your map)
+  fe_copy(v_out, candidate);
+  return 0;
+}
+
+void mont_to_ed(fe x_out, fe y_out, const fe u, const fe v) {
+  fe inv_v, temp;
+  fe t1, t2, inv_t2;
+  fe one;
+  fe_1(one);
+
+  fe_invert(inv_v, v);  // 1/v
+  fe_mul(temp, u, inv_v);  // u/v
+  fe_mul(x_out, fe_sqrt_m486664, temp);  // sqrt(-486664) * (u/v)
+  
+  fe_sub(t1, u, one);  // u - 1
+  fe_add(t2, u, one);  // u + 1
+  fe_invert(inv_t2, t2);
+  fe_mul(y_out, t1, inv_t2);  // (u-1)/(u+1)
+}
+
+void ed_to_mont(fe u_out, fe v_out, const fe x, const fe y) {
+  fe t1, t2, inv_t2;
+  fe one;
+  fe_1(one);
+
+  fe_add(t1, one, y);  // 1 + y
+  fe_sub(t2, one, y);  // 1 - y
+  fe_invert(inv_t2, t2);
+  fe_mul(u_out, t1, inv_t2);  // (1+y)/(1-y)
+  
+  fe inv_x;
+  fe_invert(inv_x, x);  // 1/x
+  fe_mul(t1, u_out, inv_x);  // u / x
+  fe_mul(v_out, fe_sqrt_m486664, t1);  // sqrt(-486664) * (u/x)
+}
+
+// Usage: Add two Montgomery points
+void add_mont_points(fe u3, fe v3, const fe u1, const fe v1, const fe u2, const fe v2) {
+  ge_p3 P_ed, Q_ed, sum_ed;
+  
+  // Convert to Edwards
+  fe x1, y1, x2, y2;
+  mont_to_ed(x1, y1, u1, v1);
+  mont_to_ed(x2, y2, u2, v2);
+  
+  // Load into ge_p3 (assume Z=1, T=x*y for affine)
+  fe_1(P_ed.Z); fe_mul(P_ed.T, x1, y1); fe_copy(P_ed.X, x1); fe_copy(P_ed.Y, y1);
+  fe_1(Q_ed.Z); fe_mul(Q_ed.T, x2, y2); fe_copy(Q_ed.X, x2); fe_copy(Q_ed.Y, y2);
+  
+  // Add using ge_
+  ge_cached Q_cached;
+  ge_p3_to_cached(&Q_cached, &Q_ed);
+  ge_p1p1 sum_p1p1;
+  ge_add(&sum_p1p1, &P_ed, &Q_cached);
+  ge_p1p1_to_p3(&sum_ed, &sum_p1p1);
+  
+  // Convert back (normalize to affine: divide by Z)
+  fe inv_z;
+  fe_invert(inv_z, sum_ed.Z);
+  fe x_out, y_out;
+  fe_mul(x_out, sum_ed.X, inv_z);
+  fe_mul(y_out, sum_ed.Y, inv_z);
+  ed_to_mont(u3, v3, x_out, y_out);
 }
 
 int ge_p3_is_point_at_infinity_vartime(const ge_p3 *p) {

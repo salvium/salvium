@@ -13222,7 +13222,11 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
     if (address.m_is_carrot) {
       hwdev.generate_carrot_tx_proof(prefix_hash, R, A, is_subaddress ? B : boost::none, D, r, sig);
     } else {
-      hwdev.generate_tx_proof(prefix_hash, R, A, B, D, r, sig);
+      crypto::signature sig_cn;
+      hwdev.generate_tx_proof(prefix_hash, R, A, B, D, r, sig_cn);
+      sig.c = sig_cn.c;
+      sig.r = sig_cn.r;
+      sig.sign_mask = 0xFF;
     }
   };
   

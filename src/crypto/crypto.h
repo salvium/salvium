@@ -85,6 +85,7 @@ namespace crypto {
 
   POD_CLASS signature {
     ec_scalar c, r;
+    uint8_t sign_mask;
     friend class crypto_ops;
   };
 
@@ -99,7 +100,7 @@ namespace crypto {
   static_assert(sizeof(ec_point) == 32 && sizeof(ec_scalar) == 32 &&
     sizeof(public_key) == 32 && sizeof(public_key_memsafe) == 32 && sizeof(secret_key) == 32 &&
     sizeof(key_derivation) == 32 && sizeof(key_image) == 32 && sizeof(key_image_y) == 32 &&
-    sizeof(signature) == 64 && sizeof(view_tag) == 1, "Invalid structure size");
+    sizeof(signature) == 65 && sizeof(view_tag) == 1, "Invalid structure size");
 
   class crypto_ops {
     crypto_ops();
