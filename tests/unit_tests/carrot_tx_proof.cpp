@@ -151,149 +151,86 @@ TEST(carrot_tx_proofs, fuzz_stability)
         // 9a. Flip a bit in R
         {
           crypto::public_key R_bad = R_pk;
-            R_bad.data[5] ^= 0x20;
-            bool ok2 = crypto::check_carrot_tx_proof(
-                prefix_hash, R_bad, A,
-                use_subaddress ? boost::make_optional(B) : boost::none,
-                D_pk, sig
-            );
-            ASSERT_FALSE(ok2);
+          R_bad.data[5] ^= 0x20;
+          bool ok2 = crypto::check_carrot_tx_proof(
+                                                   prefix_hash, R_bad, A,
+                                                   use_subaddress ? boost::make_optional(B) : boost::none,
+                                                   D_pk, sig
+                                                   );
+          ASSERT_FALSE(ok2);
         }
 
         // 9b. Flip a bit in D
         {
-            crypto::public_key D_bad = D_pk;
-            D_bad.data[7] ^= 0x10;
-            bool ok2 = crypto::check_carrot_tx_proof(
-                prefix_hash, R_pk, A,
-                use_subaddress ? boost::make_optional(B) : boost::none,
-                D_bad, sig
-            );
-            ASSERT_FALSE(ok2);
+          crypto::public_key D_bad = D_pk;
+          D_bad.data[7] ^= 0x10;
+          bool ok2 = crypto::check_carrot_tx_proof(
+                                                   prefix_hash, R_pk, A,
+                                                   use_subaddress ? boost::make_optional(B) : boost::none,
+                                                   D_bad, sig
+                                                   );
+          ASSERT_FALSE(ok2);
         }
 
         // 9c. Flip a bit in sig.c
         {
-            crypto::signature sig_bad = sig;
-            sig_bad.c.data[3] ^= 0x80;
-            bool ok2 = crypto::check_carrot_tx_proof(
-                prefix_hash, R_pk, A,
-                use_subaddress ? boost::make_optional(B) : boost::none,
-                D_pk, sig_bad
-            );
-            ASSERT_FALSE(ok2);
+          crypto::signature sig_bad = sig;
+          sig_bad.c.data[3] ^= 0x80;
+          bool ok2 = crypto::check_carrot_tx_proof(
+                                                   prefix_hash, R_pk, A,
+                                                   use_subaddress ? boost::make_optional(B) : boost::none,
+                                                   D_pk, sig_bad
+                                                   );
+          ASSERT_FALSE(ok2);
         }
 
         // 9d. Flip a bit in sign_mask
         {
-            crypto::signature sig_bad = sig;
-            sig_bad.sign_mask ^= 0x01;  // flip R_sign
-            bool ok2 = crypto::check_carrot_tx_proof(
-                prefix_hash, R_pk, A,
-                use_subaddress ? boost::make_optional(B) : boost::none,
-                D_pk, sig_bad
-            );
-            ASSERT_FALSE(ok2);
+          crypto::signature sig_bad = sig;
+          sig_bad.sign_mask ^= 0x01;  // flip R_sign
+          bool ok2 = crypto::check_carrot_tx_proof(
+                                                   prefix_hash, R_pk, A,
+                                                   use_subaddress ? boost::make_optional(B) : boost::none,
+                                                   D_pk, sig_bad
+                                                   );
+          ASSERT_FALSE(ok2);
         }
 
         // 9e. Flip a bit in sig.r
         {
-            crypto::signature sig_bad = sig;
-            sig_bad.r.data[0] ^= 0x40;
-            bool ok2 = crypto::check_carrot_tx_proof(
-                prefix_hash, R_pk, A,
-                use_subaddress ? boost::make_optional(B) : boost::none,
-                D_pk, sig_bad
-            );
-            ASSERT_FALSE(ok2);
+          crypto::signature sig_bad = sig;
+          sig_bad.r.data[0] ^= 0x40;
+          bool ok2 = crypto::check_carrot_tx_proof(
+                                                   prefix_hash, R_pk, A,
+                                                   use_subaddress ? boost::make_optional(B) : boost::none,
+                                                   D_pk, sig_bad
+                                                   );
+          ASSERT_FALSE(ok2);
+        }
+
+        // 9f. Flip a bit in A
+        {
+          crypto::public_key A_bad = A;
+          A_bad.data[12] ^= 0x08;
+          bool ok2 = crypto::check_carrot_tx_proof(
+                                                   prefix_hash, R_pk, A_bad,
+                                                   use_subaddress ? boost::make_optional(B) : boost::none,
+                                                   D_pk, sig
+                                                   );
+          ASSERT_FALSE(ok2);
+        }
+
+        // 9g. Flip a bit in B (when subaddress)
+        if (use_subaddress)
+        {
+          crypto::public_key B_bad = B;
+          B_bad.data[9] ^= 0x40;
+          bool ok2 = crypto::check_carrot_tx_proof(
+                                                   prefix_hash, R_pk, A,
+                                                   boost::make_optional(B_bad),
+                                                   D_pk, sig
+                                                   );
+          ASSERT_FALSE(ok2);
         }
     }
 }
-
-/*
-TEST(carrot_tx_proof, prove_verify_v3)
-{
-    crypto::secret_key r;
-    crypto::random32_unbiased(&r);
-
-    // A = aG
-    // B = bG
-    crypto::secret_key a,b;
-    crypto::public_key A,B;
-    crypto::generate_keys(A, a, a, false);
-    crypto::generate_keys(B, b, b, false);
-
-    // R_B = rB
-    crypto::public_key R_B;
-    ge_p3 B_p3;
-    ASSERT_EQ(ge_frombytes_vartime(&B_p3,&B), 0);
-    ge_p2 R_B_p2;
-    ge_scalarmult(&R_B_p2, &unwrap(r), &B_p3);
-    ge_tobytes(&R_B, &R_B_p2);
-
-    // R_G = rG
-    crypto::public_key R_G;
-    ASSERT_EQ(ge_frombytes_vartime(&B_p3,&B), 0);
-    ge_p3 R_G_p3;
-    ge_scalarmult_base(&R_G_p3, &unwrap(r));
-    ge_p3_tobytes(&R_G, &R_G_p3);
-
-    // D = rA
-    crypto::public_key D;
-    ge_p3 A_p3;
-    ASSERT_EQ(ge_frombytes_vartime(&A_p3,&A), 0);
-    ge_p2 D_p2;
-    ge_scalarmult(&D_p2, &unwrap(r), &A_p3);
-    ge_tobytes(&D, &D_p2);
-
-    crypto::signature sig;
-
-    // Message data
-    crypto::hash prefix_hash;
-    char data[] = "hash input";
-    crypto::cn_fast_hash(data,sizeof(data)-1,prefix_hash);
-
-    // Generate/verify valid v1 proof with standard address
-    crypto::generate_tx_proof_v1(prefix_hash, R_G, A, boost::none, D, r, sig);
-    ASSERT_TRUE(crypto::check_tx_proof(prefix_hash, R_G, A, boost::none, D, sig, 1));
-
-    // Generate/verify valid v1 proof with subaddress
-    crypto::generate_tx_proof_v1(prefix_hash, R_B, A, B, D, r, sig);
-    ASSERT_TRUE(crypto::check_tx_proof(prefix_hash, R_B, A, B, D, sig, 1));
-
-    // Generate/verify valid v2 proof with standard address
-    crypto::generate_tx_proof(prefix_hash, R_G, A, boost::none, D, r, sig);
-    ASSERT_TRUE(crypto::check_tx_proof(prefix_hash, R_G, A, boost::none, D, sig, 2));
-
-    // Generate/verify valid v2 proof with subaddress
-    crypto::generate_tx_proof(prefix_hash, R_B, A, B, D, r, sig);
-    ASSERT_TRUE(crypto::check_tx_proof(prefix_hash, R_B, A, B, D, sig, 2));
-
-    // Try to verify valid v2 proofs as v1 proof (bad)
-    crypto::generate_tx_proof(prefix_hash, R_G, A, boost::none, D, r, sig);
-    ASSERT_FALSE(crypto::check_tx_proof(prefix_hash, R_G, A, boost::none, D, sig, 1));
-    crypto::generate_tx_proof(prefix_hash, R_B, A, B, D, r, sig);
-    ASSERT_FALSE(crypto::check_tx_proof(prefix_hash, R_B, A, B, D, sig, 1));
-
-    // Randomly-distributed test points
-    crypto::secret_key evil_a, evil_b, evil_d, evil_r;
-    crypto::public_key evil_A, evil_B, evil_D, evil_R;
-    crypto::generate_keys(evil_A, evil_a, evil_a, false);
-    crypto::generate_keys(evil_B, evil_b, evil_b, false);
-    crypto::generate_keys(evil_D, evil_d, evil_d, false);
-    crypto::generate_keys(evil_R, evil_r, evil_r, false);
-
-    // Selectively choose bad point in v2 proof (bad)
-    crypto::generate_tx_proof(prefix_hash, R_B, A, B, D, r, sig);
-    ASSERT_FALSE(crypto::check_tx_proof(prefix_hash, evil_R, A, B, D, sig, 2));
-    ASSERT_FALSE(crypto::check_tx_proof(prefix_hash, R_B, evil_A, B, D, sig, 2));
-    ASSERT_FALSE(crypto::check_tx_proof(prefix_hash, R_B, A, evil_B, D, sig, 2));
-    ASSERT_FALSE(crypto::check_tx_proof(prefix_hash, R_B, A, B, evil_D, sig, 2));
-
-    // Try to verify valid v1 proofs as v2 proof (bad)
-    crypto::generate_tx_proof_v1(prefix_hash, R_G, A, boost::none, D, r, sig);
-    ASSERT_FALSE(crypto::check_tx_proof(prefix_hash, R_G, A, boost::none, D, sig, 2));
-    crypto::generate_tx_proof_v1(prefix_hash, R_B, A, B, D, r, sig);
-    ASSERT_FALSE(crypto::check_tx_proof(prefix_hash, R_B, A, B, D, sig, 2));
-}
-*/
