@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2022, The Monero Project
+// Copyright (c) 2025, Salvium (authors: SRCG, auruya)
 
 // 
 // All rights reserved.
@@ -40,17 +40,9 @@ extern "C" {
 
 #include "carrot_core/account.h"
 #include "carrot_impl/format_utils.h"
+#include "string_tools.h"
 
 using namespace carrot;
-
-
-static inline unsigned char *operator &(crypto::ec_point &point) {
-    return &reinterpret_cast<unsigned char &>(point);
-  }
-
-static inline unsigned char *operator &(crypto::ec_scalar &scalar) {
-    return &reinterpret_cast<unsigned char &>(scalar);
-  }
 
 static inline void random_carrot_keys(crypto::secret_key& a,
                                  crypto::public_key& A, 
@@ -101,7 +93,7 @@ TEST(carrot_tx_proofs, fuzz_stability)
 
         // 2. Generate random tx private key r
         crypto::secret_key r;
-        crypto::random32_unbiased(&r);
+        crypto::random32_unbiased((unsigned char*)unwrap(r).data);
 
         // 3. Recipient can be main address (no B) or subaddress
         //const crypto::public_key *B_ptr = use_subaddress ? &B : nullptr;
@@ -232,5 +224,221 @@ TEST(carrot_tx_proofs, fuzz_stability)
                                                    );
           ASSERT_FALSE(ok2);
         }
+    }
+}
+
+TEST(carrot_tx_proofs, known_values_mutation_rejection_main_address)
+{
+    // Real Salvium Carrot addresses for reproducible test (testnet) (main address)
+    // Sender: SC1ToqKSXRw3rE3rNQzjUA1nntvHhM6id3coWry25y4jUvHDRKDRGFv1vJRCTMHWUyVXct2aedmvzUfd3CofjTpKEhHmpnftqZk
+    // Recipient: SC1ToumwqT5GeDcn2JjrHoFPUMPMcNu73STkP3Sono94iZpizheMJ3ADpGGE92Wcb7b3gDCxKFT5NEp94ueQQMbu8VBYyAGHEy7
+    // Tx ID: e8729399d2af3dede8c110e370b3505c1669f4fba593fd740a16c1e4f425a728
+    
+    // Tx priv key
+    crypto::secret_key r;
+    const char* r_hex = "748b8f3131661fd8ee0f06ab3de53649381522185ea6e8148c8daf395ded010d";
+    ASSERT_TRUE(epee::string_tools::hex_to_pod(r_hex, r));
+    
+    // Recipient's actual Carrot keys from Salvium network
+    crypto::secret_key a, b;  // view-incoming and prove-spend priv keys
+    crypto::public_key A, B;  // view and spend pub keys
+    
+    // recipient view-incoming key
+    const char* a_hex = "88b6442966238bfd349eb412fe55a717b7b363175b48ae88c34a252dd8868e05";
+    ASSERT_TRUE(epee::string_tools::hex_to_pod(a_hex, a));
+    
+    // recipient prove-spend key
+    const char* b_hex = "94607b25bceb408bbb5393d25729777e92686b9447f9c989f2e735e878950d0b";
+    ASSERT_TRUE(epee::string_tools::hex_to_pod(b_hex, b));
+    
+    // Generate pub keys from priv keys
+    ASSERT_TRUE(crypto::secret_key_to_public_key(a, A));
+    ASSERT_TRUE(crypto::secret_key_to_public_key(b, B));
+    
+    // Compute R = rG (main address case)
+    mx25519_pubkey enote_ephemeral_pubkey_out;
+    carrot::make_carrot_enote_ephemeral_pubkey(r, B, false, enote_ephemeral_pubkey_out);
+    crypto::public_key R_G = carrot::raw_byte_convert<crypto::public_key>(enote_ephemeral_pubkey_out);
+
+    // Compute D = rA
+    mx25519_pubkey s_sr;
+    ASSERT_TRUE(carrot::make_carrot_uncontextualized_shared_key_sender(r, A, s_sr));
+    crypto::public_key D = carrot::raw_byte_convert<crypto::public_key>(s_sr);
+    
+    // Fixed message hash
+    crypto::hash prefix_hash;
+    memset(&prefix_hash, 0, 32);
+    for (int i = 0; i < 32; i++) {
+        prefix_hash.data[i] = i;  // Sequential bytes for reproducibility
+    }
+    
+    // Generate proof with known values
+    crypto::signature sig;
+    crypto::generate_carrot_tx_proof(prefix_hash, R_G, A, boost::none, D, r, sig);
+    
+    // Verify original proof works
+    ASSERT_TRUE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, boost::none, D, sig));
+    
+    // Test mutations are rejected
+    
+    // 1. Mutate R by flipping one bit
+    {
+        crypto::public_key R_mutated = R_G;
+        R_mutated.data[0] ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_mutated, A, boost::none, D, sig));
+    }
+    
+    // 2. Mutate D by flipping one bit
+    {
+        crypto::public_key D_mutated = D;
+        D_mutated.data[0] ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, boost::none, D_mutated, sig));
+    }
+    
+    // 3. Mutate A by flipping one bit
+    {
+        crypto::public_key A_mutated = A;
+        A_mutated.data[0] ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A_mutated, boost::none, D, sig));
+    }
+    
+    // 4. Mutate prefix_hash by flipping one bit
+    {
+        crypto::hash hash_mutated = prefix_hash;
+        hash_mutated.data[0] ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(hash_mutated, R_G, A, boost::none, D, sig));
+    }
+    
+    // 5. Mutate signature.c by flipping one bit
+    {
+        crypto::signature sig_mutated = sig;
+        sig_mutated.c.data[0] ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, boost::none, D, sig_mutated));
+    }
+    
+    // 6. Mutate signature.r by flipping one bit
+    {
+        crypto::signature sig_mutated = sig;
+        sig_mutated.r.data[0] ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, boost::none, D, sig_mutated));
+    }
+    
+    // 7. Mutate signature.sign_mask by flipping R_sign bit
+    {
+        crypto::signature sig_mutated = sig;
+        sig_mutated.sign_mask ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, boost::none, D, sig_mutated));
+    }
+    
+    // 8. Mutate signature.sign_mask by flipping D_sign bit
+    {
+        crypto::signature sig_mutated = sig;
+        sig_mutated.sign_mask ^= 0x02;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, boost::none, D, sig_mutated));
+    }
+}
+
+
+TEST(carrot_tx_proofs, known_values_mutation_rejection_subaddress)
+{
+    // Real Salvium Carrot addresses for reproducible test (testnet) (subaddress)
+    // Sender: SC1ToqKSXRw3rE3rNQzjUA1nntvHhM6id3coWry25y4jUvHDRKDRGFv1vJRCTMHWUyVXct2aedmvzUfd3CofjTpKEhHmpnftqZk
+    // Recipient: SC1TsCevdYfZRZCRb83i5caRDJDb45UoqBeynNciVW8LAihKchQ4MfmW7PmPJquaXDZyntRcJCfduPVtdFUb5nsQLokFM434usw
+    // Tx ID: 01f5e1e56df714e3af919ab443b1acc4b1bebffed03198a9aaf3d22449809453
+    
+    // Tx priv key
+    crypto::secret_key r;
+    const char* r_hex = "4eccc86c26ac250132d141d1b447e1fe25d0d1e4f3f2d7f3aca10a2633b52808";
+    ASSERT_TRUE(epee::string_tools::hex_to_pod(r_hex, r));
+    
+    // view and spend pub keys
+    crypto::public_key A, B;  
+
+    cryptonote::address_parse_info info;
+    std::string recipent_address_str = "SC1TsCevdYfZRZCRb83i5caRDJDb45UoqBeynNciVW8LAihKchQ4MfmW7PmPJquaXDZyntRcJCfduPVtdFUb5nsQLokFM434usw";
+    ASSERT_TRUE(cryptonote::get_account_address_from_str(info, cryptonote::network_type::TESTNET, recipent_address_str));
+    A = info.address.m_view_public_key;
+    B = info.address.m_spend_public_key;
+    
+    // Compute R = rG (subaddress case)
+    mx25519_pubkey enote_ephemeral_pubkey_out;
+    carrot::make_carrot_enote_ephemeral_pubkey(r, B, true, enote_ephemeral_pubkey_out);
+    crypto::public_key R_G = carrot::raw_byte_convert<crypto::public_key>(enote_ephemeral_pubkey_out);
+
+    // Compute D = rA
+    mx25519_pubkey s_sr;
+    ASSERT_TRUE(carrot::make_carrot_uncontextualized_shared_key_sender(r, A, s_sr));
+    crypto::public_key D = carrot::raw_byte_convert<crypto::public_key>(s_sr);
+    
+    // Fixed message hash
+    crypto::hash prefix_hash;
+    memset(&prefix_hash, 0, 32);
+    for (int i = 0; i < 32; i++) {
+        prefix_hash.data[i] = i;  // Sequential bytes for reproducibility
+    }
+    
+    // Generate proof with known values
+    crypto::signature sig;
+    crypto::generate_carrot_tx_proof(prefix_hash, R_G, A, B, D, r, sig);
+    
+    // Verify original proof works
+    ASSERT_TRUE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, B, D, sig));
+    
+    // Test mutations are rejected
+    
+    // 1. Mutate R by flipping one bit
+    {
+        crypto::public_key R_mutated = R_G;
+        R_mutated.data[0] ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_mutated, A, B, D, sig));
+    }
+    
+    // 2. Mutate D by flipping one bit
+    {
+        crypto::public_key D_mutated = D;
+        D_mutated.data[0] ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, B, D_mutated, sig));
+    }
+    
+    // 3. Mutate A by flipping one bit
+    {
+        crypto::public_key A_mutated = A;
+        A_mutated.data[0] ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A_mutated, B, D, sig));
+    }
+    
+    // 4. Mutate prefix_hash by flipping one bit
+    {
+        crypto::hash hash_mutated = prefix_hash;
+        hash_mutated.data[0] ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(hash_mutated, R_G, A, B, D, sig));
+    }
+    
+    // 5. Mutate signature.c by flipping one bit
+    {
+        crypto::signature sig_mutated = sig;
+        sig_mutated.c.data[0] ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, boost::none, D, sig_mutated));
+    }
+    
+    // 6. Mutate signature.r by flipping one bit
+    {
+        crypto::signature sig_mutated = sig;
+        sig_mutated.r.data[0] ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, B, D, sig_mutated));
+    }
+    
+    // 7. Mutate signature.sign_mask by flipping R_sign bit
+    {
+        crypto::signature sig_mutated = sig;
+        sig_mutated.sign_mask ^= 0x01;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, B, D, sig_mutated));
+    }
+    
+    // 8. Mutate signature.sign_mask by flipping D_sign bit
+    {
+        crypto::signature sig_mutated = sig;
+        sig_mutated.sign_mask ^= 0x02;
+        ASSERT_FALSE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, B, D, sig_mutated));
     }
 }
