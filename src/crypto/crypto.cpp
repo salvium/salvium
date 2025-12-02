@@ -705,164 +705,6 @@ namespace crypto {
 #endif
   }
   
-  /*
-
-  
-  void crypto_ops::generate_carrot_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const secret_key &r, signature &sig) {
-    // sanity check
-    ge_p3 A_p3;
-    ge_p3 B_p3;
-    if (ge_frombytes_vartime(&A_p3, &A) != 0) throw std::runtime_error("recipient view pubkey is invalid");
-    if (B && ge_frombytes_vartime(&B_p3, &*B) != 0) throw std::runtime_error("recipient spend pubkey is invalid");
-
-
-#if !defined(NDEBUG)
-    {
-      assert(sc_check(&r) == 0);
-      // check R == r*G or R == r*B
-      public_key dbg_R;
-      ge_p3 dbg_R_p3;
-      if (B)
-      {
-        ge_scalarmult_p3(&dbg_R_p3, &r, &B_p3);
-      }
-      else
-      {
-        ge_scalarmult_base(&dbg_R_p3, &r);
-      }
-      mx25519_pubkey R_x25519;
-      ge_p3_to_x25519(R_x25519.data, &dbg_R_p3);  // ConvertPointE()
-      memcpy(&dbg_R, &R_x25519, sizeof(mx25519_pubkey));
-      assert(R == dbg_R);
-      
-      // check D == r*A  // move here to wallet2.cpp later
-      public_key dbg_D;
-      ge_p3 dbg_D_p3;
-      ge_scalarmult_p3(&dbg_D_p3, &r, &A_p3);
-      mx25519_pubkey D_x25519;
-      ge_p3_to_x25519(D_x25519.data, &dbg_D_p3);  // ConvertPointE()
-      memcpy(&dbg_D, &D_x25519, sizeof(mx25519_pubkey));
-      assert(D == dbg_D);
-    }
-#endif
-
-    // pick random k
-    ec_scalar k;
-    random_scalar(k);
-    
-    // if B is not present
-    static const ec_point zero = {{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }};
-
-    s_comm_2 buf;
-    buf.msg = prefix_hash;
-    buf.D = D;
-    buf.R = R;
-    buf.A = A;
-    if (B)
-        buf.B = *B;
-    else
-        buf.B = zero;
-    cn_fast_hash(config::HASH_KEY_TXPROOF_V2, sizeof(config::HASH_KEY_TXPROOF_V2)-1, buf.sep);
-
-    // Compute in Ed25519 (where scalar mult is easy), then convert to x25519
-    // (homomorphic property)
-    
-    ge_p3 kB_or_kG_p3;
-    if (B)
-    {
-      //SUBADDRESS: compute X = k*ConvertPointE(B)
-      ge_scalarmult_p3(&kB_or_kG_p3, &k, &B_p3);  
-    }
-    else
-    {
-      //MAIN ADDRESS: compute X = k*ConvertPointE(G)
-      ge_scalarmult_base(&kB_or_kG_p3, &k);
-    }
-    mx25519_pubkey X_x25519;
-    ge_p3_to_x25519(X_x25519.data, &kB_or_kG_p3);
-    memcpy(&buf.X, &X_x25519, sizeof(mx25519_pubkey));
-    
-    // compute Y = k*ConvertPointE(A) - (A is recipient's view public key in Ed25519)
-    ge_p3 kA_p3;
-    ge_scalarmult_p3(&kA_p3, &k, &A_p3);     
-    mx25519_pubkey Y_x25519;
-    ge_p3_to_x25519(Y_x25519.data, &kA_p3); // Y_x25519 = ConvertPointE(k*A)
-    memcpy(&buf.Y, &Y_x25519, sizeof(mx25519_pubkey));
-
-    ge_p3 R_ed_true, D_ed_true;
-    if (B)
-      ge_scalarmult_p3(&R_ed_true, &r, &B_p3);
-    else
-      ge_scalarmult_base(&R_ed_true, &r);
-    ge_scalarmult_p3(&D_ed_true, &r, &A_p3);
-
-    fe u_R;
-    fe_frombytes_vartime(u_R, (const unsigned char *)&R);
-
-    fe v_R_candidate;
-    if (fe_sqrt_mont(v_R_candidate, u_R) != 0)
-      throw std::runtime_error("R not on curve");
-
-    fe x1, y1, x2, y2, v_R_neg, v_D_neg;
-    mont_to_ed(x1, y1, u_R, v_R_candidate);
-
-    fe_neg(v_R_neg, v_R_candidate);
-    mont_to_ed(x2, y2, u_R, v_R_neg);
-
-    fe inv_z, xr_true, yr_true;
-    fe_invert(inv_z, R_ed_true.Z);
-    fe_mul(xr_true, R_ed_true.X, inv_z);
-    fe_mul(yr_true, R_ed_true.Y, inv_z);
-
-    bool match1 = fe_equal(xr_true, x1) && fe_equal(yr_true, y1);
-    bool match2 = fe_equal(xr_true, x2) && fe_equal(yr_true, y2);
-    if (!match1 && !match2) throw std::runtime_error("R mapping mismatch");
-    bool R_sign = match1;  // or match2, but choose a fixed convention
-
-    fe u_D;
-    fe_frombytes_vartime(u_D, (const unsigned char *)&D);
-
-    fe v_D_candidate;
-    if (fe_sqrt_mont(v_D_candidate, u_D) != 0)
-      throw std::runtime_error("D not on curve");
-
-    mont_to_ed(x1, y1, u_D, v_D_candidate);
-
-    fe_neg(v_D_neg, v_D_candidate);
-    mont_to_ed(x2, y2, u_D, v_D_neg);
-
-    fe_invert(inv_z, D_ed_true.Z);
-    fe_mul(xr_true, D_ed_true.X, inv_z);
-    fe_mul(yr_true, D_ed_true.Y, inv_z);
-
-    match1 = fe_equal(xr_true, x1) && fe_equal(yr_true, y1);
-    match2 = fe_equal(xr_true, x2) && fe_equal(yr_true, y2);
-    if (!match1 && !match2) throw std::runtime_error("D mapping mismatch");
-    bool D_sign = match1;  // or match2, but choose a fixed convention
-
-    sig.sign_mask = (R_sign ? 0x01 : 0x00) | (D_sign ? 0x02 : 0x00);
-    struct {
-      s_comm_2 buf;
-      uint8_t sign_mask;
-    } challenge_hash;
-    challenge_hash.buf = buf;
-    challenge_hash.sign_mask = sig.sign_mask;
-    
-    // sig.c = Hs(Msg || D || X || Y || sep || R || A || B || sign_mask) 
-    hash_to_scalar(&challenge_hash, sizeof(challenge_hash), sig.c);
-
-    // sig.r = k - sig.c*r
-    sc_mulsub(&sig.r, &sig.c, &unwrap(r), &k);
-
-    memwipe(&k, sizeof(k));
-    
-#if !defined(NDEBUG)
-    bool proof_valid = check_carrot_tx_proof(prefix_hash, R, A, B, D, sig);
-    assert(proof_valid);
-#endif
-  }
-  */
-  
   // Verify a proof: either v1 (version == 1) or v2 (version == 2)
   bool crypto_ops::check_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const signature &sig, const int version) {
     // sanity check
@@ -968,22 +810,22 @@ namespace crypto {
   }
 
   // R and D are provided in X25519 format (u-coordinate), A and B in Ed25519.
-bool crypto_ops::check_carrot_tx_proof(
-    const hash &prefix_hash,
-    const public_key &R,      // X25519 u
-    const public_key &A,      // Ed25519
-    const boost::optional<public_key> &B, // Ed25519 (spend) if any
-    const public_key &D,      // X25519 u
-    const signature &sig)
-{
+  bool crypto_ops::check_carrot_tx_proof(
+                                         const hash &prefix_hash,
+                                         const public_key &R,      // X25519 u
+                                         const public_key &A,      // Ed25519 viewkey
+                                         const boost::optional<public_key> &B, // Ed25519 spendkey if any
+                                         const public_key &D,      // X25519 u
+                                         const signature &sig)
+  {
     ge_p3 A_p3, B_p3;
     if (ge_frombytes_vartime(&A_p3, &A) != 0)
-        return false;
+      return false;
     if (B && ge_frombytes_vartime(&B_p3, &*B) != 0)
-        return false;
+      return false;
 
     if (sc_check(&sig.c) != 0 || sc_check(&sig.r) != 0)
-        return false;
+      return false;
 
     // Extract sign bits
     const bool R_sign = (sig.sign_mask & 0x01) != 0;
@@ -997,7 +839,7 @@ bool crypto_ops::check_carrot_tx_proof(
     fe u_R, v_R_candidate, v_R;
     fe_frombytes_vartime(u_R, (const unsigned char *)&R);
     if (fe_sqrt_mont(v_R_candidate, u_R) != 0)
-        return false;
+      return false;
     if (R_sign) fe_copy(v_R, v_R_candidate);
     else        fe_neg(v_R, v_R_candidate);
 
@@ -1010,7 +852,7 @@ bool crypto_ops::check_carrot_tx_proof(
     fe u_D, v_D_candidate, v_D;
     fe_frombytes_vartime(u_D, (const unsigned char *)&D);
     if (fe_sqrt_mont(v_D_candidate, u_D) != 0)
-        return false;
+      return false;
     if (D_sign) fe_copy(v_D, v_D_candidate);
     else        fe_neg(v_D, v_D_candidate);
 
@@ -1028,23 +870,23 @@ bool crypto_ops::check_carrot_tx_proof(
 
     ge_p1p1 X_p1p1;
     if (B)
-    {
+      {
         // Subaddress: X' = c*R_ed + z*B
         ge_p3 rB_p3;
         ge_scalarmult_p3(&rB_p3, &sig.r, &B_p3);
         ge_cached rB_cached;
         ge_p3_to_cached(&rB_cached, &rB_p3);
         ge_add(&X_p1p1, &cR_p3, &rB_cached);
-    }
+      }
     else
-    {
+      {
         // Main address: X' = c*R_ed + z*G
         ge_p3 rG_p3;
         ge_scalarmult_base(&rG_p3, &sig.r);
         ge_cached rG_cached;
         ge_p3_to_cached(&rG_cached, &rG_p3);
         ge_add(&X_p1p1, &cR_p3, &rG_cached);
-    }
+      }
 
     ge_p3 X_ed_p3;
     ge_p1p1_to_p3(&X_ed_p3, &X_p1p1);
@@ -1083,7 +925,7 @@ bool crypto_ops::check_carrot_tx_proof(
         0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
         0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
         0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
-    }};
+      }};
 
     s_comm_2 buf;
     buf.msg = prefix_hash;
@@ -1100,8 +942,8 @@ bool crypto_ops::check_carrot_tx_proof(
     memcpy(&buf.Y, &Y_x25519, sizeof(mx25519_pubkey));
 
     struct {
-        s_comm_2 buf;
-        uint8_t sign_mask;
+      s_comm_2 buf;
+      uint8_t sign_mask;
     } challenge_hash;
 
     challenge_hash.buf       = buf;
@@ -1115,156 +957,7 @@ bool crypto_ops::check_carrot_tx_proof(
     hash_to_scalar(&challenge_hash, sizeof(challenge_hash), c2);
     sc_sub(&c2, &c2, &sig.c);
     return sc_isnonzero(&c2) == 0;
-}
-
-  /*  
-  // R and D must be provided in Ed25519 format (not X25519!)
-  bool crypto_ops::check_carrot_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const signature &sig) {    
-    ge_p3 R_p3;
-    ge_p3 A_p3;
-    ge_p3 B_p3;
-    ge_p3 D_p3;
-    if (ge_frombytes_vartime(&R_p3, &R) != 0) return false;
-    if (ge_frombytes_vartime(&A_p3, &A) != 0) return false;
-    if (B && ge_frombytes_vartime(&B_p3, &*B) != 0) return false;
-    if (ge_frombytes_vartime(&D_p3, &D) != 0) return false;
-    if (sc_check(&sig.c) != 0 || sc_check(&sig.r) != 0) return false;
-
-    bool R_sign = sig.sign_mask & 0x01;
-    bool D_sign = sig.sign_mask & 0x02;
-
-    // R
-    fe u_R, v_R_candidate, v_R;
-    fe_frombytes_vartime(u_R, (const unsigned char *)&R);
-    if (fe_sqrt_mont(v_R_candidate, u_R) != 0) return false;
-    if (R_sign) fe_copy(v_R, v_R_candidate);
-    else        fe_neg(v_R, v_R_candidate);
-
-    fe x_R, y_R;
-    mont_to_ed(x_R, y_R, u_R, v_R);
-    ge_p3 R_ed;
-    ed_affine_to_p3(&R_ed, x_R, y_R); // Z=1, T=X*Y wrapper
-
-    // D
-    fe u_D, v_D_candidate, v_D;
-    fe_frombytes_vartime(u_D, (const unsigned char *)&D);
-    if (fe_sqrt_mont(v_D_candidate, u_D) != 0) return false;
-    if (D_sign) fe_copy(v_D, v_D_candidate);
-    else        fe_neg(v_D, v_D_candidate);
-
-    fe x_D, y_D;
-    mont_to_ed(x_D, y_D, u_D, v_D);
-    ge_p3 D_ed;
-    ed_affine_to_p3(&D_ed, x_D, y_D);
-
-    // compute sig.c*R
-    ge_p3 cR_p3;
-    {
-      ge_p2 cR_p2;
-      ge_scalarmult(&cR_p2, &sig.c, &R_p3);
-      public_key cR;
-      ge_tobytes(&cR, &cR_p2);
-      if (ge_frombytes_vartime(&cR_p3, &cR) != 0) return false;
-    }
-    ge_p1p1 X_p1p1;
-    if (B)
-    {
-      // compute X = sig.c*R + sig.r*B
-      ge_p2 rB_p2;
-      ge_scalarmult(&rB_p2, &sig.r, &B_p3);
-      public_key rB;
-      ge_tobytes(&rB, &rB_p2);
-      ge_p3 rB_p3;
-      if (ge_frombytes_vartime(&rB_p3, &rB) != 0) return false;
-      ge_cached rB_cached;
-      ge_p3_to_cached(&rB_cached, &rB_p3);
-      ge_add(&X_p1p1, &cR_p3, &rB_cached);
-    }
-    else
-    {
-      // compute X = sig.c*R + sig.r*G
-      ge_p3 rG_p3;
-      ge_scalarmult_base(&rG_p3, &sig.r);
-      ge_cached rG_cached;
-      ge_p3_to_cached(&rG_cached, &rG_p3);
-      ge_add(&X_p1p1, &cR_p3, &rG_cached);
-    }
-    //convert X' from Ed25519 to X25519 // ge_scalarmult_p3 can be used here 
-    ge_p2 X_ed_p2;
-    ge_p1p1_to_p2(&X_ed_p2, &X_p1p1);
-    public_key X_ed;
-    ge_tobytes(&X_ed, &X_ed_p2);
-    ge_p3 X_ed_p3;
-    if (ge_frombytes_vartime(&X_ed_p3, &X_ed) != 0) return false;  // Should never fail
-    mx25519_pubkey X_x25519;
-    ge_p3_to_x25519(X_x25519.data, &X_ed_p3);
-
-    // compute sig.c*D
-    ge_p2 cD_p2;
-    ge_scalarmult(&cD_p2, &sig.c, &D_p3);
-
-    // compute sig.r*A
-    ge_p2 rA_p2;
-    ge_scalarmult(&rA_p2, &sig.r, &A_p3);
-
-    /// compute Y = sig.c*D + sig.r*A
-    public_key cD;
-    public_key rA;
-    ge_tobytes(&cD, &cD_p2);
-    ge_tobytes(&rA, &rA_p2);
-    ge_p3 cD_p3;
-    ge_p3 rA_p3;
-    if (ge_frombytes_vartime(&cD_p3, &cD) != 0) return false;
-    if (ge_frombytes_vartime(&rA_p3, &rA) != 0) return false;
-    ge_cached rA_cached;
-    ge_p3_to_cached(&rA_cached, &rA_p3);
-    ge_p1p1 Y_p1p1;
-    ge_add(&Y_p1p1, &cD_p3, &rA_cached);
-    ge_p2 Y_ed_p2;
-    ge_p1p1_to_p2(&Y_ed_p2, &Y_p1p1);
-    
-    // ge_scalarmult_p3 can be used here
-    public_key Y_ed;
-    ge_tobytes(&Y_ed, &Y_ed_p2);
-    ge_p3 Y_ed_p3;
-    if (ge_frombytes_vartime(&Y_ed_p3, &Y_ed) != 0) return false;
-    mx25519_pubkey Y_x25519;
-    ge_p3_to_x25519(Y_x25519.data, &Y_ed_p3);
-
-    //convert R and D fron Ed25519 to X25519 for hash
-    mx25519_pubkey R_x25519;
-    mx25519_pubkey D_x25519;
-    ge_p3_to_x25519(R_x25519.data, &R_p3);
-    ge_p3_to_x25519(D_x25519.data, &D_p3);
-
-    
-    static const ec_point zero = {{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }};
-    s_comm_2 buf;
-    buf.msg = prefix_hash;
-    
-    // Copy X25519 versions of D and R into buffer
-    memcpy(&buf.D, &D_x25519, sizeof(mx25519_pubkey));  
-    memcpy(&buf.R, &R_x25519, sizeof(mx25519_pubkey));
-    buf.A = A; // A stays in Ed25519
-    
-    if (B)
-        buf.B = *B;
-    else
-        buf.B = zero;
-    
-    cn_fast_hash(config::HASH_KEY_TXPROOF_V2, sizeof(config::HASH_KEY_TXPROOF_V2)-1, buf.sep);
-    
-    // Copy X25519 versions of reconstructed commitments into buffer
-    memcpy(&buf.X, &X_x25519, sizeof(mx25519_pubkey));
-    memcpy(&buf.Y, &Y_x25519, sizeof(mx25519_pubkey));
-
-    // Recompute challenge and verify
-    ec_scalar c2;
-    hash_to_scalar(&buf, sizeof(s_comm_2), c2);
-    sc_sub(&c2, &c2, &sig.c);
-    return sc_isnonzero(&c2) == 0;
   }
-  */
 
   static void hash_to_ec(const public_key &key, ge_p3 &res) {
     hash h;
