@@ -13301,10 +13301,15 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
       }
     }
   };
-  
+
   // determine if the address is found in the subaddress hash table (i.e. whether the proof is outbound or inbound)
   const bool is_out = m_account.get_subaddress_map_ref().count(address.m_spend_public_key) == 0;
 
+  // determine if tx_key is invalid and should be skipped
+  const bool skip_txkey = (tx_key == crypto::null_skey &&
+                           address.m_is_carrot &&
+                           tx.vout.size() == additional_tx_keys.size());
+  
   const crypto::hash txid = cryptonote::get_transaction_hash(tx);
   std::string prefix_data((const char*)&txid, sizeof(crypto::hash));
   prefix_data += message;
@@ -13323,19 +13328,29 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
 
     crypto::public_key dummy_pkey;
     crypto::secret_key dummy_skey;
-    calculate_shared_secret_fn(address.m_view_public_key,
-                               dummy_skey,
-                               dummy_pkey,
-                               tx_key,
-                               is_out,
-                               shared_secret[0]);
-    
     crypto::public_key tx_pub_key;
-    calculate_tx_public_key_fn(tx_key, tx_pub_key);
-    generate_proof_fn(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], tx_key, sig[0]);
 
+    if (!skip_txkey) {
+      calculate_shared_secret_fn(address.m_view_public_key,
+                                 dummy_skey,
+                                 dummy_pkey,
+                                 tx_key,
+                                 is_out,
+                                 shared_secret[0]);
+      
+      calculate_tx_public_key_fn(tx_key, tx_pub_key);
+      generate_proof_fn(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], tx_key, sig[0]);
+    }
     for (size_t i = 1; i < num_sigs; ++i)
     {
+      // Clear the values
+      shared_secret[i] = crypto::null_pkey;
+      sig[i] = {crypto::null_skey, crypto::null_skey};
+
+      // Is this an invalid key?
+      if (skip_txkey && additional_tx_keys[i - 1] == crypto::null_skey)
+        continue;
+      
       calculate_shared_secret_fn(address.m_view_public_key,
                                  dummy_skey,
                                  dummy_pkey,
@@ -13343,9 +13358,8 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
                                  is_out,
                                  shared_secret[i]);
     
-      crypto::public_key tx_pub_key;
       calculate_tx_public_key_fn(additional_tx_keys[i - 1], tx_pub_key);
-      generate_proof_fn(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[i], tx_key, sig[i]);
+      generate_proof_fn(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
     }
     sig_str = address.m_is_carrot ? std::string("OutProofV3") : std::string("OutProofV2");
   }
@@ -13363,15 +13377,17 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
     
     crypto::public_key dummy_pkey;
     crypto::secret_key dummy_skey;
-    calculate_shared_secret_fn(dummy_pkey,
-                               a,
-                               tx_pub_key,
-                               dummy_skey,
-                               is_out,
-                               shared_secret[0]);
+    if (!skip_txkey) {
+      calculate_shared_secret_fn(dummy_pkey,
+                                 a,
+                                 tx_pub_key,
+                                 dummy_skey,
+                                 is_out,
+                                 shared_secret[0]);
+      
+      generate_proof_fn(prefix_hash, address.m_view_public_key, tx_pub_key, address.m_spend_public_key, shared_secret[0], a, sig[0]);
+    }
     
-    generate_proof_fn(prefix_hash, address.m_view_public_key, tx_pub_key, address.m_spend_public_key, shared_secret[0], a, sig[0]);
-
     for (size_t i = 1; i < num_sigs; ++i)
     {
       calculate_shared_secret_fn(dummy_pkey,
@@ -13537,9 +13553,8 @@ bool wallet2::check_tx_proof(const cryptonote::transaction &tx, const cryptonote
   }
 
   crypto::public_key tx_pub_key = get_tx_pub_key_from_extra(tx);
-  THROW_WALLET_EXCEPTION_IF(tx_pub_key == null_pkey, error::wallet_internal_error, "Tx pubkey was not found");
-
   std::vector<crypto::public_key> additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(tx);
+  THROW_WALLET_EXCEPTION_IF(tx_pub_key == null_pkey && additional_tx_pub_keys.size()<2, error::wallet_internal_error, "Tx pubkey was not found");
   THROW_WALLET_EXCEPTION_IF(additional_tx_pub_keys.size() + 1 != num_sigs, error::wallet_internal_error, "Signature size mismatch with additional tx pubkeys");
 
   const crypto::hash txid = cryptonote::get_transaction_hash(tx);
@@ -13554,28 +13569,34 @@ bool wallet2::check_tx_proof(const cryptonote::transaction &tx, const cryptonote
   {
     if (version == 3)
     {
-      good_signature[0] = is_subaddress ?
-        crypto::check_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], sig[0]) :
-        crypto::check_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], sig[0]);
-
+      if (tx_pub_key != crypto::null_pkey) {
+        good_signature[0] = is_subaddress ?
+          crypto::check_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], sig[0]) :
+          crypto::check_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], sig[0]);
+      }
       for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
       {
-        good_signature[i + 1] = is_subaddress ?
-          crypto::check_carrot_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, address.m_spend_public_key, shared_secret[i + 1], sig[i + 1]) :
-          crypto::check_carrot_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, boost::none, shared_secret[i + 1], sig[i + 1]);
+        if (additional_tx_pub_keys[i] != crypto::null_pkey) {
+          good_signature[i + 1] = is_subaddress ?
+            crypto::check_carrot_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, address.m_spend_public_key, shared_secret[i + 1], sig[i + 1]) :
+            crypto::check_carrot_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, boost::none, shared_secret[i + 1], sig[i + 1]);
+        }
       }
     }
     else
     {
-      good_signature[0] = is_subaddress ?
-        crypto::check_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], sig[0], version) :
-        crypto::check_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], sig[0], version);
-
+      if (tx_pub_key != crypto::null_pkey) {
+        good_signature[0] = is_subaddress ?
+          crypto::check_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], sig[0], version) :
+          crypto::check_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], sig[0], version);
+      }
       for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
       {
-        good_signature[i + 1] = is_subaddress ?
-          crypto::check_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, address.m_spend_public_key, shared_secret[i + 1], sig[i + 1], version) :
-          crypto::check_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, boost::none, shared_secret[i + 1], sig[i + 1], version);
+        if (additional_tx_pub_keys[i] != crypto::null_pkey) {
+          good_signature[i + 1] = is_subaddress ?
+            crypto::check_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, address.m_spend_public_key, shared_secret[i + 1], sig[i + 1], version) :
+            crypto::check_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, boost::none, shared_secret[i + 1], sig[i + 1], version);
+        }
       }
     }
   }
@@ -13587,15 +13608,18 @@ bool wallet2::check_tx_proof(const cryptonote::transaction &tx, const cryptonote
     }
     else
     {
-      good_signature[0] = is_subaddress ?
-        crypto::check_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, address.m_spend_public_key, shared_secret[0], sig[0], version) :
-        crypto::check_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, boost::none, shared_secret[0], sig[0], version);
-
+      if (tx_pub_key != crypto::null_pkey) {
+        good_signature[0] = is_subaddress ?
+          crypto::check_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, address.m_spend_public_key, shared_secret[0], sig[0], version) :
+          crypto::check_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, boost::none, shared_secret[0], sig[0], version);
+      }
       for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
       {
-        good_signature[i + 1] = is_subaddress ?
-          crypto::check_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i], address.m_spend_public_key, shared_secret[i + 1], sig[i + 1], version) :
-          crypto::check_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i], boost::none, shared_secret[i + 1], sig[i + 1], version);
+        if (additional_tx_pub_keys[i] != crypto::null_pkey) {
+          good_signature[i + 1] = is_subaddress ?
+            crypto::check_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i], address.m_spend_public_key, shared_secret[i + 1], sig[i + 1], version) :
+            crypto::check_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i], boost::none, shared_secret[i + 1], sig[i + 1], version);
+        }
       }
     }
   }
