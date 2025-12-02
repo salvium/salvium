@@ -13201,6 +13201,9 @@ std::string wallet2::get_tx_proof(const crypto::hash &txid, const cryptonote::ac
       THROW_WALLET_EXCEPTION_IF(!get_tx_key(txid, tx_key, additional_tx_keys), error::wallet_internal_error, "Tx secret key wasn't found in the wallet file.");
     }
 
+    THROW_WALLET_EXCEPTION_IF(tx.version < TRANSACTION_VERSION_CARROT && address.m_is_carrot, error::wallet_internal_error, "Need CN address for CryptoNote TX");
+    THROW_WALLET_EXCEPTION_IF(tx.version >= TRANSACTION_VERSION_CARROT && !address.m_is_carrot, error::wallet_internal_error, "Need Carrot address for Carrot TX");
+    
     return get_tx_proof(tx, tx_key, additional_tx_keys, address, is_subaddress, message);
 }
 
@@ -13367,7 +13370,7 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
                                is_out,
                                shared_secret[0]);
     
-    generate_proof_fn(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], tx_key, sig[0]);
+    generate_proof_fn(prefix_hash, address.m_view_public_key, tx_pub_key, address.m_spend_public_key, shared_secret[0], a, sig[0]);
 
     for (size_t i = 1; i < num_sigs; ++i)
     {
@@ -13378,7 +13381,7 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
                                  is_out,
                                  shared_secret[i]);
     
-      generate_proof_fn(prefix_hash, additional_tx_pub_keys[i - 1], address.m_view_public_key, address.m_spend_public_key, shared_secret[i], tx_key, sig[i]);
+      generate_proof_fn(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i - 1], address.m_spend_public_key, shared_secret[i], a, sig[i]);
     }
     sig_str = address.m_is_carrot ? std::string("InProofV3") : std::string("InProofV2");
   }
