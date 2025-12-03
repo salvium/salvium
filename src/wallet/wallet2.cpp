@@ -12052,6 +12052,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   cryptonote::account_public_address address;
   address.m_spend_public_key = P_change;
   address.m_view_public_key = rct::rct2pk(key_yF);
+  address.m_is_carrot = false;
   
   LOG_ERROR("*****************************************************************************");
   LOG_ERROR("TX type   : RETURN");
@@ -12188,11 +12189,12 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
 
       // SRCG: should the subaddress be forced to TRUE for _RETURN_ TXs and FALSE for all others?!?!?
       // add N - 1 outputs for correct initial fee estimation
+      const bool dest_is_subaddress = (tx_type == cryptonote::transaction_type::RETURN) || is_subaddress;
       for (size_t i = 0; i < ((outputs > 1) ? outputs - 1 : outputs); ++i) {
         if (tx_type == cryptonote::transaction_type::AUDIT) {
-          tx.dsts.push_back(tx_destination_entry(1, address, tx_type == cryptonote::transaction_type::RETURN, tx_type == cryptonote::transaction_type::RETURN));
+          tx.dsts.push_back(tx_destination_entry(1, address, dest_is_subaddress, false));
         } else {
-          tx.dsts.push_back(tx_destination_entry(1, address, tx_type == cryptonote::transaction_type::RETURN, tx_type == cryptonote::transaction_type::RETURN));
+          tx.dsts.push_back(tx_destination_entry(1, address, dest_is_subaddress, tx_type == cryptonote::transaction_type::RETURN));
         }
         tx.dsts.back().asset_type = asset_type;
       }
@@ -12215,7 +12217,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
 
       // add last output, missed for fee estimation
       if (outputs > 1)
-        tx.dsts.push_back(tx_destination_entry(1, address, is_subaddress));
+        tx.dsts.push_back(tx_destination_entry(1, address, dest_is_subaddress, tx_type == cryptonote::transaction_type::RETURN));
 
       THROW_WALLET_EXCEPTION_IF(needed_fee > available_for_fee, error::wallet_internal_error, tr("Transaction cannot pay for itself"));
 
@@ -13226,7 +13228,7 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
       hwdev.generate_carrot_tx_proof(prefix_hash, R, A, is_subaddress ? B : boost::none, D, r, sig);
     } else {
       crypto::signature sig_cn;
-      hwdev.generate_tx_proof(prefix_hash, R, A, B, D, r, sig_cn);
+      hwdev.generate_tx_proof(prefix_hash, R, A, is_subaddress ? B : boost::none, D, r, sig_cn);
       sig.c = sig_cn.c;
       sig.r = sig_cn.r;
       sig.sign_mask = 0xFF;
