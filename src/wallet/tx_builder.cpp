@@ -91,7 +91,7 @@ static bool is_transfer_usable_for_input_selection(const wallet2::transfer_detai
         && td.m_key_image_known
         && !td.m_key_image_partial
         && !td.m_frozen
-        && (top_block_index >= td.m_block_height + blocks_locked_for)
+        && (top_block_index +1 >= td.m_block_height + blocks_locked_for)
         // && last_locked_block_index <= top_block_index
         && td.m_subaddr_index.major == from_account
         && (from_subaddresses.empty() || from_subaddresses.count(td.m_subaddr_index.minor) == 1)
