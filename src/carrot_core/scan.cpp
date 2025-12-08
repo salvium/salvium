@@ -477,7 +477,6 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
 {
     // Determine whether this is a full wallet or a watch-only wallet
     const cryptonote::account_keys &keys = account.get_keys();
-    bool watch_only = (keys.m_spend_secret_key == crypto::null_skey && keys.m_view_secret_key == crypto::null_skey);
     
     // input_context
     const input_context_t input_context = make_carrot_input_context(enote.tx_first_key_image);
@@ -524,45 +523,20 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
             // compute K_r = K_return + K_o
             crypto::public_key K_r = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(enote.onetime_address)));
 
-            // Is this a watch-only wallet?
-            if (watch_only) {
+            // calculate the key image for the return output
+            crypto::secret_key sum_g;
+            sc_add(to_bytes(sum_g), to_bytes(sender_extension_g_out), to_bytes(k_return));
+            crypto::key_image key_image = account.derive_key_image_view_only(address_spend_pubkey_out,
+                                                                            sum_g,
+                                                                            sender_extension_t_out,
+                                                                            K_r
+                                                                            );
 
-              // calculate the key image for the return output
-              crypto::secret_key sum_g;
-              sc_add(to_bytes(sum_g), to_bytes(sender_extension_g_out), to_bytes(k_return));
-              crypto::key_image key_image = account.derive_key_image_view_only(address_spend_pubkey_out,
-                                                                               sum_g,
-                                                                               sender_extension_t_out,
-                                                                               K_r
-                                                                               );
-              
-              // HERE BE DRAGONS!!!
-              // SRCG: test whether this will even work for return_payment detection
-              account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, key_image, crypto::null_skey, crypto::null_skey}}});
-              // LAND AHOY!!!
-              
-            } else {
-              
-              // calculate the key image for the return output
-              crypto::secret_key sum_g;
-              sc_add(to_bytes(sum_g), to_bytes(sender_extension_g_out), to_bytes(k_return));
-              crypto::key_image key_image = account.derive_key_image(address_spend_pubkey_out,
-                                                                     sum_g,
-                                                                     sender_extension_t_out,
-                                                                     K_r
-                                                                     );
-              
-              crypto::secret_key x, y;
-              account.try_searching_for_opening_for_onetime_address(address_spend_pubkey_out,
-                                                                    sum_g,
-                                                                    sender_extension_t_out,
-                                                                    x,
-                                                                    y
-                                                                    );
-              
-              // save the input context & change output key
-              account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, key_image, x, y}}});
-            }
+            // HERE BE DRAGONS!!!
+            // SRCG: test whether this will even work for return_payment detection
+            account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, address_spend_pubkey_out, key_image, sum_g, sender_extension_t_out}}});
+            //account.insert_return_output_info({{K_r, {input_context, output_key, address_spend_pubkey_out, key_image, sum_g, sender_extension_t_out}}});
+            // LAND AHOY!!!
         }
 
         // janus protection checks are not needed for internal scans

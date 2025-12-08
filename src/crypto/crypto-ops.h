@@ -176,6 +176,11 @@ int sc_isnonzero(const unsigned char *); /* Doesn't normalize */
 void ge_p3_to_x25519(unsigned char *xbytes, const ge_p3 *h);
 int edwards_bytes_to_x25519_vartime(unsigned char *xbytes, const unsigned char *s);
 
+int fe_sqrt_mont(fe v_out, const fe u_in);
+void mont_to_ed(fe x_out, fe y_out, const fe u, const fe v);
+void ed_to_mont(fe u_out, fe v_out, const fe x, const fe y);
+void add_mont_points(fe u3, fe v3, const fe u1, const fe v1, const fe u2, const fe v2);
+
 // internal
 uint64_t load_3(const unsigned char *in);
 uint64_t load_4(const unsigned char *in);
@@ -192,6 +197,10 @@ void fe_sq(fe h, const fe f);
 void fe_sub(fe h, const fe f, const fe g);
 void fe_0(fe h);
 void fe_1(fe h);
+int fe_equal(const fe a, const fe b);
+void ge_from_xy(ge_p3 *out, const fe x, const fe y);
+
+int fe_isnonzero(const fe f);
 
 int ge_p3_is_point_at_infinity_vartime(const ge_p3 *p);
 

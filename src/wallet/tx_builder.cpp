@@ -91,7 +91,7 @@ static bool is_transfer_usable_for_input_selection(const wallet2::transfer_detai
         && td.m_key_image_known
         && !td.m_key_image_partial
         && !td.m_frozen
-        && (top_block_index >= td.m_block_height + blocks_locked_for)
+        && (top_block_index +1 >= td.m_block_height + blocks_locked_for)
         // && last_locked_block_index <= top_block_index
         && td.m_subaddr_index.major == from_account
         && (from_subaddresses.empty() || from_subaddresses.count(td.m_subaddr_index.minor) == 1)
@@ -818,8 +818,14 @@ bool get_address_openings_x_y(
     if (return_output_map.find(rct::rct2pk(src.outputs[src.real_output].second.dest)) != return_output_map.end())
     {
         const auto &return_output = return_output_map.at(rct::rct2pk(src.outputs[src.real_output].second.dest));
-        x_out = return_output.x;
-        y_out = return_output.y;
+        bool r = w.get_account().try_searching_for_opening_for_onetime_address(
+                                                                               return_output.K_spend_pubkey,
+                                                                               return_output.sum_g,
+                                                                               return_output.sender_extension_t,
+                                                                               x_out,
+                                                                               y_out
+                                                                               );
+        CHECK_AND_ASSERT_THROW_MES(r, "Failed to obtain openings for onetime address (return_payment)");
         return true;
     }
 

@@ -12052,6 +12052,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   cryptonote::account_public_address address;
   address.m_spend_public_key = P_change;
   address.m_view_public_key = rct::rct2pk(key_yF);
+  address.m_is_carrot = false;
   
   LOG_ERROR("*****************************************************************************");
   LOG_ERROR("TX type   : RETURN");
@@ -12188,11 +12189,12 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
 
       // SRCG: should the subaddress be forced to TRUE for _RETURN_ TXs and FALSE for all others?!?!?
       // add N - 1 outputs for correct initial fee estimation
+      const bool dest_is_subaddress = (tx_type == cryptonote::transaction_type::RETURN) || is_subaddress;
       for (size_t i = 0; i < ((outputs > 1) ? outputs - 1 : outputs); ++i) {
         if (tx_type == cryptonote::transaction_type::AUDIT) {
-          tx.dsts.push_back(tx_destination_entry(1, address, tx_type == cryptonote::transaction_type::RETURN, tx_type == cryptonote::transaction_type::RETURN));
+          tx.dsts.push_back(tx_destination_entry(1, address, dest_is_subaddress, false));
         } else {
-          tx.dsts.push_back(tx_destination_entry(1, address, tx_type == cryptonote::transaction_type::RETURN, tx_type == cryptonote::transaction_type::RETURN));
+          tx.dsts.push_back(tx_destination_entry(1, address, dest_is_subaddress, tx_type == cryptonote::transaction_type::RETURN));
         }
         tx.dsts.back().asset_type = asset_type;
       }
@@ -12215,7 +12217,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_from(const crypton
 
       // add last output, missed for fee estimation
       if (outputs > 1)
-        tx.dsts.push_back(tx_destination_entry(1, address, is_subaddress));
+        tx.dsts.push_back(tx_destination_entry(1, address, dest_is_subaddress, tx_type == cryptonote::transaction_type::RETURN));
 
       THROW_WALLET_EXCEPTION_IF(needed_fee > available_for_fee, error::wallet_internal_error, tr("Transaction cannot pay for itself"));
 
@@ -13195,12 +13197,15 @@ std::string wallet2::get_tx_proof(const crypto::hash &txid, const cryptonote::ac
     // determine if the address is found in the subaddress hash table (i.e. whether the proof is outbound or inbound)
     crypto::secret_key tx_key = crypto::null_skey;
     std::vector<crypto::secret_key> additional_tx_keys;
-    const bool is_out = m_subaddresses.count(address.m_spend_public_key) == 0;
+    const bool is_out = m_account.get_subaddress_map_ref().count(address.m_spend_public_key) == 0;
     if (is_out)
     {
       THROW_WALLET_EXCEPTION_IF(!get_tx_key(txid, tx_key, additional_tx_keys), error::wallet_internal_error, "Tx secret key wasn't found in the wallet file.");
     }
 
+    THROW_WALLET_EXCEPTION_IF(tx.version < TRANSACTION_VERSION_CARROT && address.m_is_carrot, error::wallet_internal_error, "Need CN address for CryptoNote TX");
+    THROW_WALLET_EXCEPTION_IF(tx.version >= TRANSACTION_VERSION_CARROT && !address.m_is_carrot, error::wallet_internal_error, "Need Carrot address for Carrot TX");
+    
     return get_tx_proof(tx, tx_key, additional_tx_keys, address, is_subaddress, message);
 }
 
@@ -13208,8 +13213,104 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
 {
   hw::device &hwdev = m_account.get_device();
   rct::key  aP;
+  
+  // Lambda helper to select between carrot and normal tx proof generation
+  auto generate_proof_fn = [&](
+    const crypto::hash &prefix_hash, 
+    const crypto::public_key &R,
+    const crypto::public_key &A,
+    const boost::optional<crypto::public_key> &B,
+    const crypto::public_key &D,
+    const crypto::secret_key &r, 
+    const crypto::secret_key &a, 
+    crypto::signature &sig)
+  {
+    if (address.m_is_carrot) {
+      hwdev.generate_carrot_tx_proof(prefix_hash, R, A, is_subaddress ? B : boost::none, D, r, a, sig);
+    } else {
+      crypto::signature sig_cn;
+      if (r != crypto::null_skey) {
+        hwdev.generate_tx_proof(prefix_hash, R, A, is_subaddress ? B : boost::none, D, r, sig_cn);
+      } else {
+        hwdev.generate_tx_proof(prefix_hash, A, R, is_subaddress ? B : boost::none, D, a, sig_cn);
+      }
+      sig.c = sig_cn.c;
+      sig.r = sig_cn.r;
+      sig.sign_mask = 0xFF;
+    }
+  };
+
+  auto calculate_shared_secret_fn = [&](
+                                        const crypto::public_key &A,
+                                        const crypto::secret_key &a,
+                                        const crypto::public_key &R,
+                                        const crypto::secret_key &r,
+                                        const bool is_out,
+                                        crypto::public_key &shared_secret
+                                        )
+  {
+    if (address.m_is_carrot) {
+
+      // Carrot code
+
+      mx25519_pubkey s_sender_receiver_unctx;
+      bool success = false;
+      if (is_out) {
+        success = carrot::make_carrot_uncontextualized_shared_key_sender(r, A, s_sender_receiver_unctx);
+      } else {
+        success = carrot::make_carrot_uncontextualized_shared_key_receiver(a,
+                                                                           carrot::raw_byte_convert<mx25519_pubkey>(R),
+                                                                           s_sender_receiver_unctx);
+      }
+      THROW_WALLET_EXCEPTION_IF(!success, error::wallet_internal_error,
+                                "Failed to generate X25519 key derivation for carrot proof (main)");
+      shared_secret = carrot::raw_byte_convert<crypto::public_key>(s_sender_receiver_unctx);
+
+    } else {
+
+      // CryptoNote code
+      if (is_out) {
+        rct::key rA;
+        hwdev.scalarmultKey(rA, rct::pk2rct(A), rct::sk2rct(r));
+        shared_secret = rct::rct2pk(rA);
+      } else {
+        rct::key aR;
+        hwdev.scalarmultKey(aR,rct::pk2rct(R), rct::sk2rct(a));
+        shared_secret = rct::rct2pk(aR);
+      }
+    }
+  };
+  
+  auto calculate_tx_public_key_fn = [&](
+                                        const crypto::secret_key &tx_key,
+                                        crypto::public_key &tx_pub_key
+                                        )
+  {
+    if (address.m_is_carrot) {
+      mx25519_pubkey enote_ephemeral_pubkey_out;
+      carrot::make_carrot_enote_ephemeral_pubkey(tx_key,
+                                                 address.m_spend_public_key,
+                                                 is_subaddress,
+                                                 enote_ephemeral_pubkey_out);
+      THROW_WALLET_EXCEPTION_IF(!success, error::wallet_internal_error,
+                                "Failed to generate TX pubkey for carrot proof (main)");
+      tx_pub_key = carrot::raw_byte_convert<crypto::public_key>(enote_ephemeral_pubkey_out);
+    } else {
+      if (is_subaddress)
+      {
+        rct::key aP;
+        hwdev.scalarmultKey(aP, rct::pk2rct(address.m_spend_public_key), rct::sk2rct(tx_key));
+        tx_pub_key = rct2pk(aP);
+      }
+      else
+      {
+        hwdev.secret_key_to_public_key(tx_key, tx_pub_key);
+      }
+    }
+  };
+
   // determine if the address is found in the subaddress hash table (i.e. whether the proof is outbound or inbound)
-  const bool is_out = m_subaddresses.count(address.m_spend_public_key) == 0;
+  const bool is_out = m_account.get_subaddress_map_ref().count(address.m_spend_public_key) == 0;
 
   const crypto::hash txid = cryptonote::get_transaction_hash(tx);
   std::string prefix_data((const char*)&txid, sizeof(crypto::hash));
@@ -13220,88 +13321,127 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
   std::vector<crypto::public_key> shared_secret;
   std::vector<crypto::signature> sig;
   std::string sig_str;
+
   if (is_out)
   {
+    // determine if tx_key is invalid and should be skipped
+    const bool skip_txkey = (tx_key == crypto::null_skey &&
+                             address.m_is_carrot &&
+                             tx.vout.size() == additional_tx_keys.size());
+  
     const size_t num_sigs = 1 + additional_tx_keys.size();
     shared_secret.resize(num_sigs);
     sig.resize(num_sigs);
 
-    hwdev.scalarmultKey(aP, rct::pk2rct(address.m_view_public_key), rct::sk2rct(tx_key));
-    shared_secret[0] = rct::rct2pk(aP);
+    crypto::public_key dummy_pkey;
+    crypto::secret_key dummy_skey;
     crypto::public_key tx_pub_key;
-    if (is_subaddress)
-    {
-      hwdev.scalarmultKey(aP, rct::pk2rct(address.m_spend_public_key), rct::sk2rct(tx_key));
-      tx_pub_key = rct2pk(aP);
-      hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], tx_key, sig[0]);
-    }
-    else
-    {
-      hwdev.secret_key_to_public_key(tx_key, tx_pub_key);
-      hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], tx_key, sig[0]);
+
+    if (!skip_txkey) {
+      calculate_shared_secret_fn(address.m_view_public_key,
+                                 dummy_skey,
+                                 dummy_pkey,
+                                 tx_key,
+                                 is_out,
+                                 shared_secret[0]);
+      
+      calculate_tx_public_key_fn(tx_key, tx_pub_key);
+      generate_proof_fn(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], tx_key, crypto::null_skey, sig[0]);
     }
     for (size_t i = 1; i < num_sigs; ++i)
     {
-      hwdev.scalarmultKey(aP, rct::pk2rct(address.m_view_public_key), rct::sk2rct(additional_tx_keys[i - 1]));
-      shared_secret[i] = rct::rct2pk(aP);
-      if (is_subaddress)
-      {
-        hwdev.scalarmultKey(aP, rct::pk2rct(address.m_spend_public_key), rct::sk2rct(additional_tx_keys[i - 1]));
-        tx_pub_key = rct2pk(aP);
-        hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
-      }
-      else
-      {
-        hwdev.secret_key_to_public_key(additional_tx_keys[i - 1], tx_pub_key);
-        hwdev.generate_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[i], additional_tx_keys[i - 1], sig[i]);
-      }
+      // Clear the values
+      shared_secret[i] = crypto::null_pkey;
+      sig[i] = {crypto::null_skey, crypto::null_skey};
+
+      // Is this an invalid key?
+      if (skip_txkey && additional_tx_keys[i - 1] == crypto::null_skey)
+        continue;
+      
+      calculate_shared_secret_fn(address.m_view_public_key,
+                                 dummy_skey,
+                                 dummy_pkey,
+                                 additional_tx_keys[i - 1],
+                                 is_out,
+                                 shared_secret[i]);
+    
+      calculate_tx_public_key_fn(additional_tx_keys[i - 1], tx_pub_key);
+      generate_proof_fn(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[i], additional_tx_keys[i - 1], crypto::null_skey, sig[i]);
     }
-    sig_str = std::string("OutProofV2");
+    sig_str = address.m_is_carrot ? std::string("OutProofV3") : std::string("OutProofV2");
   }
   else
   {
     crypto::public_key tx_pub_key = get_tx_pub_key_from_extra(tx);
-    THROW_WALLET_EXCEPTION_IF(tx_pub_key == null_pkey, error::wallet_internal_error, "Tx pubkey was not found");
-
     std::vector<crypto::public_key> additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(tx);
+
+    // determine if tx_pub_key is invalid and should be skipped
+    const bool skip_tx_pubkey = (tx_pub_key == crypto::null_pkey &&
+                                 address.m_is_carrot &&
+                                 tx.vout.size() == additional_tx_pub_keys.size());
+  
+    if (!skip_tx_pubkey)
+      THROW_WALLET_EXCEPTION_IF(tx_pub_key == null_pkey, error::wallet_internal_error, "Tx pubkey was not found");
+
     const size_t num_sigs = 1 + additional_tx_pub_keys.size();
     shared_secret.resize(num_sigs);
     sig.resize(num_sigs);
 
-    const crypto::secret_key& a = m_account.get_keys().m_view_secret_key;
-    hwdev.scalarmultKey(aP, rct::pk2rct(tx_pub_key), rct::sk2rct(a));
-    shared_secret[0] =  rct2pk(aP);
-    if (is_subaddress)
-    {
-      hwdev.generate_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, address.m_spend_public_key, shared_secret[0], a, sig[0]);
+    const crypto::secret_key& a = address.m_is_carrot ? m_account.get_keys().k_view_incoming : m_account.get_keys().m_view_secret_key;
+    
+    crypto::public_key dummy_pkey;
+    crypto::secret_key dummy_skey;
+    if (!skip_tx_pubkey) {
+      calculate_shared_secret_fn(dummy_pkey,
+                                 a,
+                                 tx_pub_key,
+                                 dummy_skey,
+                                 is_out,
+                                 shared_secret[0]);
+      
+      generate_proof_fn(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], crypto::null_skey, a, sig[0]);
     }
-    else
-    {
-      hwdev.generate_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, boost::none, shared_secret[0], a, sig[0]);
-    }
+    
     for (size_t i = 1; i < num_sigs; ++i)
     {
-      hwdev.scalarmultKey(aP,rct::pk2rct(additional_tx_pub_keys[i - 1]), rct::sk2rct(a));
-      shared_secret[i] = rct2pk(aP);
-      if (is_subaddress)
-      {
-        hwdev.generate_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i - 1], address.m_spend_public_key, shared_secret[i], a, sig[i]);
-      }
-      else
-      {
-        hwdev.generate_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i - 1], boost::none, shared_secret[i], a, sig[i]);
-      }
+      // Is this an invalid key?
+      if (skip_tx_pubkey && additional_tx_pub_keys[i - 1] == crypto::null_pkey)
+        continue;
+      
+      calculate_shared_secret_fn(dummy_pkey,
+                                 a,
+                                 additional_tx_pub_keys[i - 1],
+                                 dummy_skey,
+                                 is_out,
+                                 shared_secret[i]);
+    
+      generate_proof_fn(prefix_hash, additional_tx_pub_keys[i - 1], address.m_view_public_key, address.m_spend_public_key, shared_secret[i], crypto::null_skey, a, sig[i]);
     }
-    sig_str = std::string("InProofV2");
+    sig_str = address.m_is_carrot ? std::string("InProofV3") : std::string("InProofV2");
   }
+
+  // Get the number of signatures that we have created (why? this is no different for in/out?)
   const size_t num_sigs = shared_secret.size();
 
   // check if this address actually received any funds
   crypto::key_derivation derivation;
-  THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[0], rct::rct2sk(rct::I), derivation), error::wallet_internal_error, "Failed to generate key derivation");
   std::vector<crypto::key_derivation> additional_derivations(num_sigs - 1);
-  for (size_t i = 1; i < num_sigs; ++i)
-    THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[i], rct::rct2sk(rct::I), additional_derivations[i - 1]), error::wallet_internal_error, "Failed to generate key derivation");
+  
+  if (address.m_is_carrot)
+  {
+    // For carrot addresses, shared_secret is already in x25519 format and can be used directly as derivation
+    memcpy(&derivation, &shared_secret[0], sizeof(crypto::key_derivation));
+    for (size_t i = 1; i < num_sigs; ++i)
+      memcpy(&additional_derivations[i - 1], &shared_secret[i], sizeof(crypto::key_derivation));
+  }
+  else
+  {
+    // For regular addresses, generate key derivation from shared secret
+    THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[0], rct::rct2sk(rct::I), derivation), error::wallet_internal_error, "Failed to generate key derivation");
+    for (size_t i = 1; i < num_sigs; ++i)
+      THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[i], rct::rct2sk(rct::I), additional_derivations[i - 1]), error::wallet_internal_error, "Failed to generate key derivation");
+  }
+  
   uint64_t received;
   check_tx_key_helper(tx, derivation, additional_derivations, address, received);
   // SRCG: if this returns 0 received, but it's an AUDIT TX, then that is EXPECTED
@@ -13309,9 +13449,10 @@ std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypt
   
   // concatenate all signature strings
   for (size_t i = 0; i < num_sigs; ++i)
-    sig_str +=
-      tools::base58::encode(std::string((const char *)&shared_secret[i], sizeof(crypto::public_key))) +
-      tools::base58::encode(std::string((const char *)&sig[i], sizeof(crypto::signature)));
+  {
+    sig_str += tools::base58::encode(std::string((const char *)&shared_secret[i], sizeof(crypto::public_key)));
+    sig_str += tools::base58::encode(std::string((const char *)&sig[i], sizeof(crypto::signature)));
+  }
   return sig_str;
 }
 
@@ -13372,13 +13513,26 @@ bool wallet2::check_tx_proof(const crypto::hash &txid, const cryptonote::account
 
 bool wallet2::check_tx_proof(const cryptonote::transaction &tx, const cryptonote::account_public_address &address, bool is_subaddress, const std::string &message, const std::string &sig_str, uint64_t &received) const
 {
-  // InProofV1, InProofV2, OutProofV1, OutProofV2
+  // InProofV1, InProofV2, InProofV3, OutProofV1, OutProofV2, OutProofV3
   const bool is_out = sig_str.substr(0, 3) == "Out";
   const std::string header = is_out ? sig_str.substr(0,10) : sig_str.substr(0,9);
-  int version = 2; // InProofV2
+  int version = 3; // Default to V3
+  
+  // Check for V1 or V2
   if (is_out && sig_str.substr(8,2) == "V1") version = 1; // OutProofV1
-  else if (is_out) version = 2; // OutProofV2
-  else if (sig_str.substr(7,2) == "V1") version = 1; // InProofV1
+  else if (is_out && sig_str.substr(8,2) == "V2") version = 2; // OutProofV2
+  else if (!is_out && sig_str.substr(7,2) == "V1") version = 1; // InProofV1
+  else if (!is_out && sig_str.substr(7,2) == "V2") version = 2; // InProofV2
+  
+  // Validate version matches address type
+  if (version == 3 && !address.m_is_carrot) {
+    MERROR("V3 proof provided but address is not a carrot address");
+    return false;
+  }
+  if (version != 3 && address.m_is_carrot) {
+    MERROR("Carrot address provided but proof is not V3");
+    return false;
+  }
 
   const size_t header_len = header.size();
   THROW_WALLET_EXCEPTION_IF(sig_str.size() < header_len || sig_str.substr(0, header_len) != header, error::wallet_internal_error,
@@ -13389,30 +13543,36 @@ bool wallet2::check_tx_proof(const cryptonote::transaction &tx, const cryptonote
   std::vector<crypto::signature> sig(1);
   const size_t pk_len = tools::base58::encode(std::string((const char *)&shared_secret[0], sizeof(crypto::public_key))).size();
   const size_t sig_len = tools::base58::encode(std::string((const char *)&sig[0], sizeof(crypto::signature))).size();
-  const size_t num_sigs = (sig_str.size() - header_len) / (pk_len + sig_len);
-  THROW_WALLET_EXCEPTION_IF(sig_str.size() != header_len + num_sigs * (pk_len + sig_len), error::wallet_internal_error,
+  
+  size_t per_sig_len = pk_len + sig_len;
+  const size_t num_sigs = (sig_str.size() - header_len) / per_sig_len;
+  THROW_WALLET_EXCEPTION_IF(sig_str.size() != header_len + num_sigs * per_sig_len, error::wallet_internal_error,
     "Wrong signature size");
   shared_secret.resize(num_sigs);
   sig.resize(num_sigs);
   for (size_t i = 0; i < num_sigs; ++i)
   {
     std::string pk_decoded;
+    std::string R_decoded;
+    std::string D_decoded;
     std::string sig_decoded;
-    const size_t offset = header_len + i * (pk_len + sig_len);
+    size_t offset = header_len + i * per_sig_len;
     THROW_WALLET_EXCEPTION_IF(!tools::base58::decode(sig_str.substr(offset, pk_len), pk_decoded), error::wallet_internal_error,
       "Signature decoding error");
-    THROW_WALLET_EXCEPTION_IF(!tools::base58::decode(sig_str.substr(offset + pk_len, sig_len), sig_decoded), error::wallet_internal_error,
-      "Signature decoding error");
-    THROW_WALLET_EXCEPTION_IF(sizeof(crypto::public_key) != pk_decoded.size() || sizeof(crypto::signature) != sig_decoded.size(), error::wallet_internal_error,
+    THROW_WALLET_EXCEPTION_IF(sizeof(crypto::public_key) != pk_decoded.size(), error::wallet_internal_error,
       "Signature decoding error");
     memcpy(&shared_secret[i], pk_decoded.data(), sizeof(crypto::public_key));
+    offset += pk_len;
+    THROW_WALLET_EXCEPTION_IF(!tools::base58::decode(sig_str.substr(offset, sig_len), sig_decoded), error::wallet_internal_error,
+      "Signature decoding error");
+    THROW_WALLET_EXCEPTION_IF(sizeof(crypto::signature) != sig_decoded.size(), error::wallet_internal_error,
+      "Signature decoding error");
     memcpy(&sig[i], sig_decoded.data(), sizeof(crypto::signature));
   }
 
   crypto::public_key tx_pub_key = get_tx_pub_key_from_extra(tx);
-  THROW_WALLET_EXCEPTION_IF(tx_pub_key == null_pkey, error::wallet_internal_error, "Tx pubkey was not found");
-
   std::vector<crypto::public_key> additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(tx);
+  THROW_WALLET_EXCEPTION_IF(tx_pub_key == null_pkey && additional_tx_pub_keys.size()<2, error::wallet_internal_error, "Tx pubkey was not found");
   THROW_WALLET_EXCEPTION_IF(additional_tx_pub_keys.size() + 1 != num_sigs, error::wallet_internal_error, "Signature size mismatch with additional tx pubkeys");
 
   const crypto::hash txid = cryptonote::get_transaction_hash(tx);
@@ -13425,42 +13585,99 @@ bool wallet2::check_tx_proof(const cryptonote::transaction &tx, const cryptonote
   std::vector<int> good_signature(num_sigs, 0);
   if (is_out)
   {
-    good_signature[0] = is_subaddress ?
-      crypto::check_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], sig[0], version) :
-      crypto::check_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], sig[0], version);
-
-    for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
+    if (version == 3)
     {
-      good_signature[i + 1] = is_subaddress ?
-        crypto::check_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, address.m_spend_public_key, shared_secret[i + 1], sig[i + 1], version) :
-        crypto::check_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, boost::none, shared_secret[i + 1], sig[i + 1], version);
+      if (tx_pub_key != crypto::null_pkey) {
+        good_signature[0] = is_subaddress ?
+          crypto::check_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], sig[0]) :
+          crypto::check_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], sig[0]);
+      }
+      for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
+      {
+        if (additional_tx_pub_keys[i] != crypto::null_pkey) {
+          good_signature[i + 1] = is_subaddress ?
+            crypto::check_carrot_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, address.m_spend_public_key, shared_secret[i + 1], sig[i + 1]) :
+            crypto::check_carrot_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, boost::none, shared_secret[i + 1], sig[i + 1]);
+        }
+      }
+    }
+    else
+    {
+      if (tx_pub_key != crypto::null_pkey) {
+        good_signature[0] = is_subaddress ?
+          crypto::check_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], sig[0], version) :
+          crypto::check_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], sig[0], version);
+      }
+      for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
+      {
+        if (additional_tx_pub_keys[i] != crypto::null_pkey) {
+          good_signature[i + 1] = is_subaddress ?
+            crypto::check_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, address.m_spend_public_key, shared_secret[i + 1], sig[i + 1], version) :
+            crypto::check_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, boost::none, shared_secret[i + 1], sig[i + 1], version);
+        }
+      }
     }
   }
   else
   {
-    good_signature[0] = is_subaddress ?
-      crypto::check_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, address.m_spend_public_key, shared_secret[0], sig[0], version) :
-      crypto::check_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, boost::none, shared_secret[0], sig[0], version);
-
-    for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
+    if (version == 3)
     {
-      good_signature[i + 1] = is_subaddress ?
-        crypto::check_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i], address.m_spend_public_key, shared_secret[i + 1], sig[i + 1], version) :
-        crypto::check_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i], boost::none, shared_secret[i + 1], sig[i + 1], version);
+      if (tx_pub_key != crypto::null_pkey) {
+        good_signature[0] = is_subaddress ?
+          crypto::check_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, address.m_spend_public_key, shared_secret[0], sig[0]) :
+          crypto::check_carrot_tx_proof(prefix_hash, tx_pub_key, address.m_view_public_key, boost::none, shared_secret[0], sig[0]);
+      }
+      for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
+      {
+        if (additional_tx_pub_keys[i] != crypto::null_pkey) {
+          good_signature[i + 1] = is_subaddress ?
+            crypto::check_carrot_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, address.m_spend_public_key, shared_secret[i + 1], sig[i + 1]) :
+            crypto::check_carrot_tx_proof(prefix_hash, additional_tx_pub_keys[i], address.m_view_public_key, boost::none, shared_secret[i + 1], sig[i + 1]);
+        }
+      }
+    }
+    else
+    {
+      if (tx_pub_key != crypto::null_pkey) {
+        good_signature[0] = is_subaddress ?
+          crypto::check_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, address.m_spend_public_key, shared_secret[0], sig[0], version) :
+          crypto::check_tx_proof(prefix_hash, address.m_view_public_key, tx_pub_key, boost::none, shared_secret[0], sig[0], version);
+      }
+      for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
+      {
+        if (additional_tx_pub_keys[i] != crypto::null_pkey) {
+          good_signature[i + 1] = is_subaddress ?
+            crypto::check_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i], address.m_spend_public_key, shared_secret[i + 1], sig[i + 1], version) :
+            crypto::check_tx_proof(prefix_hash, address.m_view_public_key, additional_tx_pub_keys[i], boost::none, shared_secret[i + 1], sig[i + 1], version);
+        }
+      }
     }
   }
 
   if (std::any_of(good_signature.begin(), good_signature.end(), [](int i) { return i > 0; }))
   {
-    // obtain key derivation by multiplying scalar 1 to the shared secret
+    // obtain key derivation by multiplying scalar 1 to the shared secret (or use directly for carrot)
     crypto::key_derivation derivation;
-    if (good_signature[0])
-      THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[0], rct::rct2sk(rct::I), derivation), error::wallet_internal_error, "Failed to generate key derivation");
-
     std::vector<crypto::key_derivation> additional_derivations(num_sigs - 1);
-    for (size_t i = 1; i < num_sigs; ++i)
-      if (good_signature[i])
-        THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[i], rct::rct2sk(rct::I), additional_derivations[i - 1]), error::wallet_internal_error, "Failed to generate key derivation");
+    
+    if (address.m_is_carrot)
+    {
+      // For carrot addresses, shared_secret is already in x25519 format and can be used directly as derivation
+      if (good_signature[0])
+        memcpy(&derivation, &shared_secret[0], sizeof(crypto::key_derivation));
+      for (size_t i = 1; i < num_sigs; ++i)
+        if (good_signature[i])
+          memcpy(&additional_derivations[i - 1], &shared_secret[i], sizeof(crypto::key_derivation));
+    }
+    else
+    {
+      // For regular addresses, generate key derivation from shared secret
+      if (good_signature[0])
+        THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[0], rct::rct2sk(rct::I), derivation), error::wallet_internal_error, "Failed to generate key derivation");
+      for (size_t i = 1; i < num_sigs; ++i)
+        if (good_signature[i])
+          THROW_WALLET_EXCEPTION_IF(!crypto::generate_key_derivation(shared_secret[i], rct::rct2sk(rct::I), additional_derivations[i - 1]), error::wallet_internal_error, "Failed to generate key derivation");
+    }
 
     check_tx_key_helper(tx, derivation, additional_derivations, address, received);
     return true;
