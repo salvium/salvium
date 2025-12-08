@@ -123,7 +123,7 @@ TEST(carrot_tx_proofs, fuzz_stability)
             prefix_hash,
             R_pk, A,
             use_subaddress ? boost::make_optional(B) : boost::none,
-            D_pk, r, sig
+            D_pk, r, a, sig
         );
 
         // 8. Verify
@@ -274,7 +274,7 @@ TEST(carrot_tx_proofs, known_values_mutation_rejection_main_address)
     
     // Generate proof with known values
     crypto::signature sig;
-    crypto::generate_carrot_tx_proof(prefix_hash, R_G, A, boost::none, D, r, sig);
+    crypto::generate_carrot_tx_proof(prefix_hash, R_G, A, boost::none, D, r, a, sig);
     
     // Verify original proof works
     ASSERT_TRUE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, boost::none, D, sig));
@@ -347,7 +347,7 @@ TEST(carrot_tx_proofs, known_values_mutation_rejection_subaddress)
     // Tx ID: 01f5e1e56df714e3af919ab443b1acc4b1bebffed03198a9aaf3d22449809453
     
     // Tx priv key
-    crypto::secret_key r;
+    crypto::secret_key r, a;
     const char* r_hex = "4eccc86c26ac250132d141d1b447e1fe25d0d1e4f3f2d7f3aca10a2633b52808";
     ASSERT_TRUE(epee::string_tools::hex_to_pod(r_hex, r));
     
@@ -359,6 +359,7 @@ TEST(carrot_tx_proofs, known_values_mutation_rejection_subaddress)
     ASSERT_TRUE(cryptonote::get_account_address_from_str(info, cryptonote::network_type::TESTNET, recipent_address_str));
     A = info.address.m_view_public_key;
     B = info.address.m_spend_public_key;
+    a = crypto::null_skey;
     
     // Compute R = rG (subaddress case)
     mx25519_pubkey enote_ephemeral_pubkey_out;
@@ -379,7 +380,7 @@ TEST(carrot_tx_proofs, known_values_mutation_rejection_subaddress)
     
     // Generate proof with known values
     crypto::signature sig;
-    crypto::generate_carrot_tx_proof(prefix_hash, R_G, A, B, D, r, sig);
+    crypto::generate_carrot_tx_proof(prefix_hash, R_G, A, B, D, r, a, sig);
     
     // Verify original proof works
     ASSERT_TRUE(crypto::check_carrot_tx_proof(prefix_hash, R_G, A, B, D, sig));

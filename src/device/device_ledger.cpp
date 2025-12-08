@@ -1434,11 +1434,11 @@ namespace hw {
     }
 
     void device_ledger::generate_carrot_tx_proof(const crypto::hash &prefix_hash, 
-                                          const crypto::public_key &R, const crypto::public_key &A, const boost::optional<crypto::public_key> &B, const crypto::public_key &D, const crypto::secret_key &r, 
-                                          crypto::signature &sig)  {
+                                                 const crypto::public_key &R, const crypto::public_key &A, const boost::optional<crypto::public_key> &B, const crypto::public_key &D, const crypto::secret_key &r, 
+                                                 const crypto::secret_key &a, crypto::signature &sig) {
       // to-do: For now, carrot tx proofs are not supported
       AUTO_LOCK_CMD();
-      crypto::generate_carrot_tx_proof(prefix_hash, R, A, B, D, r, sig);
+      crypto::generate_carrot_tx_proof(prefix_hash, R, A, B, D, r, a, sig);
     }
 
     bool device_ledger::open_tx(crypto::secret_key &tx_key) {

@@ -132,8 +132,10 @@ namespace crypto {
     friend void generate_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, signature &);
     static void generate_tx_proof_v1(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, signature &);
     friend void generate_tx_proof_v1(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, signature &);
-    static void generate_carrot_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, signature &);
-    friend void generate_carrot_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, signature &);
+    static void generate_carrot_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, const secret_key &, signature &);
+    friend void generate_carrot_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, const secret_key &, signature &);
+    static void generate_carrot_tx_proof_as_sender(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, const secret_key &, signature &);
+    friend void generate_carrot_tx_proof_as_sender(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, const secret_key &, signature &);
     static bool check_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const signature &, const int);
     friend bool check_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const signature &, const int);
     static bool check_carrot_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const signature &);
@@ -268,8 +270,11 @@ namespace crypto {
   /* Generation of a carrot tx proof; for carrot transactions, D is in X25519 domain (D = r*ConvertPointE(A))
    * instead of Ed25519 domain (D = r*A). This version applies ConvertPointE transformation.
    */
-  inline void generate_carrot_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const secret_key &r, signature &sig) {
-    crypto_ops::generate_carrot_tx_proof(prefix_hash, R, A, B, D, r, sig);
+  inline void generate_carrot_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const secret_key &r, const secret_key &a, signature &sig) {
+    crypto_ops::generate_carrot_tx_proof(prefix_hash, R, A, B, D, r, a, sig);
+  }
+  inline void generate_carrot_tx_proof_as_sender(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const secret_key &r, const secret_key &a, signature &sig) {
+    crypto_ops::generate_carrot_tx_proof_as_sender(prefix_hash, R, A, B, D, r, a, sig);
   }
   inline bool check_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const signature &sig, const int version) {
     return crypto_ops::check_tx_proof(prefix_hash, R, A, B, D, sig, version);
@@ -279,7 +284,11 @@ namespace crypto {
   inline bool check_carrot_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const signature &sig) {
     return crypto_ops::check_carrot_tx_proof(prefix_hash, R, A, B, D, sig);
   }
-
+  /*
+  inline bool check_carrot_tx_proof_as_sender(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const signature &sig) {
+    return crypto_ops::check_carrot_tx_proof_as_sender(prefix_hash, R, A, B, D, sig);
+  }
+  */
   inline void derive_key_image_generator(const public_key &pub, ec_point &ki_gen) {
     crypto_ops::derive_key_image_generator(pub, ki_gen);
   }
