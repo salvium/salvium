@@ -85,6 +85,7 @@ namespace crypto {
 
   POD_CLASS signature {
     ec_scalar c, r;
+    uint8_t sign_mask;
     friend class crypto_ops;
   };
 
@@ -99,7 +100,7 @@ namespace crypto {
   static_assert(sizeof(ec_point) == 32 && sizeof(ec_scalar) == 32 &&
     sizeof(public_key) == 32 && sizeof(public_key_memsafe) == 32 && sizeof(secret_key) == 32 &&
     sizeof(key_derivation) == 32 && sizeof(key_image) == 32 && sizeof(key_image_y) == 32 &&
-    sizeof(signature) == 64 && sizeof(view_tag) == 1, "Invalid structure size");
+    sizeof(signature) == 65 && sizeof(view_tag) == 1, "Invalid structure size");
 
   class crypto_ops {
     crypto_ops();
@@ -131,8 +132,14 @@ namespace crypto {
     friend void generate_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, signature &);
     static void generate_tx_proof_v1(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, signature &);
     friend void generate_tx_proof_v1(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, signature &);
+    static void generate_carrot_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, const secret_key &, signature &);
+    friend void generate_carrot_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, const secret_key &, signature &);
+    static void generate_carrot_tx_proof_as_sender(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, const secret_key &, signature &);
+    friend void generate_carrot_tx_proof_as_sender(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, const secret_key &, signature &);
     static bool check_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const signature &, const int);
     friend bool check_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const signature &, const int);
+    static bool check_carrot_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const signature &);
+    friend bool check_carrot_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const signature &);
     static void derive_key_image_generator(const public_key &, ec_point &);
     friend void derive_key_image_generator(const public_key &, ec_point &);
     static void generate_key_image(const public_key &, const secret_key &, key_image &);
@@ -260,10 +267,28 @@ namespace crypto {
   inline void generate_tx_proof_v1(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const secret_key &r, signature &sig) {
     crypto_ops::generate_tx_proof_v1(prefix_hash, R, A, B, D, r, sig);
   }
+  /* Generation of a carrot tx proof; for carrot transactions, D is in X25519 domain (D = r*ConvertPointE(A))
+   * instead of Ed25519 domain (D = r*A). This version applies ConvertPointE transformation.
+   */
+  inline void generate_carrot_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const secret_key &r, const secret_key &a, signature &sig) {
+    crypto_ops::generate_carrot_tx_proof(prefix_hash, R, A, B, D, r, a, sig);
+  }
+  inline void generate_carrot_tx_proof_as_sender(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const secret_key &r, const secret_key &a, signature &sig) {
+    crypto_ops::generate_carrot_tx_proof_as_sender(prefix_hash, R, A, B, D, r, a, sig);
+  }
   inline bool check_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const signature &sig, const int version) {
     return crypto_ops::check_tx_proof(prefix_hash, R, A, B, D, sig, version);
   }
-
+  /* Verification of a carrot tx proof; R and D should be in Ed25519 domain for verification,
+   */
+  inline bool check_carrot_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const signature &sig) {
+    return crypto_ops::check_carrot_tx_proof(prefix_hash, R, A, B, D, sig);
+  }
+  /*
+  inline bool check_carrot_tx_proof_as_sender(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const signature &sig) {
+    return crypto_ops::check_carrot_tx_proof_as_sender(prefix_hash, R, A, B, D, sig);
+  }
+  */
   inline void derive_key_image_generator(const public_key &pub, ec_point &ki_gen) {
     crypto_ops::derive_key_image_generator(pub, ki_gen);
   }

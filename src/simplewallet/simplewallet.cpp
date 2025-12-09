@@ -9441,7 +9441,7 @@ bool simple_wallet::get_tx_proof(const std::vector<std::string> &args)
   try
   {
     std::string sig_str = m_wallet->get_tx_proof(txid, info.address, info.is_subaddress, args.size() == 3 ? args[2] : "");
-    const std::string filename = "monero_tx_proof";
+    const std::string filename = "salvium_tx_proof";
     if (m_wallet->save_to_file(filename, sig_str, true))
       success_msg_writer() << tr("signature file saved to: ") << filename;
     else
