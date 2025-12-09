@@ -13081,10 +13081,13 @@ void wallet2::check_tx_key_helper(const cryptonote::transaction &tx, const crypt
   received = 0;
 
   const bool use_additional_derivations = !additional_derivations.empty() && address.m_is_carrot;
-  const auto enote_scan_infos = wallet::view_incoming_scan_transaction_as_sender(tx,
-                                                                                 use_additional_derivations ? epee::span<const crypto::key_derivation>{} : epee::span<const crypto::key_derivation>{&derivation, 1},
-                                                                                 epee::to_span(additional_derivations),
-                                                                                 address);
+  const bool is_out = m_account.get_subaddress_map_ref().count(address.m_spend_public_key) == 0;
+  const auto enote_scan_infos = (is_out)
+    ? wallet::view_incoming_scan_transaction_as_sender(tx,
+                                                       use_additional_derivations ? epee::span<const crypto::key_derivation>{} : epee::span<const crypto::key_derivation>{&derivation, 1},
+                                                       epee::to_span(additional_derivations),
+                                                       address)
+    : wallet::view_incoming_scan_transaction(tx, m_account);
 
   for (const auto &enote_scan_info : enote_scan_infos)
     if (enote_scan_info && enote_scan_info->address_spend_pubkey == address.m_spend_public_key)
