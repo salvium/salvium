@@ -544,7 +544,7 @@ namespace crypto {
 
     if (B && ge_frombytes_vartime(&B_p3, &*B) != 0)
       throw std::runtime_error("recipient spend pubkey is invalid");
-
+        
 #if !defined(NDEBUG)
     {
       // Debug check D == a*R
