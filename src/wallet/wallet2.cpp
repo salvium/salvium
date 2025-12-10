@@ -3371,11 +3371,9 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
 
   tools::threadpool& tpool = tools::threadpool::getInstanceForCompute();
 
-  size_t num_txes = 0;
   size_t num_tx_outputs = 0;
   for (const parsed_block &par_blk : parsed_blocks)
   {
-    num_txes += 2 + par_blk.txes.size();
     num_tx_outputs += par_blk.block.miner_tx.vout.size();
     num_tx_outputs += par_blk.block.protocol_tx.vout.size();
     for (const cryptonote::transaction &tx : par_blk.txes)
@@ -4164,7 +4162,7 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
   // "I had to reorder some code to fix... a timing info leak IIRC. In turn, this undid something I had fixed before, ... a subtle race condition with the txpool.
   // It was pretty subtle IIRC, and so I needed time to think about how to refix it after the move, and I never got to it."
   // https://github.com/monero-project/monero/pull/6097
-  bool refreshed = false;
+  // bool refreshed = false;
   std::map<std::pair<uint64_t, uint64_t>, size_t> output_tracker_cache = create_output_tracker_cache();
   hw::device &hwdev = m_account.get_device();
 
@@ -7290,7 +7288,6 @@ std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> wallet2::
 {
   std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> amount_per_subaddr;
   const uint64_t blockchain_height = get_blockchain_current_height();
-  const uint64_t now = time(NULL);
   if (m_transfers_indices.count(asset_type) == 0) {
     return amount_per_subaddr;
   }
@@ -9962,7 +9959,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       outs.back().reserve(fake_outputs_count + 1);
       const rct::key mask = td.is_rct() ? rct::commit(td.amount(), td.m_mask) : rct::zeroCommit(td.amount());
 
-      uint64_t num_outs = 0;
+      num_outs = 0;
       const uint64_t amount = td.is_rct() ? 0 : td.amount();
       const bool output_is_pre_fork = td.m_block_height < segregation_fork_height;
       if (is_after_segregation_fork && m_segregate_pre_fork_outputs && output_is_pre_fork)
@@ -10145,7 +10142,7 @@ void wallet2::transfer_selected(const std::vector<cryptonote::tx_destination_ent
   //prepare inputs
   LOG_PRINT_L2("preparing outputs");
   typedef cryptonote::tx_source_entry::output_entry tx_output_entry;
-  size_t i = 0, out_index = 0;
+  size_t out_index = 0;
   std::vector<cryptonote::tx_source_entry> sources;
   for(size_t idx: selected_transfers)
   {
@@ -10164,7 +10161,6 @@ void wallet2::transfer_selected(const std::vector<cryptonote::tx_destination_ent
       oe.second.mask = std::get<2>(outs[out_index][n]);
 
       src.outputs.push_back(oe);
-      ++i;
     }
 
     //paste real transaction to the random index
@@ -10399,7 +10395,7 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
 
   //prepare inputs
   LOG_PRINT_L2("preparing outputs");
-  size_t i = 0, out_index = 0;
+  size_t out_index = 0;
   std::vector<cryptonote::tx_source_entry> sources;
   for(size_t idx: selected_transfers)
   {
@@ -10437,7 +10433,6 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
       oe.second.mask = std::get<2>(outs[out_index][n]);
       src.outputs.push_back(oe);
     }
-    ++i;
 
     //paste real transaction to the random index
     auto it_to_replace = std::find_if(src.outputs.begin(), src.outputs.end(), [&](const tx_output_entry& a)
@@ -11042,7 +11037,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
     THROW_WALLET_EXCEPTION_IF(subaddr_account != 0, error::wallet_internal_error, "Staking is only permitted from main account, not secondary accounts");
     break;
   default:
-    THROW_WALLET_EXCEPTION(error::wallet_internal_error, "Invalid tx type specified: " + static_cast<uint64_t>(tx_type));
+    THROW_WALLET_EXCEPTION(error::wallet_internal_error, "Invalid tx type specified: " + std::to_string(static_cast<uint64_t>(tx_type)));
     break;
   }
 
@@ -11712,8 +11707,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
   const bool bulletproof = true;
   const bool bulletproof_plus = true;
   const bool clsag = true;
-  const bool use_fullproofs = use_fork_rules(get_full_proofs_fork(), 0);
-  const bool use_salviumone_proofs = use_fork_rules(get_salvium_one_proofs_fork(), 0);
+  //const bool use_fullproofs = use_fork_rules(get_full_proofs_fork(), 0);
+  //const bool use_salviumone_proofs = use_fork_rules(get_salvium_one_proofs_fork(), 0);
   //const rct::RCTConfig rct_config { rct::RangeProofPaddedBulletproof, use_salviumone_proofs ? 6 : use_fullproofs ? 5 : 4 };
   const bool use_view_tags = use_fork_rules(get_view_tag_fork(), 0);
   const uint64_t base_fee  = get_base_fee(priority);
@@ -13081,10 +13076,13 @@ void wallet2::check_tx_key_helper(const cryptonote::transaction &tx, const crypt
   received = 0;
 
   const bool use_additional_derivations = !additional_derivations.empty() && address.m_is_carrot;
-  const auto enote_scan_infos = wallet::view_incoming_scan_transaction_as_sender(tx,
-                                                                                 use_additional_derivations ? epee::span<const crypto::key_derivation>{} : epee::span<const crypto::key_derivation>{&derivation, 1},
-                                                                                 epee::to_span(additional_derivations),
-                                                                                 address);
+  const bool is_out = m_account.get_subaddress_map_ref().count(address.m_spend_public_key) == 0;
+  const auto enote_scan_infos = (is_out)
+    ? wallet::view_incoming_scan_transaction_as_sender(tx,
+                                                       use_additional_derivations ? epee::span<const crypto::key_derivation>{} : epee::span<const crypto::key_derivation>{&derivation, 1},
+                                                       epee::to_span(additional_derivations),
+                                                       address)
+    : wallet::view_incoming_scan_transaction(tx, m_account);
 
   for (const auto &enote_scan_info : enote_scan_infos)
     if (enote_scan_info && enote_scan_info->address_spend_pubkey == address.m_spend_public_key)

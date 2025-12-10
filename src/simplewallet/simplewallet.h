@@ -205,8 +205,8 @@ namespace cryptonote
         std::vector<cryptonote::tx_destination_entry> dsts, size_t num_splits
     );
     bool account(const std::vector<std::string> &args = std::vector<std::string>());
-    void print_accounts();
-    void print_accounts(const std::string& tag);
+    void print_accounts(bool show_all = false);
+    void print_accounts(const std::string& tag, bool show_all = false);
     bool print_address(const std::vector<std::string> &args = std::vector<std::string>());
     bool print_integrated_address(const std::vector<std::string> &args = std::vector<std::string>());
     bool address_book(const std::vector<std::string> &args = std::vector<std::string>());

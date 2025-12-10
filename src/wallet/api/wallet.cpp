@@ -926,12 +926,12 @@ std::string WalletImpl::publicSpendKey() const
 std::vector<std::string> WalletImpl::carrotKeys() const
 {
     return {
-    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().s_master),
-    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().k_prove_spend),
-    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().s_view_balance),
-    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().k_view_incoming),
-    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().k_generate_image),
-    epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().s_generate_address)
+    epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().s_master))),
+    epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().k_prove_spend))),
+    epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().s_view_balance))),
+    epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().k_view_incoming))),
+    epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().k_generate_image))),
+    epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().s_generate_address)))
     };
 }
 
@@ -947,22 +947,22 @@ std::string WalletImpl::publicMultisigSignerKey() const
 
 std::string WalletImpl::secretViewBalance() const
 {
-  return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().s_view_balance);
+  return epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().s_view_balance)));
 }
 
 std::string WalletImpl::secretProveSpend() const
 {
-  return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().k_prove_spend);
+  return epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().k_prove_spend)));
 }
 
 std::string WalletImpl::secretGenerateAddress() const
 {
-  return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().s_generate_address);
+  return epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().s_generate_address)));
 }
 
 std::string WalletImpl::secretGenerateImage() const
 {
-  return epee::string_tools::pod_to_hex(m_wallet->get_account().get_keys().k_generate_image);
+  return epee::string_tools::pod_to_hex(unwrap(unwrap(m_wallet->get_account().get_keys().k_generate_image)));
 }
 
 std::string WalletImpl::path() const
