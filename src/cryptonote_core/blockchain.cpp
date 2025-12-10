@@ -877,7 +877,7 @@ difficulty_type Blockchain::get_difficulty_for_next_block()
   std::vector<uint64_t> timestamps;
   std::vector<difficulty_type> difficulties;
   uint64_t height;
-  auto new_top_hash = get_tail_id(height); // get it again now that we have the lock
+  top_hash = get_tail_id(height); // get it again now that we have the lock
   ++height;
 
   uint8_t version = get_current_hard_fork_version();
