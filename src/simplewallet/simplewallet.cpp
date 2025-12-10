@@ -237,6 +237,7 @@ namespace
   const char* USAGE_SIGN_TRANSFER("sign_transfer [export_raw] [<filename>]");
   const char* USAGE_SET_LOG("set_log <level>|{+,-,}<categories>");
   const char* USAGE_ACCOUNT("account\n"
+                            "  account all\n"
                             "  account new <label text with white spaces allowed>\n"
                             "  account switch <index> \n"
                             "  account label <index> <label text with white spaces allowed>\n"
@@ -3635,7 +3636,8 @@ simple_wallet::simple_wallet()
   m_cmd_binder.set_handler("account",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::account, _1),
                            tr(USAGE_ACCOUNT),
-                           tr("If no arguments are specified, the wallet shows all the existing accounts along with their balances.\n"
+                           tr("If no arguments are specified, the wallet shows all the existing accounts (that have balances) along with their balances.\n"
+                              "If the \"all\" argument is specified, the wallet shows all the existing accounts, even if they have zero balances.\n"
                               "If the \"new\" argument is specified, the wallet creates a new account with its label initialized by the provided label text (which can be empty).\n"
                               "If the \"switch\" argument is specified, the wallet switches to the account specified by <index>.\n"
                               "If the \"label\" argument is specified, the wallet sets the label of the account specified by <index> to the provided label text.\n"
@@ -10708,12 +10710,21 @@ bool simple_wallet::account(const std::vector<std::string> &args/* = std::vector
   {
     // print all the existing accounts
     LOCK_IDLE_SCOPE();
-    print_accounts();
+    print_accounts(false);
     return true;
   }
 
   std::vector<std::string> local_args = args;
   std::string command = local_args[0];
+  
+  if (command == "all")
+  {
+    // print all accounts including zero balance
+    LOCK_IDLE_SCOPE();
+    print_accounts(true);
+    return true;
+  }
+  
   local_args.erase(local_args.begin());
   if (command == "new")
   {
@@ -10845,20 +10856,20 @@ bool simple_wallet::account(const std::vector<std::string> &args/* = std::vector
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-void simple_wallet::print_accounts()
+void simple_wallet::print_accounts(bool show_all)
 {
   const std::pair<std::map<std::string, std::string>, std::vector<std::string>>& account_tags = m_wallet->get_account_tags();
   size_t num_untagged_accounts = m_wallet->get_num_subaddress_accounts();
   for (const std::pair<const std::string, std::string>& p : account_tags.first)
   {
     const std::string& tag = p.first;
-    print_accounts(tag);
+    print_accounts(tag, show_all);
     num_untagged_accounts -= std::count(account_tags.second.begin(), account_tags.second.end(), tag);
     success_msg_writer() << "";
   }
 
   if (num_untagged_accounts > 0)
-    print_accounts("");
+    print_accounts("", show_all);
 
   if (num_untagged_accounts < m_wallet->get_num_subaddress_accounts()) {
     std::map<std::string, uint64_t> balances = m_wallet->balance_all(false);
@@ -10870,7 +10881,7 @@ void simple_wallet::print_accounts()
   }
 }
 //----------------------------------------------------------------------------------------------------
-void simple_wallet::print_accounts(const std::string& tag)
+void simple_wallet::print_accounts(const std::string& tag, bool show_all)
 {
   const std::pair<std::map<std::string, std::string>, std::vector<std::string>>& account_tags = m_wallet->get_account_tags();
   if (tag.empty())
@@ -10899,7 +10910,7 @@ void simple_wallet::print_accounts(const std::string& tag)
 
       auto balance = m_wallet->balance(account_index, asset, false);
       auto unlocked_balance = m_wallet->unlocked_balance(account_index, asset, false);
-      if (balance == 0)
+      if (!show_all && balance == 0)
         continue;
       success_msg_writer() << boost::format(tr(" %c%8u %8s %21s %21s %6s %21s"))
         % (m_current_subaddress_account == account_index ? '*' : ' ')
