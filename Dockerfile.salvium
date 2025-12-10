@@ -3,14 +3,16 @@ FROM ubuntu:24.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install build dependencies
+# Install build dependencies including cross-compilers
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake pkg-config git imagemagick libcap-dev librsvg2-bin libz-dev \
     g++-mingw-w64-x86-64 clang gcc-arm-none-eabi binutils-x86-64-linux-gnu libtiff-tools \
+    g++-x86-64-linux-gnu gcc-x86-64-linux-gnu binutils-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu gcc-aarch64-linux-gnu crossbuild-essential-amd64 \
     libssl-dev libzmq3-dev libunbound-dev libsodium-dev libunwind8-dev liblzma-dev \
     libreadline-dev libexpat1-dev libpgm-dev qttools5-dev-tools libhidapi-dev libusb-1.0-0-dev \
     libprotobuf-dev protobuf-compiler libudev-dev libboost-all-dev python3 ccache doxygen graphviz \
-    ca-certificates curl zip libtool gperf \
+    ca-certificates curl zip libtool gperf automake autoconf \
  && rm -rf /var/lib/apt/lists/*
 
 # Clone the develop branch
