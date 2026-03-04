@@ -139,6 +139,21 @@ void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
     RCTOutputEnoteProposal &output_enote_out,
     encrypted_payment_id_t &encrypted_payment_id_out);
 /**
+* brief: get_output_proposal_paymentchannel_v1 - convert the carrot proposal to an output proposal
+* param: proposal -
+* param: tx_first_key_image -
+* param: k_view_dev -
+* outparam: output_enote_out -
+* outparam: encrypted_payment_id_out - pid_enc
+*/
+void get_output_proposal_paymentchannel_v1(const CarrotPaymentProposalV1 &proposal,
+                                           const crypto::key_image &tx_first_key_image,
+                                           const view_balance_secret_device *s_view_balance_dev,
+                                           const crypto::public_key &K_o,
+                                           const uint64_t idx,
+                                           RCTOutputEnoteProposal &output_enote_out,
+                                           encrypted_payment_id_t &encrypted_payment_id_out);
+/**
 * brief: get_output_proposal_return_v1 - convert the carrot proposal to an output proposal
 * param: proposal -
 * param: tx_first_key_image -
@@ -147,10 +162,10 @@ void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
 * outparam: encrypted_payment_id_out - pid_enc
 */
 void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,
-    const crypto::key_image &tx_first_key_image,
-    const view_balance_secret_device *s_view_balance_dev,
-    RCTOutputEnoteProposal &output_enote_out,
-    encrypted_payment_id_t &encrypted_payment_id_out);
+                                   const crypto::key_image &tx_first_key_image,
+                                   const view_balance_secret_device *s_view_balance_dev,
+                                   RCTOutputEnoteProposal &output_enote_out,
+                                   encrypted_payment_id_t &encrypted_payment_id_out);
 /**
 * brief: get_output_proposal_special_v1 - convert the carrot proposal to an output proposal (external selfsend)
 * param: proposal -

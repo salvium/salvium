@@ -213,6 +213,7 @@ void make_carrot_transaction_proposal_v1_transfer(
     const subaddress_index_extended &change_address_index,
     const std::set<std::size_t> &subtractable_normal_payment_proposals,
     const std::set<std::size_t> &subtractable_selfsend_payment_proposals,
+    const std::string &asset_type,
     CarrotTransactionProposalV1 &tx_proposal_out);
 
 void make_carrot_transaction_proposal_v1_sweep(
@@ -225,6 +226,7 @@ void make_carrot_transaction_proposal_v1_sweep(
     std::vector<CarrotSelectedInput> &&selected_inputs,
     const crypto::public_key &change_address_spend_pubkey,
     const subaddress_index_extended &change_address_index,
+    const std::string &asset_type,
     CarrotTransactionProposalV1 &tx_proposal_out);
 
 } //namespace carrot

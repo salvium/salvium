@@ -28,6 +28,7 @@
 // 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
+#include <regex>
 #include <boost/preprocessor/stringize.hpp>
 #include <boost/uuid/nil_generator.hpp>
 #include <boost/filesystem.hpp>
@@ -3060,6 +3061,52 @@ namespace cryptonote
     res.height = m_core.get_current_blockchain_height();
     res.status = CORE_RPC_STATUS_OK;
     return true;    
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_get_tokens(const COMMAND_RPC_GET_TOKENS::request& req, COMMAND_RPC_GET_TOKENS::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
+  {
+    PERF_TIMER(on_get_tokens);
+    std::map<std::string, cryptonote::token_metadata_t> tokens = m_core.get_blockchain_storage().get_db().get_tokens();
+    for (const auto &token: tokens) {
+      if (req.filter == "") {
+        // Match anything
+        res.tokens.push_back(token.first);
+      } else if (token.first.find(req.filter) != std::string::npos) {
+        // Match ticker
+        res.tokens.push_back(token.first);
+      } else if (token.second.token.type() == typeid(cryptonote::sal_token_t)) {
+        // Check SAL tokens
+        if (boost::get<cryptonote::sal_token_t>(token.second.token).name.find(req.filter) != std::string::npos) {
+          // Match name
+          res.tokens.push_back(token.first);
+        }
+      }
+    }
+    res.status = CORE_RPC_STATUS_OK;
+    return true;    
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_get_token_info(const COMMAND_RPC_GET_TOKEN_INFO::request& req, COMMAND_RPC_GET_TOKEN_INFO::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
+  {
+    PERF_TIMER(on_token_info);
+    std::map<std::string, cryptonote::token_metadata_t> tokens = m_core.get_blockchain_storage().get_db().get_tokens();
+    if (tokens.count(req.asset_type) == 0) {
+      res.status = "Token not found";
+      return true;
+    }
+
+    res.token = tokens[req.asset_type];
+
+    if (res.token.token.type() == typeid(cryptonote::erc_token_t)) {
+      res.token_type = TOKEN_TYPE_ERC20;
+      res.erc_token = boost::get<cryptonote::erc_token_t>(res.token.token);
+    } else if (res.token.token.type() == typeid(cryptonote::sal_token_t)) {
+      res.token_type = TOKEN_TYPE_SAL;
+      res.sal_token = boost::get<cryptonote::sal_token_t>(res.token.token);
+    }
+
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::on_get_yield_info(const COMMAND_RPC_GET_YIELD_INFO::request& req, COMMAND_RPC_GET_YIELD_INFO::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)

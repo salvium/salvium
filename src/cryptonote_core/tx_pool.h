@@ -226,11 +226,12 @@ namespace cryptonote
      * @param total_weight return-by-reference the total weight of the new block
      * @param fee return-by-reference the total of fees from the included transactions
      * @param expected_reward return-by-reference the total reward awarded to the miner finding this block, including transaction fees
+     * @param create_token_entries list of create coin entries to include in protocol tx
      * @param version hard fork version to use for consensus rules
      *
      * @return true
      */
-    bool fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version);
+    bool fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, std::vector<std::pair<protocol_tx_data_t, token_metadata_t>> &create_token_entries, uint8_t version);
 
     /**
      * @brief get a list of all transactions in the pool

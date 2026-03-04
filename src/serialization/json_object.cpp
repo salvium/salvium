@@ -277,9 +277,8 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
         INSERT_INTO_JSON_OBJECT(dest, return_address_list, tx.return_address_list);
         INSERT_INTO_JSON_OBJECT(dest, return_address_change_mask, tx.return_address_change_mask);
       } else {
-        if (tx.type == cryptonote::transaction_type::STAKE &&
-              tx.version >= TRANSACTION_VERSION_CARROT)
-        {
+        if ((tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::CREATE_TOKEN) &&
+            (tx.version >= TRANSACTION_VERSION_CARROT)) {
           INSERT_INTO_JSON_OBJECT(dest, protocol_tx_data, tx.protocol_tx_data);
         } else {
           INSERT_INTO_JSON_OBJECT(dest, return_address, tx.return_address);
@@ -289,6 +288,16 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
       INSERT_INTO_JSON_OBJECT(dest, source_asset_type, tx.source_asset_type);
       INSERT_INTO_JSON_OBJECT(dest, destination_asset_type, tx.destination_asset_type);
       INSERT_INTO_JSON_OBJECT(dest, amount_slippage_limit, tx.amount_slippage_limit);
+    }
+    if (tx.version >= TRANSACTION_VERSION_ENABLE_TOKENS) {
+      if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+        INSERT_INTO_JSON_OBJECT(dest, token_metadata, tx.token_metadata);          
+      } else if (tx.type == cryptonote::transaction_type::TRANSFER) {
+        INSERT_INTO_JSON_OBJECT(dest, rollup_binding_tag, tx.rollup_binding_tag);          
+      } else if (tx.type == cryptonote::transaction_type::ROLLUP) {
+        INSERT_INTO_JSON_OBJECT(dest, rollup_binding_tag, tx.rollup_binding_tag);          
+        INSERT_INTO_JSON_OBJECT(dest, layer2_rollup_data, tx.layer2_rollup_data);
+      }
     }
   }
   if (!tx.pruned)
@@ -326,9 +335,8 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
         GET_FROM_JSON_OBJECT(val, tx.return_address_list, return_address_list);
         GET_FROM_JSON_OBJECT(val, tx.return_address_change_mask, return_address_change_mask);
       } else {
-        if (tx.type == cryptonote::transaction_type::STAKE &&
-              tx.version >= TRANSACTION_VERSION_CARROT)
-        {
+        if ((tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::CREATE_TOKEN) &&
+            (tx.version >= TRANSACTION_VERSION_CARROT)) {
           GET_FROM_JSON_OBJECT(val, tx.protocol_tx_data, protocol_tx_data);
         } else {
           GET_FROM_JSON_OBJECT(val, tx.return_address, return_address);
@@ -338,6 +346,16 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
       GET_FROM_JSON_OBJECT(val, tx.source_asset_type, source_asset_type);
       GET_FROM_JSON_OBJECT(val, tx.destination_asset_type, destination_asset_type);
       GET_FROM_JSON_OBJECT(val, tx.amount_slippage_limit, amount_slippage_limit);
+    }
+    if (tx.version >= TRANSACTION_VERSION_ENABLE_TOKENS) {
+      if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+        GET_FROM_JSON_OBJECT(val, tx.token_metadata, token_metadata);          
+      } else if (tx.type == cryptonote::transaction_type::TRANSFER) {
+        GET_FROM_JSON_OBJECT(val, tx.rollup_binding_tag, rollup_binding_tag);          
+      } else if (tx.type == cryptonote::transaction_type::ROLLUP) {
+        GET_FROM_JSON_OBJECT(val, tx.rollup_binding_tag, rollup_binding_tag);          
+        GET_FROM_JSON_OBJECT(val, tx.layer2_rollup_data, layer2_rollup_data);
+      }
     }
   }
   GET_FROM_JSON_OBJECT(val, tx.rct_signatures, ringct);
@@ -518,6 +536,141 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::txin_to_scripthash& 
   }
 }
 
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::erc_token_t& erc_token)
+{
+  dest.StartObject();
+
+  INSERT_INTO_JSON_OBJECT(dest, version, erc_token.version);
+  INSERT_INTO_JSON_OBJECT(dest, contract_address, erc_token.contract_address);
+  INSERT_INTO_JSON_OBJECT(dest, lockbox_address, erc_token.lockbox_address);
+  INSERT_INTO_JSON_OBJECT(dest, ticker, erc_token.ticker);
+  INSERT_INTO_JSON_OBJECT(dest, erc20_asset_id, erc_token.erc20_asset_id);
+
+  dest.EndObject();
+}
+
+
+void fromJsonValue(const rapidjson::Value& val, cryptonote::erc_token_t& erc_token)
+{
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, erc_token.version, version);
+  GET_FROM_JSON_OBJECT(val, erc_token.contract_address, contract_address);
+  GET_FROM_JSON_OBJECT(val, erc_token.lockbox_address, lockbox_address);
+  GET_FROM_JSON_OBJECT(val, erc_token.ticker, ticker);
+  GET_FROM_JSON_OBJECT(val, erc_token.erc20_asset_id, erc20_asset_id);
+}
+
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::sal_token_t& sal_token)
+{
+  dest.StartObject();
+
+  INSERT_INTO_JSON_OBJECT(dest, version, sal_token.version);
+  INSERT_INTO_JSON_OBJECT(dest, supply, sal_token.supply);
+  INSERT_INTO_JSON_OBJECT(dest, size, sal_token.size);
+  INSERT_INTO_JSON_OBJECT(dest, name, sal_token.name);
+  INSERT_INTO_JSON_OBJECT(dest, url, sal_token.url);
+  INSERT_INTO_JSON_OBJECT(dest, signature, sal_token.signature);
+  
+  dest.EndObject();
+}
+
+
+void fromJsonValue(const rapidjson::Value& val, cryptonote::sal_token_t& sal_token)
+{
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, sal_token.version, version);
+  GET_FROM_JSON_OBJECT(val, sal_token.supply, supply);
+  GET_FROM_JSON_OBJECT(val, sal_token.size, size);
+  GET_FROM_JSON_OBJECT(val, sal_token.name, name);
+  GET_FROM_JSON_OBJECT(val, sal_token.url, url);
+  GET_FROM_JSON_OBJECT(val, sal_token.signature, signature);
+}
+
+
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::token_v& token)
+{
+  dest.StartObject();
+  struct add_token
+  {
+    using result_type = void;
+
+    rapidjson::Writer<epee::byte_stream>& dest;
+
+    void operator()(cryptonote::erc_token_t const& token) const
+    {
+      INSERT_INTO_JSON_OBJECT(dest, erc_token, token);
+    }
+    void operator()(cryptonote::sal_token_t const& token) const
+    {
+      INSERT_INTO_JSON_OBJECT(dest, sal_token, token);
+    }
+  };
+  boost::apply_visitor(add_token{dest}, token);
+  dest.EndObject();
+}
+
+
+void fromJsonValue(const rapidjson::Value& val, cryptonote::token_v& token)
+{
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  if (val.MemberCount() != 1)
+  {
+    throw MISSING_KEY("Invalid token object");
+  }
+
+  for (auto const& elem : val.GetObject())
+  {
+    if (elem.name == "erc_token")
+    {
+      cryptonote::erc_token_t tmpVal;
+      fromJsonValue(elem.value, tmpVal);
+      token = std::move(tmpVal);
+    }
+    else if (elem.name == "sal_token")
+    {
+      cryptonote::sal_token_t tmpVal;
+      fromJsonValue(elem.value, tmpVal);
+      token = std::move(tmpVal);
+    }
+  }
+}
+
+
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::token_metadata_t& token_metadata)
+{
+  dest.StartObject();
+  
+  INSERT_INTO_JSON_OBJECT(dest, version, token_metadata.version);
+  INSERT_INTO_JSON_OBJECT(dest, asset_type, token_metadata.asset_type);
+  INSERT_INTO_JSON_OBJECT(dest, token, token_metadata.token);
+  dest.EndObject();
+}
+
+
+void fromJsonValue(const rapidjson::Value& val, cryptonote::token_metadata_t& token_metadata)
+{
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, token_metadata.version, version);
+  GET_FROM_JSON_OBJECT(val, token_metadata.asset_type, asset_type);
+  GET_FROM_JSON_OBJECT(val, token_metadata.token, token);
+}
+
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::protocol_tx_data_t& ptd)
 {
   dest.StartObject();
@@ -543,6 +696,50 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::protocol_tx_data_t& 
   GET_FROM_JSON_OBJECT(val, ptd.return_pubkey, return_pubkey);
   GET_FROM_JSON_OBJECT(val, ptd.return_view_tag, return_view_tag);
   GET_FROM_JSON_OBJECT(val, ptd.return_anchor_enc, return_anchor_enc);
+}
+
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::layer2_rollup_tx_t& lrt)
+{
+  dest.StartObject();
+
+  INSERT_INTO_JSON_OBJECT(dest, tx_prefix_hash, lrt.tx_prefix_hash);
+  INSERT_INTO_JSON_OBJECT(dest, first_key_image, lrt.first_key_image);
+  INSERT_INTO_JSON_OBJECT(dest, tx_fee, lrt.tx_fee);
+
+  dest.EndObject();
+}
+
+void fromJsonValue(const rapidjson::Value& val, cryptonote::layer2_rollup_tx_t& lrt)
+{
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, lrt.tx_prefix_hash, tx_prefix_hash);
+  GET_FROM_JSON_OBJECT(val, lrt.first_key_image, first_key_image);
+  GET_FROM_JSON_OBJECT(val, lrt.tx_fee, tx_fee);
+}
+
+void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::layer2_rollup_data_t& lrd)
+{
+  dest.StartObject();
+
+  INSERT_INTO_JSON_OBJECT(dest, version, lrd.version);
+  INSERT_INTO_JSON_OBJECT(dest, txs, lrd.txs);
+
+  dest.EndObject();
+}
+
+void fromJsonValue(const rapidjson::Value& val, cryptonote::layer2_rollup_data_t& lrd)
+{
+  if (!val.IsObject())
+  {
+    throw WRONG_TYPE("json object");
+  }
+
+  GET_FROM_JSON_OBJECT(val, lrd.version, version);
+  GET_FROM_JSON_OBJECT(val, lrd.txs, txs);
 }
 
 void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::txin_to_key& txin)

@@ -346,7 +346,7 @@ namespace cryptonote
 
     // Clear the TX contents
     tx.set_null();
-    tx.version = 2;
+    tx.version = (hard_fork_version >= HF_VERSION_ENABLE_TOKENS) ? 3 : 2;
     bool carrot_found = false;
     bool noncarrot_found = false;
     tx.type = cryptonote::transaction_type::PROTOCOL;
@@ -356,7 +356,7 @@ namespace cryptonote
       if (entry.is_carrot) carrot_found = true;
       else noncarrot_found = true;
     }
-    
+
     if (carrot_found && noncarrot_found) {
       LOG_ERROR("Cannot mix Carrot and non-Carrot outputs in the same protocol transaction");
       return false;
@@ -365,7 +365,7 @@ namespace cryptonote
       LOG_ERROR("Carrot outputs found in CryptoNote protocol transaction");
       return false;
     }
-    
+
     if (carrot_found || (!noncarrot_found && hard_fork_version >= HF_VERSION_CARROT))
     {
       // Ensure the TX version is correct
@@ -381,7 +381,8 @@ namespace cryptonote
           // Build the proposal
           carrot::CarrotCoinbaseEnoteV1 e;
           e.onetime_address = entry.return_address;
-          e.amount = entry.amount_burnt;
+          // amount_minted for CREATE_TOKEN, amount_burnt for STAKE/AUDIT
+          e.amount = (entry.type == cryptonote::transaction_type::CREATE_TOKEN) ? entry.amount_minted : entry.amount_burnt;
           e.asset_type = entry.destination_asset;
           e.view_tag = entry.return_view_tag;
           e.anchor_enc = entry.return_anchor_enc;
@@ -597,6 +598,7 @@ namespace cryptonote
       case HF_VERSION_AUDIT2:
       case HF_VERSION_AUDIT2_PAUSE:
       case HF_VERSION_CARROT:
+      case HF_VERSION_ENABLE_TOKENS:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;

@@ -163,6 +163,15 @@ public:
                                                 PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
                                                 uint32_t subaddr_account = 0,
                                                 std::set<uint32_t> subaddr_indices = {}) override;
+    PendingTransaction * createCreateTokenTransaction(const std::string &asset_type,
+                                                      uint64_t supply,
+                                                      const std::string &metadata,
+                                                      const std::string &name,
+                                                      uint32_t size,
+                                                      std::string hash,
+                                                      std::string url, 
+                                                      uint32_t subaddr_account,
+                                                      std::set<uint32_t> subaddr_indices = {}) override;
     PendingTransaction * createAuditTransaction(uint32_t mixin_count,
                                                 PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
                                                 uint32_t subaddr_account = 0,
@@ -251,6 +260,8 @@ public:
     virtual uint64_t getBytesSent() override;
 
     YieldInfo * getYieldInfo() override;
+
+    virtual std::vector<std::string> getAssetTypes() override;
 
 private:
     void clearStatus() const;

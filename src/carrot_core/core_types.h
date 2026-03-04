@@ -106,6 +106,13 @@ struct encrypted_return_pubkey_t final
     unsigned char bytes[ENCRYPTED_RETURN_PUBKEY_BYTES];
 };
 
+/// Salvium rollup binding tag
+constexpr std::size_t ROLLUP_BINDING_TAG_BYTES{8};
+struct rollup_binding_tag_t final
+{
+    unsigned char bytes[ROLLUP_BINDING_TAG_BYTES];
+};
+
 /// overloaded operators: address tag
 bool operator==(const janus_anchor_t &a, const janus_anchor_t &b);
 static inline bool operator!=(const janus_anchor_t &a, const janus_anchor_t &b) { return !(a == b); }
@@ -138,6 +145,10 @@ static inline bool operator!=(const view_tag_t &a, const view_tag_t &b) { return
 bool operator==(const encrypted_return_pubkey_t &a, const encrypted_return_pubkey_t &b);
 static inline bool operator!=(const encrypted_return_pubkey_t &a, const encrypted_return_pubkey_t &b) { return !(a == b); }
 encrypted_return_pubkey_t operator^(const encrypted_return_pubkey_t &a, const encrypted_return_pubkey_t &b);
+
+/// overloaded operators: rollup binding tag
+bool operator==(const rollup_binding_tag_t &a, const rollup_binding_tag_t &b);
+static inline bool operator!=(const rollup_binding_tag_t &a, const rollup_binding_tag_t &b) { return !(a == b); }
 
 /// generate a random janus anchor
 janus_anchor_t gen_janus_anchor();

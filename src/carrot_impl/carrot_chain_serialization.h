@@ -42,3 +42,4 @@ BLOB_SERIALIZER(carrot::view_tag_t);
 BLOB_SERIALIZER(carrot::encrypted_janus_anchor_t);
 BLOB_SERIALIZER(carrot::encrypted_payment_id_t);
 BLOB_SERIALIZER(carrot::encrypted_return_pubkey_t);
+BLOB_SERIALIZER(carrot::rollup_binding_tag_t);

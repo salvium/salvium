@@ -88,6 +88,9 @@ namespace tools
         MAP_JON_RPC_WE("thaw",               on_thaw,               wallet_rpc::COMMAND_RPC_THAW)
         MAP_JON_RPC_WE("frozen",             on_frozen,             wallet_rpc::COMMAND_RPC_FROZEN)
         MAP_JON_RPC_WE("audit",              on_audit,              wallet_rpc::COMMAND_RPC_AUDIT)
+        MAP_JON_RPC_WE("create_token",       on_create_token,       wallet_rpc::COMMAND_RPC_CREATE_TOKEN)
+        MAP_JON_RPC_WE("get_tokens",         on_get_tokens,         wallet_rpc::COMMAND_RPC_GET_TOKENS)
+        MAP_JON_RPC_WE("return_payment",     on_return_payment,     wallet_rpc::COMMAND_RPC_RETURN_PAYMENT)
         MAP_JON_RPC_WE("transfer",           on_transfer,           wallet_rpc::COMMAND_RPC_TRANSFER)
         MAP_JON_RPC_WE("transfer_split",     on_transfer_split,     wallet_rpc::COMMAND_RPC_TRANSFER_SPLIT)
         MAP_JON_RPC_WE("sign_transfer",      on_sign_transfer,      wallet_rpc::COMMAND_RPC_SIGN_TRANSFER)
@@ -163,6 +166,7 @@ namespace tools
         MAP_JON_RPC_WE("estimate_tx_size_and_weight", on_estimate_tx_size_and_weight, wallet_rpc::COMMAND_RPC_ESTIMATE_TX_SIZE_AND_WEIGHT)
         MAP_JON_RPC_WE("get_default_fee_priority", on_get_default_fee_priority, wallet_rpc::COMMAND_RPC_GET_DEFAULT_FEE_PRIORITY)
         MAP_JON_RPC_WE("get_version",        on_get_version,        wallet_rpc::COMMAND_RPC_GET_VERSION)
+        MAP_JON_RPC_WE("get_token_info",     on_get_token_info,     wallet_rpc::COMMAND_RPC_GET_TOKEN_INFO)
         MAP_JON_RPC_WE("setup_background_sync", on_setup_background_sync, wallet_rpc::COMMAND_RPC_SETUP_BACKGROUND_SYNC)
         MAP_JON_RPC_WE("start_background_sync", on_start_background_sync, wallet_rpc::COMMAND_RPC_START_BACKGROUND_SYNC)
         MAP_JON_RPC_WE("stop_background_sync", on_stop_background_sync, wallet_rpc::COMMAND_RPC_STOP_BACKGROUND_SYNC)
@@ -187,6 +191,9 @@ namespace tools
       bool on_thaw(const wallet_rpc::COMMAND_RPC_THAW::request& req, wallet_rpc::COMMAND_RPC_THAW::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_frozen(const wallet_rpc::COMMAND_RPC_FROZEN::request& req, wallet_rpc::COMMAND_RPC_FROZEN::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_audit(const wallet_rpc::COMMAND_RPC_AUDIT::request& req, wallet_rpc::COMMAND_RPC_AUDIT::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
+      bool on_create_token(const wallet_rpc::COMMAND_RPC_CREATE_TOKEN::request& req, wallet_rpc::COMMAND_RPC_CREATE_TOKEN::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
+      bool on_get_tokens(const wallet_rpc::COMMAND_RPC_GET_TOKENS::request& req, wallet_rpc::COMMAND_RPC_GET_TOKENS::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
+      bool on_return_payment(const wallet_rpc::COMMAND_RPC_RETURN_PAYMENT::request& req, wallet_rpc::COMMAND_RPC_RETURN_PAYMENT::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_transfer(const wallet_rpc::COMMAND_RPC_TRANSFER::request& req, wallet_rpc::COMMAND_RPC_TRANSFER::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_transfer_split(const wallet_rpc::COMMAND_RPC_TRANSFER_SPLIT::request& req, wallet_rpc::COMMAND_RPC_TRANSFER_SPLIT::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_sign_transfer(const wallet_rpc::COMMAND_RPC_SIGN_TRANSFER::request& req, wallet_rpc::COMMAND_RPC_SIGN_TRANSFER::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
@@ -260,6 +267,7 @@ namespace tools
       bool on_estimate_tx_size_and_weight(const wallet_rpc::COMMAND_RPC_ESTIMATE_TX_SIZE_AND_WEIGHT::request& req, wallet_rpc::COMMAND_RPC_ESTIMATE_TX_SIZE_AND_WEIGHT::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_get_default_fee_priority(const wallet_rpc::COMMAND_RPC_GET_DEFAULT_FEE_PRIORITY::request& req, wallet_rpc::COMMAND_RPC_GET_DEFAULT_FEE_PRIORITY::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_get_version(const wallet_rpc::COMMAND_RPC_GET_VERSION::request& req, wallet_rpc::COMMAND_RPC_GET_VERSION::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
+      bool on_get_token_info(const wallet_rpc::COMMAND_RPC_GET_TOKEN_INFO::request& req, wallet_rpc::COMMAND_RPC_GET_TOKEN_INFO::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_setup_background_sync(const wallet_rpc::COMMAND_RPC_SETUP_BACKGROUND_SYNC::request& req, wallet_rpc::COMMAND_RPC_SETUP_BACKGROUND_SYNC::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_start_background_sync(const wallet_rpc::COMMAND_RPC_START_BACKGROUND_SYNC::request& req, wallet_rpc::COMMAND_RPC_START_BACKGROUND_SYNC::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_stop_background_sync(const wallet_rpc::COMMAND_RPC_STOP_BACKGROUND_SYNC::request& req, wallet_rpc::COMMAND_RPC_STOP_BACKGROUND_SYNC::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);

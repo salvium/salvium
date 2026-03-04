@@ -38,6 +38,7 @@
 
 #include "include_base_utils.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
+#include "cryptonote_basic/cryptonote_format_utils.h"
 #include "tx_pool.h"
 #include "blockchain.h"
 #include "blockchain_db/locked_txn.h"
@@ -65,6 +66,8 @@
 
 #include "net/http_client.h"
 #include "storages/http_abstract_invoke.h"
+
+#include "common/debugging.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "blockchain"
@@ -1407,7 +1410,7 @@ bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t heigh
   uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   uint8_t hf_version_submitted = get_ideal_hard_fork_version(height - stake_lock_period - 1);
 
-  if (hf_version >= HF_VERSION_CARROT) {
+  if (hf_version == HF_VERSION_CARROT) {
     if (hf_version_submitted >= HF_VERSION_CARROT || b.protocol_tx.vout.size() == 0) {
       CHECK_AND_ASSERT_MES(b.protocol_tx.version == TRANSACTION_VERSION_CARROT, false, "protocol transaction has wrong version");
     } else {
@@ -1525,6 +1528,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_AUDIT2:
   case HF_VERSION_AUDIT2_PAUSE:
   case HF_VERSION_CARROT:
+  case HF_VERSION_ENABLE_TOKENS:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
@@ -1557,7 +1561,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
 }
 //------------------------------------------------------------------
 // SRCG
-bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version)
+bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version, const std::vector<std::pair<transaction, blobdata>>& txs)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
 
@@ -1633,9 +1637,20 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
     }
   }
 
+  // Count CREATE_TOKEN transactions if we're at the right hard fork version
+  size_t create_token_count = 0;
+  if (hf_version >= HF_VERSION_ENABLE_TOKENS && !txs.empty()) {
+    for (const auto& tx_pair : txs) {
+      const transaction& tx = tx_pair.first;
+      if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+        create_token_count++;
+      }
+    }
+  }
+
   // Check we have the correct number of entries
   CHECK_AND_ASSERT_MES(
-    b.protocol_tx.vout.size() == yield_payouts.size() + audit_payouts.size() + carrot_yield_payouts.size(), 
+    b.protocol_tx.vout.size() == yield_payouts.size() + audit_payouts.size() + carrot_yield_payouts.size() + create_token_count, 
     false, "Invalid number of outputs in protocol_tx - aborting"
   );
 
@@ -1680,6 +1695,71 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
           b.protocol_tx.vout[output_idx].target
         ).encrypted_janus_anchor == it->first.return_anchor_enc, false, "Incorrect anchor detected in protocol_tx"
       );
+    }
+
+    if (hf_version >= HF_VERSION_ENABLE_TOKENS) {
+      // Validate create_coin transaction outputs
+      std::vector<std::pair<protocol_tx_data_t, token_metadata_t>> create_token_data;
+      
+      for (const auto& tx_pair : txs) {
+        const transaction& tx = tx_pair.first;
+        if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+          create_token_data.push_back(std::make_pair(tx.protocol_tx_data, tx.token_metadata));
+        }
+      }
+      
+      for (const auto& ct_data : create_token_data) {
+        // Verify the output key
+        crypto::public_key out_key;
+        cryptonote::get_output_public_key(b.protocol_tx.vout[output_idx], out_key);
+        CHECK_AND_ASSERT_MES(out_key == ct_data.first.return_address, false, "Incorrect CREATE_TOKEN output key detected in protocol_tx");
+
+        // Verify the return pubkey
+        if (b.protocol_tx.vout.size() > 1) {
+          const auto additional_pubkeys = cryptonote::get_additional_tx_pub_keys_from_extra(b.protocol_tx.extra);
+          CHECK_AND_ASSERT_MES(additional_pubkeys.size() > output_idx, false, "Missing CREATE_TOKEN return pubkey detected in protocol_tx");
+          CHECK_AND_ASSERT_MES(additional_pubkeys[output_idx] == ct_data.first.return_pubkey, false, "Incorrect CREATE_TOKEN return pubkey detected in protocol_tx");
+        } else {
+          const auto main_pubkey = cryptonote::get_tx_pub_key_from_extra(b.protocol_tx.extra);
+          CHECK_AND_ASSERT_MES(main_pubkey == ct_data.first.return_pubkey, false, "Incorrect CREATE_TOKEN return pubkey detected in protocol_tx");
+        }
+
+        // Verify the correct metadata type is provided
+        CHECK_AND_ASSERT_MES(ct_data.second.token.type() == typeid(cryptonote::sal_token_t), false, "Incorred CREATE_TOKEN metadata type detected in protocol_tx");
+        cryptonote::sal_token_t token = boost::get<cryptonote::sal_token_t>(ct_data.second.token);
+        
+        // Verify the output amount
+        uint64_t hi, lo;
+        CHECK_AND_ASSERT_MES(token.supply <= (MONEY_SUPPLY / COIN), false, "Invalid SUPPLY value for CREATE_TOKEN when constructing protocol_tx");
+        lo = mul128(token.supply, COIN, &hi);
+        CHECK_AND_ASSERT_MES(hi == 0, false, "Numeric overflow in CREATE_TOKEN supply");
+        CHECK_AND_ASSERT_MES(b.protocol_tx.vout[output_idx].amount == lo, false, "Incorrect CREATE_TOKEN output amount detected in protocol_tx");
+        
+        // Verify the output asset type (should be the new asset type from protocol_tx_data)
+        std::string expected_asset_type = "sal" + ct_data.second.asset_type;
+        std::string out_asset_type;
+        cryptonote::get_output_asset_type(b.protocol_tx.vout[output_idx], out_asset_type);
+        CHECK_AND_ASSERT_MES(out_asset_type == expected_asset_type, false, "Incorrect CREATE_TOKEN output asset_type detected in protocol_tx");
+        
+        // Validate custom asset type format
+        CHECK_AND_ASSERT_MES(cryptonote::is_valid_custom_asset_type(out_asset_type), false, "CREATE_TOKEN asset type is invalid");
+
+        // Verify the view tag
+        CHECK_AND_ASSERT_MES(
+          boost::get<cryptonote::txout_to_carrot_v1>(
+            b.protocol_tx.vout[output_idx].target
+          ).view_tag == ct_data.first.return_view_tag, false, "Incorrect CREATE_TOKEN view tag detected in protocol_tx"
+        );
+
+        // Verify the anchor encrypted
+        CHECK_AND_ASSERT_MES(
+          boost::get<cryptonote::txout_to_carrot_v1>(
+            b.protocol_tx.vout[output_idx].target
+          ).encrypted_janus_anchor == ct_data.first.return_anchor_enc, false, "Incorrect CREATE_TOKEN anchor detected in protocol_tx"
+        );
+        
+        output_idx++;
+      }
     }
 
     return true;
@@ -1974,19 +2054,46 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   
   CHECK_AND_ASSERT_MES(diffic, false, "difficulty overhead.");
 
+  std::vector<cryptonote::protocol_data_entry> protocol_entries;
   size_t txs_weight;
   uint64_t fee;
-  
-  if (!m_tx_pool.fill_block_template(b, median_weight, already_generated_coins, txs_weight, fee, expected_reward, b.major_version))
+  std::vector<std::pair<protocol_tx_data_t, token_metadata_t>> create_token_entries;
+  if (!m_tx_pool.fill_block_template(b, median_weight, already_generated_coins, txs_weight, fee, expected_reward, create_token_entries, b.major_version))
   {
     return false;
+  }
+
+  // create the protocol transaction entries for CREATE_TOKEN TXs
+  if (b.major_version >= HF_VERSION_ENABLE_TOKENS) {
+    for (const auto& ct_data_entry: create_token_entries) {
+      CHECK_AND_ASSERT_MES(ct_data_entry.second.token.type() == typeid(cryptonote::sal_token_t), false, "Incorred CREATE_TOKEN metadata type detected in protocol_tx");
+      cryptonote::sal_token_t token = boost::get<cryptonote::sal_token_t>(ct_data_entry.second.token);
+      cryptonote::protocol_data_entry entry;
+      uint64_t hi, lo;
+      CHECK_AND_ASSERT_MES(token.supply <= (MONEY_SUPPLY / COIN), false, "Invalid SUPPLY value for CREATE_TOKEN when constructing protocol_tx");
+      CHECK_AND_ASSERT_MES(token.supply > 0, false, "Invalid SUPPLY value for CREATE_TOKEN when constructing protocol_tx");
+      lo = mul128(token.supply, COIN, &hi);
+      CHECK_AND_ASSERT_MES(hi == 0, false, "Numeric overflow in CREATE_TOKEN supply");
+      entry.amount_burnt = cryptonote::get_token_creation_price(ct_data_entry.second.asset_type);
+      entry.amount_minted = lo;
+      entry.amount_slippage_limit = 0;
+      entry.source_asset = "SAL1";
+      entry.destination_asset = "sal" + ct_data_entry.second.asset_type;
+      entry.type = cryptonote::transaction_type::CREATE_TOKEN;
+      entry.return_address = ct_data_entry.first.return_address;
+      entry.return_pubkey = ct_data_entry.first.return_pubkey;
+      entry.return_view_tag = ct_data_entry.first.return_view_tag;
+      entry.return_anchor_enc = ct_data_entry.first.return_anchor_enc;
+      entry.is_carrot = true;
+      entry.origin_height = height;
+      protocol_entries.push_back(entry);
+    }
   }
 
   // Check to see if there are any matured YIELD TXs
   uint64_t yield_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   uint64_t start_height = (height > yield_lock_period) ? height - yield_lock_period - 1 : 0;
 
-  std::vector<cryptonote::protocol_data_entry> protocol_entries;
   cryptonote::yield_block_info ybi_matured;
   bool ok = get_ybi_entry(start_height, ybi_matured);
   if (ok && ybi_matured.locked_coins_this_block > 0) {
@@ -3727,7 +3834,7 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
 
   if (hf_version >= HF_VERSION_CARROT) {
     // from v10, force the new SalviumOne RCT data
-    if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::AUDIT) {
+    if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::CREATE_TOKEN || tx.type == cryptonote::transaction_type::ROLLUP) {
       if (tx.rct_signatures.type != rct::RCTTypeSalviumOne) {
         MERROR_VER("SalviumOne data required after v" + std::to_string(HF_VERSION_CARROT));
         tvc.m_invalid_output = true;
@@ -3783,6 +3890,100 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
   return true;
 }
 //------------------------------------------------------------------
+bool Blockchain::check_tx_asset_types(const transaction& tx, tx_verification_context &tvc) const
+{
+  LOG_PRINT_L3("Blockchain::" << __func__);
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+
+  const uint8_t hf_version = m_hardfork->get_current_version();
+  if (hf_version >= HF_VERSION_ENABLE_TOKENS) {
+
+    // Get the valid tokens according to the DB
+    std::map<std::string, cryptonote::token_metadata_t> mapTokens = m_db->get_tokens();
+    
+    if (tx.type == cryptonote::transaction_type::PROTOCOL || tx.type == cryptonote::transaction_type::MINER) {
+      return true;
+    } else if (
+      tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
+      tx.type == cryptonote::transaction_type::ROLLUP ||
+      tx.type == cryptonote::transaction_type::STAKE
+    ) {
+      if (tx.source_asset_type != "SAL1" || tx.destination_asset_type != "SAL1") {
+        MERROR_VER("Invalid source/dest asset type for CREATE_TOKEN / ROLLUP / STAKE - provided source asset: " << tx.source_asset_type << ", and destination asset: " << tx.destination_asset_type << ", expected SAL1");
+        tvc.m_verifivation_failed = true; 
+        return false;
+      }
+    } else if (tx.type == cryptonote::transaction_type::BURN) {
+      if ((tx.source_asset_type != "SAL" && tx.source_asset_type != "SAL1") || tx.destination_asset_type != tx.source_asset_type) {
+        MERROR_VER("Invalid source/dest asset type for BURN - provided source asset: " << tx.source_asset_type << ", and destination asset: " << tx.destination_asset_type << ", expected (matching) SAL/SAL1");
+        tvc.m_verifivation_failed = true; 
+        return false;
+      }
+    } else if (tx.type == cryptonote::transaction_type::TRANSFER) {
+      if (tx.source_asset_type != tx.destination_asset_type) {
+        MERROR_VER("Mismatched asset types for TRANSFER - provided source asset: " << tx.source_asset_type << ", provided destination asset: " << tx.destination_asset_type << ", expected them to match");
+        tvc.m_verifivation_failed = true;
+        return false;
+      } else if (!(tx.source_asset_type == "SAL1" || mapTokens.count(tx.source_asset_type))) {
+        MERROR_VER("Invalid source asset type for TRANSFER - provided source asset: " << tx.source_asset_type << ", expected valid token type or SAL1");
+        tvc.m_verifivation_failed = true;
+        return false;
+      } else if (tx.destination_asset_type != "SAL1" && !mapTokens.count(tx.destination_asset_type)) {
+        MERROR_VER("Invalid destination asset type for TRANSFER - provided destination asset: " << tx.destination_asset_type << ", expected valid token type or SAL1");
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+    } else if (tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::CONVERT) {
+      MERROR_VER("AUDIT and CONVERT transaction types are not allowed in this hardfork version:" << std::to_string(HF_VERSION_ENABLE_TOKENS));
+    } else {
+      MERROR_VER("Unknown transaction type: " << tx.type << ".");
+      tvc.m_verifivation_failed = true;
+      return false;
+    }
+  } else if (hf_version >= HF_VERSION_CARROT) {
+    if (tx.source_asset_type != "SAL1" || tx.destination_asset_type != "SAL1") {
+      MERROR_VER("Invalid destination/source asset type - provided destination asset: " << tx.destination_asset_type << ", expected SAL1" << ", provided source asset: " << tx.source_asset_type << ", expected SAL1");
+      tvc.m_verifivation_failed = true;
+      return false;
+    }
+    // }
+  } else if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+    // protocol and miner txs don't have source and destination asset types
+    if (tx.type == cryptonote::transaction_type::PROTOCOL || tx.type == cryptonote::transaction_type::MINER) {
+      return true;
+    } else if (tx.type == cryptonote::transaction_type::AUDIT) {
+      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL" && tx.destination_asset_type == "SAL", false, "wrong source/destination asset type: provided source asset " << tx.source_asset_type << " expected SAL and provided destination asset " << tx.destination_asset_type << " expected SAL");
+    } else if (tx.type == cryptonote::transaction_type::BURN) {
+      if (tx.source_asset_type != "SAL1" || tx.destination_asset_type != "BURN") {
+        MERROR_VER("Invalid source/dest asset type for BURN - provided source asset: " << tx.source_asset_type << ", and destination asset: " << tx.destination_asset_type << ", expected SAL1 and BURN respectively");
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+    } else {
+      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL1" && tx.destination_asset_type == "SAL1", false, "wrong source/destination asset type: provided source asset: " << tx.source_asset_type << " expected SAL1 and provided destination asset: " << tx.destination_asset_type << " expected SAL1");
+    }
+  } else {
+    if (tx.type == cryptonote::transaction_type::BURN) {
+      if (tx.source_asset_type != "SAL" || tx.destination_asset_type != "BURN") {
+        MERROR_VER("Invalid source/dest asset type for BURN - provided source asset: " << tx.source_asset_type << ", and destination asset: " << tx.destination_asset_type << ", expected SAL and BURN respectively");
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+    }
+    //only SAL existed before hf 6
+    else{
+      if (tx.source_asset_type != "SAL" || tx.destination_asset_type != "SAL") {
+      MERROR_VER("Invalid destination/source asset type - provided destination asset: " << tx.destination_asset_type << ", expected SAL" << ", provided source asset: " << tx.source_asset_type << ", expected SAL");
+      tvc.m_verifivation_failed = true;
+      return false;}
+    }
+  }
+
+  return true;
+}
+
+ 
+//------------------------------------------------------------------
 bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verification_context &tvc) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
@@ -3808,6 +4009,25 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
     }
   }
 
+  // Reverse the order of checking now, because we're using >=
+  if (hf_version >= HF_VERSION_ENABLE_TOKENS) {
+    if (tx.type == cryptonote::transaction_type::TRANSFER ||
+        tx.type == cryptonote::transaction_type::RETURN ||
+        tx.type == cryptonote::transaction_type::ROLLUP ||
+        tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+      if (tx.version < TRANSACTION_VERSION_ENABLE_TOKENS) {
+      }
+    } else {
+      if (tx.version != TRANSACTION_VERSION_ENABLE_TOKENS) {
+      }
+      if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+        // Allowed multiple asset_types for `vout` entries 
+      } else {
+        // No mixing of asset_types permitted - verify here
+      }
+    }
+  }
+  
   // After v2 allow N-out TXs for TRANSFER ONLY
   if (hf_version >= HF_VERSION_ENABLE_N_OUTS && hf_version < HF_VERSION_CARROT) {
     if (tx.version >= TRANSACTION_VERSION_N_OUTS && tx.type != cryptonote::transaction_type::TRANSFER) {
@@ -3817,7 +4037,15 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
     }
   }
 
-  if (hf_version >= HF_VERSION_CARROT) {
+  if (hf_version >= HF_VERSION_ENABLE_TOKENS) {
+    if (tx.version != TRANSACTION_VERSION_ENABLE_TOKENS) {
+      MERROR("TX version " + std::to_string(tx.version) + " is not supported, expected " + std::to_string(TRANSACTION_VERSION_ENABLE_TOKENS));
+      tvc.m_version_mismatch = true;
+      return false;
+    }
+  }
+
+  if (hf_version == HF_VERSION_CARROT) {
     if (tx.version != TRANSACTION_VERSION_CARROT) {
       MERROR("TX version " + std::to_string(tx.version) + " is not supported, expected " + std::to_string(TRANSACTION_VERSION_CARROT));
       tvc.m_version_mismatch = true;
@@ -3834,6 +4062,19 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
     }
   }
 
+  // Make sure CREATE_TOKEN TXs are disabled until we are ready - belt and braces!
+  if (hf_version < HF_VERSION_ENABLE_TOKENS) {
+    if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+      MERROR("CREATE_TOKEN TXs are not permitted prior to v" + std::to_string(HF_VERSION_ENABLE_TOKENS));
+      tvc.m_version_mismatch = true;
+      return false;
+    }
+    if (tx.type == cryptonote::transaction_type::ROLLUP) {
+      MERROR("ROLLUP TXs are not permitted prior to v" + std::to_string(HF_VERSION_ENABLE_TOKENS));
+      tvc.m_version_mismatch = true;
+      return false;
+    }
+  }
 
   if (tx.type == cryptonote::transaction_type::AUDIT) {
     // Make sure we are supposed to accept AUDIT txs at this point
@@ -3841,25 +4082,23 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
     CHECK_AND_ASSERT_MES(audit_hard_forks.find(hf_version) != audit_hard_forks.end(), false, "trying to audit outside an audit fork");
     std::string expected_asset_type = audit_hard_forks.at(hf_version).second.first;
     CHECK_AND_ASSERT_MES(tx.source_asset_type == expected_asset_type, false, "trying to spend " << tx.source_asset_type << " coins in an AUDIT TX");
-  } else {
-    if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
-      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL1", false, "trying to spend " << tx.source_asset_type << " coins in a non-AUDIT TX");
-    } else {
-      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL", false, "trying to spend " << tx.source_asset_type << " coins in a non-AUDIT TX");
-    }
   }
 
-  if (tx.type == cryptonote::transaction_type::BURN) {
-    CHECK_AND_ASSERT_MES(tx.destination_asset_type == "BURN", false, "incorrect burn tx destination type:" << tx.destination_asset_type);
-  } else {
-    if (tx.source_asset_type != tx.destination_asset_type) {
-      MERROR_VER("Tx " << get_transaction_hash(tx) << " has mismatched asset types: " << tx.source_asset_type << " != " << tx.destination_asset_type);
+  if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+    // Check that the specific asset_type being created isn't already in our list of tokens
+    std::map<std::string, cryptonote::token_metadata_t> mapTokens = m_db->get_tokens();
+    std::string asset_type = "sal" + tx.token_metadata.asset_type;
+    if (mapTokens.count(asset_type)) {
+      MERROR("TX attempting to create '" + asset_type + "', which already exists");
       tvc.m_verifivation_failed = true;
       return false;
     }
+    // Validate token metadata //! check */
+    CHECK_AND_ASSERT_MES(tx.token_metadata.token.type() == typeid(cryptonote::sal_token_t), false, "Invalid CREATE_TOKEN metadata type");
+    cryptonote::sal_token_t token = boost::get<cryptonote::sal_token_t>(tx.token_metadata.token);
+    CHECK_AND_ASSERT_MES(token.supply > 0 && token.supply <= (MONEY_SUPPLY / COIN), false, "Invalid SUPPLY value for CREATE_TOKEN");
   }
   
-
   // Check for invalid TX types
   if (tx.type == cryptonote::transaction_type::UNSET || tx.type > cryptonote::transaction_type::MAX) {
     MERROR("TX type `" + std::to_string(tx.type) + "' is not supported");
@@ -3894,7 +4133,7 @@ bool Blockchain::have_tx_keyimges_as_spent(const transaction &tx) const
 bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys, const uint8_t &hf_version)
 {
   PERF_TIMER(expand_transaction_2);
-  CHECK_AND_ASSERT_MES(tx.version == 2 || tx.version == 3 || tx.version == 4, false, "Transaction version is not 2/3/4");
+  CHECK_AND_ASSERT_MES(tx.version == 2 || tx.version == 3 || tx.version == 4 || tx.version == 5, false, "Transaction version is not 2/3/5");
 
   rct::rctSig &rv = tx.rct_signatures;
 
@@ -4039,11 +4278,13 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
         const txin_to_key& in_to_key = boost::get<txin_to_key>(txin);
         if (in_to_key.amount == 0)
         {
-          // always consider rct inputs mixable. Even if there's not enough rct
-          // inputs on the chain to mix with, this is going to be the case for
-          // just a few blocks right after the fork at most
-          ++n_mixable;
-        }
+          // don't always consider rct inputs mixable!
+          uint64_t n_outputs = m_db->get_num_outputs_of_asset_type(in_to_key.asset_type);
+          if (n_outputs <= min_mixin)
+            ++n_unmixable;
+          else
+            ++n_mixable;
+        }  
         else
         {
           uint64_t n_outputs = m_db->get_num_outputs(in_to_key.amount);
@@ -4954,6 +5195,18 @@ bool Blockchain::get_ybi_entry(const uint64_t height, cryptonote::yield_block_in
   return true;
 }
 //------------------------------------------------------------------
+bool Blockchain::is_tx_paid_for(const cryptonote::transaction& tx)
+{
+  // Is it a TRANSFER?
+  if (tx.type != cryptonote::transaction_type::TRANSFER)
+    return true;
+  // Is is a TOKEN?
+  if (!cryptonote::is_asset_type_token(tx.source_asset_type))
+    return true;
+  // Has the TRANSFER TOKEN been paid for?
+  return m_db->is_tx_paid_for(tx);
+}
+//------------------------------------------------------------------
 //TODO: revisit, has changed a bit on upstream
 bool Blockchain::check_block_timestamp(std::vector<uint64_t>& timestamps, const block& b, uint64_t& median_ts) const
 {
@@ -5360,7 +5613,7 @@ leave:
   TIME_MEASURE_FINISH(vmt);
 
   TIME_MEASURE_START(vpt);
-  if(!validate_protocol_transaction(bl, blockchain_height, m_hardfork->get_current_version()))
+  if(!validate_protocol_transaction(bl, blockchain_height, m_hardfork->get_current_version(), txs))
   {
     MERROR_VER("Block with id: " << id << " has incorrect protocol transaction");
     bvc.m_verifivation_failed = true;
@@ -6512,7 +6765,7 @@ void Blockchain::cancel()
 }
 
 #if defined(PER_BLOCK_CHECKPOINT)
-static const char expected_block_hashes_hash[] = "fb30b46662cb1cfca74d443d66be5860936f9fd904ba5c6f8daecb926ce545f0";
+static const char expected_block_hashes_hash[] = "7e6c9efd949afb36bce062bbb720605f0dd67b03c0124e5167c527fa59c15ce3";
 void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints)
 {
   if (get_checkpoints == nullptr || !m_fast_sync)

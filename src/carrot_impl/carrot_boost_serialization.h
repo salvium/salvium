@@ -86,6 +86,12 @@ inline void serialize(Archive &a, carrot::encrypted_return_pubkey_t &x, const bo
 }
 //---------------------------------------------------
 template <class Archive>
+inline void serialize(Archive &a, carrot::rollup_binding_tag_t &x, const boost::serialization::version_type ver)
+{
+    a & x.bytes;
+}
+//---------------------------------------------------
+template <class Archive>
 inline void serialize(Archive &a, carrot::CarrotDestinationV1 &x, const boost::serialization::version_type ver)
 {
     a & x.address_spend_pubkey;

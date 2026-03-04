@@ -156,15 +156,20 @@ public:
                           const difficulty_type& cumulative_difficulty,
                           const uint64_t& coins_generated,
                           uint64_t num_rct_outs,
-                          oracle::asset_type_counts& cum_rct_by_asset_type,
+                          oracle::asset_type_counts_v2& cum_rct_by_asset_type,
                           const crypto::hash& blk_hash,
                           uint64_t slippage_total,
                           uint64_t yield_total,
                           uint64_t audit_total,
+                          uint64_t token_total,
                           const cryptonote::network_type nettype,
                           cryptonote::yield_block_info& ybi,
                           cryptonote::audit_block_info& abi
                           ) override { }
+  
+  virtual std::map<std::string, cryptonote::token_metadata_t> get_tokens() const override { return {}; }
+  virtual bool is_tx_paid_for(const cryptonote::transaction& tx) const override { return true; }
+  virtual int get_token_tx_info(const uint64_t height, std::vector<token_tx_info_carrot>& tti_container) const override { return 0; }
   virtual cryptonote::block get_block_from_height(const uint64_t& height) const override { return cryptonote::block(); }
   virtual void set_hard_fork_version(uint64_t height, uint8_t version) override {}
   virtual uint8_t get_hard_fork_version(uint64_t height) const override { return 0; }

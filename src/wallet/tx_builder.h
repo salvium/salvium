@@ -55,7 +55,25 @@ carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
     const std::uint64_t top_block_index,
     const bool allow_carrot_external_inputs_in_normal_transfers,
     const bool allow_pre_carrot_inputs_in_normal_transfers,
+    const std::string &asset_type,
     std::set<size_t> &selected_transfer_indices_out);
+
+std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_createtoken(
+    wallet2 &w,
+    const cryptonote::token_metadata_t &token,
+    const cryptonote::tx_destination_entry &de,
+    const rct::xmr_amount fee_per_weight,
+    const rct::xmr_amount fee_quantization_mask,
+    const uint32_t subaddr_account,
+    const std::set<uint32_t> &subaddr_indices,
+    const std::uint64_t top_block_index);
+std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_createtoken(
+    wallet2 &w,
+    const cryptonote::token_metadata_t &token,
+    const cryptonote::tx_destination_entry &de,
+    const std::uint32_t priority,
+    const std::uint32_t subaddr_account,
+    const std::set<uint32_t> &subaddr_indices);
 
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_transfer(
     wallet2 &w,
@@ -109,6 +127,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const rct::xmr_amount fee_quantization_mask,
     const std::vector<uint8_t> &extra,
     const cryptonote::transaction_type tx_type,
+    const std::string &asset_type,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
     const std::uint64_t top_block_index);
@@ -121,6 +140,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const std::uint32_t priority,
     const std::vector<uint8_t> &extra,
     const cryptonote::transaction_type tx_type,
+    const std::string &asset_type,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices);
 wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionProposalV1 &tx_proposal,

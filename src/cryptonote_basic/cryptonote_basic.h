@@ -44,6 +44,7 @@
 #include "serialization/debug_archive.h"
 #include "serialization/crypto.h"
 #include "serialization/keyvalue_serialization.h" // eepe named serialization
+#include "serialization/pair.h"
 #include "serialization/string.h"
 #include "carrot_core/core_types.h"
 #include "carrot_impl/carrot_chain_serialization.h"
@@ -193,8 +194,6 @@ namespace cryptonote
       VARINT_FIELD(amount)
       FIELD(target)
     END_SERIALIZE()
-
-
   };
 
   class protocol_tx_data_t {
@@ -211,6 +210,99 @@ namespace cryptonote
       FIELD(return_pubkey)
       FIELD(return_view_tag)
       FIELD(return_anchor_enc)
+    END_SERIALIZE()
+  };
+
+  struct erc_token_t
+  {
+    uint8_t version;
+    std::string contract_address;
+    std::string lockbox_address;
+    std::string ticker;
+    uint64_t erc20_asset_id; // NOTE: this is NOT the Salvium `asset_type_id`!!!
+
+    BEGIN_SERIALIZE_OBJECT()
+      VARINT_FIELD(version)
+      FIELD(contract_address)
+      FIELD(lockbox_address)
+      FIELD(ticker)
+      VARINT_FIELD(erc20_asset_id)
+    END_SERIALIZE()
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(contract_address)
+      KV_SERIALIZE(lockbox_address)
+      KV_SERIALIZE(ticker)
+      KV_SERIALIZE(erc20_asset_id)
+    END_KV_SERIALIZE_MAP()
+  };
+
+  struct sal_token_t
+  {
+    uint8_t version;
+    uint64_t supply;
+    uint64_t size;
+    std::string name;
+    std::string url;
+    crypto::hash signature;
+
+    BEGIN_SERIALIZE_OBJECT()
+      VARINT_FIELD(version)
+      VARINT_FIELD(supply)
+      VARINT_FIELD(size)
+      FIELD(name)
+      FIELD(url)
+      FIELD(signature)
+    END_SERIALIZE()
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(supply)
+      KV_SERIALIZE(size)
+      KV_SERIALIZE(name)
+      KV_SERIALIZE(url)
+    END_KV_SERIALIZE_MAP()
+  };
+
+  #define TOKEN_TYPE_UNSET 0
+  #define TOKEN_TYPE_ERC20 1
+  #define TOKEN_TYPE_SAL   2 
+
+  typedef boost::variant<erc_token_t, sal_token_t> token_v;
+  
+  struct token_metadata_t
+  {
+    uint8_t version;
+    std::string asset_type;
+    token_v token;
+
+    BEGIN_SERIALIZE_OBJECT()
+      VARINT_FIELD(version)
+      FIELD(asset_type)
+      FIELD(token)
+    END_SERIALIZE()
+  };
+
+  class layer2_rollup_tx_t {
+  public:
+    crypto::hash tx_prefix_hash;
+    crypto::key_image first_key_image;
+    uint64_t tx_fee;
+
+    BEGIN_SERIALIZE_OBJECT()
+      FIELD(tx_prefix_hash)
+      FIELD(first_key_image)
+      VARINT_FIELD(tx_fee)
+    END_SERIALIZE()
+  };
+
+  class layer2_rollup_data_t {
+  public:
+    uint8_t version;
+    std::vector<layer2_rollup_tx_t> txs;
+
+    BEGIN_SERIALIZE_OBJECT()
+      VARINT_FIELD(version)
+      FIELD(txs)
     END_SERIALIZE()
   };
 
@@ -246,6 +338,10 @@ namespace cryptonote
 
     protocol_tx_data_t protocol_tx_data;
 
+    carrot::rollup_binding_tag_t rollup_binding_tag;
+    token_metadata_t token_metadata;
+    layer2_rollup_data_t layer2_rollup_data;
+    
     BEGIN_SERIALIZE()
       VARINT_FIELD(version)
       if(version == 0 || CURRENT_TRANSACTION_VERSION < version) return false;
@@ -263,9 +359,8 @@ namespace cryptonote
             FIELD(return_address_list)
             FIELD(return_address_change_mask)
           } else {
-            if (type == cryptonote::transaction_type::STAKE &&
-                version >= TRANSACTION_VERSION_CARROT)
-            {
+            if ((type == cryptonote::transaction_type::STAKE || type == cryptonote::transaction_type::CREATE_TOKEN) &&
+                (version >= TRANSACTION_VERSION_CARROT)) {
               FIELD(protocol_tx_data)
             } else {
               FIELD(return_address)
@@ -276,6 +371,17 @@ namespace cryptonote
           FIELD(destination_asset_type)
           VARINT_FIELD(amount_slippage_limit)
         }
+      }
+      if (version < TRANSACTION_VERSION_ENABLE_TOKENS) {
+        return true;
+      }
+      if (type == cryptonote::transaction_type::CREATE_TOKEN) {
+        FIELD(token_metadata)
+      } else if (type == cryptonote::transaction_type::TRANSFER) {
+        FIELD(rollup_binding_tag)
+      } else if (type == cryptonote::transaction_type::ROLLUP) {
+        FIELD(rollup_binding_tag)
+        FIELD(layer2_rollup_data)
       }
     END_SERIALIZE()
 
@@ -297,10 +403,14 @@ namespace cryptonote
       protocol_tx_data.return_pubkey = crypto::null_pkey;
       protocol_tx_data.return_view_tag = {};
       protocol_tx_data.return_anchor_enc = {};
+      token_metadata.version = 0;
       source_asset_type.clear();
       destination_asset_type.clear();
       amount_burnt = 0;
       amount_slippage_limit = 0;
+      rollup_binding_tag = {0};
+      token_metadata = {};
+      layer2_rollup_data = {};
     }
   };
 
@@ -564,6 +674,91 @@ namespace cryptonote
     END_SERIALIZE()
   };
 
+  struct token_block_info {
+    uint64_t block_height;
+    std::map<uint32_t, uint64_t> token_info;  // Replaces the vector
+
+    token_block_info() = default; // default ctor
+
+    explicit token_block_info(const uint64_t h)
+      : block_height(h) {}
+
+    void clear() {
+      block_height = 0;
+      token_info.clear();
+    }
+    
+    std::vector<uint8_t> serialize() const noexcept {
+      constexpr uint8_t version = 1;  // Bump if format changes
+      uint32_t sz = static_cast<uint32_t>(token_info.size());
+      size_t total_size = sizeof(uint8_t) + sizeof(uint64_t) + sizeof(uint32_t) + (sz * (sizeof(uint32_t) + sizeof(uint64_t)));
+      std::vector<uint8_t> buf(total_size);
+      uint8_t* ptr = buf.data();
+
+      std::memcpy(ptr, &version, sizeof(uint8_t));
+      ptr += sizeof(uint8_t);
+
+      std::memcpy(ptr, &block_height, sizeof(uint64_t));
+      ptr += sizeof(uint64_t);
+
+      std::memcpy(ptr, &sz, sizeof(uint32_t));
+      ptr += sizeof(uint32_t);
+
+      for (const auto& p : token_info) {  // Iterates in sorted order
+        std::memcpy(ptr, &p.first, sizeof(uint32_t));
+        ptr += sizeof(uint32_t);
+        std::memcpy(ptr, &p.second, sizeof(uint64_t));
+        ptr += sizeof(uint64_t);
+      }
+      return buf;
+    }
+
+    void deserialize(const uint8_t* data, size_t len) {
+      if (len < sizeof(uint32_t)) {
+        throw std::runtime_error("Invalid serialized data");
+      }
+
+      uint8_t version;
+      std::memcpy(&version, data, sizeof(uint8_t));
+      data += sizeof(uint8_t);
+      len -= sizeof(uint8_t);
+
+      if (version == 0) {  // Legacy: No height/version (your current format)
+        // Handle old blobs: Caller must set block_height externally
+        block_height = 0;  // Or throw if height is mandatory
+      } else if (version == 1) {
+        if (len < sizeof(uint64_t) + sizeof(uint32_t)) {
+          throw std::runtime_error("Invalid serialized data");
+        }
+        std::memcpy(&block_height, data, sizeof(uint64_t));
+        data += sizeof(uint64_t);
+        len -= sizeof(uint64_t);
+      } else {
+        throw std::runtime_error("Unsupported version");
+      }
+
+      uint32_t sz;
+      std::memcpy(&sz, data, sizeof(uint32_t));
+      data += sizeof(uint32_t);
+      len -= sizeof(uint32_t);
+
+      if (len != sz * (sizeof(uint32_t) + sizeof(uint64_t))) {
+        throw std::runtime_error("Invalid serialized data length");
+      }
+
+      token_info.clear();
+      for (uint32_t i = 0; i < sz; ++i) {
+        uint32_t k;
+        uint64_t v;
+        std::memcpy(&k, data, sizeof(uint32_t));
+        data += sizeof(uint32_t);
+        std::memcpy(&v, data, sizeof(uint64_t));
+        data += sizeof(uint64_t);
+        token_info[k] = v;  // Map handles sorting/uniquness
+      }
+    }
+  };
+  
   struct yield_block_info {
     uint64_t block_height;
     uint64_t slippage_total_this_block;
@@ -784,6 +979,9 @@ VARIANT_TAG(binary_archive, cryptonote::txout_to_key, 0x2);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_tagged_key, 0x3);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_carrot_v1, 0x4);
 VARIANT_TAG(binary_archive, cryptonote::protocol_tx_data_t, 0x0);
+VARIANT_TAG(binary_archive, cryptonote::token_metadata_t, 0x0);
+VARIANT_TAG(binary_archive, cryptonote::erc_token_t, 0x0);
+VARIANT_TAG(binary_archive, cryptonote::sal_token_t, 0x1);
 VARIANT_TAG(binary_archive, cryptonote::transaction, 0xcc);
 VARIANT_TAG(binary_archive, cryptonote::block, 0xbb);
 
@@ -797,6 +995,9 @@ VARIANT_TAG(json_archive, cryptonote::txout_to_key, "key");
 VARIANT_TAG(json_archive, cryptonote::txout_to_tagged_key, "tagged_key");
 VARIANT_TAG(json_archive, cryptonote::txout_to_carrot_v1, "carrot_v1");
 VARIANT_TAG(json_archive, cryptonote::protocol_tx_data_t, "protocol_tx_data");
+VARIANT_TAG(json_archive, cryptonote::token_metadata_t, "token_metadata");
+VARIANT_TAG(json_archive, cryptonote::erc_token_t, "erc_token");
+VARIANT_TAG(json_archive, cryptonote::sal_token_t, "sal_token");
 VARIANT_TAG(json_archive, cryptonote::transaction, "tx");
 VARIANT_TAG(json_archive, cryptonote::block, "block");
 
@@ -810,5 +1011,8 @@ VARIANT_TAG(debug_archive, cryptonote::txout_to_key, "key");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_tagged_key, "tagged_key");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_carrot_v1, "carrot_v1");
 VARIANT_TAG(debug_archive, cryptonote::protocol_tx_data_t, "protocol_tx_data");
+VARIANT_TAG(debug_archive, cryptonote::token_metadata_t, "token_metadata");
+VARIANT_TAG(debug_archive, cryptonote::erc_token_t, "erc_token");
+VARIANT_TAG(debug_archive, cryptonote::sal_token_t, "sal_token");
 VARIANT_TAG(debug_archive, cryptonote::transaction, "tx");
 VARIANT_TAG(debug_archive, cryptonote::block, "block");

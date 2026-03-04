@@ -193,31 +193,51 @@ bool try_load_carrot_extra_v1(
 }
 //-------------------------------------------------------------------------------------------------------------------
 cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotEnoteV1> &enotes,
-    const std::vector<crypto::key_image> &key_images,
-    const std::vector<cryptonote::tx_source_entry> &sources,
-    const rct::xmr_amount fee,
-    const cryptonote::transaction_type tx_type,
-    const rct::xmr_amount tx_amount_burnt,
-    const std::vector<uint8_t> &change_masks,
-    const carrot::RCTOutputEnoteProposal &return_enote,
-    const encrypted_payment_id_t encrypted_payment_id)
+                                                       const std::vector<crypto::key_image> &key_images,
+                                                       const std::vector<cryptonote::tx_source_entry> &sources,
+                                                       const rct::xmr_amount fee,
+                                                       const cryptonote::transaction_type tx_type,
+                                                       const rct::xmr_amount tx_amount_burnt,
+                                                       const std::vector<uint8_t> &change_masks,
+                                                       const cryptonote::token_metadata_t &token,
+                                                       const carrot::RCTOutputEnoteProposal &return_enote,
+                                                       const encrypted_payment_id_t encrypted_payment_id,
+                                                       const uint8_t hf_version)
 {
     const size_t nins = key_images.size();
     const size_t nouts = enotes.size();
     CHECK_AND_ASSERT_THROW_MES(nins == sources.size(), "invalid inputs/sources size");
     CHECK_AND_ASSERT_THROW_MES(change_masks.size() == nouts, "invalid change masks size. Expected: "  << nouts - 1 << " got: " << change_masks.size());
 
+    // Sanity check asset types - all enotes and sources must be the same
+    std::string asset_type = "";
+    for (const auto &enote: enotes) {
+      if (asset_type == "")
+        asset_type = enote.asset_type;
+      else
+        CHECK_AND_ASSERT_THROW_MES(enote.asset_type == asset_type, "invalid asset_type in enote. Expected: " << asset_type << " got: " << enote.asset_type);
+    }
+    for (const auto &source: sources) {
+      if (asset_type == "")
+        asset_type = source.asset_type;
+      else
+        CHECK_AND_ASSERT_THROW_MES(source.asset_type == asset_type, "invalid asset_type in source. Expected: " << asset_type << " got: " << source.asset_type);
+    }      
+    
     cryptonote::transaction tx;
     tx.pruned = true;
     tx.unlock_time = 0;
-    tx.source_asset_type = "SAL1";
-    tx.destination_asset_type = "SAL1";
-    tx.version = TRANSACTION_VERSION_CARROT;
+    tx.source_asset_type = asset_type;
+    tx.destination_asset_type = asset_type;
+    tx.version = (hf_version >= HF_VERSION_ENABLE_TOKENS) ? TRANSACTION_VERSION_ENABLE_TOKENS : TRANSACTION_VERSION_CARROT;
     tx.type = 
         tx_type == cryptonote::transaction_type::RETURN ? cryptonote::transaction_type::TRANSFER : tx_type;
     tx.amount_burnt = (
-        tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN
-    ) ? tx_amount_burnt : 0;
+                       tx.type == cryptonote::transaction_type::STAKE ||
+                       tx.type == cryptonote::transaction_type::BURN ||
+                       tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
+                       tx.type == cryptonote::transaction_type::ROLLUP
+                       ) ? tx_amount_burnt : 0;
     tx.return_address_change_mask.assign(change_masks.begin(), change_masks.end());
     tx.vin.reserve(nins);
     tx.vout.reserve(nouts);
@@ -239,7 +259,7 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
         //L
         tx.vin.emplace_back(cryptonote::txin_to_key{ //@TODO: can save 2 bytes by using slim input type
             .amount = 0,
-            .asset_type = "SAL1",
+            .asset_type = asset_type,
             .key_offsets = cryptonote::absolute_output_offsets_to_relative(key_offsets),
             .k_image = key_images.at(i)
         });
@@ -264,7 +284,7 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
         tx.rct_signatures.outPk.push_back(rct::ctkey{rct::key{}, enote.amount_commitment});
 
         //K_return
-        if (tx_type != cryptonote::transaction_type::STAKE) {
+        if (tx_type != cryptonote::transaction_type::STAKE && tx_type != cryptonote::transaction_type::CREATE_TOKEN) {
             crypto::public_key K_return;
             memcpy(K_return.data, enote.return_enc.bytes, sizeof(crypto::public_key));
             tx.return_address_list.push_back(K_return);
@@ -272,7 +292,7 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
     }
 
     // store the return pubkey for stake txs
-    if (tx_type == cryptonote::transaction_type::STAKE)
+    if (tx_type == cryptonote::transaction_type::STAKE || tx_type == cryptonote::transaction_type::CREATE_TOKEN)
     {
         tx.protocol_tx_data.version = 1;
         memcpy(tx.protocol_tx_data.return_address.data, return_enote.enote.onetime_address.data, sizeof(crypto::public_key));
@@ -280,7 +300,12 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
         tx.protocol_tx_data.return_view_tag = return_enote.enote.view_tag;
         tx.protocol_tx_data.return_anchor_enc = return_enote.enote.anchor_enc;
     }
-
+    if (tx_type == cryptonote::transaction_type::CREATE_TOKEN) {
+      tx.token_metadata = token;
+    } else {
+      tx.token_metadata = cryptonote::token_metadata_t{};
+    }
+    
     //ephemeral pubkeys: D_e
     store_carrot_ephemeral_pubkeys_to_extra(enotes, tx.extra);
 

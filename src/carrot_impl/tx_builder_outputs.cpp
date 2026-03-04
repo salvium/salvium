@@ -132,7 +132,9 @@ void make_pruned_transaction_from_proposal_v1(const CarrotTransactionProposalV1 
         0, // tx_amount_burnt
         {}, // change_masks
         {}, // return_enote
-        encrypted_payment_id);
+        {0},
+        encrypted_payment_id,
+        /*hf_version=*/10);
 
     // add extra payload and sort
     if (!tx_proposal.extra.empty())

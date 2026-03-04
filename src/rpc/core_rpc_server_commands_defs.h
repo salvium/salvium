@@ -1488,6 +1488,76 @@ namespace cryptonote
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
+  struct COMMAND_RPC_GET_TOKENS
+  {
+    struct request_t
+    {
+      std::string filter;
+      
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_OPT(filter, (std::string)"")
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+    
+    struct response_t
+    {
+      std::string status;
+      std::vector<std::string> tokens;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(status)
+        KV_SERIALIZE(tokens)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  struct COMMAND_RPC_GET_TOKEN_INFO
+  {
+    struct request_t
+    {
+      std::string asset_type;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(asset_type)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    struct response_t
+    {
+      std::string status;
+      std::string asset_type;
+      uint8_t token_type;  // erc20 or sal
+      cryptonote::token_metadata_t token;
+      cryptonote::erc_token_t erc_token;
+      cryptonote::sal_token_t sal_token;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(status)
+        KV_SERIALIZE(token_type)
+        KV_SERIALIZE(token.version)
+        KV_SERIALIZE(token.asset_type)
+        if (token_type == TOKEN_TYPE_ERC20) {
+          KV_SERIALIZE(erc_token)
+          token.token = erc_token;
+        } else {
+          KV_SERIALIZE(sal_token)
+          token.token = sal_token;
+        }
+      END_KV_SERIALIZE_MAP()
+      //BEGIN_KV_SERIALIZE_MAP()
+      //KV_SERIALIZE(status)
+      //KV_SERIALIZE(token)
+      //KV_SERIALIZE(asset_type)
+      //KV_SERIALIZE(sal_token)
+      //KV_SERIALIZE(erc_token)
+      //END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
   struct peer {
     uint64_t id;
     std::string host;

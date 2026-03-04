@@ -36,6 +36,7 @@
 #include "misc_language.h"
 #include "misc_log_ex.h"
 #include "ringct/rctOps.h"
+#include "crypto/generators.h"
 
 //third party headers
 
@@ -208,10 +209,11 @@ static void get_external_output_proposal_parts(const mx25519_pubkey &s_sender_re
     // 4. construct the return pubkey
     if (s_view_balance_dev != nullptr)
         make_sparc_return_pubkey(s_sender_receiver_unctx.data,
-            input_context,
-            s_view_balance_dev,
-            onetime_address_out,
-            return_pubkey_out);
+                                 input_context,
+                                 s_view_balance_dev,
+                                 onetime_address_out,
+                                 0,
+                                 return_pubkey_out);
 }
 //-------------------------------------------------------------------------------------------------------------------    
 //-------------------------------------------------------------------------------------------------------------------
@@ -423,9 +425,93 @@ void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &propo
     // 8. save the enote ephemeral pubkey, first tx key image, and amount
     output_enote_out.enote.enote_ephemeral_pubkey = enote_ephemeral_pubkey;
     output_enote_out.enote.tx_first_key_image     = tx_first_key_image;
-    output_enote_out.enote.asset_type             = "SAL1";
+    output_enote_out.enote.asset_type             = proposal.asset_type;
     output_enote_out.enote.return_enc             = crypto::rand<carrot::encrypted_return_pubkey_t>();
     output_enote_out.amount                       = proposal.amount;
+}
+//-------------------------------------------------------------------------------------------------------------------
+void get_output_proposal_paymentchannel_v1(const CarrotPaymentProposalV1 &proposal,
+                                           const crypto::key_image &tx_first_key_image,
+                                           const view_balance_secret_device *s_view_balance_dev,
+                                           const crypto::public_key &K_o,
+                                           const uint64_t idx,
+                                           RCTOutputEnoteProposal &output_enote_out,
+                                           encrypted_payment_id_t &encrypted_payment_id_out)
+{
+    // 1. sanity checks
+    CARROT_CHECK_AND_THROW(proposal.randomness != null_anchor,
+        missing_randomness, "invalid randomness for janus anchor (zero).");
+
+    // 2. input context: input_context = "R" || KI_1
+    const input_context_t input_context = make_carrot_input_context(tx_first_key_image);
+    /*
+    //    K_v = K_return - k_idx * T 
+    CarrotPaymentProposalV1 proposal_with_kv = proposal;
+    const bool is_sparc = (k_idx != crypto::null_skey) && sc_isnonzero(to_bytes(k_idx)); // check here! for zero its not needed
+    if (is_sparc)
+    {
+        // Calculate K_v = K_return - k_idx * T
+        const rct::key K_return_rct = rct::pk2rct(proposal.destination.address_view_pubkey);
+        const rct::key k_idx_T = rct::scalarmultKey(rct::pk2rct(crypto::get_T()), rct::sk2rct(k_idx));
+        rct::key K_v_rct;
+        rct::subKeys(K_v_rct, K_return_rct, k_idx_T);
+        proposal_with_kv.destination.address_view_pubkey = rct::rct2pk(K_v_rct);
+    }
+    */
+    mx25519_pubkey s_sender_receiver_unctx; auto dhe_wiper = auto_wiper(s_sender_receiver_unctx);
+    get_normal_proposal_ecdh_parts(proposal,
+        input_context,
+        output_enote_out.enote.enote_ephemeral_pubkey,
+        s_sender_receiver_unctx);
+
+    // 4. build the output enote address pieces
+    crypto::hash s_sender_receiver; auto q_wiper = auto_wiper(s_sender_receiver);
+    encrypted_return_pubkey_t return_pubkey;
+    get_external_output_proposal_parts(
+        s_sender_receiver_unctx,
+        proposal.destination.address_spend_pubkey,
+        proposal.destination.payment_id,
+        proposal.amount,
+        CarrotEnoteType::PAYMENT,
+        output_enote_out.enote.enote_ephemeral_pubkey,
+        input_context,
+        s_view_balance_dev,
+        false, // coinbase_amount_commitment
+        s_sender_receiver,
+        output_enote_out.amount_blinding_factor,
+        output_enote_out.enote.amount_commitment,
+        output_enote_out.enote.onetime_address,
+        output_enote_out.enote.amount_enc,
+        encrypted_payment_id_out,
+        output_enote_out.enote.view_tag,
+        return_pubkey
+    );
+
+    // Override the onetime address
+    crypto::secret_key k_idx;
+    make_sparc_return_index(s_sender_receiver_unctx.data, input_context, K_o, idx, k_idx);    
+    rct::key K_r = rct::addKeys(rct::pk2rct(proposal.destination.address_spend_pubkey),rct::pk2rct(proposal.destination.address_view_pubkey));
+    rct::key K_idx = rct::scalarmultKey(rct::pk2rct(crypto::get_T()), rct::sk2rct(k_idx));
+    output_enote_out.enote.onetime_address = rct::rct2pk(rct::addKeys(K_r, K_idx));
+
+    // Recalculate the view tag : vt = H_3(s_sr || input_context || Ksra)
+    make_carrot_view_tag(s_sender_receiver_unctx.data, input_context, output_enote_out.enote.onetime_address, output_enote_out.enote.view_tag);
+    
+    // Recalculate a_enc = BytesToInt64(a) XOR m_a
+    output_enote_out.enote.amount_enc = encrypt_carrot_amount(proposal.amount, s_sender_receiver, output_enote_out.enote.onetime_address);
+    
+    // Recalculate anchor_enc = anchor XOR m_anchor
+    output_enote_out.enote.anchor_enc = encrypt_carrot_anchor(proposal.randomness, s_sender_receiver, output_enote_out.enote.onetime_address);
+    
+    // Recalculate the pid_enc = pid XOR m_pid
+    encrypted_payment_id_out = encrypt_legacy_payment_id(proposal.destination.payment_id, s_sender_receiver, output_enote_out.enote.onetime_address);
+
+    // 6. save the amount & first key image & asset type
+    output_enote_out.amount                   = proposal.amount;
+    output_enote_out.enote.asset_type         = proposal.asset_type;
+    output_enote_out.enote.tx_first_key_image = tx_first_key_image;
+    // disable returning an already returned tx.
+    output_enote_out.enote.return_enc         = crypto::rand<carrot::encrypted_return_pubkey_t>();
 }
 //-------------------------------------------------------------------------------------------------------------------
 void get_output_proposal_return_v1(const CarrotPaymentProposalV1 &proposal,
@@ -561,12 +647,12 @@ void get_output_proposal_internal_v1(const CarrotPaymentProposalSelfSendV1 &prop
     // 9. save the enote ephemeral pubkey, first tx key image, and amount
     output_enote_out.enote.enote_ephemeral_pubkey = enote_ephemeral_pubkey;
     output_enote_out.enote.tx_first_key_image     = tx_first_key_image;
-    output_enote_out.enote.asset_type             = "SAL1";
+    output_enote_out.enote.asset_type             = proposal.asset_type;
     output_enote_out.enote.return_enc             = crypto::rand<carrot::encrypted_return_pubkey_t>();
     output_enote_out.amount                       = proposal.amount;
 
     // 10. construct the stake return enote
-    if (tx_type == cryptonote::transaction_type::STAKE) {
+    if (tx_type == cryptonote::transaction_type::STAKE || tx_type == cryptonote::transaction_type::CREATE_TOKEN) {
         // make k_return
         crypto::secret_key k_return;
         s_view_balance_dev.make_internal_return_privkey(input_context, output_enote_out.enote.onetime_address, k_return);

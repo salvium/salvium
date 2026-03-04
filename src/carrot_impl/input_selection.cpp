@@ -88,7 +88,8 @@ static std::pair<std::size_t, boost::multiprecision::uint128_t> input_count_for_
     const epee::span<const InputCandidate> input_candidates,
     const std::set<std::size_t> &selectable_inputs,
     std::size_t max_num_input_count,
-    const std::map<std::size_t, rct::xmr_amount> &fee_by_input_count)
+    const std::map<std::size_t, rct::xmr_amount> &fee_by_input_count,
+    const bool is_token_transfer)
 {
     // Returns (N, X) where the X is the sum of the amounts of the greatest N <= max_num_input_count
     // inputs from selectable_inputs, maximizing X - F(N). F(N) is the fee for this transaction,
@@ -96,6 +97,7 @@ static std::pair<std::size_t, boost::multiprecision::uint128_t> input_count_for_
     // the fee, but greater than or equal to the difference of the fee compared to excluding that
     // input. If this function returns N == 0, then there aren't enough usable funds, i.e. no N
     // exists such that X - F(N) > 0.
+    // For token transfers, fee is paid separately in SAL1 so we just accumulate all inputs.
 
     if (fee_by_input_count.empty() || selectable_inputs.empty())
         return {0, 0};
@@ -125,6 +127,15 @@ static std::pair<std::size_t, boost::multiprecision::uint128_t> input_count_for_
     {
         const rct::xmr_amount amount = *amount_it;
         const rct::xmr_amount current_fee = fee_by_input_count.at(num_ins + 1);
+        
+        // For token transfers, fee is paid separately in SAL1 - just accumulate inputs
+        if (is_token_transfer)
+        {
+            ++num_ins;
+            cumulative_input_sum += amount;
+            continue;
+        }
+        
         CARROT_CHECK_AND_THROW(current_fee > last_fee,
             carrot_logic_error, "provided fee by input count is not monotonically increasing");
         const rct::xmr_amount marginal_fee_diff = current_fee - last_fee;
@@ -372,11 +383,12 @@ select_inputs_func_t make_single_transfer_input_selector(
 
         // 3. Calculate minimum required input money sum for a given input count
         const bool subtract_fee = flags & IS_KNOWN_FEE_SUBTRACTABLE;
+        const bool is_token_transfer = flags & IS_TOKEN_TRANSFER;
         std::map<std::size_t, boost::multiprecision::uint128_t> required_money_by_input_count;
         for (const auto &fee_and_input_count : fee_by_input_count)
         {
             required_money_by_input_count[fee_and_input_count.first] = 
-                nominal_output_sum + (subtract_fee ? 0 : fee_and_input_count.second);
+                nominal_output_sum + ((subtract_fee || is_token_transfer) ? 0 : fee_and_input_count.second);
         }
         const boost::multiprecision::uint128_t absolute_minimum_required_money
             = required_money_by_input_count.cbegin()->second;
@@ -390,9 +402,10 @@ select_inputs_func_t make_single_transfer_input_selector(
             "Not enough money in all inputs (" << cryptonote::print_money(total_candidate_money)
             << ") to fund minimum output sum (" << cryptonote::print_money(absolute_minimum_required_money) << ')');
 
+        // const bool is_token_transfer = flags & IS_TOKEN_TRANSFER;
         std::set<std::size_t> all_idxs; for (std::size_t i = 0; i < input_candidates.size(); ++i) all_idxs.insert(i);
         const std::pair<std::size_t, boost::multiprecision::uint128_t> max_usable_money =
-            input_count_for_max_usable_money(input_candidates, all_idxs, CARROT_MAX_TX_INPUTS, fee_by_input_count);
+            input_count_for_max_usable_money(input_candidates, all_idxs, CARROT_MAX_TX_INPUTS, fee_by_input_count, is_token_transfer);
         CARROT_CHECK_AND_THROW(max_usable_money.second >= absolute_minimum_required_money,
             not_enough_usable_money,
             "Not enough usable money in top " << max_usable_money.first << " inputs ("
@@ -417,7 +430,7 @@ select_inputs_func_t make_single_transfer_input_selector(
 
             // Skip if not enough money in this selectable set for max number of tx inputs...
             const auto max_usable_money = input_count_for_max_usable_money(input_candidates,
-                input_candidate_subset, CARROT_MAX_TX_INPUTS, fee_by_input_count);
+                input_candidate_subset, CARROT_MAX_TX_INPUTS, fee_by_input_count, is_token_transfer);
             if (!max_usable_money.first)
                 continue;
             else if (max_usable_money.second < required_money_by_input_count.at(max_usable_money.first))
@@ -441,7 +454,7 @@ select_inputs_func_t make_single_transfer_input_selector(
 
                 // Skip if not enough money in this selectable set for exact number of inputs...
                 const auto max_usable_money = input_count_for_max_usable_money(input_candidates,
-                    input_candidate_subset, n_inputs, fee_by_input_count);
+                    input_candidate_subset, n_inputs, fee_by_input_count, is_token_transfer);
                 if (max_usable_money.first != n_inputs)
                     continue;
                 else if (max_usable_money.second < required_money)

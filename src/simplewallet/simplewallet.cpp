@@ -167,7 +167,8 @@ enum TransferType {
   Burn,
   Stake,
   Return,
-  Audit
+  Audit,
+  CreateToken
 };
 
 #define CHECK_IF_BACKGROUND_SYNCING(msg) \
@@ -221,17 +222,20 @@ namespace
   const char* USAGE_TRANSFER("transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <amount> [<asset_type>]) [subtractfeefrom=<D0>[,<D1>,all,...]] [<payment_id>]");
   const char* USAGE_LOCKED_TRANSFER("locked_transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <addr> <amount> [<asset_type>]) <lockblocks> [<payment_id (obsolete)>]");
   const char* USAGE_LOCKED_SWEEP_ALL("locked_sweep_all [index=<N1>[,<N2>,...] | index=all] [<priority>] [<ring_size>] <address> <lockblocks> [<payment_id (obsolete)>]");
-  const char* USAGE_SWEEP_ALL("sweep_all [index=<N1>[,<N2>,...] | index=all] [<priority>] [<ring_size>] [outputs=<N>] <address> [<payment_id (obsolete)>]");
-  const char* USAGE_SWEEP_ACCOUNT("sweep_account <account> [index=<N1>[,<N2>,...] | index=all] [<priority>] [<ring_size>] [outputs=<N>] <address> [<payment_id (obsolete)>]");
-  const char* USAGE_SWEEP_BELOW("sweep_below <amount_threshold> [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> [<payment_id (obsolete)>]");
-  const char* USAGE_SWEEP_SINGLE("sweep_single [<priority>] [<ring_size>] [outputs=<N>] <key_image> <address> [<payment_id (obsolete)>]");
+  const char* USAGE_SWEEP_ALL("sweep_all [index=<N1>[,<N2>,...] | index=all] [<priority>] [<ring_size>] [outputs=<N>] <address> [<asset_type>] [<payment_id (obsolete)>]");
+  const char* USAGE_SWEEP_ACCOUNT("sweep_account <account> [index=<N1>[,<N2>,...] | index=all] [<priority>] [<ring_size>] [outputs=<N>] <address> [<asset_type>] [<payment_id (obsolete)>]");
+  const char* USAGE_SWEEP_BELOW("sweep_below <amount_threshold> [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> [<asset_type>] [<payment_id (obsolete)>]");
+  const char* USAGE_SWEEP_SINGLE("sweep_single [<priority>] [<ring_size>] [outputs=<N>] <key_image> <address> [<asset_type>] [<payment_id (obsolete)>]");
   const char* USAGE_RETURN_PAYMENT("return_payment <tx_hash>");
   const char* USAGE_BURN("burn <amount> <asset_type>");
   const char* USAGE_CONVERT("convert <source_amount> <source_asset> <dest_asset> [<slippage_limit>]");
   const char* USAGE_STAKE("stake <amount>");
   const char* USAGE_AUDIT("audit [index=<N1>[,<N2>,...] | index=all]");
+  const char* USAGE_CREATE_TOKEN("create_token [index=<N1>[,<N2>,...]] <ticker> <supply> [name=<name>|metadata=<metadata>|file=<metadata_file>]");
   const char* USAGE_PRICE_INFO("price_info");
   const char* USAGE_SUPPLY_INFO("supply_info");
+  const char* USAGE_GET_TOKENS("get_tokens [<asset_type_filter>]");
+  const char* USAGE_TOKEN_INFO("token_info <asset_type>");
   const char* USAGE_YIELD_INFO("yield_info");
   const char* USAGE_DONATE("donate [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <amount> [<payment_id (obsolete)>]");
   const char* USAGE_SIGN_TRANSFER("sign_transfer [export_raw] [<filename>]");
@@ -3401,24 +3405,26 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
     message_writer() << tr("\"balance\" - Show balance.");
     message_writer() << tr("\"address all\" - Show all addresses.");
     message_writer() << tr("\"address new\" - Create new subaddress.");
-    message_writer() << tr("\"transfer <address> <amount> [<asset_type>]\" - Send SAL to an address.");
+    message_writer() << tr("\"transfer <address> <amount> [<asset_type>]\" - Send specified asset to an address. If no asset type is specified, it will send SAL1.");
     message_writer() << tr("\"return_payment <tx_hash>\" - Return a previously-received amount to sender.");
     message_writer() << tr("\"burn <amount> <asset_type>\" - destroy coins forever.");
     message_writer() << tr("\"convert <amount> <source_asset> <dest_asset> [<slippage_limit>]\" - convert between coin types.");
-    message_writer() << tr("\"stake <amount>\" - stake SAL for 30 days to earn yield.");
+    message_writer() << tr("\"stake <amount>\" - stake SAL1 for 30 days to earn yield.");
     message_writer() << tr("\"audit\" - audit your wallet main address (or subaddress(es) if specified).");
+    message_writer() << tr("\"create_token <ticker> <supply> [name=<name>|metadata=<metadata>|file=<metadata_file>]\" - Create new private token.");
     message_writer() << tr("\"price_info\" - Display current pricing information for supported assets.");
     message_writer() << tr("\"supply_info\" - Display circulating supply information.");
+    message_writer() << tr("\"token_info\" - Display information for specified private token.");
     message_writer() << tr("\"yield_info\" - Display current stats on Salvium staking / yield.");
     message_writer() << tr("\"show_transfers [in|out|pending|failed|pool|coinbase|burnt|staked|yield]\" - Show transactions.");
-    message_writer() << tr("\"sweep_all <address>\" - Send whole balance to another wallet.");
+    message_writer() << tr("\"sweep_all <address> [<asset_type>]\" - Send the entire balance of the selected asset to another wallet. If no asset type is specified, the entire balance of SAL1 assets will be sent.");
     message_writer() << tr("\"seed\" - Show secret 25 words that can be used to recover this wallet.");
     message_writer() << tr("\"refresh\" - Synchronize wallet with the Salvium network.");
     message_writer() << tr("\"status\" - Check current status of wallet.");
     message_writer() << tr("\"version\" - Check software version.");
     message_writer() << tr("\"exit\" - Exit wallet.");
     message_writer() << "";
-    message_writer() << tr("\"donate <amount>\" - Donate SAL to the development team.");
+    message_writer() << tr("\"donate <amount>\" - Donate SAL1 to the development team.");
     message_writer() << "";
   }
   else if ((args.size() == 1) && (args.front() == "all"))
@@ -3605,6 +3611,18 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::audit, this, _1),
                            tr(USAGE_AUDIT),
                            tr("Sends your wallet balance (or a single address or subaddress(es)) to audit (only available during AUDIT hard forks)"));
+  m_cmd_binder.set_handler("create_token",
+                           boost::bind(&simple_wallet::create_token, this, _1),
+                           tr(USAGE_CREATE_TOKEN),
+                           tr("Create a new private token with the specified parameters. The circulating supply of the newly created token is sent to your wallet address 10 blocks later."));
+  m_cmd_binder.set_handler("get_tokens",
+                           boost::bind(&simple_wallet::get_tokens, this, _1),
+                           tr(USAGE_GET_TOKENS),
+                           tr("List the tokens matching <asset_type_filter> that are already in existence."));
+  m_cmd_binder.set_handler("token_info",
+                           boost::bind(&simple_wallet::token_info, this, _1),
+                           tr(USAGE_TOKEN_INFO),
+                           tr("Displays the supply information and immutable metadata for the specified token."));
   m_cmd_binder.set_handler("price_info",
                            boost::bind(&simple_wallet::price_info, this, _1),
                            tr(USAGE_PRICE_INFO),
@@ -3805,6 +3823,7 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::show_transfers, _1),
                            tr(USAGE_SHOW_TRANSFERS),
                            // Seemingly broken formatting to compensate for the backslash before the quotes.
+                           // check here for create coin txs
                            tr("Show the incoming/outgoing transfers within an optional height range.\n\n"
                               "Output format:\n"
                               "In or Coinbase:    Block Number, \"block\"|\"in\",              Time, Amount, Asset Type, Transaction Hash, Payment ID, Subaddress Index,                     \"-\", Note\n"
@@ -6139,6 +6158,12 @@ void simple_wallet::on_money_received(uint64_t height, const crypto::hash &txid,
       message_writer(console_color_red) << "\r" << "*** BURN ***";
     } else if (td_origin.m_tx.type == cryptonote::transaction_type::CONVERT) {
       message_writer(console_color_red) << "\r" << "*** CONVERT ***";
+    } else if (td_origin.m_tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+      message_writer(console_color_blue, false) << "\r" <<
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("new token returned ") << print_money(amount) << " " << asset_type << ", " <<
+        tr("idx ") << subaddr_index;
     } else if (td_origin.m_tx.type == cryptonote::transaction_type::STAKE) {
       message_writer(console_color_magenta, false) << "\r" <<
         tr("Height ") << height << ", " <<
@@ -6173,6 +6198,12 @@ void simple_wallet::on_money_received(uint64_t height, const crypto::hash &txid,
         tr("Height ") << height << ", " <<
         tr("txid ") << txid << ", " <<
         tr("converting ") << print_money(tx.amount_burnt) << " " << asset_type <<  ", " <<
+        tr("idx ") << subaddr_index;
+    } else if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+      message_writer(console_color_blue, false) << "\r" <<
+        tr("Height ") << height << ", " <<
+        tr("txid ") << txid << ", " <<
+        tr("creating token by spending ") << print_money(tx.amount_burnt) << " " << asset_type <<  ", " <<
         tr("idx ") << subaddr_index;
     } else if (tx.type == cryptonote::transaction_type::STAKE) {
       message_writer(console_color_cyan, false) << "\r" <<
@@ -6507,7 +6538,7 @@ bool simple_wallet::show_balance_unlocked(bool detailed)
     success_msg_writer() << tr("Balance per address:");
     success_msg_writer() << boost::format("%16s  %21s %21s %7s %21s") % tr("Address") % tr("Balance") % tr("Unlocked balance") % tr("Outputs") % tr("Label");
     std::vector<tools::wallet2::transfer_details> transfers;
-    m_wallet->get_transfers(transfers);
+    m_wallet->get_transfers(transfers, asset);
     for (const auto& i : balance_per_subaddress)
     {
       carrot::subaddress_index_extended subaddr = {{m_current_subaddress_account, i.first},
@@ -7133,7 +7164,7 @@ bool simple_wallet::transfer_main(
     return false;
   }
 
-  const size_t min_args = (transfer_type == Audit) ? 0 : (transfer_type == TransferLocked) ? 2 : 1;
+  const size_t min_args = (transfer_type == Audit) ? 0 : (transfer_type == TransferLocked) ? 2 : (transfer_type == CreateToken) ? 2 : 1;
   if(local_args.size() < min_args)
   {
      fail_msg_writer() << tr("wrong number of arguments");
@@ -7355,6 +7386,10 @@ bool simple_wallet::transfer_main(
         unlock_block = CONVERT_LOCK_PERIOD;
         ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::CONVERT, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
         break;
+      case CreateToken:
+        unlock_block = 0;
+        ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::CREATE_TOKEN, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
+        break;
       case Stake:
         unlock_block = get_config(m_wallet->nettype()).STAKE_LOCK_PERIOD;
         ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, dest_asset, cryptonote::transaction_type::STAKE, fake_outs_count, unlock_block, priority, extra, m_current_subaddress_account, subaddr_indices, subtract_fee_from_outputs);
@@ -7442,26 +7477,35 @@ bool simple_wallet::transfer_main(
         for (size_t n = 0; n < ptx_vector.size(); ++n)
         {
           total_fee += ptx_vector[n].fee;
-          for (auto i: ptx_vector[n].selected_transfers)
-            total_sent += m_wallet->get_transfer_details(i).amount();
-          total_sent -= ptx_vector[n].change_dts.amount + ptx_vector[n].fee;
-          change += ptx_vector[n].change_dts.amount;
+          if (ptx_vector[n].tx.type == cryptonote::transaction_type::TRANSFER) {
+            for (auto i: ptx_vector[n].selected_transfers)
+              total_sent += m_wallet->get_transfer_details(i).amount();
+            total_sent -= ptx_vector[n].change_dts.amount;
+            if (ptx_vector[n].tx.source_asset_type == "SAL1")
+              total_sent -= ptx_vector[n].fee;
+            change += ptx_vector[n].change_dts.amount;
 
-          if (ptx_vector[n].dust_added_to_fee)
-            dust_in_fee += ptx_vector[n].dust;
-          else
-            dust_not_in_fee += ptx_vector[n].dust;
+            if (ptx_vector[n].dust_added_to_fee)
+              dust_in_fee += ptx_vector[n].dust;
+            else
+              dust_not_in_fee += ptx_vector[n].dust;
+          } else if (ptx_vector[n].tx.type == cryptonote::transaction_type::AUDIT ||
+                     ptx_vector[n].tx.type == cryptonote::transaction_type::BURN ||
+                     ptx_vector[n].tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
+                     ptx_vector[n].tx.type == cryptonote::transaction_type::STAKE) {
+            total_sent += ptx_vector[n].tx.amount_burnt;
+          }
         }
 
         std::stringstream prompt;
         for (size_t n = 0; n < ptx_vector.size(); ++n)
         {
-          prompt << tr("\nTransaction ") << (n + 1) << "/" << ptx_vector.size() << ":\n";
+          prompt << tr("\nTransaction ") << (n + 1) << "/" << ptx_vector.size() << (ptx_vector[n].tx.type == cryptonote::transaction_type::ROLLUP ? tr(" (rollup):\n") : tr(":\n"));
           subaddr_indices.clear();
           for (const std::size_t selected_transfer : ptx_vector.at(n).selected_transfers)
             subaddr_indices.insert(m_wallet->get_transfer_details(selected_transfer).m_subaddr_index.minor);
           for (uint32_t i : subaddr_indices)
-            prompt << boost::format(tr("Spending from address index %d\n")) % i;
+            prompt << boost::format(tr("Spending %s from address index %d\n")) % ptx_vector.at(n).tx.source_asset_type % i;
           if (subaddr_indices.size() > 1)
             prompt << tr("WARNING: Outputs of multiple addresses are being used together, which might potentially compromise your privacy.\n");
         }
@@ -7473,13 +7517,16 @@ bool simple_wallet::transfer_main(
           prompt << boost::format(tr("Staking %s %s for yield accrual.  ")) % print_money(total_sent) % source_asset;
         } else if (transfer_type == Audit) {
           prompt << boost::format(tr("Auditing %s %s.  ")) % print_money(total_sent) % source_asset;
+          //update here
+        } else if (transfer_type == CreateToken) {
+          prompt << boost::format(tr("Creating new coin: burning %s %s to create %s. ")) % print_money(total_sent) % source_asset % dest_asset;
         } else {
           prompt << boost::format(tr("Sending %s %s.  ")) % print_money(total_sent) % source_asset;
         }
         if (ptx_vector.size() > 1)
         {
           prompt << boost::format(tr("Your transaction needs to be split into %llu transactions.  "
-            "This will result in a transaction fee being applied to each transaction, for a total fee of %s")) %
+            "This will result in a transaction fee being applied to each transaction, for a total fee of %s SAL1")) %
             ((unsigned long long)ptx_vector.size()) % print_money(total_fee);
         }
         else
@@ -7512,9 +7559,9 @@ bool simple_wallet::transfer_main(
         }
         if (m_wallet->confirm_non_default_ring_size() && !default_ring_size)
         {
-          prompt << tr("WARNING: this is a non default ring size, which may harm your privacy. Default is recommended.");
+          prompt << tr("\nWARNING: this is a non default ring size, which may harm your privacy. Default is recommended.");
         }
-        prompt << ENDL << tr("Is this okay?");
+        prompt << ENDL << tr("\nIs this okay?");
         
         std::string accepted = input_line(prompt.str(), true);
         if (std::cin.eof())
@@ -7631,16 +7678,45 @@ bool simple_wallet::transfer(const std::vector<std::string> &args_)
   }
   
   // Get the source asset type
-  std::string source_asset = "SAL";
-  if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
-    // Default to "SAL1" post-HF
-    source_asset = "SAL1";
+  std::string source_asset = "";
+  if (local_args.size() < 3) {
+    source_asset = "SAL";
+    if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+      // Default to "SAL1" post-HF
+      source_asset = "SAL1";
+    }
   }
-  std::string strLastArg = local_args.back();
-  std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
-  if (strLastArg == "SAL" or strLastArg == "SAL1") {
-    source_asset = strLastArg;
-    local_args.pop_back();  
+
+  if (source_asset.empty()) {
+    std::string strLastArg = local_args.back();
+    if (strLastArg == "SAL" or strLastArg == "SAL1") {
+      source_asset = strLastArg;
+    } else {
+      if (strLastArg.size() < 3)
+      {
+        fail_msg_writer() << tr("Unknown asset type: ") << strLastArg;
+        return true;
+      }
+      std::transform(strLastArg.begin() + 3, strLastArg.end(), strLastArg.begin() + 3, ::toupper);
+      std::vector<std::string> asset_types = m_wallet->list_asset_types();
+
+      // check if the last argument is a known asset type
+      bool found = false;
+      for (const auto& asset : asset_types) {
+        if (strLastArg == asset) {
+          source_asset = strLastArg;
+          found = true;
+          break;
+        }
+      }
+    
+      if (!found) {
+        fail_msg_writer() << tr("Unknown asset type: ") << strLastArg;
+        return true;
+      }
+    }
+
+    local_args.pop_back();
   }
   
   transfer_main(Transfer, source_asset, source_asset, local_args, false);
@@ -7670,12 +7746,45 @@ bool simple_wallet::locked_transfer(const std::vector<std::string> &args_)
   }
   
   // Get the source asset type
-  std::string source_asset = "SAL";
-  std::string strLastArg = local_args.back();
-  std::transform(strLastArg.begin(), strLastArg.end(), strLastArg.begin(), ::toupper);
-  if (strLastArg == "SAL" or strLastArg == "SAL1") {
-    source_asset = strLastArg;
-    local_args.pop_back();  
+  std::string source_asset = "";
+  if (local_args.size() < 3) {
+    source_asset = "SAL";
+    if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+      // Default to "SAL1" post-HF
+      source_asset = "SAL1";
+    }
+  }
+
+  if (source_asset.empty()) {
+    std::string strLastArg = local_args.back();
+    if (strLastArg == "SAL" or strLastArg == "SAL1") {
+      source_asset = strLastArg;
+    } else {
+      if (strLastArg.size() < 3)
+      {
+        fail_msg_writer() << tr("Unknown asset type: ") << strLastArg;
+        return true;
+      }
+      std::transform(strLastArg.begin() + 3, strLastArg.end(), strLastArg.begin() + 3, ::toupper);
+      std::vector<std::string> asset_types = m_wallet->list_asset_types();
+
+      // check if the last argument is a known asset type
+      bool found = false;
+      for (const auto& asset : asset_types) {
+        if (strLastArg == asset) {
+          source_asset = strLastArg;
+          found = true;
+          break;
+        }
+      }
+    
+      if (!found) {
+        fail_msg_writer() << tr("Unknown asset type: ") << strLastArg;
+        return true;
+      }
+    }
+
+    local_args.pop_back();
   }
   
   transfer_main(TransferLocked, source_asset, source_asset, local_args, false);
@@ -7937,8 +8046,6 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
     }
   }
 
-  std::string asset_type = (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) ? "SAL1" : "SAL";
-  
   std::vector<uint8_t> extra;
   bool payment_id_seen = false;
   if (local_args.size() >= 2)
@@ -7962,6 +8069,16 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
       local_args.pop_back();
   }
 
+  std::string asset_type = (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) ? "SAL1" : "SAL";
+  if (local_args.size() >= 2)
+  {
+    std::string asset_type_check = local_args.back();
+    if (cryptonote::is_valid_asset_type(asset_type_check)) {
+      asset_type = asset_type_check;
+      local_args.pop_back();
+    }
+  }
+  
   cryptonote::address_parse_info info;
   if (!cryptonote::get_account_address_from_str_or_url(info, m_wallet->nettype(), local_args[0], oa_prompter))
   {
@@ -8014,18 +8131,19 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
     {
       total_fee += ptx_vector[n].fee;
       for (auto i: ptx_vector[n].selected_transfers)
-        total_sent += m_wallet->get_transfer_details(i).amount();
+        if (ptx_vector[n].tx.type == cryptonote::transaction_type::TRANSFER)
+          total_sent += m_wallet->get_transfer_details(i).amount();
     }
 
     std::ostringstream prompt;
     for (size_t n = 0; n < ptx_vector.size(); ++n)
     {
-      prompt << tr("\nTransaction ") << (n + 1) << "/" << ptx_vector.size() << ":\n";
+      prompt << tr("\nTransaction ") << (n + 1) << "/" << ptx_vector.size() << (ptx_vector[n].tx.type == cryptonote::transaction_type::ROLLUP ? tr(" (rollup):\n") : tr(":\n"));
       subaddr_indices.clear();
       for (const std::size_t selected_transfer : ptx_vector.at(n).selected_transfers)
         subaddr_indices.insert(m_wallet->get_transfer_details(selected_transfer).m_subaddr_index.minor);
       for (uint32_t i : subaddr_indices)
-        prompt << boost::format(tr("Spending from address index %d\n")) % i;
+        prompt << boost::format(tr("Spending %s from address index %d\n")) % ptx_vector.at(n).tx.source_asset_type % i;
       if (subaddr_indices.size() > 1)
         prompt << tr("WARNING: Outputs of multiple addresses are being used together, which might potentially compromise your privacy.\n");
     }
@@ -8034,8 +8152,9 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
     //   return true;
 
     if (ptx_vector.size() > 1) {
-      prompt << boost::format(tr("Sweeping %s in %llu transactions for a total fee of %s.  Is this okay?")) %
+      prompt << boost::format(tr("Sweeping %s %s in %llu transactions for a total fee of %s SAL1.  Is this okay?")) %
         print_money(total_sent) %
+        asset_type %
         ((unsigned long long)ptx_vector.size()) %
         print_money(total_fee);
     }
@@ -8473,7 +8592,12 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
     }
 
     // Verify that the correct asset type is being returned
-    if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+    if (m_wallet->get_current_hard_fork() >= HF_VERSION_ENABLE_TOKENS) {
+      if (td.asset_type == "SAL") {
+        fail_msg_writer() << tr("SAL may not be returned for txid ") << args_[0];
+        return true;
+      }
+    } else if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
       if (td.asset_type != "SAL1") {
         fail_msg_writer() << tr("Only SAL1 may be returned for txid ") << args_[0];
         return true;
@@ -8501,7 +8625,7 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
       fail_msg_writer() << tr("No outputs found");
       return true;
     }
-    if (ptx_vector.size() > 1)
+    if (ptx_vector.size() > 2)
     {
       fail_msg_writer() << tr("Multiple transactions are created, which is not supposed to happen");
       return true;
@@ -8513,25 +8637,29 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
     }
 
     // give user total and fee, and prompt to confirm
-    uint64_t total_fee = ptx_vector[0].fee;
+    uint64_t total_fee = 0;
     uint64_t total_sent = 0;
     std::string asset_type;
-    for (auto idx: ptx_vector[0].selected_transfers) {
-      const tools::wallet2::transfer_details &td = m_wallet->get_transfer_details(idx);
-      uint64_t sent = td.amount();
-      if (total_sent + sent < total_sent) {
-        fail_msg_writer() << tr("amount overflow detected");
-        return true;
+    for (size_t n = 0; n < ptx_vector.size(); ++n) {
+      total_fee += ptx_vector[n].fee;
+      if (ptx_vector[n].tx.type == cryptonote::transaction_type::TRANSFER) {
+        for (auto idx: ptx_vector[n].selected_transfers) {
+          const tools::wallet2::transfer_details &td = m_wallet->get_transfer_details(idx);
+          uint64_t sent = td.amount();
+          if (total_sent + sent < total_sent) {
+            fail_msg_writer() << tr("amount overflow detected");
+            return true;
+          }
+          total_sent += sent;
+          asset_type = td.asset_type;
+        }
       }
-      total_sent += sent;
-      asset_type = td.asset_type;
     }
     std::ostringstream prompt;
     // if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
     //   return true;
-    prompt << boost::format(tr("Returning %s %s for a total fee of %s %s.  Is this okay?")) %
-      print_money(total_sent) % asset_type %
-      print_money(total_fee) % asset_type;
+    prompt << boost::format(tr("Returning %s %s for a total fee of %s SAL1.  Is this okay?")) %
+      print_money(total_sent) % asset_type % print_money(total_fee);
     std::string accepted = input_line(prompt.str(), true);
     if (std::cin.eof())
       return true;
@@ -8599,8 +8727,9 @@ bool simple_wallet::return_payment(const std::vector<std::string> &args_)
     }
     else
     {
-      m_wallet->commit_tx(ptx_vector[0]);
-      success_msg_writer(true) << tr("Money successfully sent, transaction: ") << get_transaction_hash(ptx_vector[0].tx);
+      commit_or_save(ptx_vector, m_do_not_relay);
+      //m_wallet->commit_tx(ptx_vector[0]);
+      //success_msg_writer(true) << tr("Money successfully sent, transaction: ") << get_transaction_hash(ptx_vector[0].tx);
     }
 
   }
@@ -8647,7 +8776,11 @@ bool simple_wallet::burn(const std::vector<std::string> &args_)
   asset_type = strLastArg;
   local_args.pop_back();
   
-  transfer_main(Burn, asset_type, "BURN", local_args, false);
+  if (m_wallet->get_current_hard_fork() >= HF_VERSION_ENABLE_TOKENS) {
+    transfer_main(Burn, asset_type, asset_type, local_args, false);
+  } else {
+    transfer_main(Burn, asset_type, "BURN", local_args, false);
+  }
   return true;  
 }
 //----------------------------------------------------------------------------------------------------
@@ -8770,6 +8903,261 @@ bool simple_wallet::audit(const std::vector<std::string> &args_)
   return true;
 }
 //----------------------------------------------------------------------------------------------------
+bool simple_wallet::create_token(const std::vector<std::string> &args_)
+{ 
+  // Disable until appropriate hard fork
+  if (m_wallet->get_current_hard_fork() < HF_VERSION_ENABLE_TOKENS) {
+    fail_msg_writer() << tr("create_token is not yet available");
+    return true;
+  }
+
+  CHECK_IF_BACKGROUND_SYNCING("cannot create tokens while background syncing");
+  if (!try_connect_to_daemon())
+    return true;
+
+  // Copy the arguments so we can modify the vector
+  std::vector<std::string> local_args = args_;
+  
+  std::set<uint32_t> subaddr_indices;
+  if (local_args.size() > 0 && local_args[0].substr(0, 6) == "index=")
+  {
+    if (local_args[0] == "index=all")
+    {
+      for (uint32_t i = 0; i < m_wallet->get_num_subaddresses(m_current_subaddress_account); ++i)
+        subaddr_indices.insert(i);
+    }
+    else if (!parse_subaddress_indices(local_args[0], subaddr_indices))
+    {
+      return true;
+    }
+    local_args.erase(local_args.begin());
+  }
+
+  // Check minimum required arguments: [index=<N1>[,<N2>,...]] <coin_symbol> <coin_supply> [name=<name>|metadata=<metadata>|file=<metadata_file>]
+  if (local_args.size() < 2)
+  {
+    PRINT_USAGE(USAGE_CREATE_TOKEN);
+    return true;
+  }
+
+  if (m_wallet->get_multisig_status().multisig_is_active)
+  {
+     fail_msg_writer() << tr("This is a multisig wallet, create_token is not currently supported");
+     return true;
+  }
+
+  // Validate token name
+  std::string token_ticker = local_args[0];
+  if (token_ticker.empty()) {
+    fail_msg_writer() << tr("Invalid ticker: Cannot be empty.");
+    return true;
+  }
+  local_args.erase(local_args.begin());
+  
+  uint64_t token_supply = 0;
+  if(!epee::string_tools::get_xtype_from_string(token_supply, local_args[0])) {
+    fail_msg_writer()<< tr("Token supply is invalid.");
+    return true;
+  }
+  local_args.erase(local_args.begin());
+
+  // Do we have name, or metadata, or a metadata file, provided?
+  std::string token_metadata_hex;
+  std::string mode, file, name, hash, size, url;
+  if (local_args.size()) {
+    uint64_t filesize = 0;
+    if (local_args[0].substr(0,5) == "file=") {
+      file = local_args[0].substr(5);
+      bool r = epee::file_io_utils::get_file_size(file, filesize);
+      if (r) {
+        // Load the file
+        if (!epee::file_io_utils::load_file_to_string(file, token_metadata_hex, filesize)) {
+          fail_msg_writer() << tr("Failed to load metadata file: ") << file;
+          return true;
+        }
+        mode = "metadata";
+        local_args.erase(local_args.begin());
+      } else {
+        fail_msg_writer() << tr("Failed to find metadata file: ") << file;
+        return true;
+      }
+    } else {
+      // Failed to load the file - must be either a name or a blob of hex on the command line
+      while (local_args.size()) {
+        if (local_args[0].substr(0,5) == "name=") {
+          mode = "name";
+          name = local_args[0].substr(5);
+        } else if (local_args[0].substr(0,5) == "hash=") {
+          mode = "hash";
+          hash = local_args[0].substr(5);
+          if (hash.size() != 64) {
+            fail_msg_writer() << tr("invalid hash parameter: ") << hash;
+            return true;
+          }
+        } else if (local_args[0].substr(0,5) == "size=") {
+          mode = "size";
+          size = local_args[0].substr(5);
+        } else if (local_args[0].substr(0,4) == "url=") {
+          mode = "url";
+          url = local_args[0].substr(4);    
+        } else if (local_args[0].substr(0,9) == "metadata=") {
+          mode = "metadata";
+          token_metadata_hex = local_args[0].substr(9);    
+        } else if (mode == "name") {
+          name.append(" ");
+          name.append(local_args[0]);
+        } else if (local_args[0].substr(0,5) == "file=") {
+          fail_msg_writer() << tr("'file' parameter cannot be used in conjunction is not valid when with other field parameters (name, size, hash, url).");
+          return true;
+        } else {
+          fail_msg_writer() << tr("unknown parameter: ") << local_args[0];
+          return true;
+        }
+        local_args.erase(local_args.begin());
+      }
+    }
+  }
+
+  if (mode != "metadata") {
+
+    // Fixup size if necessary
+    if (size == "") size = "0";
+    
+    // Build the hex metadata from the passed-in parameters
+    std::string json = (boost::format("{\"name\":\"%s\",\"size\":%s,\"hash\":\"%s\",\"url\":\"%s\"}") % name % size % hash % url).str();
+    token_metadata_hex = epee::string_tools::buff_to_hex_nodelimer(json);
+  }
+  
+  SCOPED_WALLET_UNLOCK_ON_BAD_PASSWORD(return false;);
+
+  try
+  {
+    // Call the wallet create_token() method
+    auto ptx_vector = m_wallet->create_token(token_ticker,
+                                             token_supply,
+                                             token_metadata_hex,
+                                             m_current_subaddress_account,
+                                             subaddr_indices
+                                             );
+    if (ptx_vector.empty())
+    {
+      fail_msg_writer() << tr("No outputs found");
+      return true;
+    }
+    if (ptx_vector.size() > 1)
+    {
+      fail_msg_writer() << tr("Multiple transactions are created, which is not supposed to happen");
+      return true;
+    }
+
+    // give user total and fee, and prompt to confirm
+    uint64_t total_fee = ptx_vector[0].fee + ptx_vector[0].tx.amount_burnt;
+    uint64_t total_sent = 0;
+    for (auto idx: ptx_vector[0].selected_transfers) {
+      const tools::wallet2::transfer_details &td = m_wallet->get_transfer_details(idx);
+      uint64_t sent = td.amount();
+      if (total_sent + sent < total_sent) {
+        fail_msg_writer() << tr("amount overflow detected");
+        return true;
+      }
+      total_sent += sent;
+    }
+    std::ostringstream prompt;
+    // if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
+    //   return true;
+    prompt << boost::format(tr("Creating a token '%s'.  Total fee of %s SAL1.  Is this okay?")) %
+      token_ticker % print_money(total_fee);
+    std::string accepted = input_line(prompt.str(), true);
+    if (std::cin.eof())
+      return true;
+    if (!command_line::is_yes(accepted))
+    {
+      fail_msg_writer() << tr("transaction cancelled.");
+      return true;
+    }
+
+    m_wallet->commit_tx(ptx_vector[0]);
+    success_msg_writer(true) << tr("Money successfully sent, transaction: ") << get_transaction_hash(ptx_vector[0].tx);
+  }
+  catch (const std::exception& e)
+  {
+    handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
+  }
+  catch (...)
+  {
+    LOG_ERROR("unknown error");
+    fail_msg_writer() << tr("unknown error");
+  }
+
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::get_tokens(const std::vector<std::string> &args_) {
+
+  // Sanity check the args
+  if (args_.size() > 1) {
+    PRINT_USAGE(USAGE_GET_TOKENS);
+    return true;
+  }
+
+  std::string filter = (args_.size() == 1) ? args_[0] : "";
+  
+  // get tokens
+  std::vector<std::string> tokens;
+  if(!m_wallet->get_tokens(filter, tokens)) {
+    fail_msg_writer() << "failed to get tokens. Make sure you are connected to a daemon.";
+    return false;
+  }
+  
+  message_writer(console_color_default, false) << boost::format(tr("TOKENS"));
+  for (auto token: tokens) {    
+    message_writer(console_color_default, false) << boost::format(tr("\t%8s")) % token;
+  }
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::token_info(const std::vector<std::string> &args_) {
+
+  // Sanity check the args
+  if (args_.size() != 1) {
+    PRINT_USAGE(USAGE_TOKEN_INFO);
+    return true;
+  }
+
+  std::string asset_type = args_[0];
+  std::transform(asset_type.begin()+3, asset_type.end(), asset_type.begin()+3, ::toupper);
+  
+  try {
+    cryptonote::token_metadata_t token = m_wallet->get_token_info(asset_type);
+    
+    message_writer(console_color_default, false) << tr("Token Information:");
+    message_writer(console_color_default, false) << tr(" Asset Type: ") << token.asset_type;
+    message_writer(console_color_default, false) << tr(" Version: ") << (uint32_t)token.version;
+    
+    if (token.token.type() == typeid(cryptonote::sal_token_t)) {
+      const cryptonote::sal_token_t& sal_token = boost::get<cryptonote::sal_token_t>(token.token);
+      message_writer(console_color_default, false) << tr(" Token Type: ") << "SAL";
+      message_writer(console_color_default, false) << tr(" Supply: ") << sal_token.supply;
+      message_writer(console_color_default, false) << tr(" Name: ") << sal_token.name;
+      message_writer(console_color_default, false) << tr(" URL: ") << sal_token.url;
+      message_writer(console_color_default, false) << tr(" Size: ") << sal_token.size;
+      message_writer(console_color_default, false) << tr(" Hash: ") << epee::string_tools::pod_to_hex(sal_token.signature);
+    } else if (token.token.type() == typeid(cryptonote::erc_token_t)) {
+      const cryptonote::erc_token_t& erc_token = boost::get<cryptonote::erc_token_t>(token.token);
+      message_writer(console_color_default, false) << tr(" Token Type: ") << "ERC20";
+      message_writer(console_color_default, false) << tr(" Ticker: ") << erc_token.ticker;
+      message_writer(console_color_default, false) << tr(" Contract Address: ") << erc_token.contract_address;
+      message_writer(console_color_default, false) << tr(" Lockbox Address: ") << erc_token.lockbox_address;
+      message_writer(console_color_default, false) << tr(" ERC20 Asset ID: ") << erc_token.erc20_asset_id;
+    }
+  } catch (const std::exception& e) {
+    fail_msg_writer() << tr("Failed to get token info: ") << e.what();
+    return false;
+  }
+  
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
 bool simple_wallet::stake(const std::vector<std::string> &args_)
 {
   // TODO: add locked versions
@@ -8784,7 +9172,7 @@ bool simple_wallet::stake(const std::vector<std::string> &args_)
      fail_msg_writer() << tr("This is a multisig wallet, staking is not currently supported");
      return true;
   }
-  
+
   std::vector<std::string> local_args;
   carrot::AddressDeriveType derive_type;
   if (m_wallet->use_fork_rules(HF_VERSION_CARROT, 0)) {
@@ -8992,6 +9380,7 @@ bool simple_wallet::donate(const std::vector<std::string> &args_)
   }
   local_args.push_back(address_str);
   local_args.push_back(amount_str);
+  // todo: Update donation message asset_type from sal to SAL1 if we're on a hard fork that has the SAL1 donation
   if (!payment_id_str.empty())
     local_args.push_back(payment_id_str);
   if (m_wallet->nettype() == cryptonote::MAINNET)
@@ -10144,7 +10533,7 @@ bool simple_wallet::show_transfers(const std::vector<std::string> &args_)
       }
     }
 
-    auto formatter = boost::format("%8.8llu %6.6s %8.8s %25.25s %20.20s %4.4s %s %s %14.14s %s %s - %s");
+    auto formatter = boost::format("%8.8llu %6.6s %8.8s %25.25s %20.20s %7.7s %s %s %14.14s %s %s - %s");
 
     message_writer(color, false) << formatter
       % transfer.block

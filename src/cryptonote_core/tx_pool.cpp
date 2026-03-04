@@ -47,6 +47,7 @@
 #include "common/perf_timer.h"
 #include "crypto/hash.h"
 #include "crypto/duration.h"
+#include "common/debugging.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "txpool"
@@ -266,7 +267,14 @@ namespace cryptonote
       tvc.m_verifivation_failed = true;
       return false;
     }
-    
+
+    // Check the TX asset types
+    if (!m_blockchain.check_tx_asset_types(tx, tvc)) {
+      LOG_PRINT_L1("Transaction with id= "<< id << " has invalid asset type(s)");
+      tvc.m_verifivation_failed = true;
+      return false;
+    }
+
     // assume failure during verification steps until success is certain
     tvc.m_verifivation_failed = true;
 
@@ -1505,6 +1513,10 @@ namespace cryptonote
       return false;
     }
 
+    // Check that `transfer token` TXs have been paid for before accepting them into a block template
+    if (!m_blockchain.is_tx_paid_for(lazy_tx()))
+        return false;
+
     //transaction is ok.
     return true;
   }
@@ -1614,7 +1626,7 @@ namespace cryptonote
   //---------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------
   //TODO: investigate whether boolean return is appropriate
-  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version)
+  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, std::vector<std::pair<protocol_tx_data_t, token_metadata_t>> &create_token_entries, uint8_t version)
   {
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
@@ -1630,7 +1642,6 @@ namespace cryptonote
       return false;
     }
 
-
     size_t max_total_weight_pre_v5 = (130 * median_weight) / 100 - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
     size_t max_total_weight_v5 = 2 * median_weight - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
     size_t max_total_weight = version >= 5 ? max_total_weight_v5 : max_total_weight_pre_v5;
@@ -1640,6 +1651,9 @@ namespace cryptonote
 
     LockedTXN lock(m_blockchain.get_db());
 
+    // Store list of tokens being created
+    std::set<std::string> tokens;
+    
     auto sorted_it = m_txs_by_fee_and_receive_time.begin();
     for (; sorted_it != m_txs_by_fee_and_receive_time.end(); ++sorted_it)
     {
@@ -1758,6 +1772,39 @@ namespace cryptonote
       {
         LOG_PRINT_L2("  is not a Carrot transaction - cannot be mined");
         continue;
+      }
+
+      // check for ROLLUP TXs
+      if (tx.type == cryptonote::transaction_type::ROLLUP)
+      {
+        if (version < HF_VERSION_ENABLE_TOKENS) {
+          LOG_PRINT_L2("  is a ROLLUP transaction before they are permitted - cannot be mined");
+          continue;
+        }
+      }
+      
+      // check and include create token entries
+      if (tx.type == transaction_type::CREATE_TOKEN)
+      {
+        if (version < HF_VERSION_ENABLE_TOKENS) {
+          LOG_PRINT_L2("  is a CREATE_TOKEN transaction before they are permitted - cannot be mined");
+          continue;
+        }
+
+        std::string asset_type = "sal" + tx.token_metadata.asset_type;
+        if (!cryptonote::is_valid_asset_type(asset_type)) {
+          LOG_PRINT_L2("  is a CREATE_TOKEN transaction with an invalid asset_type - cannot be mined");
+          continue;
+        }
+
+        // Check to see if token is already being created
+        if (tokens.find(tx.token_metadata.asset_type) != tokens.end()) {
+          LOG_PRINT_L2("  is a CREATE_TOKEN transaction with an asset_type already in the block template - cannot be mined");
+          continue;
+        }
+
+        tokens.insert(tx.token_metadata.asset_type);
+        create_token_entries.push_back(std::make_pair(tx.protocol_tx_data, tx.token_metadata));
       }
 
       bl.tx_hashes.push_back(sorted_it->second);

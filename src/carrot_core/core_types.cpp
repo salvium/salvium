@@ -122,6 +122,11 @@ bool operator==(const view_tag_t &a, const view_tag_t &b)
     return memcmp(&a, &b, sizeof(view_tag_t)) == 0;
 }
 //-------------------------------------------------------------------------------------------------------------------
+bool operator==(const rollup_binding_tag_t &a, const rollup_binding_tag_t &b)
+{
+    return memcmp(&a, &b, sizeof(rollup_binding_tag_t)) == 0;
+}
+//-------------------------------------------------------------------------------------------------------------------
 janus_anchor_t gen_janus_anchor()
 {
     return crypto::rand<janus_anchor_t>();
