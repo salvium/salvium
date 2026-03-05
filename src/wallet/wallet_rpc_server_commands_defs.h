@@ -2943,8 +2943,8 @@ namespace wallet_rpc
   {
     struct request_t
     {
-      std::string coin_symbol;
-      uint64_t coin_supply;
+      std::string ticker;
+      uint64_t supply;
       uint32_t account_index;
       std::set<uint32_t> subaddr_indices;
       std::string name;
@@ -2959,15 +2959,15 @@ namespace wallet_rpc
       bool get_tx_metadata;
 
       BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(coin_symbol)
-        KV_SERIALIZE(coin_supply)
+        KV_SERIALIZE(ticker)
+        KV_SERIALIZE(supply)
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(subaddr_indices)
-        KV_SERIALIZE(name)
-        KV_SERIALIZE(url)
-        KV_SERIALIZE(hash)
-        KV_SERIALIZE(size)
-        KV_SERIALIZE(token_metadata_hex)
+        KV_SERIALIZE_OPT(name, (std::string)"")
+        KV_SERIALIZE_OPT(url, (std::string)"")
+        KV_SERIALIZE_OPT(hash, (std::string)"")
+        KV_SERIALIZE_OPT(size, (uint64_t)0)
+        KV_SERIALIZE_OPT(token_metadata_hex, (std::string)"")
         KV_SERIALIZE_OPT(get_tx_keys, false)
         KV_SERIALIZE_OPT(do_not_relay, false)
         KV_SERIALIZE_OPT(get_tx_hex, false)

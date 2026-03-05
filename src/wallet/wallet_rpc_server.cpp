@@ -1301,13 +1301,13 @@ namespace tools
       return false;
     }
 
-    if (req.coin_symbol.empty()) {
+    if (req.ticker.empty()) {
       er.code = WALLET_RPC_ERROR_CODE_DENIED;
-      er.message = "Empty asset type is not allowed.";
+      er.message = "Empty ticker is not allowed.";
       return false;
     }
 
-    std::string asset_type = req.coin_symbol;
+    std::string asset_type = req.ticker;
     std::transform(asset_type.begin(), asset_type.end(), asset_type.begin(), ::toupper);
     if (asset_type.length() != 4) {
       er.code = WALLET_RPC_ERROR_CODE_DENIED;
@@ -1352,20 +1352,12 @@ namespace tools
     }
 
     // Verify supply amount is acceptable
-    if (req.coin_supply < 1 || req.coin_supply > MONEY_SUPPLY)
+    if (req.supply < 1 || req.supply > MONEY_SUPPLY)
     {
       er.code = WALLET_RPC_ERROR_CODE_DENIED;
       er.message = "Supply amount must be between 1 and MONEY_SUPPLY.";
       return false;
     }
-
-    // // Verify decimals amount is acceptable
-    // if (req.coin_decimals > 8)
-    // {
-    //   er.code = WALLET_RPC_ERROR_CODE_DENIED;
-    //   er.message = "Invalid decimals amount. Maximum allowed is 8.";
-    //   return false;
-    // }
 
     // convert req.hash to hash
     crypto::hash hash_signature{};
@@ -1386,7 +1378,7 @@ namespace tools
       token_metadata_hex = req.token_metadata_hex;
     }
 
-    //cryptonote::sal_token_t sal_token{1, req.coin_supply, req.size, req.name, req.url, hash_signature};
+    //cryptonote::sal_token_t sal_token{1, req.supply, req.size, req.name, req.url, hash_signature};
     //cryptonote::token_metadata_t token{1, asset_type, sal_token};
 
     try
@@ -1394,7 +1386,7 @@ namespace tools
       // Call the wallet create_token() method
       auto ptx_vector = m_wallet->create_token(
         asset_type,
-        req.coin_supply,
+        req.supply,
         token_metadata_hex,
         req.account_index,
         req.subaddr_indices

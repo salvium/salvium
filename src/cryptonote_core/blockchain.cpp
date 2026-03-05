@@ -1725,7 +1725,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
         }
 
         // Verify the correct metadata type is provided
-        CHECK_AND_ASSERT_MES(ct_data.second.token.type() == typeid(cryptonote::sal_token_t), false, "Incorred CREATE_TOKEN metadata type detected in protocol_tx");
+        CHECK_AND_ASSERT_MES(ct_data.second.token.type() == typeid(cryptonote::sal_token_t), false, "Incorrect CREATE_TOKEN metadata type detected in protocol_tx");
         cryptonote::sal_token_t token = boost::get<cryptonote::sal_token_t>(ct_data.second.token);
         
         // Verify the output amount
@@ -2066,7 +2066,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   // create the protocol transaction entries for CREATE_TOKEN TXs
   if (b.major_version >= HF_VERSION_ENABLE_TOKENS) {
     for (const auto& ct_data_entry: create_token_entries) {
-      CHECK_AND_ASSERT_MES(ct_data_entry.second.token.type() == typeid(cryptonote::sal_token_t), false, "Incorred CREATE_TOKEN metadata type detected in protocol_tx");
+      CHECK_AND_ASSERT_MES(ct_data_entry.second.token.type() == typeid(cryptonote::sal_token_t), false, "Incorrect CREATE_TOKEN metadata type detected in protocol_tx");
       cryptonote::sal_token_t token = boost::get<cryptonote::sal_token_t>(ct_data_entry.second.token);
       cryptonote::protocol_data_entry entry;
       uint64_t hi, lo;
@@ -4097,6 +4097,8 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
     CHECK_AND_ASSERT_MES(tx.token_metadata.token.type() == typeid(cryptonote::sal_token_t), false, "Invalid CREATE_TOKEN metadata type");
     cryptonote::sal_token_t token = boost::get<cryptonote::sal_token_t>(tx.token_metadata.token);
     CHECK_AND_ASSERT_MES(token.supply > 0 && token.supply <= (MONEY_SUPPLY / COIN), false, "Invalid SUPPLY value for CREATE_TOKEN");
+    // Validate the amount burnt matches the token creation price
+    CHECK_AND_ASSERT_MES(tx.amount_burnt == cryptonote::get_token_creation_price(tx.token_metadata.asset_type), false, "Invalid fee paid for CREATE_TOKEN");
   }
   
   // Check for invalid TX types
