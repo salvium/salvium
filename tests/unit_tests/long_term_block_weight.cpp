@@ -57,11 +57,12 @@ public:
                         , const cryptonote::difficulty_type& cumulative_difficulty
                         , const uint64_t& coins_generated
                         , uint64_t num_rct_outs
-                        , oracle::asset_type_counts& cum_rct_by_asset_type
+                        , oracle::asset_type_counts_v2& cum_rct_by_asset_type
                         , const crypto::hash& blk_hash
                         , uint64_t slippage_total
                         , uint64_t yield_total
                         , uint64_t audit_total
+                        , uint64_t token_total
                         , const cryptonote::network_type nettype
                         , cryptonote::yield_block_info& ybi
                         , cryptonote::audit_block_info& abi

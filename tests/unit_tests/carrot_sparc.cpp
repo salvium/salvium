@@ -109,15 +109,16 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_origin_
     crypto::secret_key k_return;
     alice.s_view_balance_dev.make_internal_return_privkey(input_context, enote_proposal_out.enote.onetime_address, k_return);
 
-    // compute K_return = k_return * G
-    crypto::public_key return_pub;
-    crypto::secret_key_to_public_key(k_return, return_pub);
-    encrypted_return_pubkey_t K_return;
-    static_assert(sizeof(K_return.bytes) == sizeof(return_pub.data), "Size mismatch");
-    memcpy(K_return.bytes, return_pub.data, sizeof(encrypted_return_pubkey_t));
+    // compute k_idx
+    crypto::secret_key k_idx;
+    //make_sparc_return_index(input_context, enote_proposal_out.enote.onetime_address, 0, k_idx);
+    
+    // compute SPARC K_return = k_return * G
+    crypto::public_key K_return;
+    secret_key_to_public_key(k_return, K_return);
 
-    // compute K_o = K_change + K_return
-    crypto::public_key K_o = rct::rct2pk(rct::addKeys(rct::pk2rct(return_pub), rct::pk2rct(enote_proposal_change.enote.onetime_address)));
+    // compute K_r = K_change + K_return
+    crypto::public_key K_r = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(enote_proposal_change.enote.onetime_address)));
 
     // calculate the shared secret
     mx25519_pubkey shared_secret_unctx;
@@ -133,16 +134,21 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_origin_
     make_sparc_return_pubkey_encryption_mask(shared_secret_unctx.data, input_context, enote_proposal_out.enote.onetime_address, m_return);
 
     // compute return_enc
-    enote_proposal_out.enote.return_enc = K_return ^ m_return;
+    encrypted_return_pubkey_t return_pub;
+    static_assert(sizeof(K_return.data) == sizeof(return_pub.bytes), "Size mismatch");
+    memcpy(return_pub.bytes, K_return.data, sizeof(encrypted_return_pubkey_t));
+    enote_proposal_out.enote.return_enc = return_pub ^ m_return;
 
     // Return the enotes and the public return key
     std::vector<RCTOutputEnoteProposal> tx_enotes{enote_proposal_change, enote_proposal_out};
-    return {tx_enotes, K_o};
+    return {tx_enotes, K_r};
 }
 //----------------------------------------------------------------------------------------------------------------------
-std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_return_tx(
+std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key, rct::xmr_amount> make_return_tx(
     carrot::carrot_and_legacy_account &bob,
-    std::vector<RCTOutputEnoteProposal> &origin_tx_outputs
+    std::vector<RCTOutputEnoteProposal> &origin_tx_outputs,
+    const uint64_t idx,
+    const uint64_t amount
 ) {
     // [0] enote is change, [1] enote bob received
     const auto change_output = origin_tx_outputs[0].enote;
@@ -199,23 +205,43 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_return_
     );
 
     // Create a TX fee that needs to be deducted from the returned amount
-    const rct::xmr_amount txnFee = recovered_amount >> 4;
-    const rct::xmr_amount amount_return = recovered_amount - txnFee;
+    const rct::xmr_amount txnFee = amount >> 4;
+    const rct::xmr_amount amount_return = amount - txnFee;
 
     // compute m_return
     encrypted_return_pubkey_t m_return;
     make_sparc_return_pubkey_encryption_mask(origin_tx_shared_secret_unctx.data, input_context, received_output.onetime_address, m_return);
 
     // compute K_return from return_enc
-    encrypted_return_pubkey_t K_return;
-    K_return = received_output.return_enc ^ m_return;
-    crypto::public_key return_pub;
-    static_assert(sizeof(K_return.bytes) == sizeof(return_pub.data), "Size mismatch");
-    memcpy(return_pub.data, K_return.bytes, sizeof(encrypted_return_pubkey_t));
-
+    encrypted_return_pubkey_t K_return_encrypted;
+    K_return_encrypted = received_output.return_enc ^ m_return;
+    crypto::public_key K_return_base;
+    static_assert(sizeof(K_return_encrypted.bytes) == sizeof(K_return_base.data), "Size mismatch");
+    memcpy(K_return_base.data, K_return_encrypted.bytes, sizeof(encrypted_return_pubkey_t));
+    /*
+    // k_idx
+    crypto::secret_key k_idx;
+    make_sparc_return_index(input_context, received_output.onetime_address, idx, k_idx);
+    
+    // k_idx_origin for idx=0
+    crypto::secret_key k_idx_origin;
+    make_sparc_return_index(input_context, received_output.onetime_address, 0, k_idx_origin);
+    
+    // k_idx_diff = k_idx - k_idx_origin
+    crypto::secret_key k_idx_diff;
+    sc_sub(to_bytes(k_idx_diff), to_bytes(k_idx), to_bytes(k_idx_origin));
+    
+    // K_return: K_return = K_return_base + k_idx_diff * T
+    rct::key K_return_adjusted = rct::addKeys(
+        rct::pk2rct(K_return_base),
+        rct::scalarmultKey(rct::pk2rct(crypto::get_T()), rct::sk2rct(k_idx_diff))
+    );
+    crypto::public_key return_pub = rct::rct2pk(K_return_adjusted);
+    */
+    
     // Make a destination address for the return
     CarrotDestinationV1 return_destination;
-    make_carrot_main_address_v1(change_output.onetime_address, return_pub, return_destination);
+    make_carrot_main_address_v1(change_output.onetime_address, K_return_base, return_destination);
     
     // Create the return proposal, using the return address and the amount
     const CarrotPaymentProposalV1 proposal_return = CarrotPaymentProposalV1{
@@ -226,15 +252,17 @@ std::tuple<std::vector<RCTOutputEnoteProposal>, crypto::public_key> make_return_
 
     RCTOutputEnoteProposal enote_proposal_return;
     encrypted_payment_id_t encrypted_payment_id_return;
-    get_output_proposal_return_v1(
+    get_output_proposal_paymentchannel_v1(
         proposal_return,
         tx_return_first_key_image,
         nullptr, // s_view_balance_dev
+        received_output.onetime_address,
+        idx,
         enote_proposal_return,
         encrypted_payment_id_return
     );
     std::vector<RCTOutputEnoteProposal> tx_enotes{enote_proposal_return};
-    return {tx_enotes, enote_proposal_return.enote.onetime_address};
+    return {tx_enotes, enote_proposal_return.enote.onetime_address, txnFee};
 }
 //----------------------------------------------------------------------------------------------------------------------
 TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
@@ -242,127 +270,157 @@ TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
     // these will generate a new format carrot address.
     carrot::carrot_and_legacy_account alice, bob;
     alice.generate();
+    alice.generate_subaddress_map({1,1});
     bob.generate();
+    bob.generate_subaddress_map({1,1});
 
     // make origin tx Alice -> Bob
     CarrotDestinationV1 bob_address = bob.cryptonote_address();
     auto [origin_tx_outputs, origin_return_pubkey] = make_origin_tx(alice, bob_address);
 
-    // make return tx Bob -> Alice
-    auto [return_tx_outputs, return_pubkey] = make_return_tx(bob, origin_tx_outputs);
-    const auto return_output = return_tx_outputs[0].enote;
+    std::vector<rct::xmr_amount> amounts;
+    rct::xmr_amount expected_total = 0;
+    for (size_t i=0; i<100; ++i) {
+      amounts.push_back(rct::randXmrAmount(TREASURY_SAL1_MINT_AMOUNT));
+      expected_total += amounts.back();
+    }
 
-    // 1. Alice checks the "hashmap" for a known return_address
-    ASSERT_EQ(origin_return_pubkey, return_pubkey);
+    rct::xmr_amount received_total = 0, fee_total = 0;
+    for (size_t idx=0; idx<amounts.size(); ++idx) {
+      const rct::xmr_amount amount = amounts.at(idx);
+      
+      // make return tx Bob -> Alice
+      auto [return_tx_outputs, return_pubkey, txnFee] = make_return_tx(bob, origin_tx_outputs, idx, amount);
+      const auto return_output = return_tx_outputs[0].enote;
 
-    // Alice should now have access to the origin TX, including the "change" and "output" enotes
-    const auto change_output = origin_tx_outputs[0].enote;
-    const auto sent_output = origin_tx_outputs[1].enote;
+      // 1. Alice checks the "hashmap" for a known return_address
+      //ASSERT_EQ(origin_return_pubkey, return_pubkey);
 
-    // 2. compute k_return'
-    const input_context_t input_context = make_carrot_input_context(sent_output.tx_first_key_image);
-    crypto::secret_key k_return;
-    alice.s_view_balance_dev.make_internal_return_privkey(input_context, sent_output.onetime_address, k_return);
+      // Alice should now have access to the origin TX, including the "change" and "output" enotes
+      const auto change_output = origin_tx_outputs[0].enote;
+      const auto sent_output = origin_tx_outputs[1].enote;
+      
+      // 2. compute k_return'
+      const input_context_t input_context = make_carrot_input_context(sent_output.tx_first_key_image);
+      crypto::secret_key k_return;
+      alice.s_view_balance_dev.make_internal_return_privkey(input_context, sent_output.onetime_address, k_return);
+      
+      // 6. recover the shared secret(s_sr) of return tx
+      // s_sr = k_return * D_e 
+      const input_context_t input_context_return = make_carrot_input_context(return_output.tx_first_key_image);
+      mx25519_pubkey shared_secret_return_unctx;
+      crypto::hash shared_secret_return;
+      make_carrot_uncontextualized_shared_key_receiver(k_return, return_output.enote_ephemeral_pubkey, shared_secret_return_unctx);
+
+      // 3. compute k_idx'
+      crypto::secret_key k_idx;
+      make_sparc_return_index(shared_secret_return_unctx.data, input_context_return, sent_output.onetime_address, idx, k_idx);
+      
+      // 4. compute SPARC K_return' = k_return' * G + k_idx' * T
+      rct::key K_return;
+      rct::addKeys2(K_return,
+                    rct::sk2rct(k_return),
+                    rct::sk2rct(k_idx),
+                    rct::pk2rct(crypto::get_T()));
+
+      // 5. compute K_r' = K_change + K_return'
+      crypto::public_key K_r_verify = rct::rct2pk(rct::addKeys(K_return, rct::pk2rct(change_output.onetime_address)));
+      ASSERT_EQ(K_r_verify, return_pubkey);
+
+      // 7. recompute the shared secret : s^ctx_sr = H_32(s_sr, D_e, input_context)
+      make_carrot_sender_receiver_secret(shared_secret_return_unctx.data,
+                                         return_output.enote_ephemeral_pubkey,
+                                         input_context_return,
+                                         shared_secret_return);
+
+      // 8. recompute the view_tag and make sure it is correct
+      EXPECT_TRUE(test_carrot_view_tag(shared_secret_return_unctx.data, input_context_return, K_r_verify, return_output.view_tag));
     
-    // 3. compute K_return' = k_return * G
-    crypto::public_key K_return;
-    crypto::secret_key_to_public_key(k_return, K_return);
+      // 9. compute the amount encryption mask and recover the amount
+      rct::xmr_amount recovered_amount_return = decrypt_carrot_amount(return_output.amount_enc, shared_secret_return, return_output.onetime_address);
 
-    // 4. compute K_o' = K_return' + K_change
-    crypto::public_key K_o_verify = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(change_output.onetime_address)));
-    ASSERT_EQ(K_o_verify, return_pubkey);
+      // 10. compute k_a' = H_n(s^ctx_sr, a', K^j_s', enote_type')
+      crypto::secret_key recovered_amount_blinding_factor_return;
+      make_carrot_amount_blinding_factor(shared_secret_return,
+                                         recovered_amount_return,
+                                         change_output.onetime_address,
+                                         CarrotEnoteType::PAYMENT,
+                                         recovered_amount_blinding_factor_return);
 
-    // 5. recover the shared secret(s_sr) of return tx
-    // s_sr = k_return * D_e
-    const input_context_t input_context_return = make_carrot_input_context(return_output.tx_first_key_image);
-    mx25519_pubkey shared_secret_return_unctx;
-    crypto::hash shared_secret_return;
-    make_carrot_uncontextualized_shared_key_receiver(k_return, return_output.enote_ephemeral_pubkey, shared_secret_return_unctx);
-    // s^ctx_sr = H_32(s_sr, D_e, input_context)
-    make_carrot_sender_receiver_secret(shared_secret_return_unctx.data,
-                                       return_output.enote_ephemeral_pubkey,
-                                       input_context_return,
-                                       shared_secret_return);
+      // 11. compute C_a' = k_a' G + a' H
+      rct::key recovered_amount_commitment_return = rct::commit(recovered_amount_return, rct::sk2rct(recovered_amount_blinding_factor_return));
 
-    // 6. verify the view_tag
-    EXPECT_TRUE(test_carrot_view_tag(shared_secret_return_unctx.data, input_context_return, return_output.onetime_address, return_output.view_tag));
-    
-    // 8. compute the amount encryption mask and recover the amount
-    rct::xmr_amount recovered_amount_return = decrypt_carrot_amount(return_output.amount_enc, shared_secret_return, return_output.onetime_address);
+      // 12. verify the commitment
+      ASSERT_EQ(return_output.amount_commitment, recovered_amount_commitment_return);
 
-    // 10. compute k_a' = H_n(s^ctx_sr, a', K^j_s', enote_type')
-    crypto::secret_key recovered_amount_blinding_factor_return;
-    make_carrot_amount_blinding_factor(shared_secret_return,
-                                       recovered_amount_return,
-                                       change_output.onetime_address,
-                                       CarrotEnoteType::PAYMENT,
-                                       recovered_amount_blinding_factor_return);
-
-    // 11. compute C_a' = k_a' G + a' H
-    rct::key recovered_amount_commitment_return = rct::commit(recovered_amount_return, rct::sk2rct(recovered_amount_blinding_factor_return));
-
-    // 12. verify the commitment
-    ASSERT_EQ(return_output.amount_commitment, recovered_amount_commitment_return);
-
-    // 13. compute m_pid and pid_enc - not implemented/tested since not supported in SPARC
-    /*
-    if (return_output.encrypted_payment_id)
+      // 13. compute m_pid and pid_enc - not implemented/tested since not supported in SPARC
+      /*
+        if (return_output.encrypted_payment_id)
         nominal_payment_id_out = decrypt_legacy_payment_id(*encrypted_payment_id, s_sender_receiver, onetime_address);
-    else
+        else
         nominal_payment_id_out = null_payment_id;
-    encrypted_payment_id_out =encrypt_legacy_payment_id(proposal.destination.payment_id, s_sender_receiver, output_enote_out.enote.onetime_address);
-    */
+        encrypted_payment_id_out =encrypt_legacy_payment_id(proposal.destination.payment_id, s_sender_receiver, output_enote_out.enote.onetime_address);
+      */
 
-    // 15. compute m_anchor and anchor'
-    janus_anchor_t recovered_anchor_return = decrypt_carrot_anchor(return_output.anchor_enc, shared_secret_return, return_output.onetime_address);
+      // 15. compute m_anchor and anchor'
+      janus_anchor_t recovered_anchor_return = decrypt_carrot_anchor(return_output.anchor_enc, shared_secret_return, return_output.onetime_address);
 
-    // 17. compute d_e'
-    crypto::secret_key recovered_ephemeral_privkey_return;
-    make_carrot_enote_ephemeral_privkey(recovered_anchor_return, input_context_return, change_output.onetime_address, null_payment_id, recovered_ephemeral_privkey_return);
+      // 17. compute d_e'
+      crypto::secret_key recovered_ephemeral_privkey_return;
+      make_carrot_enote_ephemeral_privkey(recovered_anchor_return, input_context_return, change_output.onetime_address, null_payment_id, recovered_ephemeral_privkey_return);
 
-    // 18. compute D_e'
-    mx25519_pubkey recovered_ephemeral_pubkey_return;
-    make_carrot_enote_ephemeral_pubkey(recovered_ephemeral_privkey_return, change_output.onetime_address, false, recovered_ephemeral_pubkey_return);
+      // 18. compute D_e'
+      mx25519_pubkey recovered_ephemeral_pubkey_return;
+      make_carrot_enote_ephemeral_pubkey(recovered_ephemeral_privkey_return, change_output.onetime_address, false, recovered_ephemeral_pubkey_return);
 
-    // 19. verify the enote ephemeral pubkey
-    ASSERT_EQ(recovered_ephemeral_pubkey_return, return_output.enote_ephemeral_pubkey);
+      // 19. verify the enote ephemeral pubkey
+      ASSERT_EQ(recovered_ephemeral_pubkey_return, return_output.enote_ephemeral_pubkey);
 
-    // Scan the change output 
-    crypto::secret_key recovered_sender_extension_g_change;
-    crypto::secret_key recovered_sender_extension_t_change;
-    crypto::public_key recovered_address_spend_pubkey_change;
-    rct::xmr_amount recovered_amount_change;
-    crypto::secret_key recovered_amount_blinding_factor_change;
-    CarrotEnoteType recovered_enote_type_change;
-    janus_anchor_t recovered_internal_message_out_change;
-    crypto::public_key return_address_out;
-    bool is_return_out;
-    const bool scan_success_change = try_scan_carrot_enote_internal_receiver(change_output,
-                                                                             alice,
-                                                                             recovered_sender_extension_g_change,
-                                                                             recovered_sender_extension_t_change,
-                                                                             recovered_address_spend_pubkey_change,
-                                                                             recovered_amount_change,
-                                                                             recovered_amount_blinding_factor_change,
-                                                                             recovered_enote_type_change,
-                                                                             recovered_internal_message_out_change,
-                                                                             return_address_out,
-                                                                             is_return_out);
-    ASSERT_TRUE(scan_success_change);
+      // Scan the change output 
+      crypto::secret_key recovered_sender_extension_g_change;
+      crypto::secret_key recovered_sender_extension_t_change;
+      crypto::public_key recovered_address_spend_pubkey_change;
+      rct::xmr_amount recovered_amount_change;
+      crypto::secret_key recovered_amount_blinding_factor_change;
+      CarrotEnoteType recovered_enote_type_change;
+      janus_anchor_t recovered_internal_message_out_change;
+      crypto::public_key return_address_out;
+      bool is_return_out;
+      const bool scan_success_change = try_scan_carrot_enote_internal_receiver(change_output,
+                                                                               alice,
+                                                                               recovered_sender_extension_g_change,
+                                                                               recovered_sender_extension_t_change,
+                                                                               recovered_address_spend_pubkey_change,
+                                                                               recovered_amount_change,
+                                                                               recovered_amount_blinding_factor_change,
+                                                                               recovered_enote_type_change,
+                                                                               recovered_internal_message_out_change,
+                                                                               return_address_out,
+                                                                               is_return_out);
+      ASSERT_TRUE(scan_success_change);
 
-    // check spendability of the change output
-    EXPECT_TRUE(alice.can_open_fcmp_onetime_address(alice.get_keys().m_carrot_account_address.m_spend_public_key,
-                                                    recovered_sender_extension_g_change,
-                                                    recovered_sender_extension_t_change,
-                                                    change_output.onetime_address));
+      // check spendability of the change output
+      EXPECT_TRUE(alice.can_open_fcmp_onetime_address(alice.get_keys().m_carrot_account_address.m_spend_public_key,
+                                                      recovered_sender_extension_g_change,
+                                                      recovered_sender_extension_t_change,
+                                                      change_output.onetime_address));
 
-    // check spendability of the return_payment
-    crypto::secret_key sum_g;
-    sc_add(to_bytes(sum_g), to_bytes(recovered_sender_extension_g_change), to_bytes(k_return));
-    ASSERT_TRUE(alice.can_open_fcmp_onetime_address(alice.get_keys().m_carrot_account_address.m_spend_public_key,
-                                                    sum_g,
-                                                    recovered_sender_extension_t_change,
-                                                    return_output.onetime_address));
+      // check spendability of the return_payment
+      crypto::secret_key sum_g, sum_t;
+      sc_add(to_bytes(sum_g), to_bytes(recovered_sender_extension_g_change), to_bytes(k_return));
+      sc_add(to_bytes(sum_t), to_bytes(recovered_sender_extension_t_change), to_bytes(k_idx));
+      ASSERT_TRUE(alice.can_open_fcmp_onetime_address(alice.get_keys().m_carrot_account_address.m_spend_public_key,
+                                                      sum_g,
+                                                      sum_t,
+                                                      return_output.onetime_address));
+
+      received_total += recovered_amount_return;
+      fee_total      += txnFee;
+      std::cout << "Amount[" << idx << "] received " << recovered_amount_return << ", fee " << txnFee << " from total " << amount << std::endl;
+    }
+
+    // Verify we received all the expected amounts
+    ASSERT_EQ(expected_total, received_total + fee_total);
 }
 //----------------------------------------------------------------------------------------------------------------------
 TEST(carrot_sparc, get_spend_authority_proof_completeness)
