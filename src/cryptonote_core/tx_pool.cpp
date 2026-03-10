@@ -275,6 +275,13 @@ namespace cryptonote
       return false;
     }
 
+    // HERE BE DRAGONS!!!
+    // Check that CREATE_TOKEN txs are unique in the pool
+    if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+      // TODO: ...scan the existing entries - requires either a registry of CREATE_TOKEN TXs, or to interatively process the pool
+    }
+    // LAND AHOY!!!
+    
     // assume failure during verification steps until success is certain
     tvc.m_verifivation_failed = true;
 
@@ -1649,11 +1656,17 @@ namespace cryptonote
 
     LOG_PRINT_L2("Filling block template, median weight " << median_weight << ", " << m_txs_by_fee_and_receive_time.size() << " txes in the pool");
 
-    LockedTXN lock(m_blockchain.get_db());
-
     // Store list of tokens being created
     std::set<std::string> tokens;
     
+    // Get the list of already-created tokens that are in the DB
+    std::map<std::string, cryptonote::token_metadata_t> mapTokens = m_blockchain.get_db().get_tokens();
+    for (const auto &entry: mapTokens) {
+      tokens.insert(entry.second.asset_type);
+    }
+    
+    LockedTXN lock(m_blockchain.get_db());
+
     auto sorted_it = m_txs_by_fee_and_receive_time.begin();
     for (; sorted_it != m_txs_by_fee_and_receive_time.end(); ++sorted_it)
     {
