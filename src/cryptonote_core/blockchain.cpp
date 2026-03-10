@@ -1351,7 +1351,10 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, 
   CHECK_AND_ASSERT_MES(b.miner_tx.vin[0].type() == typeid(txin_gen), false, "coinbase transaction in the block has the wrong type");
   CHECK_AND_ASSERT_MES(b.miner_tx.version > 1, false, "Invalid coinbase transaction version");
 
-  if (hf_version >= HF_VERSION_CARROT) {
+  if (hf_version >= HF_VERSION_ENABLE_TOKENS) {
+    CHECK_AND_ASSERT_MES(b.miner_tx.version == TRANSACTION_VERSION_ENABLE_TOKENS, false, "miner transaction has wrong version");
+    CHECK_AND_ASSERT_MES(b.miner_tx.type == cryptonote::transaction_type::MINER, false, "miner transaction has wrong type");
+  } else if (hf_version >= HF_VERSION_CARROT) {
     CHECK_AND_ASSERT_MES(b.miner_tx.version == TRANSACTION_VERSION_CARROT, false, "miner transaction has wrong version");
     CHECK_AND_ASSERT_MES(b.miner_tx.type == cryptonote::transaction_type::MINER, false, "miner transaction has wrong type");
   }
@@ -1410,7 +1413,10 @@ bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t heigh
   uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   uint8_t hf_version_submitted = get_ideal_hard_fork_version(height - stake_lock_period - 1);
 
-  if (hf_version == HF_VERSION_CARROT) {
+  if (hf_version >= HF_VERSION_ENABLE_TOKENS) {
+    CHECK_AND_ASSERT_MES(b.protocol_tx.version == TRANSACTION_VERSION_ENABLE_TOKENS, false, "protocol transaction has wrong version");
+    hf_version_submitted = hf_version;
+  } else if (hf_version == HF_VERSION_CARROT) {
     if (hf_version_submitted >= HF_VERSION_CARROT || b.protocol_tx.vout.size() == 0) {
       CHECK_AND_ASSERT_MES(b.protocol_tx.version == TRANSACTION_VERSION_CARROT, false, "protocol transaction has wrong version");
     } else {

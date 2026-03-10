@@ -392,6 +392,7 @@ namespace cryptonote
         }
         tx = store_carrot_to_coinbase_transaction_v1(enotes, std::string{}, cryptonote::transaction_type::PROTOCOL, height);
         tx.amount_burnt = 0;
+        tx.version = (hard_fork_version >= HF_VERSION_ENABLE_TOKENS) ? TRANSACTION_VERSION_ENABLE_TOKENS : TRANSACTION_VERSION_CARROT;
         tx.invalidate_hashes();
       }
       catch (const std::exception &e)
@@ -540,7 +541,7 @@ namespace cryptonote
         }
 
         tx = carrot::store_carrot_to_coinbase_transaction_v1(enotes, extra_nonce, cryptonote::transaction_type::MINER, height);
-
+        tx.version = (hard_fork_version >= HF_VERSION_ENABLE_TOKENS) ? TRANSACTION_VERSION_ENABLE_TOKENS : TRANSACTION_VERSION_CARROT;
         tx.amount_burnt = stake_reward;
         tx.invalidate_hashes();
       }
