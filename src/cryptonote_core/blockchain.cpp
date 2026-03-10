@@ -5589,6 +5589,16 @@ leave:
       }
     }
 #endif
+
+    // Check the TX type
+    tx_verification_context tvc;
+    if (!check_tx_type_and_version(tx, tvc)) {
+      MERROR("Block with id: " << id << " failed to pass transaction type and version check for transaction id: " << tx_id);
+      bvc.m_verifivation_failed = true;
+      return_tx_to_pool(txs);
+      goto leave;
+    }
+    
     TIME_MEASURE_FINISH(cc);
     t_checktx += cc;
     fee_summary += fee;
