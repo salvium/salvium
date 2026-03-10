@@ -40,7 +40,7 @@ public:
     ~SubaddressAccountImpl();
     
     // Fetches addresses from Wallet2
-    void refresh();
+    void refresh(const std::string &asset_type);
     std::vector<SubaddressAccountRow*> getAll() const;
     void addRow(const std::string &label);
     void setLabel(uint32_t accountIndex, const std::string &label);

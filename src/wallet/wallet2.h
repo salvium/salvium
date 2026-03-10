@@ -1294,6 +1294,17 @@ private:
     bool parse_unsigned_tx_from_str(const std::string &unsigned_tx_st, unsigned_tx_set &exported_txs) const;
     bool load_tx(const std::string &signed_filename, std::vector<tools::wallet2::pending_tx> &ptx, std::function<bool(const signed_tx_set&)> accept_func = NULL);
     bool parse_tx_from_str(const std::string &signed_tx_st, std::vector<tools::wallet2::pending_tx> &ptx, std::function<bool(const signed_tx_set &)> accept_func);
+
+    /**
+     * Receives a hex-encoded metadata blob that contains the fields necessary to create a `sal_token_t` instance
+     */
+    std::vector<wallet2::pending_tx> create_token(const std::string& token_ticker, const uint64_t token_supply, const std::string& token_metadata_hex, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices);
+
+    /**
+     * Creates a new token using the provided `sal_token_t` struct (verifies the target first)
+     */
+    std::vector<wallet2::pending_tx> create_token(const cryptonote::token_metadata_t& token, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices);
+
     std::vector<wallet2::pending_tx> create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type tx_type, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, const unique_index_container& subtract_fee_from_outputs = {});     // pass subaddr_indices by value on purpose
     std::vector<wallet2::pending_tx> create_transactions_all(uint64_t below, cryptonote::transaction_type tx_type, const std::string& asset_type, const cryptonote::account_public_address &address, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices);
     std::vector<wallet2::pending_tx> create_transactions_single(const crypto::key_image &ki, const cryptonote::account_public_address &address, const cryptonote::transaction_type tx_type, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra);
@@ -1315,7 +1326,8 @@ private:
     bool check_connection(uint32_t *version = NULL, bool *ssl = NULL, uint32_t timeout = 200000, bool *wallet_is_outdated = NULL, bool *daemon_is_outdated = NULL);
     bool check_version(uint32_t *version, bool *wallet_is_outdated, bool *daemon_is_outdated);
     bool check_hard_fork_version(cryptonote::network_type nettype, const std::vector<std::pair<uint8_t, uint64_t>> &daemon_hard_forks, const uint64_t height, const uint64_t target_height, bool *wallet_is_outdated, bool *daemon_is_outdated);
-    void get_transfers(wallet2::transfer_container& incoming_transfers) const;
+    void get_transfers(wallet2::transfer_container& incoming_transfers, const std::string& asset_type = "") const;
+    void get_transfers_indices(std::set<size_t>& indices, const std::string& asset_type = "SAL1") const;
     void get_payments(const crypto::hash& payment_id, std::list<wallet2::payment_details>& payments, uint64_t min_height = 0, const boost::optional<uint32_t>& subaddr_account = boost::none, const std::set<uint32_t>& subaddr_indices = {}) const;
     void get_payments(std::list<std::pair<crypto::hash,wallet2::payment_details>>& payments, uint64_t min_height, uint64_t max_height = (uint64_t)-1, const boost::optional<uint32_t>& subaddr_account = boost::none, const std::set<uint32_t>& subaddr_indices = {}) const;
     void get_payments_out(std::list<std::pair<crypto::hash,wallet2::confirmed_transfer_details>>& confirmed_payments,
@@ -1931,10 +1943,13 @@ private:
 
     bool get_pricing_record(oracle::pricing_record& pr, const uint64_t height);
     bool get_circulating_supply(std::vector<std::pair<std::string, std::string>> &amounts);
-    bool get_yield_info(std::vector<cryptonote::yield_block_info>& ybi_data);
 
+    bool get_tokens(const std::string& regex, std::vector<std::string>& tokens);
+    cryptonote::token_metadata_t get_token_info(const std::string& asset_type); // const;
+    
     typedef std::tuple<size_t, std::string, std::string, uint64_t, uint64_t> yield_payout_t;
     
+    bool get_yield_info(std::vector<cryptonote::yield_block_info>& ybi_data);
     bool get_yield_summary_info(uint64_t &total_burnt,
                                 uint64_t &total_supply,
                                 uint64_t &total_locked,
@@ -2083,9 +2098,11 @@ private:
     bool is_spent(const transfer_details &td, bool strict = true) const;
     bool is_spent(size_t idx, bool strict = true) const;
   public:
-    void get_outs(std::vector<std::vector<get_outs_entry>> &outs, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, bool rct, std::unordered_set<crypto::public_key> &valid_public_keys_cache);
-    void get_outs(std::vector<std::vector<get_outs_entry>> &outs, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, std::vector<uint64_t> &rct_offsets, std::unordered_set<crypto::public_key> &valid_public_keys_cache, uint64_t &num_spendable_global_outs, uint64_t &num_outs);
+    void get_outs(std::vector<std::vector<get_outs_entry>> &outs, const transfer_container &transfers, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, bool rct, std::unordered_set<crypto::public_key> &valid_public_keys_cache);
+    void get_outs(std::vector<std::vector<get_outs_entry>> &outs, const transfer_container &transfers, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, std::vector<uint64_t> &rct_offsets, std::unordered_set<crypto::public_key> &valid_public_keys_cache, uint64_t &num_spendable_global_outs, uint64_t &num_outs);
     size_t get_transfer_details(const crypto::key_image &ki) const;
+    size_t get_transfer_details_from_container(const crypto::key_image &ki, const transfer_container& container) const;
+    bool get_rct_distribution(const bool use_global_outs, const std::string &rct_asset_type, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &num_spendable_global_outs);
   private:
     bool tx_add_fake_output(std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs, uint64_t global_index, const crypto::public_key& tx_public_key, const rct::key& mask, uint64_t real_index, bool unlocked, std::unordered_set<crypto::public_key> &valid_public_keys_cache) const;
     bool should_pick_a_second_output(bool use_rct, size_t n_transfers, const std::vector<size_t> &unused_transfers_indices, const std::vector<size_t> &unused_dust_indices) const;
@@ -2121,8 +2138,6 @@ private:
 
     void register_devices();
     hw::device& lookup_device(const std::string & device_descriptor);
-
-    bool get_rct_distribution(const bool use_global_outs, const std::string &rct_asset_type, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &num_spendable_global_outs);
 
     uint64_t get_segregation_fork_height() const;
 

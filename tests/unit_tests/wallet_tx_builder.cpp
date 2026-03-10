@@ -109,6 +109,7 @@ TEST(wallet_tx_builder, input_selection_basic)
         top_block_index,
         /*allow_carrot_external_inputs_in_normal_transfers=*/true,
         /*allow_pre_carrot_inputs_in_normal_transfers=*/true,
+        /*asset_type=*/"",
         selected_transfer_indices
     );
 

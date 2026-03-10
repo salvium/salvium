@@ -44,16 +44,16 @@ SubaddressAccountImpl::SubaddressAccountImpl(WalletImpl *wallet)
 void SubaddressAccountImpl::addRow(const std::string &label)
 {
   m_wallet->m_wallet->add_subaddress_account(label);
-  refresh();
+  refresh("SAL1");
 }
 
 void SubaddressAccountImpl::setLabel(uint32_t accountIndex, const std::string &label)
 {
   m_wallet->m_wallet->set_subaddress_label({accountIndex, 0}, label);
-  refresh();
+  refresh("SAL1");
 }
 
-void SubaddressAccountImpl::refresh() 
+void SubaddressAccountImpl::refresh(const std::string &asset_type) 
 {
   LOG_PRINT_L2("Refreshing subaddress account");
   
@@ -64,8 +64,8 @@ void SubaddressAccountImpl::refresh()
       i,
       m_wallet->m_wallet->get_subaddress_as_str({i,0}),
       m_wallet->m_wallet->get_subaddress_label({i,0}),
-      cryptonote::print_money(m_wallet->m_wallet->balance(i, "SAL", false)),
-      cryptonote::print_money(m_wallet->m_wallet->unlocked_balance(i, "SAL", false)),
+      cryptonote::print_money(m_wallet->m_wallet->balance(i, asset_type, false)),
+      cryptonote::print_money(m_wallet->m_wallet->unlocked_balance(i, asset_type, false)),
       cryptonote::print_money(m_wallet->m_wallet->balance(i, "SAL1", false)),
       cryptonote::print_money(m_wallet->m_wallet->unlocked_balance(i, "SAL1", false))
     ));

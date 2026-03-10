@@ -727,6 +727,19 @@ namespace cryptonote
     bool check_tx_outputs(const transaction& tx, tx_verification_context &tvc) const;
 
     /**
+     * @brief check a transaction's input/output/TX asset types conform to current standards
+     *
+     * This function checks, for example at the time of this writing, that
+     * the asset types are supported by the given TX for the current HF version on-chain.
+     *
+     * @param tx the transaction to check the asset types of
+     * @param tvc returned info about tx verification
+     *
+     * @return false if the TX version and/or type is unsupported, otherwise true
+     */
+    bool check_tx_asset_types(const transaction& tx, tx_verification_context &tvc) const;
+    
+    /**
      * @brief check that a transaction's version & type conforms to current standards
      *
      * This function checks, for example at the time of this writing, that
@@ -1233,6 +1246,8 @@ namespace cryptonote
      */
     bool validate_ybi_cache();
 
+    bool is_tx_paid_for(const cryptonote::transaction& tx);
+    
 #ifndef IN_UNIT_TESTS
   private:
 #endif
@@ -1564,10 +1579,11 @@ namespace cryptonote
      * @param b the block containing the miner transaction to be validated
      * @param height the blockchain's weight
      * @param version hard fork version for that transaction
+     * @param txs create_coin transactions in the block
      *
      * @return false if anything is found wrong with the protocol transaction, otherwise true
      */
-    bool validate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version);
+    bool validate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version, const std::vector<std::pair<transaction, blobdata>>& txs = std::vector<std::pair<transaction, blobdata>>());
 
     /**
      * @brief reverts the blockchain to its previous state following a failed switch

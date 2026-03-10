@@ -59,7 +59,9 @@ enum transaction_type : uint8_t {
     STAKE = 6,
     RETURN = 7,
     AUDIT = 8,
-    MAX = 8
+    CREATE_TOKEN = 9,
+    ROLLUP = 10,
+    MAX = 10
 };
   
     namespace Utils {
@@ -366,7 +368,7 @@ struct SubaddressAccount
     virtual std::vector<SubaddressAccountRow*> getAll() const = 0;
     virtual void addRow(const std::string &label) = 0;
     virtual void setLabel(uint32_t accountIndex, const std::string &label) = 0;
-    virtual void refresh() = 0;
+    virtual void refresh(const std::string &asset_type) = 0;
 };
 
 struct MultisigState {
@@ -934,6 +936,31 @@ struct Wallet
                                                         std::set<uint32_t> subaddr_indices = {}) = 0;
 
     /*!
+     * \brief createCreateTokenTransaction  creates token creation transaction.
+     * \param asset_type              the type of asset to create
+     * \param supply                  token supply amount
+     * \param metadata                 
+     * \param name
+     * \param size
+     * \param hash
+     * \param url                
+     * \param subaddr_account         subaddress account from which the input funds are taken
+     * \param subaddr_indices         set of subaddress indices to use for transfer or sweeping. if set empty, all are chosen when sweeping, and one or more are automatically chosen when transferring. after execution, returns the set of actually used indices
+     * \return                        PendingTransaction object. caller is responsible to check PendingTransaction::status()
+     *                                after object returned
+     */
+
+    virtual PendingTransaction * createCreateTokenTransaction(const std::string &asset_type,
+                                                              uint64_t supply,
+                                                              const std::string &metadata,
+                                                              const std::string &name,
+                                                              uint32_t size,
+                                                              const std::string hash,
+                                                              const std::string url,
+                                                              uint32_t subaddr_account = 0,
+                                                              std::set<uint32_t> subaddr_indices = {}) = 0;
+
+    /*!
      * \brief createAuditTransaction  creates audit transaction.
      * \param mixin_count             mixin count. if 0 passed, wallet will use default value
      * \param subaddr_indices         set of subaddress indices to use for transfer or sweeping. if set empty, all are chosen when sweeping, and one or more are automatically chosen when transferring. after execution, returns the set of actually used indices
@@ -1260,6 +1287,9 @@ struct Wallet
 
     //! get yield information
     virtual YieldInfo * getYieldInfo() = 0;
+
+    //! get asset types for which the wallet has/had outputs
+    virtual std::vector<std::string> getAssetTypes() = 0;
 };
 
 /**

@@ -545,9 +545,22 @@ namespace tools
     bool is_carrot = m_wallet->estimate_current_hard_fork() >= HF_VERSION_CARROT;
     
     std::vector<std::string> assets_in_wallet = m_wallet->list_asset_types();
-    std::string asset_type = req.asset_type.empty() ? "SAL1" : boost::algorithm::to_upper_copy(req.asset_type);
+    std::string asset_type = req.asset_type.empty() ? "SAL1" : req.asset_type;
+    if (asset_type.length() > 4) {
+      // Assume it is a token and format accordingly
+      if (boost::algorithm::to_lower_copy(asset_type.substr(0, 3)) == "sal") {
+        asset_type = "sal" + boost::algorithm::to_upper_copy(asset_type.substr(3));
+      } else if (boost::algorithm::to_lower_copy(asset_type.substr(0, 3)) == "erc") {
+        asset_type = "erc" + boost::algorithm::to_upper_copy(asset_type.substr(3));
+      } else {
+        er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+        er.message = std::string("Invalid token asset_type '") + asset_type + "' specified"; 
+        return false;
+      }
+    }
     // verify that the asset is in the list of in-wallet assets
     if (std::find(assets_in_wallet.begin(), assets_in_wallet.end(), asset_type) == assets_in_wallet.end()) {
+      er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = std::string("Source asset '") + asset_type + "' not found in wallet"; 
       return false;
     }
@@ -1263,6 +1276,275 @@ namespace tools
       
       return fill_response(ptx_vector_all, req.get_tx_keys, res.tx_key_list, res.amount_list, res.amounts_by_dest_list, res.fee_list, res.weight_list, res.multisig_txset, res.unsigned_txset, req.do_not_relay,
                            res.tx_hash_list, req.get_tx_hex, res.tx_blob_list, req.get_tx_metadata, res.tx_metadata_list, res.spent_key_images_list, er);
+    }
+    catch (const std::exception& e)
+    {
+      handle_rpc_exception(std::current_exception(), er, WALLET_RPC_ERROR_CODE_GENERIC_TRANSFER_ERROR);
+      return false;
+    }
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool wallet_rpc_server::on_create_token(const wallet_rpc::COMMAND_RPC_CREATE_TOKEN::request& req, wallet_rpc::COMMAND_RPC_CREATE_TOKEN::response& res, epee::json_rpc::error& er, const connection_context *ctx)
+  {
+    if (!m_wallet) return not_open(er);
+    if (m_restricted)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Command unavailable in restricted mode.";
+      return false;
+    }
+
+    if (m_wallet->get_current_hard_fork() < HF_VERSION_ENABLE_TOKENS) {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Create_token is not available yet.";
+      return false;
+    }
+
+    if (req.ticker.empty()) {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Empty ticker is not allowed.";
+      return false;
+    }
+
+    std::string asset_type = req.ticker;
+    std::transform(asset_type.begin(), asset_type.end(), asset_type.begin(), ::toupper);
+    if (asset_type.length() != 4) {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Asset type must be exactly 4 characters long.";
+      return false;
+    }
+
+    // Validate characters
+    for (char c : asset_type) {
+      if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))) {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Asset type can only contain uppercase letters and digits.";
+      return false;
+      }
+    }
+    
+    // Check if starts with "SAL"
+    if (asset_type.substr(0, 3) == "SAL") {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Asset type cannot start with 'SAL'.";
+      return false;
+    }
+    
+    // todo: update reserved names
+    if (asset_type == "SAL" || asset_type == "SAL1" || asset_type == "SAL2" || asset_type == "BURN") {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Asset type is reserved and cannot be used.";
+      return false;
+    }
+
+    // get tokens
+    std::vector<std::string> tokens;
+    if(!m_wallet->get_tokens(asset_type, tokens)) {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Failed to get token data.";
+      return false;
+    }
+    if (!tokens.empty()) {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Token already exists.";
+      return false;
+    }
+
+    // Verify supply amount is acceptable
+    if (req.supply < 1 || req.supply > MONEY_SUPPLY)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Supply amount must be between 1 and MONEY_SUPPLY.";
+      return false;
+    }
+
+    // convert req.hash to hash
+    crypto::hash hash_signature{};
+    if (!req.hash.empty()) {
+      if (!epee::string_tools::hex_to_pod(req.hash, hash_signature)) {
+        //if (metadata.empty()){
+        er.message = "Invalid hash format.";
+        return false;
+        //}
+      }
+    }
+
+    std::string token_metadata_hex;
+    if (req.token_metadata_hex.empty()) {
+      std::string json = (boost::format("{\"name\":\"%s\",\"size\":%d,\"hash\":\"%s\",\"url\":\"%s\"}") % req.name % req.size % req.hash % req.url).str();
+      token_metadata_hex = epee::string_tools::buff_to_hex_nodelimer(json);
+    } else {
+      token_metadata_hex = req.token_metadata_hex;
+    }
+
+    //cryptonote::sal_token_t sal_token{1, req.supply, req.size, req.name, req.url, hash_signature};
+    //cryptonote::token_metadata_t token{1, asset_type, sal_token};
+
+    try
+    {
+      // Call the wallet create_token() method
+      auto ptx_vector = m_wallet->create_token(
+        asset_type,
+        req.supply,
+        token_metadata_hex,
+        req.account_index,
+        req.subaddr_indices
+      );
+      
+      if (ptx_vector.empty())
+      {
+        er.code = WALLET_RPC_ERROR_CODE_DENIED;
+        er.message = "ptx_vector is empty after create_token.";
+        return false;
+      }
+      if (ptx_vector.size() > 1)
+      {
+        er.code = WALLET_RPC_ERROR_CODE_DENIED;
+        er.message = "ptx_vector contains more than one transaction.";
+        return false;
+      }
+
+      return fill_response(ptx_vector, req.get_tx_keys, res.tx_key_list, res.amount_list, res.amounts_by_dest_list, res.fee_list, res.weight_list, res.multisig_txset, res.unsigned_txset, req.do_not_relay,
+        res.tx_hash_list, req.get_tx_hex, res.tx_blob_list, req.get_tx_metadata, res.tx_metadata_list, res.spent_key_images_list, er);
+    }
+    catch (const std::exception& e)
+    {
+      handle_rpc_exception(std::current_exception(), er, WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR);
+      return false;
+    }
+
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool wallet_rpc_server::on_get_tokens(const wallet_rpc::COMMAND_RPC_GET_TOKENS::request& req, wallet_rpc::COMMAND_RPC_GET_TOKENS::response& res, epee::json_rpc::error& er, const connection_context *ctx)
+  {
+    LOG_PRINT_L3("on_get_tokens starts");
+    if (!m_wallet) return not_open(er);
+
+    // Get the full list of tokens from the wallet - filtered if necessary
+    if (!m_wallet->get_tokens(req.regex, res.tokens)) {
+      er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+      er.message = "Failed to get token data from wallet.";
+      return false;
+    }
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool wallet_rpc_server::on_return_payment(const wallet_rpc::COMMAND_RPC_RETURN_PAYMENT::request& req, wallet_rpc::COMMAND_RPC_RETURN_PAYMENT::response& res, epee::json_rpc::error& er, const connection_context *ctx)
+  {
+    LOG_PRINT_L3("on_return_payment starts");
+    if (!m_wallet) return not_open(er);
+    if (m_restricted)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Command unavailable in restricted mode.";
+      return false;
+    }
+
+    // Get the TX hash we are interested in 
+    crypto::hash txid;
+    if (!epee::string_tools::hex_to_pod(req.txid, txid))
+    {
+      er.code = WALLET_RPC_ERROR_CODE_WRONG_TXID;
+      er.message = "TX ID has invalid format";
+      return false;
+    }
+
+    // Get the transfers from the wallet
+    tools::wallet2::transfer_container transfers;
+    m_wallet->get_transfers(transfers);
+    std::vector<size_t> transfers_indices = {};
+    for (size_t idx=0; idx < transfers.size(); ++idx) {
+      
+      // Get the TD by reference
+      tools::wallet2::transfer_details& td = transfers[idx];
+
+      // Skip entries we don't care about
+      if (td.m_txid != txid) continue;
+
+      // Found the specified entry - make sure we can return it
+      if (td.m_tx.type != cryptonote::transaction_type::TRANSFER) {
+        er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+        er.message = tr("incorrect TX type for txid");
+        return false;
+      }
+
+      if (td.m_tx.version >= TRANSACTION_VERSION_N_OUTS) {
+        if (td.m_tx.return_address_list.empty() || td.m_tx.return_address_change_mask.empty()) {
+          er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+          er.message = tr("invalid return_address_list for txid");
+          return false;
+        }
+      } else {
+        // Verify we have a valid return_address and tx_pubkey
+        if (td.m_tx.return_address == crypto::null_pkey || td.m_tx.return_pubkey != crypto::null_pkey) {
+          er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+          er.message = tr("invalid return_address/return_pubkey for txid");
+          return false;
+        }
+      }
+
+      // Check that we have the key image information, and that it is usable
+      if (!td.m_key_image_known || td.m_key_image_partial || td.m_spent || td.m_frozen) {
+        er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+        er.message = tr("key image is unavailable (partial / unknown / spent / frozen) for txid");
+        return false;
+      }
+
+      // Verify that the correct asset type is being returned
+      if (m_wallet->get_current_hard_fork() >= HF_VERSION_ENABLE_TOKENS) {
+        if (td.asset_type == "SAL") {
+          er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+          er.message = tr("SAL may not be returned for txid");
+          return false;
+        }
+      } else if (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+        if (td.asset_type != "SAL1") {
+          er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+          er.message = tr("Only SAL1 may be returned for txid");
+          return false;
+        }
+      }
+    
+      // We found the one(s) we were looking for - take a copy of the key_image, etc.
+      transfers_indices.push_back(idx);
+    }
+
+    // Check we have a valid key_image
+    if (transfers_indices.empty()) {
+      er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+      er.message = tr("No matching transfers found in wallet");
+      return false;
+    }
+    
+    try
+    {
+      // Call the wallet create_transactions_return() method
+      auto ptx_vector = m_wallet->create_transactions_return(transfers_indices);
+      if (ptx_vector.empty())
+      {
+        er.code = WALLET_RPC_ERROR_CODE_TX_NOT_POSSIBLE;
+        er.message = "No transaction created";
+        return false;
+      }
+      if (ptx_vector.size() > 2)
+      {
+        er.code = WALLET_RPC_ERROR_CODE_TX_TOO_LARGE;
+        er.message = "Multiple transactions are created, which is not supposed to happen.";
+        return false;
+      }
+      if (ptx_vector[0].selected_transfers.size() != transfers_indices.size())
+      {
+        er.code = WALLET_RPC_ERROR_CODE_TX_NOT_POSSIBLE;
+        er.message = tr("The transaction uses incorrect number of inputs, which is not supposed to happen");
+        return false;
+      }
+
+      //return fill_response(ptx_vector, req.get_tx_key, res.tx_key, res.amount, res.amounts_by_dest, res.fee, res.weight, res.multisig_txset, res.unsigned_txset, req.do_not_relay,
+      //    res.tx_hash, req.get_tx_hex, res.tx_blob, req.get_tx_metadata, res.tx_metadata, res.spent_key_images, er);
+      return fill_response(ptx_vector, req.get_tx_key, res.tx_key_list, res.amount_list, res.amounts_by_dest_list, res.fee_list, res.weight_list, res.multisig_txset, res.unsigned_txset, req.do_not_relay,
+          res.tx_hash_list, req.get_tx_hex, res.tx_blob_list, req.get_tx_metadata, res.tx_metadata_list, res.spent_key_images_list, er);
     }
     catch (const std::exception& e)
     {
@@ -4977,6 +5259,32 @@ namespace tools
   {
     res.version = WALLET_RPC_VERSION;
     res.release = MONERO_VERSION_IS_RELEASE;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool wallet_rpc_server::on_get_token_info(const wallet_rpc::COMMAND_RPC_GET_TOKEN_INFO::request& req, wallet_rpc::COMMAND_RPC_GET_TOKEN_INFO::response& res, epee::json_rpc::error& er, const connection_context *ctx)
+  {
+    // check
+    if (!m_wallet) return not_open(er);
+
+    try {
+      cryptonote::token_metadata_t token = m_wallet->get_token_info(req.asset_type);
+      res.status = CORE_RPC_STATUS_OK;
+      res.version = token.version;
+      res.asset_type = token.asset_type;
+      if (token.token.type() == typeid(cryptonote::sal_token_t)) {
+        res.token_type = TOKEN_TYPE_SAL;
+        res.sal_token = boost::get<cryptonote::sal_token_t>(token.token);
+      } else if (token.token.type() == typeid(cryptonote::erc_token_t)) {
+        res.token_type = TOKEN_TYPE_ERC20;
+        res.erc_token = boost::get<cryptonote::erc_token_t>(token.token);
+      }
+    } catch (const std::exception& e) {
+      er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+      er.message = "Failed to query daemon for token info";
+      return false;
+    }
+
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------

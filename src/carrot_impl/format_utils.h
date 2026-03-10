@@ -102,14 +102,16 @@ bool try_load_carrot_extra_v1(
  * return: a fully populated, pruned, non-coinbase transaction containing given Carrot information
  */
 cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotEnoteV1> &enotes,
-    const std::vector<crypto::key_image> &key_images,
-    const std::vector<cryptonote::tx_source_entry> &sources,
-    const rct::xmr_amount fee,
-    const cryptonote::transaction_type tx_type,
-    const rct::xmr_amount tx_amount_burnt,
-    const std::vector<uint8_t> &change_masks,
-    const RCTOutputEnoteProposal &return_enote,
-    const encrypted_payment_id_t encrypted_payment_id);
+                                                       const std::vector<crypto::key_image> &key_images,
+                                                       const std::vector<cryptonote::tx_source_entry> &sources,
+                                                       const rct::xmr_amount fee,
+                                                       const cryptonote::transaction_type tx_type,
+                                                       const rct::xmr_amount tx_amount_burnt,
+                                                       const std::vector<uint8_t> &change_masks,
+                                                       const cryptonote::token_metadata_t &token,
+                                                       const RCTOutputEnoteProposal &return_enote,
+                                                       const encrypted_payment_id_t encrypted_payment_id,
+                                                       const uint8_t hf_version);
 /**
  * brief: try_load_carrot_enote_from_transaction_v1 - load one non-coinbase Carrot enote from a cryptonote::transaction
  * param: tx -

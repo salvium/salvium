@@ -82,6 +82,14 @@ typedef struct mdb_txn_cursors
   MDB_cursor *m_txc_audit_blocks;
   MDB_cursor *m_txc_carrot_yield_txs;
 
+  MDB_cursor *m_txc_token_txs;
+  MDB_cursor *m_txc_tokens;
+  MDB_cursor *m_txc_asset_type_counts;
+  
+  MDB_cursor *m_txc_rct_count_info;
+  
+  MDB_cursor *m_txc_rollup_tx_info;
+  
 } mdb_txn_cursors;
 
 #define m_cur_blocks	m_cursors->m_txc_blocks
@@ -110,6 +118,14 @@ typedef struct mdb_txn_cursors
 #define m_cur_audit_txs		m_cursors->m_txc_audit_txs
 #define m_cur_audit_blocks	m_cursors->m_txc_audit_blocks
 #define m_cur_carrot_yield_txs		m_cursors->m_txc_carrot_yield_txs
+
+#define m_cur_token_txs		m_cursors->m_txc_token_txs
+#define m_cur_tokens		m_cursors->m_txc_tokens
+#define m_cur_asset_type_counts	m_cursors->m_txc_asset_type_counts
+
+#define m_cur_rct_count_info m_cursors->m_txc_rct_count_info
+
+#define m_cur_rollup_tx_info m_cursors->m_txc_rollup_tx_info
 
 typedef struct mdb_rflags
 {
@@ -140,6 +156,15 @@ typedef struct mdb_rflags
   bool m_rf_audit_txs;
   bool m_rf_audit_blocks;
   bool m_rf_carrot_yield_txs;
+
+  bool m_rf_token_txs;
+  bool m_rf_tokens;
+  bool m_rf_asset_type_counts;
+
+  bool m_rf_rct_count_info;
+
+  bool m_rf_rollup_tx_info;
+  
 } mdb_rflags;
 
 typedef struct mdb_threadinfo
@@ -242,6 +267,8 @@ public:
 
   virtual cryptonote::blobdata get_block_blob_from_height(const uint64_t& height) const;
 
+  virtual std::pair<std::vector<uint64_t>, uint64_t> get_block_cumulative_rct_outputs_old(const std::vector<uint64_t> &heights, const std::string asset_type) const;
+
   virtual std::pair<std::vector<uint64_t>, uint64_t> get_block_cumulative_rct_outputs(const std::vector<uint64_t> &heights, const std::string asset_type) const;
 
   virtual uint64_t get_block_timestamp(const uint64_t& height) const;
@@ -277,6 +304,10 @@ public:
   virtual uint64_t height() const;
 
   virtual std::map<std::string, uint64_t> get_circulating_supply() const;
+
+  virtual std::map<std::string, cryptonote::token_metadata_t> get_tokens() const;
+  
+  virtual bool is_tx_paid_for(const cryptonote::transaction& tx) const;
   
   virtual bool tx_exists(const crypto::hash& h) const;
   virtual bool tx_exists(const crypto::hash& h, uint64_t& tx_index) const;
@@ -406,11 +437,12 @@ private:
                           const difficulty_type& cumulative_difficulty,
                           const uint64_t& coins_generated,
                           uint64_t num_rct_outs,
-                          oracle::asset_type_counts& cum_rct_by_asset_type,
+                          oracle::asset_type_counts_v2& cum_rct_by_asset_type,
                           const crypto::hash& blk_hash,
                           uint64_t slippage_total,
                           uint64_t yield_total,
                           uint64_t audit_total,
+                          uint64_t token_total,
                           const cryptonote::network_type nettype,
                           cryptonote::yield_block_info& ybi,
                           cryptonote::audit_block_info& abi
@@ -479,6 +511,8 @@ private:
   virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) const;
   virtual int get_carrot_yield_tx_info(const uint64_t height, std::vector<yield_tx_info_carrot>& yti_container) const;
 
+  virtual int get_token_tx_info(const uint64_t height, std::vector<token_tx_info_carrot>& tti_container) const;
+
 private:
   MDB_env* m_env;
 
@@ -520,6 +554,14 @@ private:
   MDB_dbi m_audit_blocks;
 
   MDB_dbi m_carrot_yield_txs;
+
+  MDB_dbi m_token_txs;
+  MDB_dbi m_tokens;
+  MDB_dbi m_asset_type_counts;
+
+  MDB_dbi m_rct_count_info;
+
+  MDB_dbi m_rollup_tx_info;
 
   mutable uint64_t m_cum_size;	// used in batch size estimation
   mutable unsigned int m_cum_count;

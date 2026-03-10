@@ -45,6 +45,7 @@
 #include "crypto/crypto.h"
 #include "ringct/rctTypes.h"
 #include "ringct/rctOps.h"
+#include "serialization/containers.h"
 
 namespace boost
 {
@@ -182,6 +183,50 @@ namespace boost
   }
 
   template <class Archive>
+  inline void serialize(Archive &a, cryptonote::erc_token_t &x, const boost::serialization::version_type ver)
+  {
+    a & x.version;
+    a & x.contract_address;
+    a & x.lockbox_address;
+    a & x.ticker;
+    a & x.erc20_asset_id;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::sal_token_t &x, const boost::serialization::version_type ver)
+  {
+    a & x.version;
+    a & x.supply;
+    a & x.size;
+    a & x.name;
+    a & x.url;
+    a & x.signature;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::token_metadata_t &x, const boost::serialization::version_type ver)
+  {
+    a & x.version;
+    a & x.asset_type;
+    a & x.token;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::layer2_rollup_tx_t &x, const boost::serialization::version_type ver)
+  {
+    a & x.tx_prefix_hash;
+    a & x.first_key_image;
+    a & x.tx_fee;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::layer2_rollup_data_t &x, const boost::serialization::version_type ver)
+  {
+    a & x.version;
+    a & x.txs;
+  }
+
+  template <class Archive>
   inline void serialize(Archive &a, cryptonote::transaction_prefix &x, const boost::serialization::version_type ver)
   {
     a & x.version;
@@ -197,9 +242,8 @@ namespace boost
           a & x.return_address_list;
           a & x.return_address_change_mask;
         } else {
-          if (x.type == cryptonote::transaction_type::STAKE &&
-              x.version >= TRANSACTION_VERSION_CARROT)
-          {
+          if ((x.type == cryptonote::transaction_type::STAKE || x.type == cryptonote::transaction_type::CREATE_TOKEN) &&
+              (x.version >= TRANSACTION_VERSION_CARROT)) {
             a & x.protocol_tx_data;
           } else {
             a & x.return_address;
@@ -209,6 +253,16 @@ namespace boost
         a & x.source_asset_type;
         a & x.destination_asset_type;
         a & x.amount_slippage_limit;
+      }
+    }
+    if (x.version >= TRANSACTION_VERSION_ENABLE_TOKENS) {
+      if (x.type == cryptonote::transaction_type::CREATE_TOKEN) {
+        a & x.token_metadata;
+      } else if (x.type == cryptonote::transaction_type::TRANSFER) {
+        a & x.rollup_binding_tag;
+      } else if (x.type == cryptonote::transaction_type::ROLLUP) {
+        a & x.rollup_binding_tag;
+        a & x.layer2_rollup_data;
       }
     }
   }
@@ -229,9 +283,8 @@ namespace boost
           a & x.return_address_list;
           a & x.return_address_change_mask;
         } else {
-          if (x.type == cryptonote::transaction_type::STAKE &&
-              x.version >= TRANSACTION_VERSION_CARROT)
-          {
+          if ((x.type == cryptonote::transaction_type::STAKE || x.type == cryptonote::transaction_type::CREATE_TOKEN) &&
+              (x.version >= TRANSACTION_VERSION_CARROT)) {
             a & x.protocol_tx_data;
           } else {
             a & x.return_address;
@@ -241,6 +294,16 @@ namespace boost
         a & x.source_asset_type;
         a & x.destination_asset_type;
         a & x.amount_slippage_limit;
+      }
+      if (x.version >= TRANSACTION_VERSION_ENABLE_TOKENS) {
+        if (x.type == cryptonote::transaction_type::CREATE_TOKEN) {
+          a & x.token_metadata;
+        } else if (x.type == cryptonote::transaction_type::TRANSFER) {
+          a & x.rollup_binding_tag;
+        } else if (x.type == cryptonote::transaction_type::ROLLUP) {
+          a & x.rollup_binding_tag;
+          a & x.layer2_rollup_data;
+        }
       }
     }
     if (x.version == 1)

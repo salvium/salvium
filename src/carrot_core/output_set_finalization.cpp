@@ -174,7 +174,10 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     // assert payment proposals numbers
     const size_t num_selfsend_proposals = selfsend_payment_proposals.size();
     const size_t num_proposals = normal_payment_proposals.size() + num_selfsend_proposals;
-    if (tx_type == cryptonote::transaction_type::STAKE || tx_type == cryptonote::transaction_type::BURN) {
+    if (tx_type == cryptonote::transaction_type::STAKE ||
+        tx_type == cryptonote::transaction_type::BURN ||
+        tx_type == cryptonote::transaction_type::CREATE_TOKEN ||
+        tx_type == cryptonote::transaction_type::ROLLUP) {
         CARROT_CHECK_AND_THROW(num_proposals == 1, too_few_outputs, "tx doesn't have correct number of proposals");
     } else {
         CARROT_CHECK_AND_THROW(num_proposals >= CARROT_MIN_TX_OUTPUTS, too_few_outputs, "too few payment proposals");
@@ -221,11 +224,12 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
 
         encrypted_payment_id_t encrypted_payment_id;
         if (tx_type == cryptonote::transaction_type::RETURN) {
+            const uint64_t idx = 0;
             get_output_proposal_return_v1(normal_payment_proposals[i],
-                tx_first_key_image,
-                s_view_balance_dev,
-                output_entry.first,
-                encrypted_payment_id);
+                                          tx_first_key_image,
+                                          s_view_balance_dev,
+                                          output_entry.first,
+                                          encrypted_payment_id);
         } else {
             get_output_proposal_normal_v1(normal_payment_proposals[i],
                 tx_first_key_image,

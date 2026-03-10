@@ -1961,7 +1961,7 @@ namespace rct {
 
     //ver RingCT simple
     //assumes only post-rct style inputs (at least for max anonymity)
-    bool verRctSemanticsSimple(const rctSig & rv, const uint64_t amount_burnt)
+    bool verRctSemanticsSimple(const rctSig & rv, const uint64_t amount_burnt, const bool fee_paid_for_in_rollup)
     {
       try
       {
@@ -2027,8 +2027,10 @@ namespace rct {
         }
         key sumOutpks = addKeys(masks);
         DP(sumOutpks);
-        const key txnFeeKey = scalarmultH(d2h(rv.txnFee));
-        addKeys(sumOutpks, txnFeeKey, sumOutpks);
+        if (!fee_paid_for_in_rollup) {
+          const key txnFeeKey = scalarmultH(d2h(rv.txnFee));
+          addKeys(sumOutpks, txnFeeKey, sumOutpks);
+        }
         
         const key txnAmountBurntKey = scalarmultH(d2h(amount_burnt));
         addKeys(sumOutpks, txnAmountBurntKey, sumOutpks);

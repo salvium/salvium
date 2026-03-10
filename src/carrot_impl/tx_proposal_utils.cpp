@@ -209,17 +209,34 @@ void make_carrot_transaction_proposal_v1(const std::vector<CarrotPaymentProposal
         input_amount_sum += selected_input.amount;
 
     // callback to balance the outputs with the fee and input sum
-    carve_fees_and_balance(input_amount_sum, tx_proposal_out.fee, normal_payment_proposals, selfsend_payment_proposals);
+    std::string asset_type = "SAL1"; // default to SAL1
+    if (!normal_payment_proposals.empty()) {
+        asset_type = normal_payment_proposals.at(0).asset_type;
+    } else if (!selfsend_payment_proposals.empty()) {
+        asset_type = selfsend_payment_proposals.at(0).proposal.asset_type;
+    }
+    uint64_t fee = tx_proposal_out.fee;
+    if (asset_type != "SAL1") {
+      if (tx_type != cryptonote::transaction_type::BURN || asset_type != "SAL") {
+        CARROT_CHECK_AND_THROW(cryptonote::is_valid_custom_asset_type(asset_type),
+                               carrot_logic_error, "make_carrot_transaction_proposal_v1: invalid asset type in payment proposals: " << asset_type);
+      }
+        
+      fee = 0; //fee is always in SAL1
+    }
+    carve_fees_and_balance(input_amount_sum, fee, normal_payment_proposals, selfsend_payment_proposals);
 
     // sanity check balance
-    input_amount_sum -= tx_proposal_out.fee;
+    input_amount_sum -= fee;
     for (const CarrotPaymentProposalV1 &normal_payment_proposal : normal_payment_proposals)
         input_amount_sum -= normal_payment_proposal.amount;
     for (const CarrotPaymentProposalVerifiableSelfSendV1 &selfsend_payment_proposal : selfsend_payment_proposals)
         input_amount_sum -= selfsend_payment_proposal.proposal.amount;
 
     if (tx_type != cryptonote::transaction_type::STAKE &&
-        tx_type != cryptonote::transaction_type::BURN)
+        tx_type != cryptonote::transaction_type::BURN &&
+        tx_type != cryptonote::transaction_type::CREATE_TOKEN &&
+        tx_type != cryptonote::transaction_type::ROLLUP)
     {
         CHECK_AND_ASSERT_THROW_MES(input_amount_sum == 0,
             "make_carrot_transaction_proposal_v1: post-carved transaction does not balance");
@@ -239,7 +256,7 @@ void make_carrot_transaction_proposal_v1(const std::vector<CarrotPaymentProposal
         tx_proposal_out.key_images_sorted.end(),
         std::greater{}); // consensus rules dictate inputs sorted in *reverse* lexicographical order since v7
 
-    // set the transaction type
+    // set the transaction type & new asset type
     tx_proposal_out.tx_type = tx_type;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -255,6 +272,7 @@ void make_carrot_transaction_proposal_v1_transfer(
     const subaddress_index_extended &change_address_index,
     const std::set<std::size_t> &subtractable_normal_payment_proposals,
     const std::set<std::size_t> &subtractable_selfsend_payment_proposals,
+    const std::string &asset_type,
     CarrotTransactionProposalV1 &tx_proposal_out)
 {
     std::vector<CarrotPaymentProposalVerifiableSelfSendV1> selfsend_payment_proposals = selfsend_payment_proposals_in;
@@ -276,7 +294,7 @@ void make_carrot_transaction_proposal_v1_transfer(
             .destination_address_spend_pubkey = change_address_spend_pubkey,
             .amount = 0,
             .enote_type = add_payment_type_selfsend ? CarrotEnoteType::PAYMENT : CarrotEnoteType::CHANGE,
-            .asset_type = "SAL1"
+            .asset_type = asset_type
         },
         .subaddr_index = change_address_index
     });
@@ -398,10 +416,13 @@ void make_carrot_transaction_proposal_v1_transfer(
         
         // remove the self send payment we have made to ourself now that we have our change payment.
         if (tx_type == cryptonote::transaction_type::STAKE ||
-            tx_type == cryptonote::transaction_type::BURN)
+            tx_type == cryptonote::transaction_type::BURN ||
+            tx_type == cryptonote::transaction_type::CREATE_TOKEN ||
+            tx_type == cryptonote::transaction_type::ROLLUP)
         {
             selfsend_payment_proposals.back().proposal.enote_ephemeral_pubkey = 
                 selfsend_payment_proposals.front().proposal.enote_ephemeral_pubkey;
+
             selfsend_payment_proposals.erase(selfsend_payment_proposals.begin());
         }
 
@@ -431,6 +452,7 @@ void make_carrot_transaction_proposal_v1_sweep(
     std::vector<CarrotSelectedInput> &&selected_inputs,
     const crypto::public_key &change_address_spend_pubkey,
     const subaddress_index_extended &change_address_index,
+    const std::string &asset_type,
     CarrotTransactionProposalV1 &tx_proposal_out)
 {
     // sanity check payment proposals are provided
@@ -453,6 +475,19 @@ void make_carrot_transaction_proposal_v1_sweep(
     CHECK_AND_ASSERT_THROW_MES(bool(normal_payment_proposals.size()) ^ bool(selfsend_payment_proposals.size()),
         "make carrot transaction proposal v1 sweep: both normal and self-send payment proposals are provided");
 
+    std::vector<CarrotPaymentProposalVerifiableSelfSendV1> selfsend_payment_proposals_inout{selfsend_payment_proposals};
+    //if (tx_type == cryptonote::transaction_type::RETURN) {
+      selfsend_payment_proposals_inout.push_back(carrot::CarrotPaymentProposalVerifiableSelfSendV1{
+              .proposal = carrot::CarrotPaymentProposalSelfSendV1{
+                .destination_address_spend_pubkey = change_address_spend_pubkey,
+                .amount = 0,
+                .enote_type = carrot::CarrotEnoteType::CHANGE,
+                .asset_type = asset_type
+              },
+              .subaddr_index = change_address_index
+            });
+      //   }
+    
     const bool is_selfsend_sweep = !selfsend_payment_proposals.empty();
 
     // define input selection callback, which is just a shuttle for `selected_inputs`
@@ -503,7 +538,7 @@ void make_carrot_transaction_proposal_v1_sweep(
 
     // make unsigned transaction with sweep carving callback and selected inputs
     make_carrot_transaction_proposal_v1(normal_payment_proposals,
-        selfsend_payment_proposals,
+        selfsend_payment_proposals_inout,
         fee_per_weight,
         fee_quantization_mask,
         extra,

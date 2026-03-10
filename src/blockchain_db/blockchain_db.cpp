@@ -294,7 +294,22 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
   time1 = epee::misc_utils::get_tick_count();
 
   uint64_t num_rct_outs = 0;
-  oracle::asset_type_counts num_rct_outs_by_asset_type;
+  oracle::asset_type_counts_v2 num_rct_outs_by_asset_type;
+  
+  // add newly created tokens
+  for (const std::pair<transaction, blobdata>& tx : txs)
+  {
+    if (tx.first.type == cryptonote::transaction_type::CREATE_TOKEN)
+    {
+      uint32_t asset_type_id = cryptonote::asset_id_from_type("sal" + tx.first.token_metadata.asset_type);
+      if (!num_rct_outs_by_asset_type.add_asset_type(asset_type_id))
+        throw std::runtime_error("Failed to add asset_type 'sal" + tx.first.token_metadata.asset_type + "'");
+    }
+
+    if (!is_tx_paid_for(tx.first))
+      throw std::runtime_error("TX is not paid for");
+  }
+  
   blobdata miner_bd = tx_to_blob(blk.miner_tx);
   add_transaction(blk_hash, std::make_pair(blk.miner_tx, blobdata_ref(miner_bd)));
   blobdata protocol_bd = tx_to_blob(blk.protocol_tx);
@@ -309,12 +324,14 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
       std::string asset_type;
       if (!get_output_asset_type(vout, asset_type))
         throw std::runtime_error("Failed to get output asset type");
-      num_rct_outs_by_asset_type.add(asset_type, 1);
+      uint32_t asset_type_id = cryptonote::asset_id_from_type(asset_type);
+      num_rct_outs_by_asset_type.add_asset_type(asset_type_id);
+      num_rct_outs_by_asset_type.add(asset_type_id, 1);
     }
   }
 
   std::map<std::string, int64_t> slippage_counts;
-  uint64_t audit_total = 0, yield_total = 0;
+  uint64_t audit_total = 0, token_total = 0, yield_total = 0;
   if (blk.protocol_tx.version >= 2)
   {
     num_rct_outs += blk.protocol_tx.vout.size();
@@ -326,10 +343,12 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
       std::string asset_type;
       if (!get_output_asset_type(vout, asset_type))
         throw std::runtime_error("Failed to get output asset type");
+      uint32_t asset_type_id = cryptonote::asset_id_from_type(asset_type);
       
-      // Update the RCT outs
-      num_rct_outs_by_asset_type.add(asset_type, 1);
-
+      // Update the RCT outs for the asset_type
+      num_rct_outs_by_asset_type.add_asset_type(asset_type_id);
+      num_rct_outs_by_asset_type.add(asset_type_id, 1);
+      
       // Update the amount tallies by DEDUCTING the minted amount
       if (slippage_counts.count(asset_type) == 0)
         slippage_counts[asset_type] = 0;
@@ -350,7 +369,9 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
         throw std::runtime_error("Failed to get output asset type");
       if (vout.amount == 0) {
         ++num_rct_outs;
-        num_rct_outs_by_asset_type.add(asset_type, 1);
+        uint32_t asset_type_id = cryptonote::asset_id_from_type(asset_type);
+        num_rct_outs_by_asset_type.add_asset_type(asset_type_id);
+        num_rct_outs_by_asset_type.add(asset_type_id, 1);
       }
 
       // Is this a CONVERT TX?
@@ -365,6 +386,16 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
     // Is this an AUDIT TX?
     if (tx.first.type == cryptonote::transaction_type::AUDIT) {
       audit_total += tx.first.amount_burnt;
+    }
+    
+    // Is this an create_token TX?
+    if (tx.first.type == cryptonote::transaction_type::CREATE_TOKEN) {
+      token_total += tx.first.amount_burnt;
+      /*
+      uint32_t asset_type_id = cryptonote::asset_id_from_type(tx.first.token_metadata.asset_type);
+      if (!num_rct_outs_by_asset_type.add_asset_type(asset_type_id))
+        throw std::runtime_error("Failed to add asset_type '" + tx.first.token_metadata.asset_type + "' to RCT outputs");
+      */
     }
     
     // Is this a STAKE TX?
@@ -420,7 +451,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
 
   // call out to subclass implementation to add the block & metadata
   time1 = epee::misc_utils::get_tick_count();
-  add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, num_rct_outs, num_rct_outs_by_asset_type, blk_hash, slippage_total, yield_total, audit_total, nettype, ybi, abi);
+  add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, num_rct_outs, num_rct_outs_by_asset_type, blk_hash, slippage_total, yield_total, audit_total, token_total, nettype, ybi, abi);
   TIME_MEASURE_FINISH(time1);
   time_add_block1 += time1;
 

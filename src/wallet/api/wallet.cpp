@@ -1643,6 +1643,107 @@ PendingTransaction *WalletImpl::createStakeTransaction(uint64_t amount, uint32_t
   return createTransactionMultDest(Monero::transaction_type::STAKE, std::vector<string> {dst_addr}, payment_id, amount ? (std::vector<uint64_t> {amount}) : (optional<std::vector<uint64_t>>()), mixin_count, asset_type, is_return, priority, subaddr_account, subaddr_indices);
 }
 
+PendingTransaction *WalletImpl::createCreateTokenTransaction(const std::string &asset_type, uint64_t supply, const std::string &metadata, const std::string &name, uint32_t size, std::string hash, std::string url, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices){
+
+    PendingTransactionImpl * transaction = new PendingTransactionImpl(*this);
+    std::string token_metadata_hex;
+    crypto::hash hash_signature{};
+    if (!hash.empty()) {
+      if (!epee::string_tools::hex_to_pod(hash, hash_signature)) {
+        if (metadata.empty()){
+            setStatusError(tr("Invalid hash format."));
+            return transaction;
+        }
+      }
+    }
+    if (metadata.empty()) {
+      std::string json = (boost::format("{\"name\":\"%s\",\"size\":%d,\"hash\":\"%s\",\"url\":\"%s\"}") % name % size % hash % url).str();
+      token_metadata_hex = epee::string_tools::buff_to_hex_nodelimer(json);
+    } else {
+      token_metadata_hex = metadata;
+    }
+
+    cryptonote::sal_token_t sal_token;
+    sal_token.version = 1;
+    sal_token.supply = supply;
+    // todo: if not provided, use token_metadata_hex
+    sal_token.size = size;
+    sal_token.name = name;
+    sal_token.url = url;
+    sal_token.signature = hash_signature;
+
+    cryptonote::token_metadata_t token_meta;
+    token_meta.version = 1;
+    token_meta.asset_type = asset_type;
+    token_meta.token = sal_token;
+
+    clearStatus();
+    try {
+        // check if token already exists before attempting to create
+        std::vector<std::string> existing_tokens;
+        if (m_wallet->get_tokens(asset_type, existing_tokens) && !existing_tokens.empty()) {
+            setStatusError(tr("Token with ticker '") + asset_type + tr("' already exists"));
+            statusWithErrorString(transaction->m_status, transaction->m_errorString);
+            return transaction;
+        }
+
+        transaction->m_pending_tx = m_wallet->create_token(asset_type, supply, token_metadata_hex, subaddr_account, subaddr_indices
+        );
+        pendingTxPostProcess(transaction);
+    } catch (const tools::error::daemon_busy&) {
+        setStatusError(tr("daemon is busy. Please try again later."));
+    } catch (const tools::error::no_connection_to_daemon&) {
+        setStatusError(tr("no connection to daemon. Please make sure daemon is running."));
+    } catch (const tools::error::wallet_rpc_error& e) {
+        setStatusError(tr("RPC error: ") +  e.to_string());
+    } catch (const tools::error::get_outs_error &e) {
+        setStatusError((boost::format(tr("failed to get outputs to mix: %s")) % e.what()).str());
+    } catch (const tools::error::not_enough_unlocked_money& e) {
+        std::ostringstream writer;
+        writer << boost::format(tr("not enough SAL1 to create token, available only %s, required %s")) %
+                print_money(e.available()) %
+                print_money(e.tx_amount());
+        setStatusError(writer.str());
+    } catch (const tools::error::not_enough_money& e) {
+        std::ostringstream writer;
+        writer << boost::format(tr("not enough SAL1 to create token, overall balance only %s, required %s")) %
+                print_money(e.available()) %
+                print_money(e.tx_amount());
+        setStatusError(writer.str());
+    } catch (const tools::error::tx_not_possible& e) {
+        std::ostringstream writer;
+        writer << boost::format(tr("not enough SAL1 to create token, available only %s, required %s = %s (locked) + %s (fee)")) %
+                print_money(e.available()) %
+                print_money(e.tx_amount() + e.fee()) %
+                print_money(e.tx_amount()) %
+                print_money(e.fee());
+        setStatusError(writer.str());
+    } catch (const tools::error::tx_not_constructed&) {
+        setStatusError(tr("transaction for token creation was not constructed"));
+    } catch (const tools::error::tx_rejected& e) {
+        std::ostringstream writer;
+        writer << (boost::format(tr("create token transaction %s was rejected by daemon with status: ")) % get_transaction_hash(e.tx())) << e.status();
+        std::string reason = e.reason();
+        if (!reason.empty())
+            writer << tr(". Reason: ") << reason;
+        setStatusError(writer.str());
+    } catch (const tools::error::tx_sum_overflow& e) {
+        setStatusError(e.what());
+    } catch (const tools::error::tx_too_big& e) {
+        setStatusError(tr("token creation transaction is too large"));
+    } catch (const tools::error::transfer_error& e) {
+        setStatusError(string(tr("token creation error: ")) + e.what());
+    } catch (const tools::error::wallet_internal_error& e) {
+        setStatusError(string(tr("internal error: ")) + e.what());
+    } catch (const std::exception& e) {
+        setStatusError(string(tr("unexpected error: ")) + e.what());
+    } catch (...) {
+        setStatusError(tr("unknown error"));
+    }
+    statusWithErrorString(transaction->m_status, transaction->m_errorString);
+    return transaction;
+}
+
 PendingTransaction *WalletImpl::createAuditTransaction(
     uint32_t mixin_count,
     PendingTransaction::Priority priority,
@@ -1783,8 +1884,8 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const Monero::transact
                   const auto result = m_wallet->create_transactions_all(0,
                                                                         converted_tx_type,
                                                                         asset_type,
-                                                                        m_wallet->get_subaddress({subaddr_account, subaddr_index}),
-                                                                        (subaddr_index > 0),
+                                                                        info.address,
+                                                                        info.is_subaddress,
                                                                         1,
                                                                         fake_outs_count,
                                                                         0 /* unlock_time */,
@@ -2930,6 +3031,11 @@ YieldInfo * WalletImpl::getYieldInfo()
   auto yi = new YieldInfoImpl(*this);
   bool ok = m_wallet->get_yield_summary_info(yi->m_burnt, yi->m_supply, yi->m_locked, yi->m_yield, yi->m_yield_per_stake, yi->m_num_entries, yi->m_payouts);
   return yi;
+}
+
+std::vector<std::string> WalletImpl::getAssetTypes()
+{
+  return m_wallet->list_asset_types();
 }
 
 } // namespace

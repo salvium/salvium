@@ -165,6 +165,7 @@ static void subtest_multi_account_transfer_over_transaction(const unittest_trans
         {{0, 0}, AddressDeriveType::Carrot},
         {},
         {},
+        "SAL1",
         tx_proposal);
 
     // make unsigned transaction

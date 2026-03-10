@@ -44,10 +44,11 @@
 #define CRYPTONOTE_MAX_TX_PER_BLOCK                     0x10000000
 #define CRYPTONOTE_PUBLIC_ADDRESS_TEXTBLOB_VER          0
 #define CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW            60
-#define CURRENT_TRANSACTION_VERSION                     4
+#define CURRENT_TRANSACTION_VERSION                     5
 #define TRANSACTION_VERSION_2_OUTS                      2
 #define TRANSACTION_VERSION_N_OUTS                      3
 #define TRANSACTION_VERSION_CARROT                      4
+#define TRANSACTION_VERSION_ENABLE_TOKENS               5
 #define CURRENT_BLOCK_MAJOR_VERSION                     1
 #define CURRENT_BLOCK_MINOR_VERSION                     1
 #define CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT              60*60*2
@@ -90,6 +91,8 @@
 
 #define TREASURY_SAL1_MINT_AMOUNT                       ((uint64_t)130000000000000ull)  // 1.3M
 #define TREASURY_SAL1_MINT_COUNT                        8                               // 8 times
+
+#define CREATE_TOKEN_LOCK_PERIOD                        10
 
 #define DIFFICULTY_TARGET_V2                            120  // seconds
 #define DIFFICULTY_TARGET_V1                            60  // seconds - before first fork
@@ -244,6 +247,7 @@
 #define HF_VERSION_AUDIT2                       8
 #define HF_VERSION_AUDIT2_PAUSE                 9
 #define HF_VERSION_CARROT                       10
+#define HF_VERSION_ENABLE_TOKENS                 11
 
 #define HF_VERSION_REQUIRE_VIEW_TAGS            255
 #define HF_VERSION_ENABLE_CONVERT               255

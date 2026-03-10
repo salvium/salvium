@@ -218,6 +218,18 @@ typedef struct yield_tx_info_carrot {
   carrot::encrypted_janus_anchor_t return_anchor_enc;
 } yield_tx_info_carrot;
 
+typedef struct token_tx_info_carrot {
+  uint64_t block_height;
+  uint8_t version;
+  crypto::hash tx_hash;
+  uint64_t locked_coins;
+  crypto::public_key return_address;
+  crypto::public_key return_pubkey;
+  carrot::view_tag_t return_view_tag;
+  carrot::encrypted_janus_anchor_t return_anchor_enc;
+  uint32_t asset_type_id;
+} token_tx_info_carrot;
+
 #define DBF_SAFE       1
 #define DBF_FAST       2
 #define DBF_FASTEST    4
@@ -437,11 +449,12 @@ private:
                           const difficulty_type& cumulative_difficulty,
                           const uint64_t& coins_generated,
                           uint64_t num_rct_outs,
-                          oracle::asset_type_counts& cum_rct_by_asset_type,
+                          oracle::asset_type_counts_v2& cum_rct_by_asset_type,
                           const crypto::hash& blk_hash,
                           uint64_t slippage_total,
                           uint64_t yield_total,
                           uint64_t audit_total,
+                          uint64_t token_total,
                           const cryptonote::network_type nettype,
                           cryptonote::yield_block_info& ybi,
                           cryptonote::audit_block_info& abi
@@ -1213,6 +1226,20 @@ public:
   
 
   /**
+   * @brief fetch the tokens from the blockchain
+   *
+   * @return the current token values
+   */
+  virtual std::map<std::string, cryptonote::token_metadata_t> get_tokens() const = 0;
+
+  /**
+   * @brief determine if a TX has been paid for
+   *
+   * @return the current token values
+   */
+  virtual bool is_tx_paid_for(const cryptonote::transaction& tx) const = 0;
+
+  /**
    * <!--
    * TODO: Rewrite (if necessary) such that all calls to remove_* are
    *       done in concrete members of this base class.
@@ -1936,6 +1963,8 @@ public:
   virtual int get_yield_tx_info(const uint64_t height, std::vector<yield_tx_info>& yti_container) const = 0;
 
   virtual int get_carrot_yield_tx_info(const uint64_t height, std::vector<yield_tx_info_carrot>& yti_container) const = 0;
+
+  virtual int get_token_tx_info(const uint64_t height, std::vector<token_tx_info_carrot>& tti_container) const = 0;
 
   
   /**

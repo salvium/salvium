@@ -194,6 +194,9 @@ namespace cryptonote
     bool burn(const std::vector<std::string> &args);
     bool convert(const std::vector<std::string> &args);
     bool audit(const std::vector<std::string> &args);
+    bool create_token(const std::vector<std::string> &args);
+    bool get_tokens(const std::vector<std::string> &args);
+    bool token_info(const std::vector<std::string> &args);
     bool stake(const std::vector<std::string> &args);
     bool price_info(const std::vector<std::string> &args);
     bool supply_info(const std::vector<std::string> &args);

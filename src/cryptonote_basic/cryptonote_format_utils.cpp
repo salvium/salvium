@@ -31,6 +31,7 @@
 
 #include <atomic>
 #include <csignal>
+#include <map>
 #include <boost/algorithm/string.hpp>
 #include "wipeable_string.h"
 #include "string_tools.h"
@@ -43,6 +44,7 @@
 #include "crypto/hash.h"
 #include "ringct/rctSigs.h"
 #include "oracle/asset_types.h"
+#include "common/debugging.h"
 
 using namespace epee;
 
@@ -1114,7 +1116,37 @@ namespace cryptonote
     default:
       break;
     }
+    if (asset_type_id)
+    {
+      // Check to see if 1st byte is permitted
+      std::string s, s_prefix;
+      switch (asset_type_id >> 24) {
+      case 0x01:
+        // We have a user-generated token
+        s_prefix = "sal";
+        break;
+      case 0x02:
+        s_prefix = "erc";
+        break;
+      default:
+        ASSERT_MES_AND_THROW("Invalid asset_type_id: " << asset_type_id);
+      }
+
+      // Break up the remaining 3 bytes into 4 chunks of base36/64
+      static const char alphabet[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      uint32_t asset_type_id_temp = asset_type_id & 0x00FFFFFF;
+      for (int i=0; i<4; ++i) {
+        uint8_t val = asset_type_id_temp & 0x0000003F;
+        if (val >= 36) 
+          ASSERT_MES_AND_THROW("Invalid asset_type_id: " << asset_type_id);
+        s.push_back(alphabet[val]);
+        asset_type_id_temp >>= 6;
+      }
+      std::reverse(s.begin(), s.end());
+      return s_prefix + s;
+    } 
     // Should probably throw() here
+    ASSERT_MES_AND_THROW("Invalid asset_type_id: " << asset_type_id);
     return "";
   }
   //---------------------------------------------------------------
@@ -1129,9 +1161,160 @@ namespace cryptonote
     } else if (asset_type == "") {
       return 0x00000000;
     } else {
-      // Should probably throw() here
-      return static_cast<uint32_t>(-1);
+      if (asset_type.length() != 7) {
+        LOG_ERROR("Custom asset type '" << asset_type << "' has invalid length.");
+        return 0x00000000;
+      }
+      static const std::string alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+      // Check the 4-char type
+      std::string s_type = asset_type.substr(3);
+      std::transform(s_type.begin(), s_type.end(), s_type.begin(),
+                     [](unsigned char c){ return std::toupper(c); });
+      uint32_t asset_id = 0x00000000;
+      for (int i=0; i<s_type.length(); ++i) {
+        uint8_t idx = alphabet.find(s_type.at(i));
+        if (idx == std::string::npos || idx >= 36) {
+          LOG_ERROR("Custom asset type contains invalid char.");
+          return 0x00000000;
+        }
+        asset_id = (asset_id << 6) | (idx & 0x3F);
+      }
+      
+      // Check the 3-char prefix
+      std::string s_prefix = asset_type.substr(0,3);
+      std::transform(s_prefix.begin(), s_prefix.end(), s_prefix.begin(),
+                     [](unsigned char c){ return std::tolower(c); });
+      if (s_prefix == "sal") {
+        asset_id |= 0x01000000;
+      } else if (s_prefix == "erc") {
+        asset_id |= 0x02000000;
+      } else {
+        LOG_ERROR("Custom asset type has invalid prefix.");
+        return 0x00000000;
+      }
+      return asset_id;
     }
+  }
+  //---------------------------------------------------------------
+  bool is_asset_type_token(const std::string& asset_type)
+  {
+    // SAL, SAL1, BURN are base asset types
+    // erc prefix is not included here
+    if (asset_type.length() >= 3) {
+      std::string prefix = asset_type.substr(0, 3);
+      return (prefix == "sal");
+    }
+    return false;
+  }
+  //---------------------------------------------------------------
+  bool is_valid_asset_type(const std::string& asset_type) {
+    // This method does NOT throw()
+    try {
+      uint32_t asset_id = asset_id_from_type(asset_type);
+      std::string asset_type_check = asset_type_from_id(asset_id);
+      return (asset_type_check == asset_type);
+    }
+    catch (std::exception e) {
+      return false;
+    }
+  }
+  //---------------------------------------------------------------
+  bool is_valid_custom_asset_type(const std::string& asset_type)
+  {
+    if (!is_valid_asset_type(asset_type))
+      return false;
+    
+    // double check with reserved IDs
+    uint32_t id = asset_id_from_type(asset_type);
+    if (id == 0x53414C00 || id == 0x53414C31 || id == 0x4255524E || id == 0x00000000) {
+      return false;
+    }
+
+    return true;
+  }
+  //---------------------------------------------------------------
+  uint64_t get_token_creation_price(const std::string& ticker)
+  {
+    static const std::map<std::string, uint64_t> premium_tickers = {
+      // add more
+      {"USDT", 10000 * COIN},
+      {"USDC", 10000 * COIN},
+      {"WBTC", 10000 * COIN},
+      {"DOGE", 10000 * COIN},
+      {"SHIB", 10000 * COIN},
+      {"AVAX", 10000 * COIN},
+      {"ATOM", 10000 * COIN},
+      {"NEAR", 10000 * COIN},
+      {"TRON", 10000 * COIN},
+      {"HBAR", 10000 * COIN},
+      {"AAVE", 10000 * COIN},
+      {"FLOW", 10000 * COIN},
+      {"EGLD", 10000 * COIN},
+      {"KLAY", 10000 * COIN},
+      {"LUNA", 10000 * COIN},
+      {"DASH", 10000 * COIN},
+      {"NANO", 10000 * COIN},
+      {"CORE", 10000 * COIN},
+      {"BEAM", 10000 * COIN},
+      {"DYDX", 10000 * COIN},
+      {"COMP", 10000 * COIN},
+      {"SAND", 10000 * COIN},
+      {"MANA", 10000 * COIN},
+      {"RUNE", 10000 * COIN},
+      {"PYTH", 10000 * COIN},
+      {"ARKM", 10000 * COIN},
+      {"BLUR", 10000 * COIN},
+      {"STRK", 10000 * COIN},
+      {"PEPE", 10000 * COIN},
+      {"BONK", 10000 * COIN},
+      {"VIUM", 10000 * COIN},
+      {"GOLD", 10000 * COIN},
+      {"SILV", 10000 * COIN},
+      {"CASH", 10000 * COIN},
+      {"EURO", 10000 * COIN},
+      {"PESO", 10000 * COIN},
+      {"BOND", 10000 * COIN},
+      {"FUND", 10000 * COIN},
+      {"BANK", 10000 * COIN},
+      {"SWAP", 10000 * COIN},
+      {"LEND", 10000 * COIN},
+      {"LOAN", 10000 * COIN},
+      {"NOTE", 10000 * COIN},
+      {"HOLD", 10000 * COIN},
+      {"BULL", 10000 * COIN},
+      {"BEAR", 10000 * COIN},
+      {"TECH", 10000 * COIN},
+      {"DATA", 10000 * COIN},
+      {"HASH", 10000 * COIN},
+      {"NODE", 10000 * COIN},
+      {"BYTE", 10000 * COIN},
+      {"GRID", 10000 * COIN},
+      {"CODE", 10000 * COIN},
+      {"META", 10000 * COIN},
+      {"WEB3", 10000 * COIN},
+      {"NFTS", 10000 * COIN},
+      {"DEFI", 10000 * COIN},
+      {"LAND", 10000 * COIN},
+      {"REAL", 10000 * COIN},
+      {"RENT", 10000 * COIN},
+      {"FARM", 10000 * COIN},
+      {"OILX", 10000 * COIN},
+      {"ENRG", 10000 * COIN},
+      {"FUEL", 10000 * COIN},
+      {"VOTE", 10000 * COIN},
+      {"PASS", 10000 * COIN},
+      {"LOCK", 10000 * COIN},
+    };
+
+    // is it a premium ticker
+    auto it = premium_tickers.find(ticker);
+    if (it != premium_tickers.end()) {
+      return it->second;
+    }
+
+    // not premium
+    return 1000 * COIN;
   }
   //---------------------------------------------------------------
   /**
@@ -1405,32 +1588,6 @@ namespace cryptonote
         CHECK_AND_ASSERT_MES(o.target.type() == tx.vout[0].target.type(), false, "non-matching variant types: "
           << o.target.type().name() << " and " << tx.vout[0].target.type().name() << ", "
           << "expected matching variant types in transaction");
-      }
-
-      // Verify the asset type
-      std::string asset_type;
-      CHECK_AND_ASSERT_MES(cryptonote::get_output_asset_type(o, asset_type), false, "failed to get asset type");
-      if (hf_version < HF_VERSION_SALVIUM_ONE_PROOFS) {
-        // Prior to the first audit, ONLY SAL was supported
-        CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
-      } else {
-        if (tx.type == cryptonote::transaction_type::AUDIT) {
-          // HERE BE DRAGONS!!!
-          // SRCG: This will NOT always be the case - when we add an audit for SALx it'll need to support that as well
-          // The CHANGE for an AUDIT TX must be SAL (and 0 value, and unspendable, and to the origin wallet, and ...)
-          CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
-          // LAND AHOY!!!
-        } else if (tx.type == cryptonote::transaction_type::PROTOCOL) {
-          if (hf_version < HF_VERSION_AUDIT1_PAUSE) {
-            // PROTOCOL TXs are responsible for paying out SAL and SAL1 during the first AUDIT
-            CHECK_AND_ASSERT_MES(asset_type == "SAL1" || asset_type == "SAL", false, "wrong output asset type:" << asset_type);
-          } else {
-            CHECK_AND_ASSERT_MES(asset_type == "SAL1", false, "wrong output asset type:" << asset_type);
-          }
-        } else {
-          // All other TX types must only spend + create SAL1 (MINER, TRANSFER)
-          CHECK_AND_ASSERT_MES(asset_type == "SAL1", false, "wrong output asset type:" << asset_type);
-        }
       }
     }
     return true;

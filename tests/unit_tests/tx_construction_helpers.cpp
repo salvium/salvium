@@ -415,6 +415,7 @@ cryptonote::transaction construct_carrot_pruned_transaction_fake_inputs(
         {{0, 0}, carrot::AddressDeriveType::PreCarrot},
         {},
         {},
+        "SAL1",
         tx_proposal);
 
     cryptonote::transaction tx;

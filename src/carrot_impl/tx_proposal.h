@@ -67,8 +67,8 @@ struct CarrotPaymentProposalVerifiableSelfSendV1
  *
  * For exact details on what goes into the signable transaction hash, see `rct::get_pre_mlsag_hash`.
  */
-struct CarrotTransactionProposalV1
-{
+  struct CarrotTransactionProposalV1
+  {
     /// Key images sorted in std::greater order
     std::vector<crypto::key_image> key_images_sorted;
     // sources in the same order as key_images_sorted.
@@ -89,8 +89,18 @@ struct CarrotTransactionProposalV1
     /// how much money tx burns
     rct::xmr_amount amount_burnt;
 
+    /// used if this is a CREATE_TOKEN transaction
+    cryptonote::token_metadata_t token;
+
     /// This field is truly "extra". It should contain only tx.extra fields that aren't present in a
     /// normal Carrot transaction, i.e. NOT ephemeral pubkeys nor encrypted PIDs
     std::vector<std::uint8_t> extra;
-};
+
+    /// Used if this is a TOKEN_TRANSFER or ROLLUP transaction
+    carrot::rollup_binding_tag_t rollup_binding_tag;
+
+    /// Used if this is a ROLLUP transaction
+    cryptonote::layer2_rollup_data_t layer2_rollup_data;
+  };
+  
 } //namespace carrot

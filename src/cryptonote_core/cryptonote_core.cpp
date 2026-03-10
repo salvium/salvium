@@ -843,7 +843,8 @@ namespace cryptonote
     bad_semantics_txes_lock.unlock();
 
     uint8_t hf_version = m_blockchain_storage.get_current_hard_fork_version();
-    const size_t max_tx_version = hf_version >= HF_VERSION_CARROT ? TRANSACTION_VERSION_CARROT :
+    const size_t max_tx_version = hf_version >= HF_VERSION_ENABLE_TOKENS ? TRANSACTION_VERSION_ENABLE_TOKENS :
+                                  hf_version >= HF_VERSION_CARROT ? TRANSACTION_VERSION_CARROT :
                                   hf_version >= HF_VERSION_ENABLE_N_OUTS ? TRANSACTION_VERSION_N_OUTS :
                                   TRANSACTION_VERSION_2_OUTS;
     if (tx.version == 0 || tx.version > max_tx_version)
@@ -904,6 +905,7 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   bool core::handle_incoming_tx_accumulated_batch(std::vector<tx_verification_batch_info> &tx_info, bool keeped_by_block)
   {
+    const uint8_t hf_version = m_blockchain_storage.get_current_hard_fork_version();
     bool ret = true;
     if (keeped_by_block && get_blockchain_storage().is_within_compiled_block_hash_area())
     {
@@ -925,7 +927,6 @@ namespace cryptonote
       if (tx_info[n].tx->version < 2)
         continue;
       const rct::rctSig &rv = tx_info[n].tx->rct_signatures;
-      const uint8_t hf_version = m_blockchain_storage.get_current_hard_fork_version();
       if (hf_version >= HF_VERSION_CARROT) {
         if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeSalviumOne) {
           MERROR_VER("Invalid RCT type provided");
@@ -950,7 +951,11 @@ namespace cryptonote
           tx_info[n].result = false;
           return false;
         }
-      }            
+      }
+      bool need_rollup = false;
+      if (hf_version >= HF_VERSION_CARROT) {
+        need_rollup = (tx_info[n].tx->source_asset_type != "SAL1");
+      }
       switch (rv.type) {
         case rct::RCTTypeNull:
           // coinbase should not come here, so we reject for all other types
@@ -965,7 +970,8 @@ namespace cryptonote
                                           tx_info[n].tx->type == cryptonote::transaction_type::CONVERT ? tx_info[n].tx->amount_burnt :
                                           tx_info[n].tx->type == cryptonote::transaction_type::STAKE ? tx_info[n].tx->amount_burnt :
                                           tx_info[n].tx->type == cryptonote::transaction_type::AUDIT ? tx_info[n].tx->amount_burnt :
-                                          0
+                                          0,
+                                          need_rollup
                                           ))
           {
             MERROR_VER("rct signature semantics check failed");
@@ -1030,12 +1036,19 @@ namespace cryptonote
           continue;
         if (tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof2 && tx_info[n].tx->rct_signatures.type != rct::RCTTypeCLSAG && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproofPlus && tx_info[n].tx->rct_signatures.type != rct::RCTTypeFullProofs && tx_info[n].tx->rct_signatures.type != rct::RCTTypeSalviumZero && tx_info[n].tx->rct_signatures.type != rct::RCTTypeSalviumOne)
           continue;
+        bool need_rollup = false;
+        if (hf_version >= HF_VERSION_CARROT) {
+          need_rollup = (tx_info[n].tx->source_asset_type != "SAL1");
+        }
         if (!rct::verRctSemanticsSimple(tx_info[n].tx->rct_signatures,
                                         tx_info[n].tx->type == cryptonote::transaction_type::BURN ? tx_info[n].tx->amount_burnt :
                                         tx_info[n].tx->type == cryptonote::transaction_type::CONVERT ? tx_info[n].tx->amount_burnt :
                                         tx_info[n].tx->type == cryptonote::transaction_type::STAKE ? tx_info[n].tx->amount_burnt :
                                         tx_info[n].tx->type == cryptonote::transaction_type::AUDIT ? tx_info[n].tx->amount_burnt :
-                                        0
+                                        tx_info[n].tx->type == cryptonote::transaction_type::CREATE_TOKEN ? tx_info[n].tx->amount_burnt :
+                                        tx_info[n].tx->type == cryptonote::transaction_type::ROLLUP ? tx_info[n].tx->amount_burnt :
+                                        0,
+                                        need_rollup
                                         ))
         {
           set_semantics_failed(tx_info[n].tx_hash);
@@ -1249,6 +1262,13 @@ namespace cryptonote
       return false;
     }
 
+    /*
+    if (hf_version >= HF_VERSION_ENABLE_TOKENS && !m_blockchain_storage.is_tx_paid_for(tx))
+    {
+      MERROR_VER("tx has not been paid for by ROLLUP");
+      return false;
+    }
+    */
     return true;
   }
   //-----------------------------------------------------------------------------------------------
