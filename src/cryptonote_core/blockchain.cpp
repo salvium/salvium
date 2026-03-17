@@ -3920,8 +3920,8 @@ bool Blockchain::check_tx_asset_types(const transaction& tx, tx_verification_con
         return false;
       }
     } else if (tx.type == cryptonote::transaction_type::BURN) {
-      if ((tx.source_asset_type != "SAL" && tx.source_asset_type != "SAL1") || tx.destination_asset_type != tx.source_asset_type) {
-        MERROR_VER("Invalid source/dest asset type for BURN - provided source asset: " << tx.source_asset_type << ", and destination asset: " << tx.destination_asset_type << ", expected (matching) SAL/SAL1");
+      if ((tx.source_asset_type != "SAL" && tx.source_asset_type != "SAL1") || (tx.source_asset_type != tx.destination_asset_type)) {
+        MERROR_VER("Invalid source/dest asset type for BURN - provided source asset: " << tx.source_asset_type << ", and destination asset: " << tx.destination_asset_type << ", expected SAL/SAL1 for both");
         tvc.m_verifivation_failed = true; 
         return false;
       }
@@ -3947,12 +3947,19 @@ bool Blockchain::check_tx_asset_types(const transaction& tx, tx_verification_con
       return false;
     }
   } else if (hf_version >= HF_VERSION_CARROT) {
-    if (tx.source_asset_type != "SAL1" || tx.destination_asset_type != "SAL1") {
-      MERROR_VER("Invalid destination/source asset type - provided destination asset: " << tx.destination_asset_type << ", expected SAL1" << ", provided source asset: " << tx.source_asset_type << ", expected SAL1");
-      tvc.m_verifivation_failed = true;
-      return false;
+    if (tx.type == cryptonote::transaction_type::BURN) {
+      if (tx.source_asset_type != "SAL1" || tx.destination_asset_type != "BURN") {
+        MERROR_VER("Invalid source/dest asset type for BURN - provided destination asset: " << tx.destination_asset_type << ", expected BURN" << ", provided source asset: " << tx.source_asset_type << ", expected SAL1");
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+    } else {
+      if (tx.source_asset_type != "SAL1" || tx.destination_asset_type != "SAL1") {
+        MERROR_VER("Invalid destination/source asset type - provided destination asset: " << tx.destination_asset_type << ", expected SAL1" << ", provided source asset: " << tx.source_asset_type << ", expected SAL1");
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
     }
-    // }
   } else if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
     // protocol and miner txs don't have source and destination asset types
     if (tx.type == cryptonote::transaction_type::PROTOCOL || tx.type == cryptonote::transaction_type::MINER) {
@@ -3960,8 +3967,8 @@ bool Blockchain::check_tx_asset_types(const transaction& tx, tx_verification_con
     } else if (tx.type == cryptonote::transaction_type::AUDIT) {
       CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL" && tx.destination_asset_type == "SAL", false, "wrong source/destination asset type: provided source asset " << tx.source_asset_type << " expected SAL and provided destination asset " << tx.destination_asset_type << " expected SAL");
     } else if (tx.type == cryptonote::transaction_type::BURN) {
-      if (tx.source_asset_type != "SAL1" || tx.destination_asset_type != "BURN") {
-        MERROR_VER("Invalid source/dest asset type for BURN - provided source asset: " << tx.source_asset_type << ", and destination asset: " << tx.destination_asset_type << ", expected SAL1 and BURN respectively");
+      if ((tx.source_asset_type != "SAL" && tx.source_asset_type != "SAL1") || tx.destination_asset_type != "BURN") {
+        MERROR_VER("Invalid source/dest asset type for BURN - provided source asset: " << tx.source_asset_type << ", and destination asset: " << tx.destination_asset_type << ", expected SAL/SAL1 and BURN respectively");
         tvc.m_verifivation_failed = true;
         return false;
       }

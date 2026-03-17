@@ -11089,7 +11089,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
 
     // Is this a BURN TX?
     if (hf_version >= HF_VERSION_ENABLE_TOKENS && tx_type == cryptonote::transaction_type::BURN) {
-      THROW_WALLET_EXCEPTION_IF(source_asset != "SAL" && source_asset != "SAL1", error::wallet_internal_error, "Only SAL and SAL1 may be burnt");
+      THROW_WALLET_EXCEPTION_IF(source_asset != "SAL" && source_asset != "SAL1", error::wallet_internal_error, "Only SAL/SAL1 may be burnt");
       THROW_WALLET_EXCEPTION_IF(dsts.size() != 1, error::wallet_internal_error, "Only 1 destination permitted for BURN");
       dsts[0].asset_type = source_asset;
     }

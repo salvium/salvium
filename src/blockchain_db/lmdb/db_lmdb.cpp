@@ -1501,38 +1501,55 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       tx.type == cryptonote::transaction_type::STAKE ||
       tx.type == cryptonote::transaction_type::AUDIT ||
       tx.type == cryptonote::transaction_type::TRANSFER ||
-      tx.type == cryptonote::transaction_type::CREATE_TOKEN) 
+      tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
+      tx.type == cryptonote::transaction_type::ROLLUP) 
   {
 
-    // Get the current tally value for the source currency type
-    MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
-    boost::multiprecision::int128_t source_tally = 0;
-    result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
-    boost::multiprecision::int128_t final_source_tally = source_tally - tx.amount_burnt - tx.rct_signatures.txnFee;
-    if (result)
-      throw0(DB_ERROR(lmdb_error("Failed to get circulating supply tally when adding db transaction: ", result).c_str()));
-    // Sanity check - prevent underflow
-    if (source_tally < final_source_tally)
-      throw0(DB_ERROR("numeric underflow detected when processing C/B/S/A/T for db transaction")); 
-    write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
-    LOG_PRINT_L1("tx ID " << tx_id << "\n\tTally before burn = " << source_tally.str() << "\n\tTally after burn = " << final_source_tally.str());
+    bool is_token = cryptonote::is_asset_type_token(tx.source_asset_type);
+    if (!is_token) {
+      // Get the current tally value for the source currency type
+      MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
+      boost::multiprecision::int128_t source_tally = 0;
+      result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
+      boost::multiprecision::int128_t final_source_tally = source_tally - tx.amount_burnt - tx.rct_signatures.txnFee;
+      if (tx.version >= TRANSACTION_VERSION_ENABLE_TOKENS) {
+        if (tx.source_asset_type != "SAL1") {
+          // this must be a SAL BURN TX, so fee is paid for by ROLLUP
+          final_source_tally = final_source_tally + tx.rct_signatures.txnFee;
+        }
+      }
+      if (result)
+        throw0(DB_ERROR(lmdb_error("Failed to get circulating supply tally when adding db transaction: ", result).c_str()));
+      // Sanity check - prevent underflow
+      if (source_tally < final_source_tally)
+        throw0(DB_ERROR("numeric underflow detected when processing C/B/S/A/T for db transaction")); 
+      write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
+      LOG_PRINT_L1("tx ID " << tx_id << "\n\tTally before burn = " << source_tally.str() << "\n\tTally after burn = " << final_source_tally.str());
 
-    MDB_val_copy<uint64_t> burn_idx(cryptonote::asset_id_from_type("BURN"));
-    boost::multiprecision::int128_t burn_tally = 0;
-    result = read_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, burn_tally);
-    if (result && /*(m_height>0 ||*/ result != MDB_NOTFOUND/*)*/)
-      throw0(DB_ERROR(lmdb_error("Failed to get circulating supply tally when adding db transaction: ", result).c_str()));
-    boost::multiprecision::int128_t final_burn_tally = burn_tally + tx.amount_burnt + tx.rct_signatures.txnFee;
-    // Sanity check - prevent underflow
-    if (burn_tally > final_burn_tally)
-      throw0(DB_ERROR("burn overflow detected when adding tx for db transaction")); 
-    write_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, final_burn_tally);
+      MDB_val_copy<uint64_t> burn_idx(cryptonote::asset_id_from_type("BURN"));
+      boost::multiprecision::int128_t burn_tally = 0;
+      result = read_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, burn_tally);
+      if (result && /*(m_height>0 ||*/ result != MDB_NOTFOUND/*)*/)
+        throw0(DB_ERROR(lmdb_error("Failed to get circulating supply tally when adding db transaction: ", result).c_str()));
+      boost::multiprecision::int128_t final_burn_tally = burn_tally + tx.amount_burnt + tx.rct_signatures.txnFee;
+      if (tx.version >= TRANSACTION_VERSION_ENABLE_TOKENS) {
+        if (tx.source_asset_type != "SAL1") {
+          // this must be a SAL BURN TX, so fee is paid for by ROLLUP
+          final_burn_tally = final_burn_tally - tx.rct_signatures.txnFee;
+        }
+      }
+      // Sanity check - prevent underflow
+      if (burn_tally > final_burn_tally)
+        throw0(DB_ERROR("burn overflow detected when adding tx for db transaction")); 
+      write_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, final_burn_tally);
+    }
   }
 
   if (tx.type == cryptonote::transaction_type::PROTOCOL) {
 
     // Iterate over all of the outputs for a PROTOCOL_TX since they're all MINTED
     std::map<uint32_t, uint64_t> minted_amounts; 
+    std::map<uint32_t, uint64_t> burned_amounts;
     for (const auto& out: tx.vout) {
 
       // Fetch the amount and output_asset_type for this output
@@ -1541,6 +1558,11 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       if (!ok)
         throw0(DB_ERROR("failed to get output asset type (needed to update the circulating supply data for the PROTOCOL_TX)"));
       minted_amounts[cryptonote::asset_id_from_type(asset_type)] += out.amount;
+
+      if (asset_type == "SAL" || asset_type == "SAL1") {
+        uint32_t burned_asset_id = cryptonote::asset_id_from_type("BURN");
+        burned_amounts[burned_asset_id] += out.amount;
+      }
     }
 
     // Now update the overall tally entries
@@ -1567,23 +1589,23 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
       // Log can be changed - not burning here
       LOG_PRINT_L1("tx ID " << tx_id << "\n\tAsset Type = " << cryptonote::asset_type_from_id(asset.first) << "\n\tTally before burn =" << source_tally.str() << "\n\tTally after burn =" << final_source_tally.str());
-
-      MDB_val_copy<uint64_t> burn_idx(cryptonote::asset_id_from_type("BURN"));
+    }
+    
+    // Update burned asset tallies (subtract what was burned, BUT NOT for tokens which are being created!)
+    // HERE BE DRAGONS!!!
+    // SRCG: there should only ever be one entry in this vector!!!
+    for (const auto& asset: burned_amounts) {
+      MDB_val_copy<uint64_t> burn_idx(asset.first);
       boost::multiprecision::int128_t burn_tally = 0;
       result = read_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, burn_tally);
       if (result && result != MDB_NOTFOUND)
         throw0(DB_ERROR(lmdb_error("Failed to get circulating supply tally when adding db transaction: ", result).c_str()));
-      uint64_t burn_amount = 0;
-      if (asset.first == 0x53414C00 || asset.first == 0x53414C31 || asset.first == 0x4255524E) { //BURN SAL and SAL1 // check
-        burn_amount = asset.second;
-      } else {
-        burn_amount = asset.second / 200;
-      }
-      if (burn_tally < burn_amount)
+      if (burn_tally < asset.second)
         throw0(DB_ERROR("add_transaction_data() - burn underflow"));
-      boost::multiprecision::int128_t final_burn_tally = burn_tally - burn_amount;
+      boost::multiprecision::int128_t final_burn_tally = burn_tally - asset.second;
       write_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, final_burn_tally);
     }
+    // LAND AHOY!!!
   }
 
   // Is there a rollup_tx to add?
@@ -1898,37 +1920,60 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
     write_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, final_burn_tally);
   }
   
-  if (tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::TRANSFER) {
+  if (tx.type == cryptonote::transaction_type::BURN ||
+      tx.type == cryptonote::transaction_type::CONVERT ||
+      tx.type == cryptonote::transaction_type::STAKE ||
+      tx.type == cryptonote::transaction_type::AUDIT ||
+      tx.type == cryptonote::transaction_type::TRANSFER ||
+      tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
+      tx.type == cryptonote::transaction_type::ROLLUP) 
+    {
 
-    // Get the current tally value for the source currency type
-    MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
-    boost::multiprecision::int128_t source_tally = 0;
-    result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
-    boost::multiprecision::int128_t final_source_tally = source_tally + tx.amount_burnt + tx.rct_signatures.txnFee;
-    if (result)
-      throw0(DB_ERROR(lmdb_error("Failed to get circulating supply tally when removing db transaction: ", result).c_str()));
-    // Sanity check - prevent overflow
-    if (source_tally > final_source_tally)
-      throw0(DB_ERROR("numeric overflow detected when processing C/B/S/A/T for db transaction")); 
-    write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
-    LOG_PRINT_L1("tx ID " << tip->data.tx_id << "\n\tTally before remint =" << source_tally.str() << "\n\tTally after remint =" << final_source_tally.str());
+      bool is_token = cryptonote::is_asset_type_token(tx.source_asset_type);
+      if (!is_token) {
+        // Get the current tally value for the source currency type
+        MDB_val_copy<uint64_t> source_idx(cryptonote::asset_id_from_type(tx.source_asset_type));
+        boost::multiprecision::int128_t source_tally = 0;
+        result = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx, source_tally);
+        boost::multiprecision::int128_t final_source_tally = source_tally + tx.amount_burnt + tx.rct_signatures.txnFee;
+        if (tx.version >= TRANSACTION_VERSION_ENABLE_TOKENS) {
+          if (tx.source_asset_type != "SAL1") {
+            // this must be a SAL BURN TX, so fee is paid for by ROLLUP
+            final_source_tally = final_source_tally - tx.rct_signatures.txnFee;
+          }
+        }
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to get circulating supply tally when removing db transaction: ", result).c_str()));
+        // Sanity check - prevent overflow
+        if (source_tally > final_source_tally)
+          throw0(DB_ERROR("numeric overflow detected when processing C/B/S/A/T for db transaction")); 
+        write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
+        LOG_PRINT_L1("tx ID " << tip->data.tx_id << "\n\tTally before remint =" << source_tally.str() << "\n\tTally after remint =" << final_source_tally.str());
 
-    MDB_val_copy<uint64_t> burn_idx(cryptonote::asset_id_from_type("BURN"));
-    boost::multiprecision::int128_t burn_tally = 0;
-    result = read_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, burn_tally);
-    if (result && /*(m_height>0 ||*/ result != MDB_NOTFOUND/*)*/)
-      throw0(DB_ERROR(lmdb_error("Failed to get circulating supply tally when adding db transaction: ", result).c_str()));
-    boost::multiprecision::int128_t final_burn_tally = burn_tally - tx.amount_burnt - tx.rct_signatures.txnFee;
-    // Sanity check - prevent underflow
-    if (burn_tally < (tx.amount_burnt + tx.rct_signatures.txnFee))
-      throw0(DB_ERROR("burn underflow detected when removing tx for db transaction")); 
-    write_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, final_burn_tally);
-  }
-
+        MDB_val_copy<uint64_t> burn_idx(cryptonote::asset_id_from_type("BURN"));
+        boost::multiprecision::int128_t burn_tally = 0;
+        result = read_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, burn_tally);
+        if (result && /*(m_height>0 ||*/ result != MDB_NOTFOUND/*)*/)
+          throw0(DB_ERROR(lmdb_error("Failed to get circulating supply tally when adding db transaction: ", result).c_str()));
+        boost::multiprecision::int128_t final_burn_tally = burn_tally - tx.amount_burnt - tx.rct_signatures.txnFee;
+        if (tx.version >= TRANSACTION_VERSION_ENABLE_TOKENS) {
+          if (tx.source_asset_type != "SAL1") {
+            // this must be a SAL BURN TX, so fee is paid for by ROLLUP
+            final_burn_tally = final_burn_tally + tx.rct_signatures.txnFee;
+          }
+        }
+        // Sanity check - prevent underflow
+        if (burn_tally < (tx.amount_burnt + tx.rct_signatures.txnFee))
+          throw0(DB_ERROR("burn underflow detected when removing tx for db transaction")); 
+        write_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, final_burn_tally);
+      }
+    }
+  
   if (tx.type == cryptonote::transaction_type::PROTOCOL) {
 
     // Iterate over all of the outputs for a PROTOCOL_TX since they're all MINTED
     std::map<uint32_t, uint64_t> minted_amounts;
+    std::map<uint32_t, uint64_t> burned_amounts;
     for (const auto& out: tx.vout) {
 
       // Fetch the amount and output_asset_type for this output
@@ -1937,6 +1982,11 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
       if (!ok)
         throw0(DB_ERROR("failed to get output asset type (needed to update the circulating supply data for the PROTOCOL_TX)"));
       minted_amounts[cryptonote::asset_id_from_type(asset_type)] += out.amount;
+
+      if (asset_type == "SAL" || asset_type == "SAL1") {
+        uint32_t burned_asset_id = cryptonote::asset_id_from_type("BURN");
+        burned_amounts[burned_asset_id] += out.amount;
+      }
     }
 
     // Now update the overall tally entries
@@ -1955,8 +2005,13 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
       boost::multiprecision::int128_t final_source_tally = source_tally - asset.second;
       write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
       LOG_PRINT_L1("tx ID " << tip->data.tx_id << "\n\tAsset Type = " << cryptonote::asset_type_from_id(asset.first) << "\n\tTally before undoing mint =" << source_tally.str() << "\n\tTally after undoing mint =" << final_source_tally.str());
-
-      MDB_val_copy<uint64_t> burn_idx(cryptonote::asset_id_from_type("BURN"));
+    }
+    
+    // Update burned asset tallies (add what was burned, BUT NOT for tokens which were being created!)
+    // HERE BE DRAGONS!!!
+    // SRCG: there should only ever be one entry in this vector!!!
+    for (const auto& asset: burned_amounts) {
+      MDB_val_copy<uint64_t> burn_idx(asset.first);
       boost::multiprecision::int128_t burn_tally = 0;
       result = read_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, burn_tally);
       if (result)
@@ -1966,6 +2021,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
       boost::multiprecision::int128_t final_burn_tally = burn_tally + asset.second;
       write_circulating_supply_data(m_cur_circ_supply_tally, burn_idx, final_burn_tally);
     }
+    // LAND AHOY!!!
   }
   remove_tx_outputs(tip->data.tx_id, tx);
 
