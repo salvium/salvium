@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <limits>
 #include <boost/asio/dispatch.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptor/reversed.hpp>
@@ -4113,7 +4114,21 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
     // Validate the amount burnt matches the token creation price
     CHECK_AND_ASSERT_MES(tx.amount_burnt == cryptonote::get_token_creation_price(tx.token_metadata.asset_type), false, "Invalid fee paid for CREATE_TOKEN");
   }
-  
+
+  if (tx.type == cryptonote::transaction_type::ROLLUP) {
+    CHECK_AND_ASSERT_MES(tx.layer2_rollup_data.version == 1, false, "Invalid ROLLUP data version");
+    CHECK_AND_ASSERT_MES(!tx.layer2_rollup_data.txs.empty(), false, "ROLLUP must include at least one paid TX entry");
+
+    uint64_t expected_amount_burnt = 0;
+    for (const auto &rollup_tx : tx.layer2_rollup_data.txs) {
+      CHECK_AND_ASSERT_MES(rollup_tx.tx_fee > 0, false, "ROLLUP contains a paid TX entry with zero fee");
+      CHECK_AND_ASSERT_MES(expected_amount_burnt <= std::numeric_limits<uint64_t>::max() - rollup_tx.tx_fee, false, "Numeric overflow in ROLLUP fee total");
+      expected_amount_burnt += rollup_tx.tx_fee;
+    }
+
+    CHECK_AND_ASSERT_MES(tx.amount_burnt == expected_amount_burnt, false, "Invalid amount_burnt for ROLLUP");
+  }
+
   // Check for invalid TX types
   if (tx.type == cryptonote::transaction_type::UNSET || tx.type > cryptonote::transaction_type::MAX) {
     MERROR("TX type `" + std::to_string(tx.type) + "' is not supported");
