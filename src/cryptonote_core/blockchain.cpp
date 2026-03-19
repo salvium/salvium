@@ -4099,6 +4099,8 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
   }
 
   if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+    // Check that the ticker doesn't begin with the reserved chars `SAL`
+    CHECK_AND_ASSERT_MES(tx.token_metadata.asset_type.substr(0,3) != "SAL", false, "Invalid CREATE_TOKEN ticker - SAL* is reserved");    
     // Check that the specific asset_type being created isn't already in our list of tokens
     std::map<std::string, cryptonote::token_metadata_t> mapTokens = m_db->get_tokens();
     std::string asset_type = "sal" + tx.token_metadata.asset_type;
