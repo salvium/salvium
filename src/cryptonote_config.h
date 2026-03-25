@@ -94,6 +94,10 @@
 
 #define CREATE_TOKEN_LOCK_PERIOD                        10
 
+// HF11 block reward split
+#define BLOCK_REWARD_TREASURY_PCT                       25  // to treasury, 21600-block unlock
+#define BLOCK_REWARD_STAKER_PCT                         20  // to stakers via yield
+
 #define DIFFICULTY_TARGET_V2                            120  // seconds
 #define DIFFICULTY_TARGET_V1                            60  // seconds - before first fork
 #define DIFFICULTY_WINDOW_V2                            70 // blocks
@@ -319,6 +323,7 @@ namespace config
   const uint64_t STAKE_LOCK_PERIOD = 30*24*30;
   const uint64_t TREASURY_SAL1_MINT_PERIOD = 30*24*30; // 1 month of blocks
 
+  std::string const TREASURY_ADDRESS_CARROT = "SC11sFBPrGmNuT8AiTPUW479BwkdPJwBxdjKEhZ96yDfFg3B4mawgcpE1YfCAa1zwzUiRTMP9eqB54av48ALhzUu1Q5QoPGUfh";
   std::string const TREASURY_ADDRESS = "SaLvdZR6w1A21sf2Wh6jYEh1wzY4GSbT7RX6FjyPsnLsffWLrzFQeXUXJcmBLRWDzZC2YXeYe5t7qKsnrg9FpmxmEcxPHsEYfqA";
 
   // treasury payout {tx-key, output-key, anchor_enc, vie_tag} tuples
@@ -423,9 +428,11 @@ namespace config
       "KWv3Vo1/Gny+1vfaxsXhBQiG1KlHkafNGarzoL0WHW4ocqaaqF5iv8i35A==\n"
       "-----END PUBLIC KEY-----\n";
 
-    std::string const TREASURY_ADDRESS = "SaLvTyLFta9BiAXeUfFkKvViBkFt4ay5nEUBpWyDKewYggtsoxBbtCUVqaBjtcCDyY1euun8Giv7LLEgvztuurLo5a6Km1zskZn36";
+    std::string const TREASURY_ADDRESS_CARROT = "SC1TouvX6e4HmkAqsU6AAXLRjgeZnnKHjSpVfMHepTXramNMT2P47AsDmteLH81wdPR2DwMg3cxKvgrhUBeDSUW6MhM3sQb92we";
+    std::string const TREASURY_ADDRESS = "SaLvTyL2pN2SCAPRxwDQ7qjhdg46VbhZrGZTp2wHKJ5sK434a8ivEH35eWp2FTcmyW6LY6ExfBb9chmQ9xAL1eJyZ5FQjtQGTis3v";
 
     // treasury payout {tx-key, output-key, anchor_enc, vie_tag} tuples
+    // check address type before future development 
     const std::map<uint64_t, std::tuple<std::string, std::string, std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_DATA = {
       {1100, {"71336a480440ed24a53b2cfd5a5292d1e618c3e843637227883ea2cc42fb346f","a135f59a05ea9e33539e4502b187b4789cc7fba79616c6902a902cc6601f0359","7f1c6970232254a9b13f7f063df2a853","62073c"}},
       {1120, {"2cc49b182addc0106b601c9876c01a4b06532c05f9dd9179b2c4f47e5c7c0d74","fd62e59324389f37d0bb628a39f413c11be34d572ec3a40f465e008b9dfd5e0c","fbf8584222e299bb748009eaf2177123","b76a8d"}},
@@ -467,6 +474,7 @@ namespace config
       "KWv3Vo1/Gny+1vfaxsXhBQiG1KlHkafNGarzoL0WHW4ocqaaqF5iv8i35A==\n"
       "-----END PUBLIC KEY-----\n";
 
+    std::string const TREASURY_ADDRESS_CARROT = ""; // TODO: generate stagenet Carrot treasury address ?
     std::string const TREASURY_ADDRESS = "fuLMowH85abK8nz9BBMEem7MAfUbQu4aSHHUV9j5Z86o6Go9Lv2U5ZQiJCWPY9R9HA8p5idburazjAhCqDngLo7fYPCD9ciM9ee1A";
 
     // treasury payout {tx-key, output-key, anchor_enc, view_tag} tuples
@@ -521,6 +529,7 @@ namespace cryptonote
     uint64_t TREASURY_SAL1_MINT_PERIOD;
     std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> const AUDIT_HARD_FORKS;
     std::string TREASURY_ADDRESS;
+    std::string TREASURY_ADDRESS_CARROT;
     std::map<uint64_t, std::tuple<std::string, std::string, std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_DATA;
   };
   inline const config_t& get_config(network_type nettype)
@@ -544,6 +553,7 @@ namespace cryptonote
       ::config::TREASURY_SAL1_MINT_PERIOD,
       ::config::AUDIT_HARD_FORKS,
       ::config::TREASURY_ADDRESS,
+      ::config::TREASURY_ADDRESS_CARROT,
       ::config::TREASURY_SAL1_MINT_OUTPUT_DATA
     };
     static const config_t testnet = {
@@ -565,6 +575,7 @@ namespace cryptonote
       ::config::testnet::TREASURY_SAL1_MINT_PERIOD,
       ::config::testnet::AUDIT_HARD_FORKS,
       ::config::testnet::TREASURY_ADDRESS,
+      ::config::testnet::TREASURY_ADDRESS_CARROT,
       ::config::testnet::TREASURY_SAL1_MINT_OUTPUT_DATA
     };
     static const config_t stagenet = {
@@ -586,6 +597,7 @@ namespace cryptonote
       ::config::stagenet::TREASURY_SAL1_MINT_PERIOD,
       ::config::stagenet::AUDIT_HARD_FORKS,
       ::config::stagenet::TREASURY_ADDRESS,
+      ::config::stagenet::TREASURY_ADDRESS_CARROT,
       ::config::stagenet::TREASURY_SAL1_MINT_OUTPUT_DATA
     };
     switch (nettype)

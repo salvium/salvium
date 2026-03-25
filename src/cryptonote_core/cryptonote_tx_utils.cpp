@@ -459,6 +459,30 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
+  keypair get_deterministic_keypair_from_height(uint64_t height)
+  {
+    keypair k;
+    ec_scalar& sec = k.sec;
+
+    // Encode height as little-endian into the first 8 bytes of the secret key
+    for (int i = 0; i < 8; i++)
+    {
+      uint64_t height_byte = height & ((uint64_t)0xFF << (i * 8));
+      uint8_t byte = height_byte >> (i * 8);
+      sec.data[i] = byte;
+    }
+    // Zero-pad the remaining 24 bytes
+    for (int i = 8; i < 32; i++)
+    {
+      sec.data[i] = 0x00;
+    }
+
+    // Derive a valid Ed25519 keypair: hash/clamp the seed, compute public key
+    generate_keys(k.pub, k.sec, k.sec, true);
+
+    return k;
+  }
+  //---------------------------------------------------------------
   bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, network_type nettype, const std::vector<hardfork_t>& hardforks, const blobdata& extra_nonce, size_t max_outs, uint8_t hard_fork_version) {
 
     // Clear the TX contents
@@ -487,33 +511,72 @@ namespace cryptonote
     {
       try
       {
-        // Build the miner payout
-        carrot::CarrotDestinationV1 destination;
+        // miner destination
+        carrot::CarrotDestinationV1 miner_destination;
         carrot::make_carrot_main_address_v1(miner_address.m_spend_public_key,
           miner_address.m_view_public_key,
-          destination);
+          miner_destination);
+        
+        CHECK_AND_ASSERT_THROW_MES(!miner_destination.is_subaddress,
+                                   "construct_miner_tx: subaddresses are not allowed in miner transactions");
+        CHECK_AND_ASSERT_THROW_MES(miner_destination.payment_id == carrot::null_payment_id,
+                                   "construct_miner_tx: integrated addresses are not allowed in miner transactions");
 
-        CHECK_AND_ASSERT_THROW_MES(!destination.is_subaddress,
-                                   "make_single_enote_carrot_coinbase_transaction_v1: subaddress are not allowed in miner transactions");
-        CHECK_AND_ASSERT_THROW_MES(destination.payment_id == carrot::null_payment_id,
-                                   "make_single_enote_carrot_coinbase_transaction_v1: integrated addresses are not allowed in miner transactions");
+        const bool do_new_split = (hard_fork_version >= HF_VERSION_ENABLE_TOKENS);
+        uint64_t treasury_reward = do_new_split ? (block_reward * BLOCK_REWARD_TREASURY_PCT / 100) : 0;
+        uint64_t stake_reward = (block_reward - treasury_reward) * BLOCK_REWARD_STAKER_PCT / 100;
+        uint64_t miner_reward = (block_reward - treasury_reward - stake_reward);
 
-        uint64_t stake_reward = block_reward / 5;
-
-        const carrot::CarrotPaymentProposalV1 payment_proposal{
-          .destination = destination,
-          .amount = block_reward - stake_reward,
+        //miner enote
+        const carrot::CarrotPaymentProposalV1 miner_proposal{
+          .destination = miner_destination,
+          .amount = miner_reward,
           .asset_type = "SAL1",
           .randomness = carrot::gen_janus_anchor()
         };
 
-        std::vector<carrot::CarrotCoinbaseEnoteV1> enotes(treasury_payout_exists ? 2 : 1);
-        carrot::get_coinbase_output_proposal_v1(payment_proposal, height, enotes.front());
+        // Determine number of enotes: miner + optional treasury_reward + optional treasury_mint
+        size_t num_enotes = 1;
+        if (do_new_split) num_enotes++;           // treasury reward output
+        if (treasury_payout_exists) num_enotes++; 
+        std::vector<carrot::CarrotCoinbaseEnoteV1> enotes(num_enotes);
+        carrot::get_coinbase_output_proposal_v1(miner_proposal, height, enotes[0]);
 
-        // Check to see if there needs to be a treasury payout
+        size_t enote_idx = 1;
+
+        // Add the treasury reward enote (25% of block reward) for HF11+
+        if (do_new_split) {
+
+          //treasury address for HF11+ block reward split
+          address_parse_info treasury_addr_info;
+          bool treasury_ok = cryptonote::get_account_address_from_str(treasury_addr_info, nettype, get_config(nettype).TREASURY_ADDRESS_CARROT);
+          CHECK_AND_ASSERT_MES(treasury_ok, false, "Failed to parse treasury address for block reward split"); // maybe more check can be added here, but it's enough for now (bcs validation)
+
+          carrot::CarrotDestinationV1 treasury_destination;
+          carrot::make_carrot_main_address_v1(treasury_addr_info.address.m_spend_public_key,
+                                              treasury_addr_info.address.m_view_public_key,
+                                              treasury_destination);
+
+          // Derive a deterministic janus anchor from height so validators can independently recompute the expected treasury K_o
+          const keypair det_keys = get_deterministic_keypair_from_height(height);
+          carrot::janus_anchor_t treasury_anchor{};
+          static_assert(sizeof(treasury_anchor.bytes) <= sizeof(det_keys.sec.data),
+                        "janus anchor must fit in secret key");
+          memcpy(treasury_anchor.bytes, det_keys.sec.data, sizeof(treasury_anchor.bytes));
+
+          const carrot::CarrotPaymentProposalV1 treasury_proposal{
+            .destination = treasury_destination,
+            .amount = treasury_reward,
+            .asset_type = "SAL1",
+            .randomness = treasury_anchor
+          };
+
+          carrot::get_coinbase_output_proposal_v1(treasury_proposal, height, enotes[enote_idx]);
+          enote_idx++;
+        }
+
+        // 
         if (treasury_payout_exists) {
-
-          // Convert the strings into meaningful data
           const auto [tx_public_key_str, onetime_address_str, anchor_enc_str, view_tag_str] = treasury_payout_data.at(height);
           mx25519_pubkey tx_public_key;
           CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(tx_public_key_str, tx_public_key), "fail to deserialize treasury tx public key");
@@ -524,8 +587,8 @@ namespace cryptonote
           carrot::view_tag_t view_tag;
           CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(view_tag_str, view_tag), "fail to deserialize treasury tx view_tag");
           
-          // Manually produce an enote for the treasury payout using the hardcoded keys
-          carrot::CarrotCoinbaseEnoteV1 &treasury_enote = enotes.back();
+          //
+          carrot::CarrotCoinbaseEnoteV1 &treasury_enote = enotes[enote_idx];
           treasury_enote.onetime_address = onetime_address;
           treasury_enote.amount = TREASURY_SAL1_MINT_AMOUNT;
           treasury_enote.asset_type = "SAL1";
@@ -533,12 +596,12 @@ namespace cryptonote
           treasury_enote.view_tag = view_tag;
           treasury_enote.enote_ephemeral_pubkey = tx_public_key;
           treasury_enote.block_index = height;
-        
-          // sort enotes by K_o
-          if (enotes[0].onetime_address > enotes[1].onetime_address) {
-            std::swap(enotes[0], enotes[1]);
-          }
         }
+
+        // Sort enotes by K_o
+        std::sort(enotes.begin(), enotes.end(), [](const carrot::CarrotCoinbaseEnoteV1 &a, const carrot::CarrotCoinbaseEnoteV1 &b) {
+          return a.onetime_address < b.onetime_address;
+        });
 
         tx = carrot::store_carrot_to_coinbase_transaction_v1(enotes, extra_nonce, cryptonote::transaction_type::MINER, height);
         tx.version = (hard_fork_version >= HF_VERSION_ENABLE_TOKENS) ? TRANSACTION_VERSION_ENABLE_TOKENS : TRANSACTION_VERSION_CARROT;

@@ -58,6 +58,8 @@
 #include "crypto/hash.h"
 #include "cryptonote_core.h"
 #include "ringct/rctSigs.h"
+#include "carrot_core/payment_proposal.h"
+#include "carrot_impl/format_utils.h"
 #include "common/perf_timer.h"
 #include "common/notify.h"
 #include "common/varint.h"
@@ -1517,6 +1519,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   for(size_t i = 0; i < b.miner_tx.vout.size(); i++)
   {
     // skip the treasury output
+    // check
     if (treasury_payout_exists && (i == treasury_index_in_tx_outputs)) {
       continue;
     }
@@ -1535,13 +1538,101 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_AUDIT2:
   case HF_VERSION_AUDIT2_PAUSE:
   case HF_VERSION_CARROT:
-  case HF_VERSION_ENABLE_TOKENS:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
     }
     if (already_generated_coins != 0)
       CHECK_AND_ASSERT_MES(money_in_use / 5 == b.miner_tx.amount_burnt, false, "miner_transaction has incorrect amount_burnt amount");
+    break;
+  case HF_VERSION_ENABLE_TOKENS:
+    // HF11: block reward split is 60% miner + 25% treasury + 215% staker (amount_burnt)
+    if (b.miner_tx.amount_burnt > 0) {
+      CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
+      money_in_use += b.miner_tx.amount_burnt;
+    }
+    if (already_generated_coins != 0) {
+      // Validate treasury share: one output must equal block_reward * 25 / 100
+      uint64_t expected_treasury = money_in_use * BLOCK_REWARD_TREASURY_PCT / 100;
+      // Validate staker share: amount_burnt == block_reward * 20 / 100
+      uint64_t expected_staker = (money_in_use - expected_treasury) * BLOCK_REWARD_STAKER_PCT / 100;
+      CHECK_AND_ASSERT_MES(expected_staker == b.miner_tx.amount_burnt, false,
+        "miner_transaction has incorrect amount_burnt for HF11 (expected " << expected_staker << ", got " << b.miner_tx.amount_burnt << ")");
+      uint64_t expected_miner = money_in_use - b.miner_tx.amount_burnt - expected_treasury;
+      bool found_treasury = false;
+      bool found_miner = false;
+      for (size_t i = 0; i < b.miner_tx.vout.size(); i++) {
+        if (treasury_payout_exists && (i == treasury_index_in_tx_outputs)) continue;
+        if (b.miner_tx.vout[i].amount == expected_treasury) found_treasury = true; //check here
+        if (b.miner_tx.vout[i].amount == expected_miner) found_miner = true;
+      }
+      CHECK_AND_ASSERT_MES(found_treasury, false, "miner_transaction missing treasury output with expected amount " << expected_treasury);
+      CHECK_AND_ASSERT_MES(found_miner, false, "miner_transaction missing miner output with expected amount " << expected_miner);
+
+      // Verify treasury output full? using deterministic anchor
+      {
+        // treasury_destination
+        address_parse_info treasury_addr_info;
+        bool addr_ok = cryptonote::get_account_address_from_str(treasury_addr_info, m_nettype, get_config(m_nettype).TREASURY_ADDRESS_CARROT);
+        CHECK_AND_ASSERT_MES(addr_ok, false, "Failed to parse treasury address for validation");
+
+        carrot::CarrotDestinationV1 treasury_destination;
+        carrot::make_carrot_main_address_v1(treasury_addr_info.address.m_spend_public_key,
+          treasury_addr_info.address.m_view_public_key,
+          treasury_destination);
+
+        // deterministic janus anchor
+        const keypair det_keys = get_deterministic_keypair_from_height(height);
+        carrot::janus_anchor_t treasury_anchor{};
+        memcpy(treasury_anchor.bytes, det_keys.sec.data, sizeof(treasury_anchor.bytes));
+
+        const carrot::CarrotPaymentProposalV1 treasury_proposal{
+          .destination = treasury_destination,
+          .amount = expected_treasury,
+          .asset_type = "SAL1",
+          .randomness = treasury_anchor
+        };
+
+        carrot::CarrotCoinbaseEnoteV1 expected_enote;
+        carrot::get_coinbase_output_proposal_v1(treasury_proposal, height, expected_enote);
+
+        // Validate treasury output: K_o, view_tag, anchor_enc, and D_e
+        bool found_valid_treasury = false;
+
+        // ephemeral pubkeys
+        crypto::public_key single_tx_pubkey = cryptonote::get_tx_pub_key_from_extra(b.miner_tx.extra);
+        bool has_single = (single_tx_pubkey != crypto::null_pkey);
+        std::vector<crypto::public_key> additional_tx_pubkeys = cryptonote::get_additional_tx_pub_keys_from_extra(b.miner_tx.extra);
+
+        for (size_t i = 0; i < b.miner_tx.vout.size(); i++) {
+          if (treasury_payout_exists && (i == treasury_index_in_tx_outputs)) continue;
+          if (b.miner_tx.vout[i].target.type() != typeid(txout_to_carrot_v1)) continue;
+          const auto &carrot_out = boost::get<txout_to_carrot_v1>(b.miner_tx.vout[i].target);
+
+          // Check K_o
+          if (carrot_out.key != expected_enote.onetime_address) continue;
+          // Check view_tag
+          CHECK_AND_ASSERT_MES(carrot_out.view_tag == expected_enote.view_tag, false,
+            "treasury output view_tag mismatch (burning bug: K_o correct but view_tag tampered)");          CHECK_AND_ASSERT_MES(0 == memcmp(&carrot_out.encrypted_janus_anchor, &expected_enote.anchor_enc, sizeof(expected_enote.anchor_enc)), false,
+            "treasury output anchor_enc mismatch (burning bug: K_o correct but anchor tampered)");
+          // Check D_e
+          const crypto::public_key expected_De = carrot::raw_byte_convert<crypto::public_key>(expected_enote.enote_ephemeral_pubkey);
+          crypto::public_key actual_De{};
+          if (!additional_tx_pubkeys.empty() && i < additional_tx_pubkeys.size()) {
+            actual_De = additional_tx_pubkeys[i];
+          } else if (has_single) {
+            actual_De = single_tx_pubkey;
+          }
+          CHECK_AND_ASSERT_MES(actual_De == expected_De, false,
+            "treasury output D_e mismatch"); //important
+
+          found_valid_treasury = true;
+          break;
+        }
+        CHECK_AND_ASSERT_MES(found_valid_treasury, false,
+          "miner_transaction treasury output has wrong onetime address (K_o mismatch)");
+      }
+    }
     break;
   default:
     assert(false);
@@ -2237,9 +2328,6 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   */
   
   // Time to construct the protocol_tx
-  address_parse_info treasury_address_info;
-  ok = cryptonote::get_account_address_from_str(treasury_address_info, m_nettype, get_config(m_nettype).TREASURY_ADDRESS);
-  CHECK_AND_ASSERT_MES(ok, false, "Failed to obtain treasury address info");
   ok = construct_protocol_tx(height, b.protocol_tx, protocol_entries, b.major_version);
   CHECK_AND_ASSERT_MES(ok, false, "Failed to construct protocol tx");
   
@@ -2303,7 +2391,8 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
    */
   //make blocks coin-base tx looks close to real coinbase tx to get truthful blob weight
   uint8_t hf_version = b.major_version;
-  size_t max_outs = hf_version >= 4 ? 1 : 11;
+  size_t max_outs = hf_version >= HF_VERSION_ENABLE_TOKENS ? 3 : (hf_version >= 4 ? 1 : 11);
+
   bool r = construct_miner_tx(height, median_weight, already_generated_coins, txs_weight, fee, miner_address, b.miner_tx, m_nettype, m_hardfork->get_hardforks(), ex_nonce, max_outs, hf_version);
   CHECK_AND_ASSERT_MES(r, false, "Failed to construct miner tx, first chance");
   size_t cumulative_weight = txs_weight + get_transaction_weight(b.miner_tx);
