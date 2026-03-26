@@ -63,7 +63,7 @@ const hardfork_t mainnet_hard_forks[] = {
   {10, 334750, 0, 1759142500 },
 
   // version 11 Two Milestone 1 - starts from block 465000, which is on or around the 13th of April, 2026. Fork time finalised on 2026-03-20. No fork voting occurs for the v11 fork.
-  {11, 465000, 0, 1759142500 },
+  {11, 465000, 0, 1774000000 },
 };
 const size_t num_mainnet_hard_forks = sizeof(mainnet_hard_forks) / sizeof(mainnet_hard_forks[0]);
 const uint64_t mainnet_hard_fork_version_1_till = ((uint64_t)-1);
