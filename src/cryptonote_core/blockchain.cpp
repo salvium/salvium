@@ -1491,7 +1491,53 @@ std::tuple<bool, size_t> Blockchain::validate_treasury_payout(const transaction&
     return {false, 0};
   }
 
-  return {true, output - tx.vout.begin()};
+  // Burning-bug guards: verify view_tag, anchor_enc, and D_e from the hardcoded config
+  // so a miner cannot tamper with those fields while keeping K_o correct.
+
+  // Check view_tag
+  carrot::view_tag_t expected_view_tag{};
+  if (!epee::string_tools::hex_to_pod(viewtag, expected_view_tag)) {
+    MERROR_VER("treasury payout: failed to deserialize expected view_tag");
+    return {false, 0};
+  }
+  if (target.view_tag != expected_view_tag) {
+    MERROR_VER("treasury payout view_tag mismatch (burning bug: K_o correct but view_tag tampered)");
+    return {false, 0};
+  }
+
+  // Check anchor_enc
+  carrot::encrypted_janus_anchor_t expected_anchor_enc{};
+  if (!epee::string_tools::hex_to_pod(anchor_enc, expected_anchor_enc)) {
+    MERROR_VER("treasury payout: failed to deserialize expected anchor_enc");
+    return {false, 0};
+  }
+  if (0 != memcmp(&target.encrypted_janus_anchor, &expected_anchor_enc, sizeof(expected_anchor_enc))) {
+    MERROR_VER("treasury payout anchor_enc mismatch (burning bug: K_o correct but anchor tampered)");
+    return {false, 0};
+  }
+
+  // Check D_e (enote ephemeral pubkey)
+  mx25519_pubkey expected_tx_key_raw{};
+  if (!epee::string_tools::hex_to_pod(tx_key, expected_tx_key_raw)) {
+    MERROR_VER("treasury payout: failed to deserialize expected tx_key");
+    return {false, 0};
+  }
+  const crypto::public_key expected_De = carrot::raw_byte_convert<crypto::public_key>(expected_tx_key_raw);
+  const size_t output_idx = output - tx.vout.begin();
+  const crypto::public_key single_tx_pubkey = cryptonote::get_tx_pub_key_from_extra(tx);
+  const std::vector<crypto::public_key> additional_tx_pubkeys = cryptonote::get_additional_tx_pub_keys_from_extra(tx);
+  crypto::public_key actual_De{};
+  if (!additional_tx_pubkeys.empty() && output_idx < additional_tx_pubkeys.size()) {
+    actual_De = additional_tx_pubkeys[output_idx];
+  } else if (single_tx_pubkey != crypto::null_pkey) {
+    actual_De = single_tx_pubkey;
+  }
+  if (actual_De != expected_De) {
+    MERROR_VER("treasury payout D_e mismatch (burning bug: K_o correct but ephemeral key tampered)");
+    return {false, 0};
+  }
+
+  return {true, output_idx};
 }
 //------------------------------------------------------------------
 // This function validates the miner transaction reward
@@ -1516,13 +1562,16 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
 
   //validate reward
   uint64_t money_in_use = 0;
+  CHECK_AND_ASSERT_MES(b.miner_tx.amount_burnt > 0 || height == 0, false, "invalid tx.amount_burnt for miner_tx");
+  CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt >= money_in_use, false, "miner transaction is overflowed by amount_burnt");
+  money_in_use += b.miner_tx.amount_burnt;
   for(size_t i = 0; i < b.miner_tx.vout.size(); i++)
   {
     // skip the treasury output
-    // check
     if (treasury_payout_exists && (i == treasury_index_in_tx_outputs)) {
       continue;
     }
+    CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.vout[i].amount >= money_in_use, false, "miner transaction is overflowed by output amount");
     money_in_use += b.miner_tx.vout[i].amount;
   }
   partial_block_reward = false;
@@ -1538,104 +1587,111 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_AUDIT2:
   case HF_VERSION_AUDIT2_PAUSE:
   case HF_VERSION_CARROT:
-    if (b.miner_tx.amount_burnt > 0) {
-      CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
-      money_in_use += b.miner_tx.amount_burnt;
-    }
-    if (already_generated_coins != 0)
+    if (already_generated_coins != 0) {
+      // HF1-10: block reward split is 80% miner + 20% staker (amount_burnt)
       CHECK_AND_ASSERT_MES(money_in_use / 5 == b.miner_tx.amount_burnt, false, "miner_transaction has incorrect amount_burnt amount");
+    }
     break;
   case HF_VERSION_ENABLE_TOKENS:
-    // HF11: block reward split is 60% miner + 25% treasury + 215% staker (amount_burnt)
-    if (b.miner_tx.amount_burnt > 0) {
-      CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
-      money_in_use += b.miner_tx.amount_burnt;
-    }
+    // HF11: block reward split is 60% miner + 25% treasury + 15% staker (amount_burnt)
     if (already_generated_coins != 0) {
+
+      // Make sure we have the correct number of outputs
+      if (treasury_payout_exists)
+        CHECK_AND_ASSERT_MES(b.miner_tx.vout.size() == 3, false, "Incorrect number of miner_tx outputs (expected 3)");
+      else
+        CHECK_AND_ASSERT_MES(b.miner_tx.vout.size() == 2, false, "Incorrect number of miner_tx outputs (expected 2)");
+ 
       // Validate treasury share: one output must equal block_reward * 25 / 100
-      uint64_t expected_treasury = money_in_use * BLOCK_REWARD_TREASURY_PCT / 100;
-      // Validate staker share: amount_burnt == block_reward * 20 / 100
-      uint64_t expected_staker = (money_in_use - expected_treasury) * BLOCK_REWARD_STAKER_PCT / 100;
-      CHECK_AND_ASSERT_MES(expected_staker == b.miner_tx.amount_burnt, false,
-        "miner_transaction has incorrect amount_burnt for HF11 (expected " << expected_staker << ", got " << b.miner_tx.amount_burnt << ")");
-      uint64_t expected_miner = money_in_use - b.miner_tx.amount_burnt - expected_treasury;
-      bool found_treasury = false;
-      bool found_miner = false;
+      uint64_t expected_treasury_block_reward = money_in_use * BLOCK_REWARD_TREASURY_PCT / 100;
+      // Validate staker share: amount_burnt == block_reward * 15 / 100
+      uint64_t expected_staker_block_reward = (money_in_use - expected_treasury_block_reward) * BLOCK_REWARD_STAKER_PCT / 100;
+      CHECK_AND_ASSERT_MES(expected_staker_block_reward == b.miner_tx.amount_burnt, false,
+        "miner_transaction has incorrect amount_burnt for HF11 (expected " << expected_staker_block_reward << ", got " << b.miner_tx.amount_burnt << ")");
+      uint64_t expected_miner_block_reward = money_in_use - b.miner_tx.amount_burnt - expected_treasury_block_reward;
+
+      // treasury_destination
+      address_parse_info treasury_addr_info;
+      bool addr_ok = cryptonote::get_account_address_from_str(treasury_addr_info, m_nettype, get_config(m_nettype).TREASURY_ADDRESS_CARROT);
+      CHECK_AND_ASSERT_MES(addr_ok, false, "Failed to parse treasury address for validation");
+
+      carrot::CarrotDestinationV1 treasury_destination;
+      carrot::make_carrot_main_address_v1(treasury_addr_info.address.m_spend_public_key,
+                                          treasury_addr_info.address.m_view_public_key,
+                                          treasury_destination);
+
+      // deterministic janus anchor
+      const carrot::janus_anchor_t treasury_anchor = get_deterministic_treasury_anchor_from_height(height);
+      const carrot::CarrotPaymentProposalV1 treasury_proposal{
+        .destination = treasury_destination,
+        .amount = expected_treasury_block_reward,
+        .asset_type = "SAL1",
+        .randomness = treasury_anchor
+      };
+
+      carrot::CarrotCoinbaseEnoteV1 expected_enote;
+      carrot::get_coinbase_output_proposal_v1(treasury_proposal, height, expected_enote);
+
+      // Get the ephemeral pubkeys from the TX
+      crypto::public_key tx_pubkey = cryptonote::get_tx_pub_key_from_extra(b.miner_tx.extra);
+      bool has_single = (tx_pubkey != crypto::null_pkey);
+      std::vector<crypto::public_key> additional_tx_pubkeys = cryptonote::get_additional_tx_pub_keys_from_extra(b.miner_tx.extra);
+
+      bool found_treasury_block_reward = false;
+      bool found_miner_block_reward = false;
       for (size_t i = 0; i < b.miner_tx.vout.size(); i++) {
+
+        // Get the output
+        CHECK_AND_ASSERT_MES(b.miner_tx.vout[i].target.type() == typeid(txout_to_carrot_v1), false, "Output of miner_tx is not txout_to_carrot_V1");
+        const auto &output = boost::get<txout_to_carrot_v1>(b.miner_tx.vout[i].target);
+        
+        // Skip the premine remint
         if (treasury_payout_exists && (i == treasury_index_in_tx_outputs)) continue;
-        if (b.miner_tx.vout[i].amount == expected_treasury) found_treasury = true; //check here
-        if (b.miner_tx.vout[i].amount == expected_miner) found_miner = true;
-      }
-      CHECK_AND_ASSERT_MES(found_treasury, false, "miner_transaction missing treasury output with expected amount " << expected_treasury);
-      CHECK_AND_ASSERT_MES(found_miner, false, "miner_transaction missing miner output with expected amount " << expected_miner);
 
-      // Verify treasury output full? using deterministic anchor
-      {
-        // treasury_destination
-        address_parse_info treasury_addr_info;
-        bool addr_ok = cryptonote::get_account_address_from_str(treasury_addr_info, m_nettype, get_config(m_nettype).TREASURY_ADDRESS_CARROT);
-        CHECK_AND_ASSERT_MES(addr_ok, false, "Failed to parse treasury address for validation");
+        // Could this be the treasury block reward?
+        if (b.miner_tx.vout[i].amount == expected_treasury_block_reward) {
 
-        carrot::CarrotDestinationV1 treasury_destination;
-        carrot::make_carrot_main_address_v1(treasury_addr_info.address.m_spend_public_key,
-          treasury_addr_info.address.m_view_public_key,
-          treasury_destination);
+          /// Check Ko
+          if (output.key != expected_enote.onetime_address) continue;
 
-        // deterministic janus anchor
-        const keypair det_keys = get_deterministic_keypair_from_height(height);
-        carrot::janus_anchor_t treasury_anchor{};
-        memcpy(treasury_anchor.bytes, det_keys.sec.data, sizeof(treasury_anchor.bytes));
-
-        const carrot::CarrotPaymentProposalV1 treasury_proposal{
-          .destination = treasury_destination,
-          .amount = expected_treasury,
-          .asset_type = "SAL1",
-          .randomness = treasury_anchor
-        };
-
-        carrot::CarrotCoinbaseEnoteV1 expected_enote;
-        carrot::get_coinbase_output_proposal_v1(treasury_proposal, height, expected_enote);
-
-        // Validate treasury output: K_o, view_tag, anchor_enc, and D_e
-        bool found_valid_treasury = false;
-
-        // ephemeral pubkeys
-        crypto::public_key single_tx_pubkey = cryptonote::get_tx_pub_key_from_extra(b.miner_tx.extra);
-        bool has_single = (single_tx_pubkey != crypto::null_pkey);
-        std::vector<crypto::public_key> additional_tx_pubkeys = cryptonote::get_additional_tx_pub_keys_from_extra(b.miner_tx.extra);
-
-        for (size_t i = 0; i < b.miner_tx.vout.size(); i++) {
-          if (treasury_payout_exists && (i == treasury_index_in_tx_outputs)) continue;
-          if (b.miner_tx.vout[i].target.type() != typeid(txout_to_carrot_v1)) continue;
-          const auto &carrot_out = boost::get<txout_to_carrot_v1>(b.miner_tx.vout[i].target);
-
-          // Check K_o
-          if (carrot_out.key != expected_enote.onetime_address) continue;
           // Check view_tag
-          CHECK_AND_ASSERT_MES(carrot_out.view_tag == expected_enote.view_tag, false,
-            "treasury output view_tag mismatch (burning bug: K_o correct but view_tag tampered)");          CHECK_AND_ASSERT_MES(0 == memcmp(&carrot_out.encrypted_janus_anchor, &expected_enote.anchor_enc, sizeof(expected_enote.anchor_enc)), false,
-            "treasury output anchor_enc mismatch (burning bug: K_o correct but anchor tampered)");
+          CHECK_AND_ASSERT_MES(output.view_tag == expected_enote.view_tag, false,
+                               "treasury output view_tag mismatch (burning bug: K_o correct but view_tag tampered)");
+
+          // Check anchor_enc
+          CHECK_AND_ASSERT_MES(0 == memcmp(&output.encrypted_janus_anchor, &expected_enote.anchor_enc, sizeof(expected_enote.anchor_enc)), false,
+                               "treasury output anchor_enc mismatch (burning bug: K_o correct but anchor tampered)");
+
           // Check D_e
           const crypto::public_key expected_De = carrot::raw_byte_convert<crypto::public_key>(expected_enote.enote_ephemeral_pubkey);
           crypto::public_key actual_De{};
           if (!additional_tx_pubkeys.empty() && i < additional_tx_pubkeys.size()) {
             actual_De = additional_tx_pubkeys[i];
           } else if (has_single) {
-            actual_De = single_tx_pubkey;
+            actual_De = tx_pubkey;
           }
           CHECK_AND_ASSERT_MES(actual_De == expected_De, false,
-            "treasury output D_e mismatch"); //important
+                               "treasury output D_e mismatch"); //important
 
-          found_valid_treasury = true;
-          break;
+          // Passed all checks
+          found_treasury_block_reward = true;
+          continue;
         }
-        CHECK_AND_ASSERT_MES(found_valid_treasury, false,
-          "miner_transaction treasury output has wrong onetime address (K_o mismatch)");
+        if (b.miner_tx.vout[i].amount == expected_miner_block_reward) {
+          std::string miner_out_asset_type;
+          cryptonote::get_output_asset_type(b.miner_tx.vout[i], miner_out_asset_type);
+          CHECK_AND_ASSERT_MES(miner_out_asset_type == "SAL1", false,
+            "miner output has wrong asset_type: expected SAL1, got " << miner_out_asset_type);
+          found_miner_block_reward = true;
+          continue;
+        }
       }
+      CHECK_AND_ASSERT_MES(found_treasury_block_reward, false, "miner_tx missing treasury output with expected amount " << expected_treasury_block_reward);
+      CHECK_AND_ASSERT_MES(found_miner_block_reward, false, "miner_tx missing miner output with expected amount " << expected_miner_block_reward);
     }
     break;
   default:
-    assert(false);
+    CHECK_AND_ASSERT_MES(false, false, "invalid HF detected in miner_tx : " << version);
     break;
   }
 
@@ -6896,7 +6952,7 @@ void Blockchain::cancel()
 }
 
 #if defined(PER_BLOCK_CHECKPOINT)
-static const char expected_block_hashes_hash[] = "7e6c9efd949afb36bce062bbb720605f0dd67b03c0124e5167c527fa59c15ce3";
+static const char expected_block_hashes_hash[] = "f3bf12451890c9cbeb9f90b2762e4ee2756aaa726958e280e27b51ed9edf84b3";
 void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints)
 {
   if (get_checkpoints == nullptr || !m_fast_sync)

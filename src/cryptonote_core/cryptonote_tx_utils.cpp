@@ -459,28 +459,14 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  keypair get_deterministic_keypair_from_height(uint64_t height)
+  carrot::janus_anchor_t get_deterministic_treasury_anchor_from_height(uint64_t height)
   {
-    keypair k;
-    ec_scalar& sec = k.sec;
-
-    // Encode height as little-endian into the first 8 bytes of the secret key
-    for (int i = 0; i < 8; i++)
-    {
-      uint64_t height_byte = height & ((uint64_t)0xFF << (i * 8));
-      uint8_t byte = height_byte >> (i * 8);
-      sec.data[i] = byte;
-    }
-    // Zero-pad the remaining 24 bytes
-    for (int i = 8; i < 32; i++)
-    {
-      sec.data[i] = 0x00;
-    }
-
-    // Derive a valid Ed25519 keypair: hash/clamp the seed, compute public key
-    generate_keys(k.pub, k.sec, k.sec, true);
-
-    return k;
+    carrot::janus_anchor_t treasury_anchor{};
+    for (int i = 0; i < 8; ++i)
+      treasury_anchor.bytes[i] = (height >> (8 * i)) & 0xff;
+    for (int i = 8; i < 16; ++i)
+      treasury_anchor.bytes[i] = 0;
+    return treasury_anchor;
   }
   //---------------------------------------------------------------
   bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, network_type nettype, const std::vector<hardfork_t>& hardforks, const blobdata& extra_nonce, size_t max_outs, uint8_t hard_fork_version) {
@@ -558,12 +544,7 @@ namespace cryptonote
                                               treasury_destination);
 
           // Derive a deterministic janus anchor from height so validators can independently recompute the expected treasury K_o
-          const keypair det_keys = get_deterministic_keypair_from_height(height);
-          carrot::janus_anchor_t treasury_anchor{};
-          static_assert(sizeof(treasury_anchor.bytes) <= sizeof(det_keys.sec.data),
-                        "janus anchor must fit in secret key");
-          memcpy(treasury_anchor.bytes, det_keys.sec.data, sizeof(treasury_anchor.bytes));
-
+          const carrot::janus_anchor_t treasury_anchor = get_deterministic_treasury_anchor_from_height(height);
           const carrot::CarrotPaymentProposalV1 treasury_proposal{
             .destination = treasury_destination,
             .amount = treasury_reward,

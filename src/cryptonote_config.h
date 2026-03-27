@@ -326,7 +326,7 @@ namespace config
   std::string const TREASURY_ADDRESS_CARROT = "SC11sFBPrGmNuT8AiTPUW479BwkdPJwBxdjKEhZ96yDfFg3B4mawgcpE1YfCAa1zwzUiRTMP9eqB54av48ALhzUu1Q5QoPGUfh";
   std::string const TREASURY_ADDRESS = "SaLvdZR6w1A21sf2Wh6jYEh1wzY4GSbT7RX6FjyPsnLsffWLrzFQeXUXJcmBLRWDzZC2YXeYe5t7qKsnrg9FpmxmEcxPHsEYfqA";
 
-  // treasury payout {tx-key, output-key, anchor_enc, vie_tag} tuples
+  // treasury payout {tx-key, output-key, anchor_enc, view_tag} tuples
   const std::map<uint64_t, std::tuple<std::string, std::string, std::string, std::string>> TREASURY_SAL1_MINT_OUTPUT_DATA = {
     {334750, {"1b2cd3ff56aa77c0cbab0473bfb96697ebdd0b25ad230136bfe41d5dc1ef265f","718cf02eabca157fd7ad7f8537db217624bfe1ca99dd09e758357e7000a5e57a","789cca3def51fb879eb7fbca271869b7","79bd0c"}},
     {356350, {"b51acbf35265d09f3cfb83dcabde2746991ddf0d30b5a4ecc34043b349a77031","9dc0d2e9534cdccf83494687c55c67c8c1b29834acf97cce53124a08a9549231","588ebc2918d06c009a18a28a8ab76694","ab8c23"}},
