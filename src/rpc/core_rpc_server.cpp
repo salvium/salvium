@@ -1871,40 +1871,22 @@ namespace cryptonote
   bool core_rpc_server::get_block_template(const account_public_address &address, const crypto::hash *prev_block, const cryptonote::blobdata &extra_nonce, size_t &reserved_offset, cryptonote::difficulty_type  &difficulty, uint64_t &height, uint64_t &expected_reward, block &b, uint64_t &seed_height, crypto::hash &seed_hash, crypto::hash &next_seed_hash, epee::json_rpc::error &error_resp)
   {
     b = boost::value_initialized<cryptonote::block>();
-    if(!m_core.get_block_template(b, prev_block, address, difficulty, height, expected_reward, extra_nonce, seed_height, seed_hash))
+    crypto::public_key tx_pub_key = crypto::null_pkey;
+    if(!m_core.get_block_template(b, prev_block, address, difficulty, height, expected_reward, extra_nonce, seed_height, seed_hash, tx_pub_key))
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
       error_resp.message = "Internal error: failed to create block template";
       LOG_ERROR("Failed to create block template");
       return false;
     }
-    blobdata block_blob = t_serializable_object_to_blob(b);
-    crypto::public_key tx_pub_key = cryptonote::get_tx_pub_key_from_extra(b.miner_tx);
-    const std::vector<crypto::public_key> additional_tx_pub_keys = cryptonote::get_additional_tx_pub_keys_from_extra(b.miner_tx);
     if(tx_pub_key == crypto::null_pkey)
     {
-      // Check for Carrot treasury payout
-      const uint8_t hf_version = m_core.get_blockchain_storage().get_current_hard_fork_version();
-      if (hf_version >= HF_VERSION_CARROT && b.miner_tx.vout.size() == 2) {
-
-        const auto treasury_payout_data = get_config(nettype()).TREASURY_SAL1_MINT_OUTPUT_DATA;
-        const bool treasury_payout_exists = (treasury_payout_data.count(height) == 1);
-        if (!treasury_payout_exists) {
-          error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
-          error_resp.message = "Internal error: failed to create block template (missing treasury payout)";
-          LOG_ERROR("Failed to get tx pub key in coinbase extra (missing treasury payout)");
-          return false;
-        }
-        tx_pub_key = additional_tx_pub_keys.back();
-        
-      } else {      
-        error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
-        error_resp.message = "Internal error: failed to create block template";
-        LOG_ERROR("Failed to get tx pub key in coinbase extra");
-        return false;
-      }
+      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
+      error_resp.message = "Internal error: failed to create block template";
+      LOG_ERROR("Failed to get tx pub key in coinbase extra");
+      return false;
     }
-
+    blobdata block_blob = t_serializable_object_to_blob(b);
     uint64_t next_height;
     crypto::rx_seedheights(height, &seed_height, &next_height);
     if (next_height != seed_height)

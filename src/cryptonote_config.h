@@ -323,7 +323,7 @@ namespace config
   const uint64_t STAKE_LOCK_PERIOD = 30*24*30;
   const uint64_t TREASURY_SAL1_MINT_PERIOD = 30*24*30; // 1 month of blocks
 
-  std::string const TREASURY_ADDRESS_CARROT = "SC11sFBPrGmNuT8AiTPUW479BwkdPJwBxdjKEhZ96yDfFg3B4mawgcpE1YfCAa1zwzUiRTMP9eqB54av48ALhzUu1Q5QoPGUfh";
+  std::string const TREASURY_ADDRESS_CARROT = "SC11ksHLFhy7H1yMk9bUZvADG1Z9ZkR1T5QMknm3RbGBbgdPkyanB2WBb5TER3MsiwJC5BnyoiYs2DBcvAfAm6JQ537iNKdtvm";
   std::string const TREASURY_ADDRESS = "SaLvdZR6w1A21sf2Wh6jYEh1wzY4GSbT7RX6FjyPsnLsffWLrzFQeXUXJcmBLRWDzZC2YXeYe5t7qKsnrg9FpmxmEcxPHsEYfqA";
 
   // treasury payout {tx-key, output-key, anchor_enc, view_tag} tuples

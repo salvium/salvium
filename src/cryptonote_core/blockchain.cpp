@@ -1560,7 +1560,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
     treasury_index_in_tx_outputs = index_in_tx_outputs;
   }
 
-  //validate reward
+  // Calculate reward being issued
   uint64_t money_in_use = 0;
   CHECK_AND_ASSERT_MES(b.miner_tx.amount_burnt > 0 || height == 0, false, "invalid tx.amount_burnt for miner_tx");
   CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt >= money_in_use, false, "miner transaction is overflowed by amount_burnt");
@@ -1576,6 +1576,25 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   }
   partial_block_reward = false;
 
+  // Make sure the TOTAL REWARD is correct
+  uint64_t median_weight = m_current_block_cumul_weight_median;
+  if (!get_block_reward(median_weight, cumulative_block_weight, already_generated_coins, base_reward, version))
+  {
+    MERROR_VER("block weight " << cumulative_block_weight << " is bigger than allowed for this blockchain");
+    return false;
+  }
+  if(base_reward + fee < money_in_use)
+  {
+    MERROR_VER("coinbase transaction spend too much money (" << print_money(money_in_use) << "). Block reward is " << print_money(base_reward + fee) << "(" << print_money(base_reward) << "+" << print_money(fee) << "), cumulative_block_weight " << cumulative_block_weight);
+    return false;
+  }
+  if(base_reward + fee != money_in_use)
+  {
+    MDEBUG("coinbase transaction doesn't use full amount of block reward:  spent: " << money_in_use << ",  block reward " << base_reward + fee << "(" << base_reward << "+" << fee << ")");
+    return false;
+  }
+
+  // HF-specific additional checks
   switch (version) {
   case HF_VERSION_BULLETPROOF_PLUS:
   case HF_VERSION_ENABLE_N_OUTS:
@@ -1596,12 +1615,6 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
     // HF11: block reward split is 60% miner + 25% treasury + 15% staker (amount_burnt)
     if (already_generated_coins != 0) {
 
-      // Make sure we have the correct number of outputs
-      if (treasury_payout_exists)
-        CHECK_AND_ASSERT_MES(b.miner_tx.vout.size() == 3, false, "Incorrect number of miner_tx outputs (expected 3)");
-      else
-        CHECK_AND_ASSERT_MES(b.miner_tx.vout.size() == 2, false, "Incorrect number of miner_tx outputs (expected 2)");
- 
       // Validate treasury share: one output must equal block_reward * 25 / 100
       uint64_t expected_treasury_block_reward = money_in_use * BLOCK_REWARD_TREASURY_PCT / 100;
       // Validate staker share: amount_burnt == block_reward * 15 / 100
@@ -1638,12 +1651,14 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
       std::vector<crypto::public_key> additional_tx_pubkeys = cryptonote::get_additional_tx_pub_keys_from_extra(b.miner_tx.extra);
 
       bool found_treasury_block_reward = false;
-      bool found_miner_block_reward = false;
       for (size_t i = 0; i < b.miner_tx.vout.size(); i++) {
 
         // Get the output
         CHECK_AND_ASSERT_MES(b.miner_tx.vout[i].target.type() == typeid(txout_to_carrot_v1), false, "Output of miner_tx is not txout_to_carrot_V1");
         const auto &output = boost::get<txout_to_carrot_v1>(b.miner_tx.vout[i].target);
+
+        // Check the output type is SAL1
+        CHECK_AND_ASSERT_MES(output.asset_type == "SAL1", false, "Output of miner_tx is not SAL1");
         
         // Skip the premine remint
         if (treasury_payout_exists && (i == treasury_index_in_tx_outputs)) continue;
@@ -1677,17 +1692,8 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
           found_treasury_block_reward = true;
           continue;
         }
-        if (b.miner_tx.vout[i].amount == expected_miner_block_reward) {
-          std::string miner_out_asset_type;
-          cryptonote::get_output_asset_type(b.miner_tx.vout[i], miner_out_asset_type);
-          CHECK_AND_ASSERT_MES(miner_out_asset_type == "SAL1", false,
-            "miner output has wrong asset_type: expected SAL1, got " << miner_out_asset_type);
-          found_miner_block_reward = true;
-          continue;
-        }
       }
       CHECK_AND_ASSERT_MES(found_treasury_block_reward, false, "miner_tx missing treasury output with expected amount " << expected_treasury_block_reward);
-      CHECK_AND_ASSERT_MES(found_miner_block_reward, false, "miner_tx missing miner output with expected amount " << expected_miner_block_reward);
     }
     break;
   default:
@@ -1695,22 +1701,6 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
     break;
   }
 
-  uint64_t median_weight = m_current_block_cumul_weight_median;
-  if (!get_block_reward(median_weight, cumulative_block_weight, already_generated_coins, base_reward, version))
-  {
-    MERROR_VER("block weight " << cumulative_block_weight << " is bigger than allowed for this blockchain");
-    return false;
-  }
-  if(base_reward + fee < money_in_use)
-  {
-    MERROR_VER("coinbase transaction spend too much money (" << print_money(money_in_use) << "). Block reward is " << print_money(base_reward + fee) << "(" << print_money(base_reward) << "+" << print_money(fee) << "), cumulative_block_weight " << cumulative_block_weight);
-    return false;
-  }
-  if(base_reward + fee != money_in_use)
-  {
-    MDEBUG("coinbase transaction doesn't use full amount of block reward:  spent: " << money_in_use << ",  block reward " << base_reward + fee << "(" << base_reward << "+" << fee << ")");
-    return false;
-  }
   return true;
 }
 //------------------------------------------------------------------
@@ -2041,7 +2031,7 @@ uint64_t Blockchain::get_current_cumulative_block_weight_median() const
 // in a lot of places.  That flag is not referenced in any of the code
 // nor any of the makefiles, howeve.  Need to look into whether or not it's
 // necessary at all.
-bool Blockchain::create_block_template(block& b, const crypto::hash *from_block, const account_public_address& miner_address, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce, uint64_t &seed_height, crypto::hash &seed_hash)
+bool Blockchain::create_block_template(block& b, const crypto::hash *from_block, const account_public_address& miner_address, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce, uint64_t &seed_height, crypto::hash &seed_hash, crypto::public_key &miner_reward_tx_key)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   size_t median_weight;
@@ -2449,7 +2439,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   uint8_t hf_version = b.major_version;
   size_t max_outs = hf_version >= HF_VERSION_ENABLE_TOKENS ? 3 : (hf_version >= 4 ? 1 : 11);
 
-  bool r = construct_miner_tx(height, median_weight, already_generated_coins, txs_weight, fee, miner_address, b.miner_tx, m_nettype, m_hardfork->get_hardforks(), ex_nonce, max_outs, hf_version);
+  bool r = construct_miner_tx(height, median_weight, already_generated_coins, txs_weight, fee, miner_address, miner_reward_tx_key, b.miner_tx, m_nettype, m_hardfork->get_hardforks(), ex_nonce, max_outs, hf_version);
   CHECK_AND_ASSERT_MES(r, false, "Failed to construct miner tx, first chance");
   size_t cumulative_weight = txs_weight + get_transaction_weight(b.miner_tx);
 #if defined(DEBUG_CREATE_BLOCK_TEMPLATE)
@@ -2458,7 +2448,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
 #endif
   for (size_t try_count = 0; try_count != 10; ++try_count)
   {
-    r = construct_miner_tx(height, median_weight, already_generated_coins, cumulative_weight, fee, miner_address, b.miner_tx, m_nettype, m_hardfork->get_hardforks(), ex_nonce, max_outs, hf_version);
+    r = construct_miner_tx(height, median_weight, already_generated_coins, cumulative_weight, fee, miner_address, miner_reward_tx_key, b.miner_tx, m_nettype, m_hardfork->get_hardforks(), ex_nonce, max_outs, hf_version);
 
     CHECK_AND_ASSERT_MES(r, false, "Failed to construct miner tx, second chance");
     size_t coinbase_weight = get_transaction_weight(b.miner_tx);
@@ -2510,9 +2500,9 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   return false;
 }
 //------------------------------------------------------------------
-bool Blockchain::create_block_template(block& b, const account_public_address& miner_address, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce, uint64_t &seed_height, crypto::hash &seed_hash)
+bool Blockchain::create_block_template(block& b, const account_public_address& miner_address, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce, uint64_t &seed_height, crypto::hash &seed_hash, crypto::public_key &miner_reward_tx_key)
 {
-  return create_block_template(b, NULL, miner_address, diffic, height, expected_reward, ex_nonce, seed_height, seed_hash);
+  return create_block_template(b, NULL, miner_address, diffic, height, expected_reward, ex_nonce, seed_height, seed_hash, miner_reward_tx_key);
 }
 //------------------------------------------------------------------
 bool Blockchain::get_miner_data(uint8_t& major_version, uint64_t& height, crypto::hash& prev_id, crypto::hash& seed_hash, difficulty_type& difficulty, uint64_t& median_weight, uint64_t& already_generated_coins, std::vector<tx_block_template_backlog_entry>& tx_backlog)

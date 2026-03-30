@@ -175,7 +175,8 @@ namespace cryptonote
 
     uint64_t seed_height;
     crypto::hash seed_hash;
-    if(!m_phandler->get_block_template(bl, m_mine_address, di, height, expected_reward, extra_nonce, seed_height, seed_hash))
+    crypto::public_key miner_reward_tx_key;
+    if(!m_phandler->get_block_template(bl, m_mine_address, di, height, expected_reward, extra_nonce, seed_height, seed_hash, miner_reward_tx_key))
     {
       LOG_ERROR("Failed to get_block_template(), stopping mining");
       m_forced_stop = true;

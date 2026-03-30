@@ -469,7 +469,7 @@ namespace cryptonote
     return treasury_anchor;
   }
   //---------------------------------------------------------------
-  bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, network_type nettype, const std::vector<hardfork_t>& hardforks, const blobdata& extra_nonce, size_t max_outs, uint8_t hard_fork_version) {
+  bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, crypto::public_key& miner_reward_tx_key, transaction& tx, network_type nettype, const std::vector<hardfork_t>& hardforks, const blobdata& extra_nonce, size_t max_outs, uint8_t hard_fork_version) {
 
     // Clear the TX contents
     tx.set_null();
@@ -528,6 +528,9 @@ namespace cryptonote
         std::vector<carrot::CarrotCoinbaseEnoteV1> enotes(num_enotes);
         carrot::get_coinbase_output_proposal_v1(miner_proposal, height, enotes[0]);
 
+        // STORE THE MINER TX_PUB_KEY NOW
+        miner_reward_tx_key = carrot::raw_byte_convert<crypto::public_key>(enotes[0].enote_ephemeral_pubkey);
+        
         size_t enote_idx = 1;
 
         // Add the treasury reward enote (25% of block reward) for HF11+
@@ -600,6 +603,8 @@ namespace cryptonote
 
     keypair txkey = keypair::generate(hw::get_device("default"));
     add_tx_pub_key_to_extra(tx, txkey.pub);
+    // STORE THE MINER TX_PUB_KEY NOW
+    miner_reward_tx_key = txkey.pub;
     if(!extra_nonce.empty())
       if(!add_extra_nonce_to_tx_extra(tx.extra, extra_nonce))
         return false;
