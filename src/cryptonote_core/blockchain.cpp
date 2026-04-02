@@ -2060,6 +2060,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
       expected_reward = m_btc_expected_reward;
       seed_height = m_btc_seed_height;
       seed_hash = m_btc_seed_hash;
+      miner_reward_tx_key = m_btc_miner_reward_tx_key;
       return true;
     }
     MDEBUG("Not using cached template: address " << (!memcmp(&miner_address, &m_btc_address, sizeof(cryptonote::account_public_address))) << ", nonce " << (m_btc_nonce == ex_nonce) << ", cookie " << (m_btc_pool_cookie == m_tx_pool.cookie()) << ", from_block " << (!!from_block));
@@ -2493,7 +2494,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
 #endif
 
     if (!from_block)
-      cache_block_template(b, miner_address, ex_nonce, diffic, height, expected_reward, seed_height, seed_hash, pool_cookie);
+      cache_block_template(b, miner_address, ex_nonce, diffic, height, expected_reward, seed_height, seed_hash, pool_cookie, miner_reward_tx_key);
     return true;
   }
   LOG_ERROR("Failed to create_block_template with " << 10 << " tries");
@@ -7084,7 +7085,7 @@ void Blockchain::invalidate_block_template_cache()
   m_btc_valid = false;
 }
 
-void Blockchain::cache_block_template(const block &b, const cryptonote::account_public_address &address, const blobdata &nonce, const difficulty_type &diff, uint64_t height, uint64_t expected_reward, uint64_t seed_height, const crypto::hash &seed_hash, uint64_t pool_cookie)
+void Blockchain::cache_block_template(const block &b, const cryptonote::account_public_address &address, const blobdata &nonce, const difficulty_type &diff, uint64_t height, uint64_t expected_reward, uint64_t seed_height, const crypto::hash &seed_hash, uint64_t pool_cookie, crypto::public_key &miner_reward_tx_key)
 {
   MDEBUG("Setting block template cache");
   m_btc = b;
@@ -7096,6 +7097,7 @@ void Blockchain::cache_block_template(const block &b, const cryptonote::account_
   m_btc_seed_hash = seed_hash;
   m_btc_seed_height = seed_height;
   m_btc_pool_cookie = pool_cookie;
+  m_btc_miner_reward_tx_key = miner_reward_tx_key;
   m_btc_valid = true;
 }
 
