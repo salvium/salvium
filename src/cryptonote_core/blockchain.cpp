@@ -2208,33 +2208,6 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
     return false;
   }
 
-  // create the protocol transaction entries for CREATE_TOKEN TXs
-  if (b.major_version >= HF_VERSION_ENABLE_TOKENS) {
-    for (const auto& ct_data_entry: create_token_entries) {
-      CHECK_AND_ASSERT_MES(ct_data_entry.second.token.type() == typeid(cryptonote::sal_token_t), false, "Incorrect CREATE_TOKEN metadata type detected in protocol_tx");
-      cryptonote::sal_token_t token = boost::get<cryptonote::sal_token_t>(ct_data_entry.second.token);
-      cryptonote::protocol_data_entry entry;
-      uint64_t hi, lo;
-      CHECK_AND_ASSERT_MES(token.supply <= (MONEY_SUPPLY / COIN), false, "Invalid SUPPLY value for CREATE_TOKEN when constructing protocol_tx");
-      CHECK_AND_ASSERT_MES(token.supply > 0, false, "Invalid SUPPLY value for CREATE_TOKEN when constructing protocol_tx");
-      lo = mul128(token.supply, COIN, &hi);
-      CHECK_AND_ASSERT_MES(hi == 0, false, "Numeric overflow in CREATE_TOKEN supply");
-      entry.amount_burnt = cryptonote::get_token_creation_price(ct_data_entry.second.asset_type);
-      entry.amount_minted = lo;
-      entry.amount_slippage_limit = 0;
-      entry.source_asset = "SAL1";
-      entry.destination_asset = "sal" + ct_data_entry.second.asset_type;
-      entry.type = cryptonote::transaction_type::CREATE_TOKEN;
-      entry.return_address = ct_data_entry.first.return_address;
-      entry.return_pubkey = ct_data_entry.first.return_pubkey;
-      entry.return_view_tag = ct_data_entry.first.return_view_tag;
-      entry.return_anchor_enc = ct_data_entry.first.return_anchor_enc;
-      entry.is_carrot = true;
-      entry.origin_height = height;
-      protocol_entries.push_back(entry);
-    }
-  }
-
   // Check to see if there are any matured YIELD TXs
   uint64_t yield_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   uint64_t start_height = (height > yield_lock_period) ? height - yield_lock_period - 1 : 0;
@@ -2374,6 +2347,33 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   }
   */
   
+  // create the protocol transaction entries for CREATE_TOKEN TXs
+  if (b.major_version >= HF_VERSION_ENABLE_TOKENS) {
+    for (const auto& ct_data_entry: create_token_entries) {
+      CHECK_AND_ASSERT_MES(ct_data_entry.second.token.type() == typeid(cryptonote::sal_token_t), false, "Incorrect CREATE_TOKEN metadata type detected in protocol_tx");
+      cryptonote::sal_token_t token = boost::get<cryptonote::sal_token_t>(ct_data_entry.second.token);
+      cryptonote::protocol_data_entry entry;
+      uint64_t hi, lo;
+      CHECK_AND_ASSERT_MES(token.supply <= (MONEY_SUPPLY / COIN), false, "Invalid SUPPLY value for CREATE_TOKEN when constructing protocol_tx");
+      CHECK_AND_ASSERT_MES(token.supply > 0, false, "Invalid SUPPLY value for CREATE_TOKEN when constructing protocol_tx");
+      lo = mul128(token.supply, COIN, &hi);
+      CHECK_AND_ASSERT_MES(hi == 0, false, "Numeric overflow in CREATE_TOKEN supply");
+      entry.amount_burnt = cryptonote::get_token_creation_price(ct_data_entry.second.asset_type);
+      entry.amount_minted = lo;
+      entry.amount_slippage_limit = 0;
+      entry.source_asset = "SAL1";
+      entry.destination_asset = "sal" + ct_data_entry.second.asset_type;
+      entry.type = cryptonote::transaction_type::CREATE_TOKEN;
+      entry.return_address = ct_data_entry.first.return_address;
+      entry.return_pubkey = ct_data_entry.first.return_pubkey;
+      entry.return_view_tag = ct_data_entry.first.return_view_tag;
+      entry.return_anchor_enc = ct_data_entry.first.return_anchor_enc;
+      entry.is_carrot = true;
+      entry.origin_height = height;
+      protocol_entries.push_back(entry);
+    }
+  }
+
   // Time to construct the protocol_tx
   ok = construct_protocol_tx(height, b.protocol_tx, protocol_entries, b.major_version);
   CHECK_AND_ASSERT_MES(ok, false, "Failed to construct protocol tx");
