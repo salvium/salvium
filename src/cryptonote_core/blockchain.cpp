@@ -1714,6 +1714,14 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
           } else if (has_single) {
             actual_De = tx_pubkey;
           }
+          if (actual_De != expected_De) {
+            std::string tx_extra_hex = epee::string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(b.miner_tx.extra.data()), b.miner_tx.extra.size()));
+            std::string treasury_anchor_hex = epee::string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(treasury_anchor.bytes), carrot::JANUS_ANCHOR_BYTES));
+            LOG_ERROR("treasury output D_e mismatch: actual: " << actual_De << ", expected: " << expected_De);
+            LOG_ERROR("TX has " << (additional_tx_pubkeys.size() + (has_single ? 1 : 0)) << " pubkeys in tx.extra");
+            LOG_ERROR("TX extra = " << tx_extra_hex);
+            LOG_ERROR("\tHeight = " << height << "\n\tOutput key = " << output.key << "\n\tAmount = " << expected_treasury_block_reward << "\n\tRandomness = " << treasury_anchor_hex);
+          }
           if (actual_De != expected_De) { MERROR("treasury output D_e mismatch"); return false; } //important
 
           // Passed all checks
