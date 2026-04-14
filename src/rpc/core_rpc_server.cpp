@@ -1905,10 +1905,10 @@ namespace cryptonote
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
       error_resp.message = "Internal error: failed to create block template";
-      LOG_ERROR("Failed to find tx pub key in blockblob");
+      LOG_ERROR("Failed to find miner_tx.extra in blockblob");
       return false;
     }
-    reserved_offset += sizeof(tx_pub_key) + 2; //2 bytes: tag for TX_EXTRA_NONCE(1 byte), counter in TX_EXTRA_NONCE(1 byte)
+    reserved_offset += nonce_payload_offset_in_extra;
     if(reserved_offset + extra_nonce.size() > block_blob.size())
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
