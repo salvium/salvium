@@ -1,0 +1,5 @@
+32017a3e480db6556485f75f279d4e0a3e582e3fb509060ee2e51bec2802f46e  salvium-v1.1.1b-macos-aarch64.zip
+5d03af3e7ddb0dda25c87b87d115da3666bfeb472466d969b934c0b8a6924ddb  salvium-v1.1.1b-macos-x86_64.zip
+130b51258ce682f797bde86746ce9cfbffb9550da5c41e28a25d18c41221a4aa  salvium-v1.1.1b-ubuntu22.04-linux-aarch64.zip
+fa78813d14cff1821aea12b295f54990854bcdf534b9085ac4839aa17a9eceb6  salvium-v1.1.1b-ubuntu22.04-linux-x86_64.zip
+8884e88edb38e9f4dfce620f6ea2d4cfa85d0aea4f1f0fc6334671deae3b1250  salvium-v1.1.1b-win64.zip
