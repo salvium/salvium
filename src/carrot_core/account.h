@@ -192,6 +192,9 @@ namespace carrot
     );
 
     void create_from_svb_key(const cryptonote::account_public_address& address, const crypto::secret_key& svb_key);
+    void create_from_carrot_components(const cryptonote::account_public_address& address,
+        const crypto::secret_key& svb_key,
+        const crypto::secret_key& k_prove_spend);
     void set_carrot_keys(const AddressDeriveType default_derive_type = AddressDeriveType::Carrot);
     void insert_subaddresses(const std::unordered_map<crypto::public_key, subaddress_index_extended>& subaddress_map);
     void insert_return_output_info(

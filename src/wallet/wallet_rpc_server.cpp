@@ -4419,7 +4419,14 @@ namespace tools
     if (m_wallet)
       delete m_wallet;
     m_wallet = wal.release();
-    res.address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
+    if (info.address.m_is_carrot)
+    {
+      res.address = m_wallet->get_account().get_carrot_public_address_str(m_wallet->nettype());
+    }
+    else
+    {
+      res.address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
+    }
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------

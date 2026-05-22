@@ -422,6 +422,25 @@ void carrot_and_legacy_account::create_from_svb_key(const cryptonote::account_pu
   this->default_derive_type = AddressDeriveType::Carrot;
 }
 //----------------------------------------------------------------------------------------------------------------------
+void carrot_and_legacy_account::create_from_carrot_components(const cryptonote::account_public_address& address,
+    const crypto::secret_key& svb_key,
+    const crypto::secret_key& k_prove_spend)
+{
+  // Copy inputs locally to avoid aliasing when callers pass references into m_keys.
+  const cryptonote::account_public_address address_copy = address;
+  const crypto::secret_key svb_key_copy = svb_key;
+  const crypto::secret_key k_prove_spend_copy = k_prove_spend;
+
+  create_from_svb_key(address_copy, svb_key_copy);
+
+  m_keys.k_prove_spend = k_prove_spend_copy;
+
+  crypto::public_key K_s_check;
+  make_carrot_spend_pubkey(m_keys.k_generate_image, m_keys.k_prove_spend, K_s_check);
+  CHECK_AND_ASSERT_THROW_MES(K_s_check == address_copy.m_spend_public_key,
+      "create_from_carrot_components: supplied keys do not reproduce address spend pubkey");
+}
+//----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::set_carrot_keys(const AddressDeriveType default_derive_type)
 {   
     // top level keys
