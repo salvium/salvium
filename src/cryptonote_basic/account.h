@@ -78,8 +78,9 @@ namespace cryptonote
       if (m_account_address.m_spend_public_key == crypto::null_pkey) {
         KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE(s_view_balance)
         KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE(k_view_incoming)
+        KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE(k_prove_spend)
         KV_SERIALIZE(m_carrot_account_address)
-      }        
+      }
     END_KV_SERIALIZE_MAP()
 
     void encrypt(const crypto::chacha_key &key);

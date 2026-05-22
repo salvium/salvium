@@ -5566,30 +5566,45 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
   }
   const cryptonote::account_keys& keys = m_account.get_keys();
   hw::device &hwdev = m_account.get_device();
+  // Carrot from components wallets have null classic keys, so verify Carrot keys directly.
+  const bool is_carrot_components_wallet = !m_watch_only && keys.m_spend_secret_key == crypto::null_skey;
+
   if (m_watch_only) {
 
     // Check to see if this is a Carrot SVB wallet
     crypto::secret_key kv_recomputed;
     carrot::make_carrot_viewincoming_key(keys.s_view_balance, kv_recomputed);
     THROW_WALLET_EXCEPTION_IF(keys.k_view_incoming != kv_recomputed, error::wallet_internal_error, "cannot compute viable wallet");
-    
+
     // assume Carrot SVB wallet
     m_account.create_from_svb_key(keys.m_carrot_account_address, keys.s_view_balance);
 
     // Now verify that the account address has a public view key that matches k_view_incoming
     r = r && hwdev.verify_keys(keys.k_view_incoming,  keys.m_carrot_main_address.m_view_public_key);
 
+  } else if (is_carrot_components_wallet) {
+
+    crypto::secret_key kv_recomputed;
+    carrot::make_carrot_viewincoming_key(keys.s_view_balance, kv_recomputed);
+    THROW_WALLET_EXCEPTION_IF(keys.k_view_incoming != kv_recomputed, error::wallet_internal_error, "cannot compute viable wallet");
+
+    // Reconstruct the Carrot key hierarchy and verify k_prove_spend against the address.
+    m_account.create_from_carrot_components(keys.m_carrot_account_address, keys.s_view_balance, keys.k_prove_spend);
+
+    r = r && hwdev.verify_keys(keys.k_view_incoming, keys.m_carrot_main_address.m_view_public_key);
+
   } else {
     // Assume normal wallet
     r = r && hwdev.verify_keys(keys.m_view_secret_key,  keys.m_account_address.m_view_public_key);
   }
-  if (!m_watch_only && !m_multisig && hwdev.device_protocol() != hw::device::PROTOCOL_COLD && !m_is_background_wallet)
+  if (!m_watch_only && !is_carrot_components_wallet && !m_multisig && hwdev.device_protocol() != hw::device::PROTOCOL_COLD && !m_is_background_wallet)
     r = r && hwdev.verify_keys(keys.m_spend_secret_key, keys.m_account_address.m_spend_public_key);
   THROW_WALLET_EXCEPTION_IF(!r, error::wallet_files_doesnt_correspond, m_keys_file, m_wallet_file);
 
   if (r)
   {
-    if (!m_watch_only)
+    // Skip set_carrot_keys for Carrot from components wallets to preserve their preset keys.
+    if (!m_watch_only && !is_carrot_components_wallet)
       m_account.set_carrot_keys();
 
     if (!m_is_background_wallet)
@@ -6061,7 +6076,15 @@ void wallet2::generate(const std::string& wallet_, const epee::wipeable_string& 
     THROW_WALLET_EXCEPTION_IF(boost::filesystem::exists(m_keys_file,   ignored_ec), error::file_exists, m_keys_file);
   }
 
-  m_account.create_from_keys(account_public_address, spendkey, viewkey);
+  // For Carrot, viewkey is s_view_balance and spendkey is k_prove_spend.
+  if (account_public_address.m_is_carrot)
+  {
+    m_account.create_from_carrot_components(account_public_address, viewkey, spendkey);
+  }
+  else
+  {
+    m_account.create_from_keys(account_public_address, spendkey, viewkey);
+  }
   init_type(hw::device::device_type::SOFTWARE);
   m_account_public_address = account_public_address;
   setup_keys(password);
@@ -6952,7 +6975,10 @@ void wallet2::load_wallet_cache(const bool use_fs, const std::string& cache_buf)
         ar >> *this;
       }
     }
-    if (m_watch_only) {
+    // Carrot wallets keep their address in m_carrot_main_address. Watch only and Carrot
+    // from components both have m_account_address null, so compare against the Carrot slot.
+    const bool compare_against_carrot = m_watch_only || m_account.get_keys().m_spend_secret_key == crypto::null_skey;
+    if (compare_against_carrot) {
       THROW_WALLET_EXCEPTION_IF(
         m_account_public_address.m_spend_public_key != m_account.get_keys().m_carrot_main_address.m_spend_public_key ||
         m_account_public_address.m_view_public_key  != m_account.get_keys().m_carrot_main_address.m_view_public_key,
