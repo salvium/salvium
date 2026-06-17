@@ -1,0 +1,315 @@
+diff -ru ./CMakeLists.txt /tmp/protobuf-new/CMakeLists.txt
+--- ./CMakeLists.txt	2026-06-11 12:26:38.000000000 -0400
++++ /tmp/protobuf-new/CMakeLists.txt	2026-06-14 19:21:05.825005457 -0400
+@@ -4,7 +4,7 @@
+ 
+ # Revert to old behavior for MSVC debug symbols.
+ if(POLICY CMP0141)
+-  cmake_policy(SET CMP0141 OLD)
++  cmake_policy(SET CMP0141 NEW)
+ endif()
+ 
+ if(protobuf_VERBOSE)
+diff -ru ./src/google/protobuf/compiler/cpp/helpers.cc /tmp/protobuf-new/src/google/protobuf/compiler/cpp/helpers.cc
+--- ./src/google/protobuf/compiler/cpp/helpers.cc	2026-06-11 12:26:38.000000000 -0400
++++ /tmp/protobuf-new/src/google/protobuf/compiler/cpp/helpers.cc	2026-06-14 19:21:05.860055019 -0400
+@@ -1733,7 +1733,7 @@
+       if (field->is_required()) {
+         result.contains_required = true;
+       }
+-      if (field->options().weak()) {
++      if (field->options()._salvium_internal_weak()) {
+         result.contains_weak = true;
+       }
+       switch (field->type()) {
+diff -ru ./src/google/protobuf/compiler/cpp/helpers.h /tmp/protobuf-new/src/google/protobuf/compiler/cpp/helpers.h
+--- ./src/google/protobuf/compiler/cpp/helpers.h	2026-06-11 12:26:38.000000000 -0400
++++ /tmp/protobuf-new/src/google/protobuf/compiler/cpp/helpers.h	2026-06-14 19:21:05.860239617 -0400
+@@ -356,7 +356,7 @@
+ }
+ 
+ inline bool IsWeak(const FieldDescriptor* field, const Options& options) {
+-  if (field->options().weak()) {
++  if (field->options()._salvium_internal_weak()) {
+     ABSL_CHECK(!options.opensource_runtime);
+     return true;
+   }
+diff -ru ./src/google/protobuf/compiler/cpp/message.cc /tmp/protobuf-new/src/google/protobuf/compiler/cpp/message.cc
+--- ./src/google/protobuf/compiler/cpp/message.cc	2026-06-11 12:26:38.000000000 -0400
++++ /tmp/protobuf-new/src/google/protobuf/compiler/cpp/message.cc	2026-06-14 19:21:05.860332326 -0400
+@@ -169,7 +169,7 @@
+ void PrintPresenceCheck(const FieldDescriptor* field,
+                         const std::vector<int>& has_bit_indices, io::Printer* p,
+                         int* cached_has_word_index, const Options& options) {
+-  if (!field->options().weak()) {
++  if (!field->options()._salvium_internal_weak()) {
+     int has_bit_index = has_bit_indices[field->index()];
+     if (*cached_has_word_index != (has_bit_index / 32)) {
+       *cached_has_word_index = (has_bit_index / 32);
+@@ -754,7 +754,7 @@
+                         optimized_order_.end());
+ 
+   for (auto field : internal::FieldRange(descriptor_)) {
+-    if (!field->real_containing_oneof() && !field->options().weak()) {
++    if (!field->real_containing_oneof() && !field->options()._salvium_internal_weak()) {
+       continue;
+     }
+     ordered_fields.push_back(field);
+@@ -1126,7 +1126,7 @@
+ void MessageGenerator::GenerateSingularFieldHasBits(
+     const FieldDescriptor* field, io::Printer* p) {
+   auto t = p->WithVars(MakeTrackerCalls(field, options_));
+-  if (field->options().weak()) {
++  if (field->options()._salvium_internal_weak()) {
+     p->Emit(
+         R"cc(
+           inline bool $Msg$::has_$name$() const {
+@@ -1341,7 +1341,7 @@
+                              /*with_enclosing_braces_always=*/true);
+     return;
+   }
+-  if (field->options().weak()) {
++  if (field->options()._salvium_internal_weak()) {
+     p->Emit({{"emit_body", [&] { emit_body(); }}},
+             R"cc(
+               if (has_$name$()) {
+@@ -1374,7 +1374,7 @@
+ void MessageGenerator::MaybeEmitUpdateCachedHasbits(
+     const FieldDescriptor* field, io::Printer* p,
+     int& cached_has_word_index) const {
+-  if (!HasHasbit(field, options_) || field->options().weak()) return;
++  if (!HasHasbit(field, options_) || field->options()._salvium_internal_weak()) return;
+ 
+   int has_bit_index = has_bit_indices_[field->index()];
+ 
+@@ -2111,7 +2111,7 @@
+         [&] {
+           for (auto field : internal::FieldRange(descriptor_)) {
+             // set_has_***() generated in all oneofs.
+-            if (!field->is_repeated() && !field->options().weak() &&
++            if (!field->is_repeated() && !field->options()._salvium_internal_weak() &&
+                 field->real_containing_oneof()) {
+               p->Emit({{"field_name", FieldName(field)}}, R"cc(
+                 void set_has_$field_name$();
+@@ -2592,7 +2592,7 @@
+   for (auto field : internal::FieldRange(descriptor_)) {
+     // TODO: We should not have an entry in the offset table for fields
+     // that do not use them.
+-    if (field->options().weak()) {
++    if (field->options()._salvium_internal_weak()) {
+       // Mark the field to prevent unintentional access through reflection.
+       // Don't use the top bit because that is for unused fields.
+       format("::_pbi::kInvalidFieldOffsetTag");
+@@ -4185,7 +4185,7 @@
+             p, "from.", field, ShouldSplit(field, options_), options_,
+             /*emit_body=*/[&]() { generator.GenerateMergingCode(p); },
+             /*with_enclosing_braces_always=*/true);
+-      } else if (field->options().weak() ||
++      } else if (field->options()._salvium_internal_weak() ||
+                  cached_has_word_index != HasWordIndex(field)) {
+         // Check hasbit, not using cached bits.
+         auto v = p->WithVars(HasBitVars(field));
+@@ -4525,7 +4525,7 @@
+     field_generators_.get(field).GenerateSerializeWithCachedSizesToArray(p);
+   };
+ 
+-  if (field->options().weak()) {
++  if (field->options()._salvium_internal_weak()) {
+     emit_body();
+     p->Emit("\n");
+     return;
+@@ -4831,7 +4831,7 @@
+                         sorted_extensions[j]->start_number())) {
+                  const FieldDescriptor* field = ordered_fields[i++];
+                  re.Flush(no_more_extensions);
+-                 if (field->options().weak()) {
++                 if (field->options()._salvium_internal_weak()) {
+                    largest_weak_field.ReplaceIfLarger(field);
+                    PrintFieldComment(Formatter{p}, field, options_);
+                  } else {
+diff -ru ./src/google/protobuf/descriptor.cc /tmp/protobuf-new/src/google/protobuf/descriptor.cc
+--- ./src/google/protobuf/descriptor.cc	2026-06-11 12:26:38.000000000 -0400
++++ /tmp/protobuf-new/src/google/protobuf/descriptor.cc	2026-06-14 19:21:05.861443537 -0400
+@@ -8002,7 +8002,7 @@
+     // if weak fields exist or not so that we don't need to force building
+     // weak dependencies. However the name lookup rules for symbols are
+     // somewhat complicated, so I defer it too another CL.
+-    bool is_weak = !pool_->enforce_weak_ && proto.options().weak();
++    bool is_weak = !pool_->enforce_weak_ && proto.options()._salvium_internal_weak();
+     bool is_lazy = pool_->lazily_build_dependencies_ && !is_weak;
+ 
+     Symbol type =
+@@ -10704,7 +10704,7 @@
+ 
+ HasbitMode GetFieldHasbitModeWithoutProfile(const FieldDescriptor* field) {
+   // Do not generate hasbits for "real-oneof", weak, or extension fields.
+-  if (field->real_containing_oneof() || field->options().weak() ||
++  if (field->real_containing_oneof() || field->options()._salvium_internal_weak() ||
+       field->is_extension()) {
+     return HasbitMode::kNoHasbit;
+   }
+diff -ru ./src/google/protobuf/descriptor.pb.h /tmp/protobuf-new/src/google/protobuf/descriptor.pb.h
+--- ./src/google/protobuf/descriptor.pb.h	2026-06-11 12:26:38.000000000 -0400
++++ /tmp/protobuf-new/src/google/protobuf/descriptor.pb.h	2026-06-14 19:21:05.827777352 -0400
+@@ -8214,6 +8214,7 @@
+   [[deprecated]]  void clear_weak() ;
+   [[nodiscard]] [[deprecated]] bool weak() const;
+   [[deprecated]] void set_weak(bool value);
++  bool _salvium_internal_weak() const { return _internal_weak(); }
+ 
+   private:
+   bool _internal_weak() const;
+diff -ru ./src/google/protobuf/dynamic_message.cc /tmp/protobuf-new/src/google/protobuf/dynamic_message.cc
+--- ./src/google/protobuf/dynamic_message.cc	2026-06-11 12:26:38.000000000 -0400
++++ /tmp/protobuf-new/src/google/protobuf/dynamic_message.cc	2026-06-14 19:21:05.861264118 -0400
+@@ -842,7 +842,7 @@
+   for (int i = 0; i < descriptor->field_count(); i++) {
+     const FieldDescriptor* field = descriptor->field(i);
+     if (field->cpp_type() == FieldDescriptor::CPPTYPE_MESSAGE &&
+-        !field->options().weak() && !InRealOneof(field) &&
++        !field->options()._salvium_internal_weak() && !InRealOneof(field) &&
+         !field->is_repeated()) {
+       void* field_ptr = MutableRaw(i);
+       // For fields with message types, we need to cross-link with the
+diff -ru ./src/google/protobuf/generated_message_reflection.cc /tmp/protobuf-new/src/google/protobuf/generated_message_reflection.cc
+--- ./src/google/protobuf/generated_message_reflection.cc	2026-06-11 12:26:38.000000000 -0400
++++ /tmp/protobuf-new/src/google/protobuf/generated_message_reflection.cc	2026-06-14 19:21:05.860832162 -0400
+@@ -2515,7 +2515,7 @@
+   // This is an optimization to avoid going to GetPrototype() below, as that
+   // requires a lock and a map lookup.
+   if (!field->is_extension() && !field->is_repeated() &&
+-      !field->options().weak() && !IsLazyField(field) &&
++      !field->options()._salvium_internal_weak() && !IsLazyField(field) &&
+       !schema_.InRealOneof(field)) {
+     auto* res = DefaultRaw<const Message*>(field);
+     ABSL_DCHECK_NE(res, nullptr);
+@@ -3225,7 +3225,7 @@
+ 
+ bool Reflection::HasFieldWithHasbits(const Message& message,
+                                      const FieldDescriptor* field) const {
+-  ABSL_DCHECK(!field->options().weak());
++  ABSL_DCHECK(!field->options()._salvium_internal_weak());
+   ABSL_DCHECK(!field->is_extension());
+   if (schema_.HasBitIndex(field) != static_cast<uint32_t>(kNoHasbit)) {
+     return IsFieldPresentGivenHasbits(message, field, GetHasBits(message),
+@@ -3258,7 +3258,7 @@
+ 
+ void Reflection::SetHasBit(Message* message,
+                            const FieldDescriptor* field) const {
+-  ABSL_DCHECK(!field->options().weak());
++  ABSL_DCHECK(!field->options()._salvium_internal_weak());
+   const uint32_t index = schema_.HasBitIndex(field);
+   if (index == static_cast<uint32_t>(kNoHasbit)) return;
+   MutableHasBits(message)[index / 32] |=
+@@ -3267,7 +3267,7 @@
+ 
+ void Reflection::ClearHasBit(Message* message,
+                              const FieldDescriptor* field) const {
+-  ABSL_DCHECK(!field->options().weak());
++  ABSL_DCHECK(!field->options()._salvium_internal_weak());
+   const uint32_t index = schema_.HasBitIndex(field);
+   if (index == static_cast<uint32_t>(kNoHasbit)) return;
+   MutableHasBits(message)[index / 32] &=
+@@ -3276,7 +3276,7 @@
+ 
+ void Reflection::NaiveSwapHasBit(Message* message1, Message* message2,
+                                  const FieldDescriptor* field) const {
+-  ABSL_DCHECK(!field->options().weak());
++  ABSL_DCHECK(!field->options()._salvium_internal_weak());
+   if (!schema_.HasHasbits() ||
+       schema_.HasBitIndex(field) == static_cast<uint32_t>(kNoHasbit)) {
+     return;
+diff -ru ./src/google/protobuf/generated_message_tctable_gen.cc /tmp/protobuf-new/src/google/protobuf/generated_message_tctable_gen.cc
+--- ./src/google/protobuf/generated_message_tctable_gen.cc	2026-06-11 12:26:38.000000000 -0400
++++ /tmp/protobuf-new/src/google/protobuf/generated_message_tctable_gen.cc	2026-06-14 19:21:05.861172459 -0400
+@@ -665,7 +665,7 @@
+ 
+ bool HasWeakFields(const Descriptor* descriptor) {
+   for (int i = 0; i < descriptor->field_count(); i++) {
+-    if (descriptor->field(i)->options().weak()) {
++    if (descriptor->field(i)->options()._salvium_internal_weak()) {
+       return true;
+     }
+   }
+@@ -704,7 +704,7 @@
+ bool IsFieldTypeEligibleForFastParsing(const FieldDescriptor* field) {
+   // Map, oneof, weak, and split fields are not handled on the fast path.
+   if (field->is_map() || field->real_containing_oneof() ||
+-      field->options().weak()) {
++      field->options()._salvium_internal_weak()) {
+     return false;
+   }
+ 
+@@ -739,7 +739,7 @@
+     // the following typed fields are supported.
+     return (field->type() == FieldDescriptor::TYPE_MESSAGE ||
+             field->type() == FieldDescriptor::TYPE_GROUP) &&
+-           !field->is_map() && !field->options().weak() &&
++           !field->is_map() && !field->options()._salvium_internal_weak() &&
+            !HasLazyRep(field, options) && !options.is_implicitly_weak &&
+            options.use_direct_tcparser_table && is_non_cold(options);
+   };
+@@ -779,7 +779,7 @@
+             aux_entries.push_back({kEnumValidator, {map_value}});
+           }
+         }
+-      } else if (field->options().weak()) {
++      } else if (field->options()._salvium_internal_weak()) {
+         // Disable the type card for this entry to force the fallback.
+         entry.type_card = 0;
+       } else if (HasLazyRep(field, options)) {
+diff -ru ./src/google/protobuf/map.cc /tmp/protobuf-new/src/google/protobuf/map.cc
+--- ./src/google/protobuf/map.cc	2026-06-11 12:26:38.000000000 -0400
++++ /tmp/protobuf-new/src/google/protobuf/map.cc	2026-06-14 19:21:05.871443245 -0400
+@@ -251,6 +251,7 @@
+     case UntypedMapBase::TypeKind::kString:
+       return AlignAndAddSize<std::string>(v, max_align);
+     case UntypedMapBase::TypeKind::kMessage: {
++      if (value_prototype_if_message == nullptr) Unreachable();
+       auto* class_data = GetClassData(*value_prototype_if_message);
+       v = AlignTo(v, class_data->alignment(), max_align);
+       return {v, v + class_data->allocation_size()};
+diff -ru ./src/google/protobuf/reflection_visit_fields.h /tmp/protobuf-new/src/google/protobuf/reflection_visit_fields.h
+--- ./src/google/protobuf/reflection_visit_fields.h	2026-06-11 12:26:38.000000000 -0400
++++ /tmp/protobuf-new/src/google/protobuf/reflection_visit_fields.h	2026-06-14 19:21:05.859934850 -0400
+@@ -106,7 +106,7 @@
+ 
+   for (int i = 0; i < field_count; i++) {
+     const FieldDescriptor* field = descriptor->field(i);
+-    ABSL_DCHECK(!field->options().weak()) << "weak fields are not supported";
++    ABSL_DCHECK(!field->options()._salvium_internal_weak()) << "weak fields are not supported";
+ 
+     if (!ShouldVisit(mask, field->cpp_type())) continue;
+ 
+diff -ru ./src/google/protobuf/text_format.cc /tmp/protobuf-new/src/google/protobuf/text_format.cc
+--- ./src/google/protobuf/text_format.cc	2026-06-11 12:26:38.000000000 -0400
++++ /tmp/protobuf-new/src/google/protobuf/text_format.cc	2026-06-14 19:21:05.867923197 -0400
+@@ -257,7 +257,18 @@
+ 
+ TextFormat::ParseLocation TextFormat::ParseInfoTree::GetLocation(
+     const FieldDescriptor* field, int index) const {
+-  return GetLocationRange(field, index).start;
++  CheckFieldIndex(field, index);
++  if (index == -1) {
++    index = 0;
++  }
++
++  auto it = locations_.find(field);
++  if (it == locations_.end() ||
++      index >= static_cast<int64_t>(it->second.size())) {
++    return TextFormat::ParseLocation();
++  }
++
++  return it->second[static_cast<size_t>(index)].full.start;
+ }
+ 
+ absl::StatusOr<TextFormat::FieldLocation>
+@@ -792,7 +803,7 @@
+       if (consumed_semicolon) {
+         TryConsumeWhitespace();
+       }
+-      if (consumed_semicolon && field->options().weak() &&
++      if (consumed_semicolon && field->options()._salvium_internal_weak() &&
+           LookingAtType(io::Tokenizer::TYPE_STRING)) {
+         // we are getting a bytes string for a weak field.
+         int v_start_line = tokenizer_.current().line;

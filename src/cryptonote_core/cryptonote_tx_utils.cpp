@@ -728,7 +728,7 @@ namespace cryptonote
     // Step 4: Encrypt the data (AES-256-CBC or ChaCha20)
     std::string ciphertext(sizeof(crypto::secret_key), '\0');
     crypto::chacha_key symmetric_key;
-    memcpy(&symmetric_key, &symmetric_key_hash, sizeof(symmetric_key));
+    memcpy(symmetric_key.data(), symmetric_key_hash.data, sizeof(symmetric_key));
     crypto::chacha_iv iv = crypto::rand<crypto::chacha_iv>();
     crypto::chacha20(pvk.data, sizeof(crypto::secret_key), symmetric_key, iv, &ciphertext[0]);
     
@@ -776,7 +776,7 @@ namespace cryptonote
     // Step 4: Decrypt the data
     std::string plaintext(ciphertext.size(), '\0');
     crypto::chacha_key symmetric_key;
-    memcpy(&symmetric_key, &symmetric_key_hash, sizeof(symmetric_key));
+    memcpy(symmetric_key.data(), symmetric_key_hash.data, sizeof(symmetric_key));
     crypto::chacha20(ciphertext.data(), ciphertext.size(), symmetric_key, iv, &plaintext[0]);
 
     memcpy(pvk.data, &plaintext[0], sizeof(crypto::secret_key));
@@ -1193,7 +1193,7 @@ namespace cryptonote
         crypto::public_key pubkey;
       } buf;
       std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-      std::strncpy(buf.domain_separator, "RETURN", 6);
+      std::memcpy(buf.domain_separator, "RETURN", 6);
       buf.pubkey = P_change;
       crypto::hash_to_scalar(&buf, sizeof(buf), y);
 

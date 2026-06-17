@@ -12481,7 +12481,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
       crypto::public_key pubkey;
     } buf;
     std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-    std::strncpy(buf.domain_separator, "RETURN", 6);
+    std::memcpy(buf.domain_separator, "RETURN", 6);
     buf.pubkey = P_change;
     crypto::hash_to_scalar(&buf, sizeof(buf), y);
   }
@@ -12851,7 +12851,7 @@ uint8_t wallet2::estimate_current_hard_fork(const uint64_t height) const
     num_stagenet_hard_forks;
   
   // Iterate over the hard fork table, to see what the current fork is for the guessed height
-  for (size_t i = hfs_count-1; i>=0; --i) {
+  for (size_t i = hfs_count; i-- > 0; ) {
     if (hfs[i].height <= guessed_height)
       return hfs[i].version;
   }
@@ -13658,8 +13658,6 @@ std::string wallet2::get_tx_proof(const crypto::hash &txid, const cryptonote::ac
 std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const cryptonote::account_public_address &address, bool is_subaddress, const std::string &message) const
 {
   hw::device &hwdev = m_account.get_device();
-  rct::key  aP;
-  
   // Lambda helper to select between carrot and normal tx proof generation
   auto generate_proof_fn = [&](
     const crypto::hash &prefix_hash, 

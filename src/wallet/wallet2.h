@@ -1450,7 +1450,20 @@ private:
       a & m_unconfirmed_payments.parent();
       if(ver < 23)
         return;
-      a & (std::pair<std::map<std::string, std::string>, std::vector<std::string>>&)m_account_tags;
+      using account_tags_archive = std::pair<std::map<std::string, std::string>, std::vector<std::string>>;
+      if (typename t_archive::is_saving())
+      {
+        account_tags_archive account_tags{m_account_tags.first, m_account_tags.second};
+        a & account_tags;
+      }
+      else
+      {
+        account_tags_archive account_tags;
+        a & account_tags;
+        m_account_tags.first.clear();
+        m_account_tags.first.insert(account_tags.first.begin(), account_tags.first.end());
+        m_account_tags.second = std::move(account_tags.second);
+      }
       if(ver < 24)
         return;
       a & m_ring_history_saved;

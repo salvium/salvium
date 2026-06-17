@@ -224,7 +224,6 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
 
         encrypted_payment_id_t encrypted_payment_id;
         if (tx_type == cryptonote::transaction_type::RETURN) {
-            const uint64_t idx = 0;
             get_output_proposal_return_v1(normal_payment_proposals[i],
                                           tx_first_key_image,
                                           s_view_balance_dev,

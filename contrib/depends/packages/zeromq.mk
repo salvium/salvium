@@ -5,7 +5,7 @@ $(package)_file_name=$(package)-$($(package)_version).tar.gz
 $(package)_sha256_hash=6653ef5910f17954861fe72332e68b03ca6e4d9c7160eb3a8de5a5a913bfab43
 
 define $(package)_set_vars
-  $(package)_config_opts=--without-documentation --disable-shared --without-libsodium --disable-curve --with-cv-impl=pthread
+  $(package)_config_opts=--without-docs --disable-shared --without-libsodium --disable-curve --disable-libbsd --disable-libunwind --with-cv-impl=pthread
   $(package)_config_opts_linux=--with-pic
   $(package)_config_opts_freebsd=--with-pic
   $(package)_cxxflags=-std=c++11
@@ -20,11 +20,14 @@ define $(package)_build_cmds
 endef
 
 define $(package)_stage_cmds
-  $(MAKE) DESTDIR=$($(package)_staging_dir) install-libLTLIBRARIES install-includeHEADERS install-pkgconfigDATA
+  mkdir -p $($(package)_staging_prefix_dir)/lib/pkgconfig \
+           $($(package)_staging_prefix_dir)/include &&\
+  cp src/.libs/libzmq.a $($(package)_staging_prefix_dir)/lib/ &&\
+  cp include/zmq.h include/zmq_utils.h $($(package)_staging_prefix_dir)/include/ &&\
+  cp src/libzmq.pc $($(package)_staging_prefix_dir)/lib/pkgconfig/
 endef
 
 define $(package)_postprocess_cmds
   rm -rf bin share &&\
-  rm lib/*.la
+  rm -f lib/*.la
 endef
-

@@ -32,6 +32,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <limits>
+#include <set>
+#include <stdexcept>
 #include <boost/asio/dispatch.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptor/reversed.hpp>
@@ -1621,8 +1623,6 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
       uint64_t expected_staker_block_reward = (money_in_use - expected_treasury_block_reward) * BLOCK_REWARD_STAKER_PCT / 100;
       CHECK_AND_ASSERT_MES(expected_staker_block_reward == b.miner_tx.amount_burnt, false,
         "miner_transaction has incorrect amount_burnt for HF11 (expected " << expected_staker_block_reward << ", got " << b.miner_tx.amount_burnt << ")");
-      uint64_t expected_miner_block_reward = money_in_use - b.miner_tx.amount_burnt - expected_treasury_block_reward;
-
       // treasury_destination
       address_parse_info treasury_addr_info;
       bool addr_ok = cryptonote::get_account_address_from_str(treasury_addr_info, m_nettype, get_config(m_nettype).TREASURY_ADDRESS_CARROT);
@@ -5120,12 +5120,67 @@ bool Blockchain::get_abi_entry(const uint64_t height, cryptonote::audit_block_in
   return true;
 }
 //------------------------------------------------------------------
+namespace
+{
+  template <typename YieldEntry>
+  bool calculate_yield_payouts_from_entries(
+      const char *context,
+      const cryptonote::network_type nettype,
+      const uint64_t start_height,
+      const std::vector<YieldEntry>& yield_entries,
+      const std::map<uint64_t, cryptonote::yield_block_info>& ybi_cache,
+      std::vector<std::pair<YieldEntry, uint64_t>>& yield_container)
+  {
+    yield_container.clear();
+
+    const std::set<std::string> txs_blacklist = {};
+
+    for (const auto& entry: yield_entries)
+    {
+      if (txs_blacklist.find(epee::string_tools::pod_to_hex(entry.tx_hash)) != txs_blacklist.end())
+      {
+        LOG_ERROR(context << " found blacklisted TX at height " << start_height << " - skipping payout");
+        continue;
+      }
+      yield_container.emplace_back(std::make_pair(entry, entry.locked_coins));
+    }
+
+    const uint64_t yield_lock_period = cryptonote::get_config(nettype).STAKE_LOCK_PERIOD;
+    for (uint64_t idx = start_height + 1; idx <= start_height + yield_lock_period; ++idx)
+    {
+      const auto ybi_it = ybi_cache.find(idx);
+      if (ybi_it == ybi_cache.end())
+      {
+        LOG_ERROR("failed to locate yield information for block height " << idx << " - aborting");
+        return false;
+      }
+
+      const yield_block_info& ybi = ybi_it->second;
+      if (ybi.slippage_total_this_block == 0 || ybi.locked_coins_tally == 0)
+        continue;
+
+      const boost::multiprecision::int128_t slippage_128 = ybi.slippage_total_this_block;
+      const boost::multiprecision::int128_t locked_total_128 = ybi.locked_coins_tally;
+
+      for (auto& entry: yield_container)
+      {
+        const boost::multiprecision::int128_t locked_coins_128 = entry.first.locked_coins;
+        const boost::multiprecision::int128_t yield_128 = (slippage_128 * locked_coins_128) / locked_total_128;
+        const uint64_t yield_u64 = boost::numeric_cast<uint64_t>(yield_128);
+
+        if (entry.second + yield_u64 < entry.second)
+          throw std::overflow_error("uint64_t addition overflow");
+        entry.second += yield_u64;
+      }
+    }
+
+    return true;
+  }
+}
+//------------------------------------------------------------------
 bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info_carrot, uint64_t>>& yield_container)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-
-  // Clear the yield payout amounts
-  yield_container.clear();
 
   // Get the YIELD TX information for matured staked coins
   std::vector<cryptonote::yield_tx_info_carrot> yield_entries;
@@ -5138,60 +5193,19 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
     return false;
   }
 
-  // Build a blacklist of staking TXs _not_ to pay out for
-  const std::set<std::string> txs_blacklist = {};
-  
-  // Get the YBI information for the 21,600 blocks that the matured TX(s), we can calculate yield
-  for (const auto& entry: yield_entries) {
-    // Check to see if this entry is in the blacklist
-    if (txs_blacklist.find(epee::string_tools::pod_to_hex(entry.tx_hash)) != txs_blacklist.end()) {
-      LOG_ERROR("calculate_yield_payouts() found blacklisted TX at height " << start_height << " - skipping payout");
-      continue;
-    }
-    yield_container.emplace_back(std::make_pair(entry, entry.locked_coins));
-  }
-  
-  // Iterate over the cached yield_block_info data
-  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
-  for (uint64_t idx = start_height+1; idx <= start_height + yield_lock_period; ++idx) {
-    // Get the next block
-    if (m_yield_block_info_cache.count(idx) == 0) {
-      LOG_ERROR("failed to locate yield information for block height " << idx <<"  - aborting");
-      return false;
-    }
-    yield_block_info ybi = m_yield_block_info_cache[idx];
-    if (ybi.slippage_total_this_block == 0) continue;
-    if (ybi.locked_coins_tally == 0) continue;
-    
-    boost::multiprecision::int128_t slippage_128 = ybi.slippage_total_this_block;
-
-    // Get the total number of coins locked at this height
-    boost::multiprecision::int128_t locked_total_128 = ybi.locked_coins_tally;
-    
-    // Iterate over the yield_container, adding each proportion of the yield
-    for (auto& entry: yield_container) {
-      boost::multiprecision::int128_t locked_coins_128 = entry.first.locked_coins;
-      boost::multiprecision::int128_t yield_128 = (slippage_128 * locked_coins_128) / locked_total_128;
-      uint64_t yield_u64 = boost::numeric_cast<uint64_t>(yield_128);
-
-      if (entry.second + yield_u64 < entry.second) {
-        throw std::overflow_error("uint64_t addition overflow");
-      }
-      entry.second += yield_u64;
-    }
-  }
-  
-  // Return success to caller
-  return true;
+  return calculate_yield_payouts_from_entries(
+      "calculate_yield_payouts(carrot)",
+      m_nettype,
+      start_height,
+      yield_entries,
+      m_yield_block_info_cache,
+      yield_container);
 }
 //------------------------------------------------------------------
 //------------------------------------------------------------------
 bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& yield_container)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-
-  // Clear the yield payout amounts
-  yield_container.clear();
 
   // Get the YIELD TX information for matured staked coins
   std::vector<cryptonote::yield_tx_info> yield_entries;
@@ -5204,51 +5218,13 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
     return false;
   }
 
-  // Build a blacklist of staking TXs _not_ to pay out for
-  const std::set<std::string> txs_blacklist = {};
-  
-  // Get the YBI information for the 21,600 blocks that the matured TX(s), we can calculate yield
-  for (const auto& entry: yield_entries) {
-    // Check to see if this entry is in the blacklist
-    if (txs_blacklist.find(epee::string_tools::pod_to_hex(entry.tx_hash)) != txs_blacklist.end()) {
-      LOG_ERROR("calculate_yield_payouts() found blacklisted TX at height " << start_height << " - skipping payout");
-      continue;
-    }
-    yield_container.emplace_back(std::make_pair(entry, entry.locked_coins));
-  }
-  
-  // Iterate over the cached yield_block_info data
-  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
-  for (uint64_t idx = start_height+1; idx <= start_height + yield_lock_period; ++idx) {
-    // Get the next block
-    if (m_yield_block_info_cache.count(idx) == 0) {
-      LOG_ERROR("failed to locate yield information for block height " << idx <<"  - aborting");
-      return false;
-    }
-    yield_block_info ybi = m_yield_block_info_cache[idx];
-    if (ybi.slippage_total_this_block == 0) continue;
-    if (ybi.locked_coins_tally == 0) continue;
-    
-    boost::multiprecision::int128_t slippage_128 = ybi.slippage_total_this_block;
-
-    // Get the total number of coins locked at this height
-    boost::multiprecision::int128_t locked_total_128 = ybi.locked_coins_tally;
-    
-    // Iterate over the yield_container, adding each proportion of the yield
-    for (auto& entry: yield_container) {
-      boost::multiprecision::int128_t locked_coins_128 = entry.first.locked_coins;
-      boost::multiprecision::int128_t yield_128 = (slippage_128 * locked_coins_128) / locked_total_128;
-      uint64_t yield_u64 = boost::numeric_cast<uint64_t>(yield_128);
-
-      if (entry.second + yield_u64 < entry.second) {
-        throw std::overflow_error("uint64_t addition overflow");
-      }
-      entry.second += yield_u64;
-    }
-  }
-  
-  // Return success to caller
-  return true;
+  return calculate_yield_payouts_from_entries(
+      "calculate_yield_payouts",
+      m_nettype,
+      start_height,
+      yield_entries,
+      m_yield_block_info_cache,
+      yield_container);
 }
 //------------------------------------------------------------------
 bool Blockchain::rebuild_ybi_cache()

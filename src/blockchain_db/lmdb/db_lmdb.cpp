@@ -3830,7 +3830,6 @@ std::pair<std::vector<uint64_t>, uint64_t> BlockchainLMDB::get_block_cumulative_
 
   MDB_val v;
 
-  uint64_t prev_height = heights[0];
   uint64_t range_begin = 0, range_end = 0;
   for (uint64_t height: heights)
   {
@@ -3873,7 +3872,6 @@ std::pair<std::vector<uint64_t>, uint64_t> BlockchainLMDB::get_block_cumulative_
     //  num_spendable_global_outs = asset_type.empty() ? bi->bi_cum_rct : bi->bi_cum_rct_by_asset_type[asset_type];
     assert(true);
 
-    prev_height = height;
   }
 
   TXN_POSTFIX_RDONLY();
@@ -3910,7 +3908,6 @@ std::pair<std::vector<uint64_t>, uint64_t> BlockchainLMDB::get_block_cumulative_
     if (heights[i] >= db_stats.ms_entries)
       throw0(BLOCK_DNE(std::string("Attempt to get rct distribution from height " + std::to_string(heights[i]) + " failed -- block size not in db").c_str()));
 
-  uint64_t prev_height = heights[0];
   for (uint64_t height: heights)
   {
     MDB_val v;
@@ -3931,7 +3928,6 @@ std::pair<std::vector<uint64_t>, uint64_t> BlockchainLMDB::get_block_cumulative_
     if (height == heights[heights.size() - CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE])
       num_spendable_global_outs = rct_count_info[asset_type_id];
 
-    prev_height = height;
   }
   
   TXN_POSTFIX_RDONLY();
@@ -4389,8 +4385,6 @@ std::map<std::string, cryptonote::token_metadata_t> BlockchainLMDB::get_tokens()
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
   TXN_PREFIX_RDONLY();
-  int result;
-
   // Open the tokens table read-only
   RCURSOR(tokens)
 
@@ -6242,7 +6236,6 @@ void BlockchainLMDB::migrate_2_3()
         if (result)
           throw0(DB_ERROR(lmdb_error("Failed to open a cursor for block_info: ", result).c_str()));
         if (!i) {
-          MDB_stat db_stat;
           result = mdb_stat(txn, m_block_info, &db_stats);
           if (result)
             throw0(DB_ERROR(lmdb_error("Failed to query m_block_info: ", result).c_str()));

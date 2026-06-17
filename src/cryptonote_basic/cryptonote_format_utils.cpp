@@ -913,6 +913,9 @@ namespace cryptonote
   bool add_extra_nonce_to_tx_extra(std::vector<uint8_t>& tx_extra, const blobdata& extra_nonce)
   {
     CHECK_AND_ASSERT_MES(extra_nonce.size() <= TX_EXTRA_NONCE_MAX_COUNT, false, "extra nonce could be 255 bytes max");
+    if (extra_nonce.empty())
+      return true;
+
     size_t start_pos = tx_extra.size();
     tx_extra.resize(tx_extra.size() + 2 + extra_nonce.size());
     //write tag
@@ -1172,8 +1175,8 @@ namespace cryptonote
       std::transform(s_type.begin(), s_type.end(), s_type.begin(),
                      [](unsigned char c){ return std::toupper(c); });
       uint32_t asset_id = 0x00000000;
-      for (int i=0; i<s_type.length(); ++i) {
-        uint8_t idx = alphabet.find(s_type.at(i));
+      for (size_t i=0; i<s_type.length(); ++i) {
+        const size_t idx = alphabet.find(s_type.at(i));
         if (idx == std::string::npos || idx >= 36) {
           LOG_ERROR("Custom asset type contains invalid char.");
           return 0x00000000;
@@ -1215,7 +1218,7 @@ namespace cryptonote
       std::string asset_type_check = asset_type_from_id(asset_id);
       return (asset_type_check == asset_type);
     }
-    catch (std::exception e) {
+    catch (const std::exception&) {
       return false;
     }
   }

@@ -179,26 +179,6 @@ static cryptonote::tx_destination_entry make_tx_destination_entry(
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static crypto::public_key find_change_address_spend_pubkey(
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
-    const std::uint32_t subaddr_account)
-{
-    const auto change_it = std::find_if(subaddress_map.cbegin(), subaddress_map.cend(),
-        [subaddr_account](const auto &p) { return p.second.major == subaddr_account && p.second.minor == 0; });
-    CHECK_AND_ASSERT_THROW_MES(change_it != subaddress_map.cend(),
-        "find_change_address_spend_pubkey: missing change address (index "
-        << subaddr_account << ",0) in subaddress map");
-
-    const auto change_it_2 = std::find_if(std::next(change_it), subaddress_map.cend(),
-        [subaddr_account](const auto &p) { return p.second.major == subaddr_account && p.second.minor == 0; });
-    CHECK_AND_ASSERT_THROW_MES(change_it_2 == subaddress_map.cend(),
-        "find_change_address_spend_pubkey: provided CN subaddress map is malformed!!! At least two spend pubkeys map to "
-        "index " << subaddr_account << ",0 in the subaddress map!");
-
-    return change_it->first;
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-static crypto::public_key find_change_address_spend_pubkey(
     const std::unordered_map<crypto::public_key, carrot::subaddress_index_extended> &subaddress_map,
     const std::uint32_t subaddr_account)
 {
@@ -491,7 +471,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         for (size_t i = 0; i < num_dsts_to_complete && !dsts.empty(); ++i)
         {
             const cryptonote::tx_destination_entry &dst = dsts.back();
-            const bool is_selfsend = build_payment_proposals(normal_payment_proposals,
+            build_payment_proposals(normal_payment_proposals,
                 selfsend_payment_proposals,
                 dst,
                 w.get_account().get_subaddress_map_cn());

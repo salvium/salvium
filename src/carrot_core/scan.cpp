@@ -475,9 +475,6 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
     crypto::public_key &return_address_out,
     bool &is_return_out)
 {
-    // Determine whether this is a full wallet or a watch-only wallet
-    const cryptonote::account_keys &keys = account.get_keys();
-    
     // input_context
     const input_context_t input_context = make_carrot_input_context(enote.tx_first_key_image);
 

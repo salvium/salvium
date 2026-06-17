@@ -1,25 +1,121 @@
-diff --git a/configure.ac b/configure.ac
-index 9e2de27c..0fa85c2d 100644
---- a/configure.ac
-+++ b/configure.ac
-@@ -807,6 +807,10 @@ AS_IF([test "x$EMSCRIPTEN" = "x"],[
- # include <sys/random.h>
+diff --git a/configure b/configure
+--- a/configure	2026-04-09 18:24:31.000000000 -0400
++++ b/configure	2026-06-14 19:55:01.407713502 -0400
+@@ -10893,7 +10893,7 @@
+ for (i = 0; i < 10000000; i += 1024) { x[-i] = x[i] = (unsigned char) i; }
  #endif
- ]], [[
+ free((void *) x);
+-exit(1)
++exit(1);
+ 
+   ;
+   return 0;
+@@ -11005,11 +11005,7 @@
+ 
+ printf '%s\n' "#define HAVE_CATCHABLE_ABRT 1" >>confdefs.h
+ 
+-else case e in #(
+-  e) { printf '%s\n' "$as_me:${as_lineno-$LINENO}: WARNING: On this platform, SIGABRT cannot be caught using signal handlers." >&5
+-printf '%s\n' "$as_me: WARNING: On this platform, SIGABRT cannot be caught using signal handlers." >&2;}
+-     ;;
+-esac
++else :
+ fi
+ 
+ 
+@@ -22807,6 +22803,10 @@
+ main (void)
+ {
+ 
 +#ifdef __linux__
 +# error getrandom() is currently disabled on Linux to support glibc < 2.25
 +#endif
 +
  unsigned char buf;
- (void) getrandom((void *) &buf, 1U, 0U);
-   ]])],
-@@ -825,6 +829,9 @@ unsigned char buf;
- # include <sys/random.h>
- #endif
- ]], [[
+ if (&getrandom != NULL) {
+   (void) getrandom((void *) &buf, 1U, 0U);
+@@ -22853,6 +22853,10 @@
+ main (void)
+ {
+ 
 +#ifdef __linux__
 +# error getentropy() is currently disabled on Linux to support glibc < 2.25
 +#endif
- #ifdef __APPLE__
- # error getentropy() is currently disabled on Apple operating systems
- #endif
++
+ unsigned char buf;
+ if (&getentropy != NULL) {
+   (void) getentropy((void *) &buf, 1U);
+diff --git a/src/libsodium/Makefile.in b/src/libsodium/Makefile.in
+--- a/src/libsodium/Makefile.in	2026-04-09 18:24:31.000000000 -0400
++++ b/src/libsodium/Makefile.in	2026-06-14 19:54:33.733672445 -0400
+@@ -1194,7 +1194,7 @@
+ noinst_LTLIBRARIES = libaesni.la libarmcrypto.la libsse2.la \
+ 	libssse3.la libsse41.la libavx2.la libavx512f.la \
+ 	$(am__append_9)
+-librdrand_la_LDFLAGS = $(libsodium_la_LDFLAGS)
++librdrand_la_LDFLAGS = $(AM_LDFLAGS)
+ librdrand_la_CPPFLAGS = $(libsodium_la_CPPFLAGS) \
+ 	@CFLAGS_RDRAND@
+ 
+@@ -1201,7 +1201,7 @@
+ librdrand_la_SOURCES = \
+ 	randombytes/internal/randombytes_internal_random.c
+ 
+-libarmcrypto_la_LDFLAGS = $(libsodium_la_LDFLAGS)
++libarmcrypto_la_LDFLAGS = $(AM_LDFLAGS)
+ libarmcrypto_la_CPPFLAGS = $(libsodium_la_CPPFLAGS) \
+ 	@CFLAGS_ARMCRYPTO@
+ 
+@@ -1216,7 +1216,7 @@
+ 	crypto_pwhash/argon2/argon2-fill-block-neon.c \
+ 	crypto_pwhash/argon2/blamka-round-neon.h
+ 
+-libaesni_la_LDFLAGS = $(libsodium_la_LDFLAGS)
++libaesni_la_LDFLAGS = $(AM_LDFLAGS)
+ libaesni_la_CPPFLAGS = $(libsodium_la_CPPFLAGS) \
+ 	@CFLAGS_SSE2@ @CFLAGS_SSSE3@ @CFLAGS_AVX@ @CFLAGS_AESNI@ @CFLAGS_PCLMUL@
+ 
+@@ -1229,14 +1229,14 @@
+ 	crypto_ipcrypt/ipcrypt_aesni.c \
+ 	crypto_ipcrypt/ipcrypt_aesni.h
+ 
+-libsse2_la_LDFLAGS = $(libsodium_la_LDFLAGS)
++libsse2_la_LDFLAGS = $(AM_LDFLAGS)
+ libsse2_la_CPPFLAGS = $(libsodium_la_CPPFLAGS) \
+ 	@CFLAGS_SSE2@
+ 
+ libsse2_la_SOURCES = crypto_onetimeauth/poly1305/sse2/poly1305_sse2.c \
+ 	crypto_onetimeauth/poly1305/sse2/poly1305_sse2.h \
+ 	$(am__append_11) $(am__append_12)
+-libssse3_la_LDFLAGS = $(libsodium_la_LDFLAGS)
++libssse3_la_LDFLAGS = $(AM_LDFLAGS)
+ libssse3_la_CPPFLAGS = $(libsodium_la_CPPFLAGS) \
+ 	@CFLAGS_SSE2@ @CFLAGS_SSSE3@
+ 
+@@ -1251,7 +1251,7 @@
+ 	crypto_stream/chacha20/dolbeau/u1.h \
+ 	crypto_stream/chacha20/dolbeau/u4.h
+ 
+-libsse41_la_LDFLAGS = $(libsodium_la_LDFLAGS)
++libsse41_la_LDFLAGS = $(AM_LDFLAGS)
+ libsse41_la_CPPFLAGS = $(libsodium_la_CPPFLAGS) \
+ 	@CFLAGS_SSE2@ @CFLAGS_SSSE3@ @CFLAGS_SSE41@
+ 
+@@ -1259,7 +1259,7 @@
+ 	crypto_generichash/blake2b/ref/blake2b-compress-sse41.c \
+ 	crypto_generichash/blake2b/ref/blake2b-compress-sse41.h
+ 
+-libavx2_la_LDFLAGS = $(libsodium_la_LDFLAGS)
++libavx2_la_LDFLAGS = $(AM_LDFLAGS)
+ libavx2_la_CPPFLAGS = $(libsodium_la_CPPFLAGS) \
+ 	@CFLAGS_SSE2@ @CFLAGS_SSSE3@ @CFLAGS_SSE41@ @CFLAGS_AVX@ @CFLAGS_AVX2@
+ 
+@@ -1278,7 +1278,7 @@
+ 	crypto_stream/salsa20/xmm6int/u4.h \
+ 	crypto_stream/salsa20/xmm6int/u8.h
+ 
+-libavx512f_la_LDFLAGS = $(libsodium_la_LDFLAGS)
++libavx512f_la_LDFLAGS = $(AM_LDFLAGS)
+ libavx512f_la_CPPFLAGS = $(libsodium_la_CPPFLAGS) \
+ 	@CFLAGS_SSE2@ @CFLAGS_SSSE3@ @CFLAGS_SSE41@ @CFLAGS_AVX@ @CFLAGS_AVX2@ @CFLAGS_AVX512F@
+ 
