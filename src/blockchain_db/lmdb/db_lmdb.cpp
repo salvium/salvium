@@ -35,6 +35,7 @@
 
 #include <memory>  // std::unique_ptr
 #include <cstring>  // memcpy
+#include <thread>  // std::this_thread::yield
 
 #ifdef WIN32
 #include <winioctl.h>
@@ -158,8 +159,9 @@ int BlockchainLMDB::compare_uint64(const MDB_val *a, const MDB_val *b)
 
 int BlockchainLMDB::compare_hash32(const MDB_val *a, const MDB_val *b)
 {
-  uint32_t *va = (uint32_t*) a->mv_data;
-  uint32_t *vb = (uint32_t*) b->mv_data;
+  uint32_t va[8], vb[8];
+  memcpy(va, a->mv_data, 32);
+  memcpy(vb, b->mv_data, 32);
   for (int n = 7; n >= 0; n--)
   {
     if (va[n] == vb[n])
@@ -522,7 +524,8 @@ void mdb_txn_safe::prevent_new_txns()
 
 void mdb_txn_safe::wait_no_active_txns()
 {
-  while (num_active_txns > 0);
+  while (num_active_txns > 0)
+    std::this_thread::yield();
 }
 
 void mdb_txn_safe::allow_new_txns()

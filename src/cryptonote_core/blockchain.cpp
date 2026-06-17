@@ -4062,6 +4062,12 @@ bool Blockchain::check_tx_asset_types(const transaction& tx, tx_verification_con
         tvc.m_verifivation_failed = true; 
         return false;
       }
+    } else if (tx.type == cryptonote::transaction_type::RETURN) {
+      if (tx.source_asset_type != "SAL1" || tx.destination_asset_type != "SAL1") {
+        MERROR_VER("Invalid source/dest asset type for RETURN - provided source asset: " << tx.source_asset_type << ", provided destination asset: " << tx.destination_asset_type << ", expected SAL1 for both");
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
     } else if (tx.type == cryptonote::transaction_type::TRANSFER) {
       if (tx.source_asset_type != tx.destination_asset_type) {
         MERROR_VER("Mismatched asset types for TRANSFER - provided source asset: " << tx.source_asset_type << ", provided destination asset: " << tx.destination_asset_type << ", expected them to match");
@@ -4159,21 +4165,21 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
     }
   }
 
-  // Reverse the order of checking now, because we're using >=
   if (hf_version >= HF_VERSION_ENABLE_TOKENS) {
     if (tx.type == cryptonote::transaction_type::TRANSFER ||
         tx.type == cryptonote::transaction_type::RETURN ||
         tx.type == cryptonote::transaction_type::ROLLUP ||
         tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
       if (tx.version < TRANSACTION_VERSION_ENABLE_TOKENS) {
+        MERROR("Transaction version " << std::to_string(tx.version) << " is too low for TRANSFER/RETURN/ROLLUP/CREATE_TOKEN at HF_ENABLE_TOKENS, expected " << std::to_string(TRANSACTION_VERSION_ENABLE_TOKENS));
+        tvc.m_version_mismatch = true;
+        return false;
       }
     } else {
       if (tx.version != TRANSACTION_VERSION_ENABLE_TOKENS) {
-      }
-      if (tx.type == cryptonote::transaction_type::PROTOCOL) {
-        // Allowed multiple asset_types for `vout` entries 
-      } else {
-        // No mixing of asset_types permitted - verify here
+        MERROR("Transaction version " << std::to_string(tx.version) << " is not supported for tx type " << tx.type << " at HF_ENABLE_TOKENS, expected " << std::to_string(TRANSACTION_VERSION_ENABLE_TOKENS));
+        tvc.m_version_mismatch = true;
+        return false;
       }
     }
   }
@@ -4301,7 +4307,7 @@ bool Blockchain::have_tx_keyimges_as_spent(const transaction &tx) const
 bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys, const uint8_t &hf_version)
 {
   PERF_TIMER(expand_transaction_2);
-  CHECK_AND_ASSERT_MES(tx.version == 2 || tx.version == 3 || tx.version == 4 || tx.version == 5, false, "Transaction version is not 2/3/5");
+  CHECK_AND_ASSERT_MES(tx.version == 2 || tx.version == 3 || tx.version == 4 || tx.version == 5, false, "Transaction version is not 2/3/4/5");
 
   rct::rctSig &rv = tx.rct_signatures;
 

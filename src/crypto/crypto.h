@@ -203,6 +203,7 @@ namespace crypto {
    */
   template<typename T>
   typename std::enable_if<std::is_unsigned<T>::value, T>::type rand_idx(T sz) {
+    if (sz == 0) return 0;
     return crypto::rand_range<T>(0, sz-1);
   }
 

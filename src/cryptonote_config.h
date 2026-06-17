@@ -474,7 +474,7 @@ namespace config
       "KWv3Vo1/Gny+1vfaxsXhBQiG1KlHkafNGarzoL0WHW4ocqaaqF5iv8i35A==\n"
       "-----END PUBLIC KEY-----\n";
 
-    std::string const TREASURY_ADDRESS_CARROT = ""; // TODO: generate stagenet Carrot treasury address ?
+    std::string const TREASURY_ADDRESS_CARROT = "fuLMowH85abK8nz9BBMEem7MAfUbQu4aSHHUV9j5Z86o6Go9Lv2U5ZQiJCWPY9R9HA8p5idburazjAhCqDngLo7fYPCD9ciM9ee1A";
     std::string const TREASURY_ADDRESS = "fuLMowH85abK8nz9BBMEem7MAfUbQu4aSHHUV9j5Z86o6Go9Lv2U5ZQiJCWPY9R9HA8p5idburazjAhCqDngLo7fYPCD9ciM9ee1A";
 
     // treasury payout {tx-key, output-key, anchor_enc, view_tag} tuples

@@ -92,7 +92,7 @@ namespace carrot {
     
     // Step 3: Calculate the challenge scalar
     std::vector<rct::key> keys{commitment, K_o};
-    rct::key challenge = rct::hash_to_scalar(keys); // c = H(R || K_o)
+    rct::key challenge = carrot::hash_to_scalar(keys); // c = H(R || K_o || domain_separator)
     
     // Step 4: Calculate responses
     rct::key response_x;
@@ -118,7 +118,7 @@ namespace carrot {
     
     // Step 1: calculate the challenge
     std::vector<rct::key> keys{proof.R, K_o};
-    rct::key recomputed_challenge = rct::hash_to_scalar(keys);
+    rct::key recomputed_challenge = carrot::hash_to_scalar(keys);
     
     // Step 2: Calculate z_xG + x_yT
     rct::key z_xG  = rct::scalarmultBase(proof.z1); // z1 * G
