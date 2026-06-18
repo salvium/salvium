@@ -5758,7 +5758,16 @@ leave:
       return_tx_to_pool(txs);
       goto leave;
     }
-    
+
+    // from HF_VERSION_REJECT_CLEARTEXT_AMOUNTS, confidential outputs must not carry a cleartext amount
+    if (m_hardfork->get_current_version() >= HF_VERSION_REJECT_CLEARTEXT_AMOUNTS && tx_has_cleartext_confidential_amount(tx)) {
+      MERROR_VER("Block with id: " << id << " has transaction (id: " << tx_id << ") with a nonzero cleartext amount on a confidential output");
+      add_block_as_invalid(bl, id);
+      bvc.m_verifivation_failed = true;
+      return_tx_to_pool(txs);
+      goto leave;
+    }
+
     TIME_MEASURE_FINISH(cc);
     t_checktx += cc;
     fee_summary += fee;

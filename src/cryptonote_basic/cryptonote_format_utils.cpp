@@ -1055,6 +1055,17 @@ namespace cryptonote
     return true;
   }
   //-----------------------------------------------------------------------------------------------
+  bool tx_has_cleartext_confidential_amount(const transaction& tx)
+  {
+    // RingCT outputs hide value in commitments; a nonzero cleartext amount is malformed
+    if (tx.rct_signatures.type == rct::RCTTypeNull)
+      return false;
+    for (const tx_out& o : tx.vout)
+      if (o.amount != 0)
+        return true;
+    return false;
+  }
+  //-----------------------------------------------------------------------------------------------
   bool check_money_overflow(const transaction& tx)
   {
     return check_inputs_overflow(tx) && check_outs_overflow(tx);

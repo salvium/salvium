@@ -260,7 +260,16 @@ namespace cryptonote
       tvc.m_invalid_output = true;
       return false;
     }
-    
+
+    // confidential outputs carry value in commitments; reject a leaked cleartext amount
+    if (!kept_by_block && tx_has_cleartext_confidential_amount(tx))
+    {
+      LOG_PRINT_L1("Transaction with id= "<< id << " has a nonzero cleartext amount on a confidential output");
+      tvc.m_verifivation_failed = true;
+      tvc.m_invalid_output = true;
+      return false;
+    }
+
     // Check the TX type
     if (!m_blockchain.check_tx_type_and_version(tx, tvc)) {
       LOG_PRINT_L1("Transaction with id= "<< id << " has invalid type " << (uint8_t)tx.type << " and/or version " << tx.version);
