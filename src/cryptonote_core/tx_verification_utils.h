@@ -35,6 +35,11 @@ namespace cryptonote
 {
 
 /**
+ * @brief Collect output pubkeys and amount commitments for torsion checks.
+ */
+bool collect_points_for_torsion_check(const transaction& tx, std::vector<rct::key> &pubkeys_and_commitments_inout);
+
+/**
  * @brief Get the maximum transaction weight for a given hardfork
  *
  * @param hf_version hard fork version

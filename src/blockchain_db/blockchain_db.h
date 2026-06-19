@@ -1997,9 +1997,9 @@ public:
       active = true;
     }
   }
-  virtual ~db_txn_guard()
+  virtual ~db_txn_guard() noexcept
   {
-    stop();
+    try { stop(); } catch (...) {}
   }
   void stop()
   {

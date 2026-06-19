@@ -2409,79 +2409,129 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
   // Return success to caller
   return true;
 }
-/*
-//----------------------------------------------------------------------------------------------------
-bool wallet2::verify_spend_authority_proof(const cryptonote::transaction &tx, const size_t i, const tx_scan_info_t &tx_scan_info)
+bool wallet2::verify_spend_authority_proof(
+    const cryptonote::transaction &tx,
+    const size_t i,
+    std::string *reason,
+    crypto::public_key *P_change_out,
+    uint8_t *change_index_out)
 {
-  // Sanity checks
-  if (tx.type != cryptonote::transaction_type::TRANSFER) return true;
-  if (tx.version < TRANSACTION_VERSION_N_OUTS) return true;
-  if (tx.rct_signatures.type != rct::RCTTypeFullProofs && tx.rct_signatures.type != rct::RCTTypeSalviumOne) return true;
+  try
+  {
+    if (tx.type != cryptonote::transaction_type::TRANSFER)
+      return true; // not applicable
 
-  // To verify the spend authority proof, we need to know the y value to process the F value
-  ec_scalar y;
-  
-  // Get P_change from the TX
-  crypto::public_key P_change = crypto::null_pkey;
+    if (tx.rct_signatures.type != rct::RCTTypeSalviumOne)
+      return true; // not applicable
+
+    if (i >= tx.vout.size())
+    {
+      if (reason) *reason = "received output index out of range";
+      return false;
+    }
+
+    if (i >= tx.return_address_change_mask.size())
+    {
+      if (reason) *reason = "missing return_address_change_mask entry";
+      return false;
+    }
+
+    // 1. parse tx extra
+    std::vector<crypto::public_key> main_tx_ephemeral_pubkeys;
+    std::vector<crypto::public_key> additional_tx_ephemeral_pubkeys;
+    cryptonote::blobdata tx_extra_nonce;
+    if (!wallet::parse_tx_extra_for_scanning(tx.extra,
+                                             tx.vout.size(),
+                                             main_tx_ephemeral_pubkeys,
+                                             additional_tx_ephemeral_pubkeys,
+                                             tx_extra_nonce)) {
+      if (reason) *reason = "transaction extra has unsupported format";
+      return false;
+    }
+
+    THROW_WALLET_EXCEPTION_IF(main_tx_ephemeral_pubkeys.empty() && additional_tx_ephemeral_pubkeys.empty(), error::wallet_internal_error,
+        "Transaction missing ephemeral pubkeys");
+    const bool is_carrot = carrot::is_carrot_transaction_v1(tx);
+    THROW_WALLET_EXCEPTION_IF(!is_carrot, error::wallet_internal_error,
+        "Return payment is only supported for Carrot transactions");
+
+    // 2. perform ECDH derivations
+    std::vector<crypto::key_derivation> main_derivations;
+    std::vector<crypto::key_derivation> additional_derivations;
+    wallet::perform_ecdh_derivations(
+      epee::to_span(main_tx_ephemeral_pubkeys),
+      epee::to_span(additional_tx_ephemeral_pubkeys),
+      m_account.get_keys().k_view_incoming,
+      m_account.get_keys().get_device(),
+      is_carrot,
+      main_derivations,
+      additional_derivations
+    );
+
+    crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+    if (main_derivations.size() == 1)
+    {
+      derivation = main_derivations[0];
+    }
+    else
+    {
+      if (i >= additional_derivations.size())
+      {
+        if (reason) *reason = "missing additional derivation for output";
+        return false;
+      }
+      derivation = additional_derivations[i];
+    }
     
-  // Calculate z_i (the shared secret between sender and ourselves for the original TX)
-  crypto::public_key txkey_pub = null_pkey; // R
-  const std::vector<crypto::public_key> in_additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(tx);
-  if (in_additional_tx_pub_keys.size() != 0) {
-    THROW_WALLET_EXCEPTION_IF(in_additional_tx_pub_keys.size() != tx.vout.size(),
-                              error::wallet_internal_error,
-                              tr("at verify_spend_authority_proof(): incorrect number of additional TX pubkeys in TX"));
-    txkey_pub = in_additional_tx_pub_keys[i];
-  } else {
-    txkey_pub = get_tx_pub_key_from_extra(tx);
+    // 3. compute the change index
+    crypto::secret_key z_i;
+    derivation_to_scalar(derivation, i, z_i);
+    struct {
+      char domain_separator[8];
+      crypto::secret_key output_index_key;
+    } buf;
+    std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
+    std::memcpy(buf.domain_separator, "CHG_IDX", 8);
+    std::memcpy(buf.output_index_key.data, z_i.data, sizeof(crypto::secret_key));
+    uint8_t eci_data = tx.return_address_change_mask[i];
+    crypto::secret_key eci_out;
+    keccak((uint8_t *)&buf, sizeof(buf), (uint8_t*)&eci_out, sizeof(eci_out));
+    uint8_t change_index = eci_data ^ eci_out.data[0];
+    if (change_index >= tx.vout.size()) {
+      if (reason) *reason = "decoded change_index is out of range";
+      return false;
+    }
+    
+    // 4. Get the P_change key
+    crypto::public_key P_change;
+    THROW_WALLET_EXCEPTION_IF(
+      !cryptonote::get_output_public_key(tx.vout[change_index], P_change),
+      error::wallet_internal_error,
+      "Failed to identify change output"
+    );
+
+    // 5. Verify the proof
+    const rct::key key_P_change = rct::pk2rct(P_change);    
+    if (!rct::SAProof_Ver(tx.rct_signatures.salvium_data.sa_proof, key_P_change))
+    {
+      if (reason) *reason = "SA proof verification failed";
+      return false;
+    }
+    if (P_change_out) *P_change_out = P_change;
+    if (change_index_out) *change_index_out = change_index;
+    return true;
   }
-  crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
-  THROW_WALLET_EXCEPTION_IF(!generate_key_derivation(txkey_pub, m_account.get_keys().m_view_secret_key, derivation),
-                            error::wallet_internal_error,
-                            tr("at verify_spend_authority_proof(): failed to generate_key_derivation"));
-  crypto::secret_key z_i;
-  derivation_to_scalar(derivation, i, z_i);
-    
-  // Calculate the y value for return_payment support
-  struct {
-    char domain_separator[8];
-    rct::key amount_key;
-  } buf;
-  std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-  std::strncpy(buf.domain_separator, "RETURN", 7);
-  buf.amount_key = rct::sk2rct(z_i);
-  crypto::hash_to_scalar(&buf, sizeof(buf), y);
-
-  // The change_index needs decoding too
-  uint8_t eci_data = tx.return_address_change_mask[i];
-      
-  // Calculate the encrypted_change_index data for this output
-  std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-  std::strncpy(buf.domain_separator, "CHG_IDX", 8);
-  crypto::secret_key eci_out;
-  keccak((uint8_t *)&buf, sizeof(buf), (uint8_t*)&eci_out, sizeof(eci_out));
-  uint8_t change_index = eci_data ^ eci_out.data[0];
-  THROW_WALLET_EXCEPTION_IF(change_index >= tx.vout.size(), error::wallet_internal_error, tr("at verify_spend_authority_proof(): invalid change_index calculated"));
-
-  // Now we know the index, we can get P_change
-  THROW_WALLET_EXCEPTION_IF(!cryptonote::get_output_public_key(tx.vout[change_index], P_change), error::wallet_internal_error, tr("at verify_spend_authority_proof(): failed to get P_change"));
-  rct::key key_P_change = rct::pk2rct(P_change);
-
-  // Calculate the shared secret yF
-  rct::key key_y         = (rct::key&)(y);
-  rct::key key_F         = (rct::key&)(tx.return_address_list[i]);
-  rct::key key_yF        = rct::scalarmultKey(key_F, key_y);
-  rct::key hs_yF         = rct::hash_to_scalar(key_yF);
-
-  // Now we can verify the proof itself
-  if (!rct::SAProof_Ver(tx.rct_signatures.salvium_data.sa_proof, key_P_change, hs_yF)) {
+  catch (const std::exception &e)
+  {
+    if (reason) *reason = e.what();
     return false;
   }
-
-  // Return success to caller
-  return true;
+  catch (...)
+  {
+    if (reason) *reason = "unknown exception";
+    return false;
+  }
 }
-*/
 //----------------------------------------------------------------------------------------------------
 void wallet2::scan_key_image(const wallet::enote_view_incoming_scan_info_t &enote_scan_info,
   const bool pool,
@@ -2719,6 +2769,30 @@ void wallet2::process_new_scanned_transaction(
     td.m_td_origin_idx = m_salvium_txs.find(enote_scan_info->address_spend_pubkey) != m_salvium_txs.end() ?
       m_salvium_txs.at(enote_scan_info->address_spend_pubkey) : std::numeric_limits<uint64_t>::max();
 
+    // Check SA proof to flag potentially hacked outputs
+    crypto::public_key P_change = crypto::null_pkey;
+    uint8_t change_index = 0;
+    std::string reason;
+
+    td.m_sa_proof_ok = false;
+    td.m_return_payment_change_index = 0xff;
+    td.m_return_payment_change_key = crypto::null_pkey;
+    
+    const bool sa_ok = verify_spend_authority_proof(tx,
+                                                    local_output_index,
+                                                    &reason,
+                                                    &P_change,
+                                                    &change_index);
+
+    if (sa_ok) {
+      td.m_sa_proof_ok = true;
+      td.m_return_payment_change_index = change_index;
+      td.m_return_payment_change_key = P_change;
+    } else {
+      // Log an error message
+      MERROR("Received output in tx " << txid << " which has an invalid spend authority proof. Error = " << reason);
+    }
+    
     // update m_transfers key image values
     td.m_key_image_known = bool(output_key_images[local_output_index]);
     td.m_key_image = output_key_images[local_output_index].value_or(crypto::key_image{});
@@ -2824,7 +2898,7 @@ void wallet2::process_new_scanned_transaction(
       // Add a "locked coins" entry so users don't freak out when they STAKE/AUDIT
       m_locked_coins.insert({onetime_address, {0, tx.amount_burnt, tx.source_asset_type}});
     }
-    
+
     // update multisig info
     if (m_multisig)
     {
@@ -2833,7 +2907,7 @@ void wallet2::process_new_scanned_transaction(
       if (m_multisig_rescan_info && m_multisig_rescan_info->front().size() >= m_transfers.size())
         update_multisig_rescan_info(*m_multisig_rescan_k, *m_multisig_rescan_info, m_transfers.size() - 1);
     }
-
+    
     // money received callbacks
     LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
     if (!ignore_callbacks && 0 != m_callback && td.m_amount > 0)
@@ -5589,7 +5663,7 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
 
   if (r)
   {
-    if (!m_watch_only)
+    if (!m_watch_only && hwdev.device_protocol() == hw::device::PROTOCOL_DEFAULT)
       m_account.set_carrot_keys();
 
     if (!m_is_background_wallet)
@@ -12217,6 +12291,11 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   const bool do_carrot_tx_construction = use_fork_rules(HF_VERSION_CARROT);
   if (do_carrot_tx_construction)
   {
+    // 0. Sanity check
+    THROW_WALLET_EXCEPTION_IF(!td_origin.m_sa_proof_ok,
+                              error::wallet_internal_error,
+                              "return_payment unavailable: sender spend-authority proof was not verified");    
+
     // calculate the return address
     // 1. parse tx extra
     std::vector<crypto::public_key> main_tx_ephemeral_pubkeys;
@@ -12496,15 +12575,6 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   address.m_spend_public_key = P_change;
   address.m_view_public_key = rct::rct2pk(key_yF);
   address.m_is_carrot = false;
-  
-  LOG_ERROR("*****************************************************************************");
-  LOG_ERROR("TX type   : RETURN");
-  LOG_ERROR("a         : " << crypto::secret_key_explicit_print_ref{m_account.get_keys().m_view_secret_key});
-  LOG_ERROR("F         : " << key_F);
-  LOG_ERROR("y         : " << key_y);
-  LOG_ERROR("P_change  : " << P_change);
-  LOG_ERROR("aP_change : " << key_yF);
-  LOG_ERROR("*****************************************************************************");
 
   // Call the necessary handler
   return create_transactions_from(address, cryptonote::transaction_type::RETURN, asset_type, is_subaddress, outputs, transfers_indices, unused_dust_indices, fake_outs_count, unlock_time, priority, extra);
@@ -15604,6 +15674,7 @@ void wallet2::stop_background_sync(const epee::wipeable_string &wallet_password,
 
   // Set the plaintext spend key
   m_account.set_spend_key(recovered_spend_key);
+  m_account.set_carrot_keys();
 
   // Encrypt the spend key when done if needed
   epee::misc_utils::auto_scope_leave_caller keys_reencryptor;

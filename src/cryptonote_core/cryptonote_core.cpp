@@ -601,7 +601,7 @@ namespace cryptonote
       if(options.size() >= 3 && !safemode)
       {
         char *endptr;
-        uint64_t threshold = strtoull(options[2].c_str(), &endptr, 0);
+        uint64_t threshold = strtoull(options[2].c_str(), &endptr, 10);
         if (*endptr == '\0' || !strcmp(endptr, "blocks"))
         {
           sync_on_blocks = true;
@@ -1262,13 +1262,12 @@ namespace cryptonote
       return false;
     }
 
-    /*
-    if (hf_version >= HF_VERSION_ENABLE_TOKENS && !m_blockchain_storage.is_tx_paid_for(tx))
+    if (keeped_by_block && hf_version >= HF_VERSION_ENABLE_TOKENS && !m_blockchain_storage.is_tx_paid_for(tx))
     {
       MERROR_VER("tx has not been paid for by ROLLUP");
       return false;
     }
-    */
+
     return true;
   }
   //-----------------------------------------------------------------------------------------------

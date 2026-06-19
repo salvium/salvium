@@ -133,6 +133,7 @@ namespace cryptonote
   bool parse_and_validate_block_from_blob(const blobdata_ref& b_blob, block& b, crypto::hash &block_hash);
   bool get_inputs_money_amount(const transaction& tx, uint64_t& money);
   uint64_t get_outs_money_amount(const transaction& tx);
+  bool tx_has_cleartext_confidential_amount(const transaction& tx);
   std::string asset_type_from_id(const uint32_t asset_type_id);
   uint32_t asset_id_from_type(const std::string asset_type);
   bool is_valid_custom_asset_type(const std::string& asset_type);

@@ -719,10 +719,14 @@ namespace cryptonote
     for(auto& in: tx.vin)
     {
       CHECK_AND_ASSERT_MES(in.type() == typeid(txin_to_key), 0, "unexpected type id in transaction");
+      if (amount_in > UINT64_MAX - boost::get<txin_to_key>(in).amount) return false;
       amount_in += boost::get<txin_to_key>(in).amount;
     }
     for(auto& o: tx.vout)
+    {
+      if (amount_out > UINT64_MAX - o.amount) return false;
       amount_out += o.amount;
+    }
 
     CHECK_AND_ASSERT_MES(amount_in >= amount_out, false, "transaction spend (" <<amount_in << ") more than it has (" << amount_out << ")");
     fee = amount_in - amount_out;
@@ -1012,6 +1016,7 @@ namespace cryptonote
     for(const auto& in: tx.vin)
     {
       CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
+      if (money > UINT64_MAX - tokey_in.amount) return false;
       money += tokey_in.amount;
     }
     return true;
@@ -1055,6 +1060,20 @@ namespace cryptonote
     return true;
   }
   //-----------------------------------------------------------------------------------------------
+  bool tx_has_cleartext_confidential_amount(const transaction& tx)
+  {
+    // rct hides value in commitments, a nonzero cleartext amount is malformed
+    if (tx.rct_signatures.type == rct::RCTTypeNull)
+      return false;
+    for (const txin_v& in : tx.vin)
+      if (in.type() == typeid(txin_to_key) && boost::get<txin_to_key>(in).amount != 0)
+        return true;
+    for (const tx_out& o : tx.vout)
+      if (o.amount != 0)
+        return true;
+    return false;
+  }
+  //-----------------------------------------------------------------------------------------------
   bool check_money_overflow(const transaction& tx)
   {
     return check_inputs_overflow(tx) && check_outs_overflow(tx);
@@ -1091,10 +1110,17 @@ namespace cryptonote
     for(const auto& o: tx.vout) {
       if(o.target.type() == typeid(txout_to_tagged_key)) {
         if (boost::get<txout_to_tagged_key>(o.target).asset_type == "SAL1") {
+          if (outputs_amount > UINT64_MAX - o.amount) return 0;
           outputs_amount += o.amount;
         }
       } else if (o.target.type() == typeid(txout_to_key)) {
         if (boost::get<txout_to_key>(o.target).asset_type == "SAL1") {
+          if (outputs_amount > UINT64_MAX - o.amount) return 0;
+          outputs_amount += o.amount;
+        }
+      } else if (o.target.type() == typeid(txout_to_carrot_v1)) {
+        if (boost::get<txout_to_carrot_v1>(o.target).asset_type == "SAL1") {
+          if (outputs_amount > UINT64_MAX - o.amount) return 0;
           outputs_amount += o.amount;
         }
       }

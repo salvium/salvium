@@ -405,7 +405,8 @@ namespace rct {
       key b;
       key bT;
 
-      hwdev.clsag_prepare_carrot(x,z,sig.I,D,H,a,aG,b,bT,aH);
+      if (!hwdev.clsag_prepare_carrot(x,z,sig.I,D,H,a,aG,b,bT,aH))
+        throw std::runtime_error("Carrot CLSAG not supported by hardware device");
 
       geDsmp I_precomp;
       geDsmp D_precomp;
@@ -1411,7 +1412,12 @@ namespace rct {
     bool SAProof_Ver(const zk_proof &proof, const key &P) {
     
         // Sanity checks for inputs
-        CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::zero()), "SAProof_Ver() failed - invalid public key provided");
+        CHECK_AND_ASSERT_THROW_MES(crypto::check_key(rct::rct2pk(P)), "SAProof_Ver() failed - invalid public key encoding");
+        CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(P, rct::identity()), "SAProof_Ver() failed - invalid public key provided");
+        CHECK_AND_ASSERT_THROW_MES(crypto::check_key(rct::rct2pk(proof.R)), "SAProof_Ver() failed - invalid commitment R encoding");
+        CHECK_AND_ASSERT_THROW_MES(!rct::equalKeys(proof.R, rct::identity()), "SAProof_Ver() failed - invalid commitment R provided");
+        CHECK_AND_ASSERT_THROW_MES(sc_check(proof.z1.bytes) == 0, "SAProof_Ver() failed - non-canonical z1 provided");
+        CHECK_AND_ASSERT_THROW_MES(sc_check(proof.z2.bytes) == 0, "SAProof_Ver() failed - non-canonical z2 provided");
         
         // Make the domain separator into a key
         rct::key sa_proof_domain_sep;
@@ -2105,7 +2111,7 @@ namespace rct {
 
     //ver RingCT simple
     //assumes only post-rct style inputs (at least for max anonymity)
-    bool verRctNonSemanticsSimple(const rctSig & rv) {
+    bool verRctNonSemanticsSimple(const rctSig & rv, const cryptonote::transaction_type tx_type) {
       try
       {
         PERF_TIMER(verRctNonSemanticsSimple);
@@ -2152,7 +2158,7 @@ namespace rct {
           }
         }
 
-        bool audit = (rv.type == RCTTypeSalviumZero && rv.salvium_data.salvium_data_type == rct::SalviumZeroAudit);
+        bool audit = (tx_type == cryptonote::transaction_type::AUDIT && rv.type == RCTTypeSalviumZero);
         if (audit) {
           // Validate the Salvium audit data
           CHECK_AND_ASSERT_THROW_MES(PRProof_Ver(rv.outPk[0].mask, rv.salvium_data.cz_proof), "PRProof_Ver() failed on change proof");

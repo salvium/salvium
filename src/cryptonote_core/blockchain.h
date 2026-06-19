@@ -1071,6 +1071,8 @@ namespace cryptonote
       return *m_db;
     }
 
+    network_type get_nettype() const { return m_nettype; }
+    
     /**
      * @brief get a number of outputs of a specific amount
      *
