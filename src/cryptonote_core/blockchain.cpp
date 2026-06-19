@@ -1790,9 +1790,26 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
         LOG_ERROR("Block at height: " << height << " - Failed to obtain carrot yield payout information - aborting");
         return false;
       }
+
+      // Get the YIELD TX information for matured pre-carrot staked coins - should not be any
+      std::vector<cryptonote::yield_tx_info> yield_entries;
+      m_db->get_yield_tx_info(matured_height, yield_entries);
+      if (yield_entries.size() != 0) {
+        LOG_ERROR("Block at height: " << height << " - Both carrot and pre-carrot yield payout information found - aborting");
+        return false;
+      }
+      
     } else {
       if (!calculate_yield_payouts(matured_height, yield_payouts)) {
         LOG_ERROR("Block at height: " << height << " - Failed to obtain yield payout information - aborting");
+        return false;
+      }
+
+      // Get the YIELD TX information for matured carrot staked coins - should not be any
+      std::vector<cryptonote::yield_tx_info_carrot> yield_entries;
+      m_db->get_carrot_yield_tx_info(matured_height, yield_entries);
+      if (yield_entries.size() != 0) {
+        LOG_ERROR("Block at height: " << height << " - Both carrot and pre-carrot yield payout information found - aborting");
         return false;
       }
     }

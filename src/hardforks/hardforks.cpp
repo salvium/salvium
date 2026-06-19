@@ -66,7 +66,7 @@ const hardfork_t mainnet_hard_forks[] = {
   {11, 465000, 0, 1774000000 },
 
   // version 12 Spam TX HF - starts from block 513000, which is on or around the 19th of June, 2026. Fork time finalised on 2026-06-19. No fork voting occurs for the v12 fork.
-  {12, 513000, 0, 1781865000 },
+  {12, 513100, 0, 1781865000 },
 };
 const size_t num_mainnet_hard_forks = sizeof(mainnet_hard_forks) / sizeof(mainnet_hard_forks[0]);
 const uint64_t mainnet_hard_fork_version_1_till = ((uint64_t)-1);

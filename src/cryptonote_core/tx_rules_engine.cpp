@@ -402,8 +402,7 @@ namespace cryptonote::txrules
   }
 
   static tx_type_rules make_rollup_rules(const std::string& asset,
-                                         uint8_t txver,
-                                         bool allow_carrot_outputs)
+                                         uint8_t txver)
   {
     tx_type_rules r;
     r.tx_versions = {txver, txver};
@@ -411,9 +410,7 @@ namespace cryptonote::txrules
     r.vout_count  = {1, 2}; // keep aligned with your current HF11 shape unless protocol says otherwise
 
     r.variants.inputs  = bits_inputs({input_kind::to_key});
-    r.variants.outputs = bits_outputs({output_kind::to_key, output_kind::to_tagged_key});
-    if (allow_carrot_outputs)
-      r.variants.outputs.set(static_cast<size_t>(output_kind::to_carrot_v1));
+    r.variants.outputs = bits_outputs({output_kind::to_carrot_v1});
 
     // ROLLUP burns SAL1 fees and returns SAL1 change; no token outputs in this tx itself.
     r.assets.outputs_multi_asset       = req::MUST_NOT;
@@ -428,7 +425,6 @@ namespace cryptonote::txrules
     // User-submitted tx, not coinbase.
     r.rct.coinbase_must_be_null = false;
     r.rct.allowed_rct_types.reset();
-    //r.rct.required_rct_type.reset();
 
     r.extra_check = &check_rollup_semantics;
     return r;
@@ -738,7 +734,7 @@ namespace cryptonote::txrules
     hf.by_type[cryptonote::BURN].rct.allowed_rct_types.set(static_cast<size_t>(rct::RCTTypeSalviumOne));
     hf.by_type[cryptonote::CREATE_TOKEN] = make_create_token_rules("SAL1", TRANSACTION_VERSION_ENABLE_TOKENS, /*carrot*/true);
     hf.by_type[cryptonote::CREATE_TOKEN].rct.allowed_rct_types.set(static_cast<size_t>(rct::RCTTypeSalviumOne));
-    hf.by_type[cryptonote::ROLLUP] = make_rollup_rules("SAL1", TRANSACTION_VERSION_ENABLE_TOKENS, /*carrot*/true);
+    hf.by_type[cryptonote::ROLLUP] = make_rollup_rules("SAL1", TRANSACTION_VERSION_ENABLE_TOKENS);
     hf.by_type[cryptonote::ROLLUP].rct.allowed_rct_types.set(static_cast<size_t>(rct::RCTTypeSalviumOne));
     hf.by_type[cryptonote::STAKE] = make_stake_rules("SAL1", TRANSACTION_VERSION_ENABLE_TOKENS, /*carrot*/true);
     hf.by_type[cryptonote::STAKE].rct.allowed_rct_types.set(static_cast<size_t>(rct::RCTTypeSalviumOne));

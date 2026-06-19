@@ -221,27 +221,12 @@ namespace cryptonote::txrules
     }
     else
     {
-      /*
-      // HF global RCT enforcement (HF4)
-      if (hf.global_required_rct_type && ctx.rct_type != *hf.global_required_rct_type)
-      {
-        if (why) *why = "HF requires a specific RCT type";
-        return false;
-      }
-      // per-type enforcement
-      if (r.rct.required_rct_type && ctx.rct_type != *r.rct.required_rct_type)
-      {
-        if (why) *why = "tx type requires a specific RCT type";
-        return false;
-      }
-      */
-
       if (ctx.rct_type >= r.rct.allowed_rct_types.size())
       {
         if (why) *why = "invalid RCT type";
         return false;
       }
-// check here!!!!!!
+
       // User transactions must use non-null RingCT.
       if (ctx.rct_type == rct::RCTTypeNull)
       {
