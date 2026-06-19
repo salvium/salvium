@@ -1644,6 +1644,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
     }
     break;
   case HF_VERSION_ENABLE_TOKENS:
+  case HF_VERSION_REJECT_CLEARTEXT_AMOUNTS:
     // HF11: block reward split is 60% miner + 25% treasury + 15% staker (amount_burnt)
     if (already_generated_coins != 0) {
 
@@ -4202,7 +4203,7 @@ bool Blockchain::check_tx_asset_types(const transaction& tx, tx_verification_con
         return false;
       }
     } else if (tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::CONVERT) {
-      MERROR_VER("AUDIT and CONVERT transaction types are not allowed in this hardfork version:" << std::to_string(HF_VERSION_ENABLE_TOKENS));
+      MERROR_VER("AUDIT and CONVERT transaction types are not allowed in this hardfork version:" << std::to_string(HF_VERSION_REJECT_CLEARTEXT_AMOUNTS));
       return false;
     } else {
       MERROR_VER("Unknown transaction type: " << tx.type << ".");
@@ -4341,12 +4342,12 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
   // Make sure CREATE_TOKEN TXs are disabled until we are ready - belt and braces!
   if (hf_version < HF_VERSION_ENABLE_TOKENS) {
     if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
-      MERROR("CREATE_TOKEN TXs are not permitted prior to v" + std::to_string(HF_VERSION_ENABLE_TOKENS));
+      MERROR("CREATE_TOKEN TXs are not permitted prior to v" + std::to_string(HF_VERSION_REJECT_CLEARTEXT_AMOUNTS));
       tvc.m_version_mismatch = true;
       return false;
     }
     if (tx.type == cryptonote::transaction_type::ROLLUP) {
-      MERROR("ROLLUP TXs are not permitted prior to v" + std::to_string(HF_VERSION_ENABLE_TOKENS));
+      MERROR("ROLLUP TXs are not permitted prior to v" + std::to_string(HF_VERSION_REJECT_CLEARTEXT_AMOUNTS));
       tvc.m_version_mismatch = true;
       return false;
     }

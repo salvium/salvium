@@ -104,6 +104,9 @@ const hardfork_t testnet_hard_forks[] = {
   
   // version 11
   {11, 1200, 0, 1739880005 },
+  
+  // version 12
+  {12, 1300, 0, 1781865000 },
 };
 const size_t num_testnet_hard_forks = sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]);
 const uint64_t testnet_hard_fork_version_1_till = ((uint64_t)-1);

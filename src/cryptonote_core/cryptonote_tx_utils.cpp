@@ -611,6 +611,7 @@ namespace cryptonote
       case HF_VERSION_AUDIT2_PAUSE:
       case HF_VERSION_CARROT:
       case HF_VERSION_ENABLE_TOKENS:
+      case HF_VERSION_REJECT_CLEARTEXT_AMOUNTS:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;
