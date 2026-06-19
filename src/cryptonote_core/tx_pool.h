@@ -548,6 +548,18 @@ namespace cryptonote
     bool remove_transaction_keyimages(const transaction_prefix& tx, const crypto::hash &txid);
 
     /**
+     * @brief remove key image entries for a txid by reverse lookup
+     *
+     * Used when the transaction blob is corrupted and cannot be parsed,
+     * so the key images cannot be obtained from the transaction inputs.
+     * Scans m_spent_key_images for any set containing txid and removes it.
+     * Caller must hold m_transactions_lock.
+     *
+     * @param txid the transaction hash to purge from key image sets
+     */
+    void remove_keyimages_by_txid(const crypto::hash &txid);
+
+    /**
      * @brief check if any of a transaction's spent key images are present in a given set
      *
      * @param kic the set of key images to check against

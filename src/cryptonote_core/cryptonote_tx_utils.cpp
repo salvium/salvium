@@ -181,32 +181,6 @@ namespace cryptonote
       // Clear the pubkey, because it isn't used
       F_txkey_pub = crypto::null_pkey;
 
-      /*
-      // SANITY CHECK - PERFORM --ALL-- THE STEPS REQUIRED TO VERIFY THIS PROCESS WILL WORK
-      crypto::secret_key s = keypair::generate(hw::get_device("default")).sec;
-      crypto::key_derivation derivation_syF = AUTO_VAL_INIT(derivation_syF);
-      bool r = hwdev.generate_key_derivation(rct::rct2pk(key_aP_change), s, derivation_syF);
-      crypto::public_key onetime = crypto::null_pkey;
-      r = hwdev.derive_public_key(derivation_syF, 0, P_change, onetime);
-      crypto::public_key R = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(P_change), rct::sk2rct(s)));
-
-      crypto::key_derivation derivation_ret = AUTO_VAL_INIT(derivation_ret);
-      r = hwdev.generate_key_derivation(R, sender_account_keys.m_view_secret_key, derivation_ret);
-      crypto::public_key P_change_ver = crypto::null_pkey;
-      r = hwdev.derive_subaddress_public_key(onetime, derivation_ret, 0, P_change_ver);
-      CHECK_AND_ASSERT_MES(P_change == P_change_ver, false, "at get_return_address: failed to verify ALL steps");
-
-      LOG_ERROR("*****************************************************************************");
-      LOG_ERROR("TX type   : TRANSFER");
-      LOG_ERROR("txkey_pub : " << txkey_pub);
-      LOG_ERROR("a         : " << sender_account_keys.m_view_secret_key);
-      LOG_ERROR("y         : " << key_y);
-      LOG_ERROR("P_change  : " << P_change);
-      LOG_ERROR("aP_change : " << pk_aP_change);
-      LOG_ERROR("F         : " << F);
-      LOG_ERROR("*****************************************************************************");
-      */
-      
       // We are done here - return to caller
       return true;
       
@@ -242,19 +216,7 @@ namespace cryptonote
       // All is well - copy the return address
       F = out_eph_public_key;
 
-      /*
-      LOG_ERROR("*****************************************************************************");
-      LOG_ERROR("txkey_pub : " << txkey_pub);
-      LOG_ERROR("a         : " << sender_account_keys.m_view_secret_key);
-      LOG_ERROR("s         : " << s);
-      LOG_ERROR("y         : " << key_y);
-      LOG_ERROR("P_change  : " << P_change);
-      LOG_ERROR("aP_change : " << pk_aP_change);
-      LOG_ERROR("F         : " << F);
-      LOG_ERROR("*****************************************************************************");
-      */
-      
-      // We are done here - return to caller
+     // We are done here - return to caller
       return true;
     }
     
@@ -649,6 +611,7 @@ namespace cryptonote
       case HF_VERSION_AUDIT2_PAUSE:
       case HF_VERSION_CARROT:
       case HF_VERSION_ENABLE_TOKENS:
+      case HF_VERSION_REJECT_CLEARTEXT_AMOUNTS:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;
@@ -728,7 +691,8 @@ namespace cryptonote
     // Step 4: Encrypt the data (AES-256-CBC or ChaCha20)
     std::string ciphertext(sizeof(crypto::secret_key), '\0');
     crypto::chacha_key symmetric_key;
-    memcpy(symmetric_key.data(), symmetric_key_hash.data, sizeof(symmetric_key));
+    static_assert(sizeof(symmetric_key) == sizeof(symmetric_key_hash), "chacha_key/hash size mismatch");
+    memcpy(&symmetric_key, &symmetric_key_hash, sizeof(symmetric_key));
     crypto::chacha_iv iv = crypto::rand<crypto::chacha_iv>();
     crypto::chacha20(pvk.data, sizeof(crypto::secret_key), symmetric_key, iv, &ciphertext[0]);
     
@@ -746,11 +710,14 @@ namespace cryptonote
     std::string encrypted_data;
     for (size_t i = 0; i < encrypted_data_hex.length(); i += 2) {
       std::istringstream iss(encrypted_data_hex.substr(i, 2));
-      int byte;
+      unsigned int byte;
       iss >> std::hex >> byte;
-      encrypted_data += static_cast<char>(byte);
+      if (iss.fail()) return false;
+      encrypted_data += static_cast<char>(static_cast<uint8_t>(byte));
     }
     const char *data_ptr = encrypted_data.data();
+    if (encrypted_data.size() < sizeof(crypto::public_key) + sizeof(crypto::chacha_iv))
+      return false;
     crypto::public_key ephemeral_pk;
     memcpy(&ephemeral_pk, data_ptr, sizeof(ephemeral_pk));
     data_ptr += sizeof(ephemeral_pk);
@@ -776,7 +743,8 @@ namespace cryptonote
     // Step 4: Decrypt the data
     std::string plaintext(ciphertext.size(), '\0');
     crypto::chacha_key symmetric_key;
-    memcpy(symmetric_key.data(), symmetric_key_hash.data, sizeof(symmetric_key));
+    static_assert(sizeof(symmetric_key) == sizeof(symmetric_key_hash), "chacha_key/hash size mismatch");
+    memcpy(&symmetric_key, &symmetric_key_hash, sizeof(symmetric_key));
     crypto::chacha20(ciphertext.data(), ciphertext.size(), symmetric_key, iv, &plaintext[0]);
 
     memcpy(pvk.data, &plaintext[0], sizeof(crypto::secret_key));
@@ -1071,15 +1039,6 @@ namespace cryptonote
         found_change = true;
       }
 
-      LOG_ERROR("*****************************************************************************");
-      LOG_ERROR("in construct_tx_With_tx_key()");
-      LOG_ERROR("TX type   : TRANSFER");
-      LOG_ERROR("tx_key    : " << crypto::secret_key_explicit_print_ref{tx_key});
-      LOG_ERROR("tx_pubkey : " << txkey_pub);
-      LOG_ERROR("P_change  : " << dst_entr.addr.m_spend_public_key);
-      LOG_ERROR("aP_change : " << dst_entr.addr.m_view_public_key);
-      LOG_ERROR("*****************************************************************************");
-      
       hwdev.generate_output_ephemeral_keys(tx.version,sender_account_keys, txkey_pub, tx_key,
                                            dst_entr, change_addr, output_index,
                                            need_additional_txkeys, additional_tx_keys,
@@ -1143,7 +1102,7 @@ namespace cryptonote
           rct::key amount_key;
         } buf;
         std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-        std::strncpy(buf.domain_separator, "RETURN", 7);
+        std::strncpy(buf.domain_separator, "RETURN", sizeof(buf.domain_separator));
         buf.amount_key = amount_keys[op_index];
         crypto::hash_to_scalar(&buf, sizeof(buf), y);
         
@@ -1166,8 +1125,8 @@ namespace cryptonote
           char domain_separator[8];
           rct::key amount_key;
         } eci_buf;
-        std::memset(eci_buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-        std::strncpy(eci_buf.domain_separator, "CHG_IDX", 8);
+        std::memset(eci_buf.domain_separator, 0x0, sizeof(eci_buf.domain_separator));
+        std::strncpy(eci_buf.domain_separator, "CHG_IDX", sizeof(eci_buf.domain_separator));
         eci_buf.amount_key = amount_keys[op_index];
         crypto::secret_key eci_out;
         keccak((uint8_t *)&eci_buf, sizeof(eci_buf), (uint8_t*)&eci_out, sizeof(eci_out));
@@ -1193,7 +1152,7 @@ namespace cryptonote
         crypto::public_key pubkey;
       } buf;
       std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-      std::memcpy(buf.domain_separator, "RETURN", 6);
+      std::strncpy(buf.domain_separator, "RETURN", sizeof(buf.domain_separator));
       buf.pubkey = P_change;
       crypto::hash_to_scalar(&buf, sizeof(buf), y);
 

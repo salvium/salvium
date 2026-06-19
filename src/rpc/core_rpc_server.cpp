@@ -83,6 +83,29 @@ using namespace epee;
 
 namespace
 {
+  static bool get_extra_nonce_payload_offset(const cryptonote::transaction &tx, const cryptonote::blobdata &extra_nonce, size_t &offset)
+  {
+    if (extra_nonce.empty())
+      return false;
+
+    const std::vector<uint8_t> &tx_extra = tx.extra;
+    if (tx_extra.size() < extra_nonce.size() + 2)
+      return false;
+
+    std::vector<uint8_t> needle;
+    needle.reserve(extra_nonce.size() + 2);
+    needle.push_back(TX_EXTRA_NONCE);
+    needle.push_back(static_cast<uint8_t>(extra_nonce.size()));
+    needle.insert(needle.end(), extra_nonce.begin(), extra_nonce.end());
+
+    const auto match = std::search(tx_extra.begin(), tx_extra.end(), needle.begin(), needle.end());
+    if (match == tx_extra.end())
+      return false;
+
+    offset = std::distance(tx_extra.begin(), match) + 2;
+    return true;
+  }
+
   class RPCTracker
   {
   public:
@@ -1900,15 +1923,29 @@ namespace cryptonote
       return true;
     }
 
-    reserved_offset = slow_memmem((void*)block_blob.data(), block_blob.size(), &tx_pub_key, sizeof(tx_pub_key));
+    // Do not derive the reserved offset from a tx pubkey. Carrot coinbase
+    // transactions can legitimately store per-output D_e values in
+    // tx_extra_additional_pub_keys, so searching for one pubkey and assuming the
+    // nonce sits right after it can point inside the wrong pubkey slot and let a
+    // pool corrupt tx.extra while patching the template blob.
+    size_t nonce_payload_offset_in_extra = 0;
+    if (!get_extra_nonce_payload_offset(b.miner_tx, extra_nonce, nonce_payload_offset_in_extra))
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
+      error_resp.message = "Internal error: failed to create block template";
+      LOG_ERROR("Failed to locate tx_extra_nonce in miner tx extra");
+      return false;
+    }
+
+    reserved_offset = slow_memmem((void*)block_blob.data(), block_blob.size(), b.miner_tx.extra.data(), b.miner_tx.extra.size());
     if(!reserved_offset)
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
       error_resp.message = "Internal error: failed to create block template";
-      LOG_ERROR("Failed to find tx pub key in blockblob");
+      LOG_ERROR("Failed to find miner_tx.extra in blockblob");
       return false;
     }
-    reserved_offset += sizeof(tx_pub_key) + 2; //2 bytes: tag for TX_EXTRA_NONCE(1 byte), counter in TX_EXTRA_NONCE(1 byte)
+    reserved_offset += nonce_payload_offset_in_extra;
     if(reserved_offset + extra_nonce.size() > block_blob.size())
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;

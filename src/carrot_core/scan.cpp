@@ -115,7 +115,7 @@ bool scan_return_output(
             return_view_tag
         ),
         false,
-        "view tag verification failed for carrot coinbase enote"
+        "view tag verification failed for carrot return enote"
     );
 
     // 5. compute anchor_return
@@ -145,7 +145,7 @@ bool scan_return_output(
     CHECK_AND_ASSERT_MES(
         memcmp(recovered_ephemeral_pubkey_return.data, return_ephemeral_pubkey.data, sizeof(mx25519_pubkey)) == 0,
         false,
-        "carrot coinbase enote protection verification failed"
+        "carrot return enote protection verification failed"
     );
 
     amount_out = carrot::decrypt_carrot_amount(return_amount_enc, shared_secret_return, return_onetime_address);
@@ -486,6 +486,8 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
     account.s_view_balance_dev.make_internal_view_tag(input_context, enote.onetime_address, nominal_view_tag);
 
     // test view tag
+    // view tag is only a probabilistic filter, so a failed internal scan must still fall
+    // through to the return-output check below
     if (nominal_view_tag == enote.view_tag) {
         // s^ctx_sr = H_32(s_vb, D_e, input_context)
         crypto::hash s_sender_receiver;
@@ -493,7 +495,7 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
             input_context,
             s_sender_receiver);
     
-        if (!try_scan_carrot_enote_internal_burnt(enote,
+        if (try_scan_carrot_enote_internal_burnt(enote,
             s_sender_receiver,
             sender_extension_g_out,
             sender_extension_t_out,
@@ -502,11 +504,10 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
             amount_blinding_factor_out,
             enote_type_out,
             internal_message_out))
-            return false;
-
-        // we received a change output
-        // save the Kr = K_change + K_return to out subaddress map
-        for (const auto &output_key : enote.tx_output_keys) {
+        {
+          // we received a change output
+          // save the Kr = K_change + K_return to out subaddress map
+          for (const auto &output_key : enote.tx_output_keys) {
             // make k_return
             crypto::secret_key k_return;
             const carrot::input_context_t input_context = carrot::make_carrot_input_context(enote.tx_first_key_image);
@@ -523,20 +524,17 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
             crypto::secret_key sum_g;
             sc_add(to_bytes(sum_g), to_bytes(sender_extension_g_out), to_bytes(k_return));
             crypto::key_image key_image = account.derive_key_image_view_only(address_spend_pubkey_out,
-                                                                            sum_g,
-                                                                            sender_extension_t_out,
-                                                                            K_r
-                                                                            );
+                                                                             sum_g,
+                                                                             sender_extension_t_out,
+                                                                             K_r
+                                                                             );
 
-            // HERE BE DRAGONS!!!
-            // SRCG: test whether this will even work for return_payment detection
             account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, address_spend_pubkey_out, key_image, sum_g, sender_extension_t_out}}});
-            //account.insert_return_output_info({{K_r, {input_context, output_key, address_spend_pubkey_out, key_image, sum_g, sender_extension_t_out}}});
-            // LAND AHOY!!!
+          }
+          
+          // janus protection checks are not needed for internal scans
+          return true;
         }
-
-        // janus protection checks are not needed for internal scans
-        return true;
     }
 
     // check for known return addresses

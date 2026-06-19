@@ -127,6 +127,8 @@ namespace rct {
     void scalarmult8(ge_p3 &res, const key & P);
     // checks a is in the main subgroup (ie, not a small one)
     bool isInMainSubgroup(const key & a);
+    // checks all points are in the main subgroup
+    bool verPointsForTorsion(const keyV & points);
 
     //Curve addition / subtractions
 

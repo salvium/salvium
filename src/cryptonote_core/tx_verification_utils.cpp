@@ -27,6 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <boost/iterator/transform_iterator.hpp>
+#include <sstream>
 
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_core/blockchain.h"
@@ -36,7 +37,7 @@
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "blockchain"
 
-#define VER_ASSERT(cond, msgexpr) CHECK_AND_ASSERT_MES(cond, false, msgexpr)
+// VER_ASSERT macro removed (T3-4): converted all usages to if/MERROR/return-false
 
 using namespace cryptonote;
 
@@ -44,26 +45,26 @@ using namespace cryptonote;
 static bool expand_tx_and_ver_rct_non_sem(transaction& tx, const rct::ctkeyM& mix_ring, uint8_t hf_version)
 {
     // Pruned transactions can not be expanded and verified because they are missing RCT data
-    VER_ASSERT(!tx.pruned, "Pruned transaction will not pass verRctNonSemanticsSimple");
+    if (tx.pruned) { MERROR("Pruned transaction will not pass verRctNonSemanticsSimple"); return false; }
 
     // Calculate prefix hash
     const crypto::hash tx_prefix_hash = get_transaction_prefix_hash(tx);
 
     // Expand mixring, tx inputs, tx key images, prefix hash message, etc into the RCT sig
     const bool exp_res = Blockchain::expand_transaction_2(tx, tx_prefix_hash, mix_ring, hf_version);
-    VER_ASSERT(exp_res, "Failed to expand rct signatures!");
+    if (!exp_res) { MERROR("Failed to expand rct signatures!"); return false; }
 
     const rct::rctSig& rv = tx.rct_signatures;
 
     // Check that expanded RCT mixring == input mixring
-    VER_ASSERT(rv.mixRing == mix_ring, "Failed to check ringct signatures: mismatched pubkeys/mixRing");
+    if (rv.mixRing != mix_ring) { MERROR("Failed to check ringct signatures: mismatched pubkeys/mixRing"); return false; }
 
     // Check CLSAG/MLSAG size against transaction input
     const size_t n_sigs = rct::is_rct_tclsag(rv.type) ? rv.p.TCLSAGs.size() : 
     (
         rct::is_rct_clsag(rv.type) ? rv.p.CLSAGs.size() : rv.p.MGs.size()
     );
-    VER_ASSERT(n_sigs == tx.vin.size(), "Failed to check ringct signatures: mismatched input sigs/vin sizes");
+    if (n_sigs != tx.vin.size()) { MERROR("Failed to check ringct signatures: mismatched input sigs/vin sizes"); return false; }
 
     // For each input, check that the key images were copied into the expanded RCT sig correctly
     for (size_t n = 0; n < n_sigs; ++n)
@@ -73,24 +74,24 @@ static bool expand_tx_and_ver_rct_non_sem(transaction& tx, const rct::ctkeyM& mi
         if (rct::is_rct_tclsag(rv.type))
         {
             const bool ki_match = 0 == memcmp(&nth_vin_image, &rv.p.TCLSAGs[n].I, 32);
-            VER_ASSERT(ki_match, "Failed to check ringct signatures: mismatched TCLSAG key image");
+            if (!ki_match) { MERROR("Failed to check ringct signatures: mismatched TCLSAG key image"); return false; }
         }
         else if (rct::is_rct_clsag(rv.type))
         {
             const bool ki_match = 0 == memcmp(&nth_vin_image, &rv.p.CLSAGs[n].I, 32);
-            VER_ASSERT(ki_match, "Failed to check ringct signatures: mismatched CLSAG key image");
+            if (!ki_match) { MERROR("Failed to check ringct signatures: mismatched CLSAG key image"); return false; }
         }
         else
         {
             const bool mg_nonempty = !rv.p.MGs[n].II.empty();
-            VER_ASSERT(mg_nonempty, "Failed to check ringct signatures: missing MLSAG key image");
+            if (!mg_nonempty) { MERROR("Failed to check ringct signatures: missing MLSAG key image"); return false; }
             const bool ki_match = 0 == memcmp(&nth_vin_image, &rv.p.MGs[n].II[0], 32);
-            VER_ASSERT(ki_match, "Failed to check ringct signatures: mismatched MLSAG key image");
+            if (!ki_match) { MERROR("Failed to check ringct signatures: mismatched MLSAG key image"); return false; }
         }
     }
 
     // Mix ring data is now known to be correctly incorporated into the RCT sig inside tx.
-    return rct::verRctNonSemanticsSimple(rv);
+    return rct::verRctNonSemanticsSimple(rv, tx.type);
 }
 
 // Create a unique identifier for pair of tx blob + mix ring
@@ -120,6 +121,33 @@ static crypto::hash calc_tx_mixring_hash(const transaction& tx, const rct::ctkey
 
 namespace cryptonote
 {
+
+bool collect_points_for_torsion_check(const transaction& tx,
+    std::vector<rct::key> &pubkeys_and_commitments_inout)
+{
+    for (std::size_t i = 0; i < tx.vout.size(); ++i)
+    {
+        // Don't need to collect points if we're not checking the tx outs for torsion
+        if (!cryptonote::output_checked_for_torsion(tx.vout[i].target))
+            continue;
+
+        crypto::public_key output_pubkey;
+        if (!cryptonote::get_output_public_key(tx.vout[i], output_pubkey))
+            return false;
+        rct::key pubkey = rct::pk2rct(output_pubkey);
+
+        rct::key commitment;
+        if (!rct::getCommitment(tx, i, commitment))
+            return false;
+
+        pubkeys_and_commitments_inout.emplace_back(pubkey);
+        pubkeys_and_commitments_inout.emplace_back(commitment);
+    }
+
+    return true;
+}
+
+
 
 bool collect_pubkeys_and_commitments(const transaction& tx, std::vector<rct::key> &pubkeys_and_commitments_inout)
 {
@@ -188,7 +216,7 @@ bool ver_rct_non_semantics_simple_cached
     // holds true in the future, enable the verification hash by modifying the `untested_tx`
     // condition below.
     const bool untested_tx = tx.version > TRANSACTION_VERSION_ENABLE_TOKENS || tx.rct_signatures.type > rct::RCTTypeSalviumOne;
-    VER_ASSERT(!untested_tx, "Unknown TX type. Make sure RCT cache works correctly with this type and then enable it in the code here.");
+    if (untested_tx) { MERROR("Unknown TX type. Make sure RCT cache works correctly with this type and then enable it in the code here."); return false; }
 
     // Don't cache older (or newer) rctSig types
     // This cache only makes sense when it caches data from mempool first,

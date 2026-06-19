@@ -168,6 +168,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
 {
     output_enote_proposals_out.clear();
     encrypted_payment_id_out = {{0}};
+    change_index_out = static_cast<size_t>(-1); // sentinel if no change output
     if (payment_proposal_order_out)
         payment_proposal_order_out->clear();
 

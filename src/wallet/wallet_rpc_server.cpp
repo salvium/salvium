@@ -1294,6 +1294,7 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
+    CHECK_IF_BACKGROUND_SYNCING();
 
     if (m_wallet->get_current_hard_fork() < HF_VERSION_ENABLE_TOKENS) {
       er.code = WALLET_RPC_ERROR_CODE_DENIED;
@@ -1441,8 +1442,9 @@ namespace tools
       er.message = "Command unavailable in restricted mode.";
       return false;
     }
+    CHECK_IF_BACKGROUND_SYNCING();
 
-    // Get the TX hash we are interested in 
+    // Get the TX hash we are interested in
     crypto::hash txid;
     if (!epee::string_tools::hex_to_pod(req.txid, txid))
     {

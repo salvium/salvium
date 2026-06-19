@@ -1,4 +1,4 @@
-# Salvium One v1.1.1
+# Salvium One v1.1.2c
 
 Copyright (c) 2023-2025, Salvium
 Portions Copyright (c) 2014-2023, The Monero Project
@@ -179,7 +179,7 @@ invokes cmake commands as needed.
 
     ```bash
     cd salvium
-    git checkout v1.1.1
+    git checkout v1.1.2c
     make
     ```
 
@@ -258,7 +258,7 @@ Tested on a Raspberry Pi Zero with a clean install of minimal Raspbian Stretch (
     ```bash
     git clone https://github.com/salvium/salvium
     cd salvium
-    git checkout v1.1.1
+    git checkout v1.1.2c
     ```
 
 * Build:
@@ -377,10 +377,10 @@ application.
     cd salvium
     ```
 
-* If you would like a specific [version/tag](https://github.com/salvium/salvium/tags), do a git checkout for that version. eg. 'v1.1.1'. If you don't care about the version and just want binaries from master, skip this step:
+* If you would like a specific [version/tag](https://github.com/salvium/salvium/tags), do a git checkout for that version. eg. 'v1.1.2c'. If you don't care about the version and just want binaries from master, skip this step:
 
     ```bash
-    git checkout v1.1.1
+    git checkout v1.1.2c
     ```
 
 * If you are on a 64-bit system, run:

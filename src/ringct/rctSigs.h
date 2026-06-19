@@ -203,7 +203,7 @@ namespace rct {
     bool verRct(const rctSig & rv, bool semantics);
     static inline bool verRct(const rctSig & rv) { return verRct(rv, true) && verRct(rv, false); }
     bool verRctSemanticsSimple(const rctSig & rv, const uint64_t amount_burnt=0, const bool fee_paid_for_in_rollup=false);
-    bool verRctNonSemanticsSimple(const rctSig & rv);
+    bool verRctNonSemanticsSimple(const rctSig & rv, const cryptonote::transaction_type tx_type = cryptonote::transaction_type::TRANSFER);
     static inline bool verRctSimple(const rctSig & rv, const uint64_t amount_burnt=0, const bool fee_paid_for_in_rollup=false) {
       return verRctSemanticsSimple(rv, amount_burnt, fee_paid_for_in_rollup) && verRctNonSemanticsSimple(rv);
     }

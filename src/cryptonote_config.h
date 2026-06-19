@@ -251,14 +251,15 @@
 #define HF_VERSION_AUDIT2                       8
 #define HF_VERSION_AUDIT2_PAUSE                 9
 #define HF_VERSION_CARROT                       10
-#define HF_VERSION_ENABLE_TOKENS                 11
+#define HF_VERSION_ENABLE_TOKENS                11
+#define HF_VERSION_REJECT_CLEARTEXT_AMOUNTS     12
 
 #define HF_VERSION_REQUIRE_VIEW_TAGS            255
 #define HF_VERSION_ENABLE_CONVERT               255
 #define HF_VERSION_ENABLE_ORACLE                255
 #define HF_VERSION_SLIPPAGE_YIELD               255
 
-#define TESTNET_VERSION                         18
+#define TESTNET_VERSION                         19
 #define STAGENET_VERSION                        1
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
@@ -273,6 +274,8 @@
 
 #define FCMP_PLUS_PLUS_MAX_INPUTS               8
 #define FCMP_PLUS_PLUS_MAX_OUTPUTS              8
+
+#define MAX_MINER_VOUTS                         25000
 
 #define CRYPTONOTE_PRUNING_STRIPE_SIZE          4096 // the smaller, the smoother the increase
 #define CRYPTONOTE_PRUNING_LOG_STRIPES          3 // the higher, the more space saved
