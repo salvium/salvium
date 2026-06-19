@@ -722,15 +722,14 @@ namespace cryptonote::txrules
     hf.hf_version = 11;
 
     // TRANSFER: txver=5
-    hf.by_type[cryptonote::TRANSFER] = make_transfer_rules("", TRANSACTION_VERSION_ENABLE_TOKENS, 2, 16, /*carrot*/true);
-    hf.by_type[cryptonote::TRANSFER].assets.allowed_assets = {"SAL","SAL1"};
+    hf.by_type[cryptonote::TRANSFER] = make_transfer_rules("SAL1", TRANSACTION_VERSION_ENABLE_TOKENS, 2, 16, /*carrot*/true);
     hf.by_type[cryptonote::TRANSFER].assets.allow_any_known_token = true;
     hf.by_type[cryptonote::TRANSFER].assets.asset_predicate = &asset_pred_height_valid;
     hf.by_type[cryptonote::TRANSFER].rct.allowed_rct_types.set(static_cast<size_t>(rct::RCTTypeSalviumOne));
   
     // BURN/CREATE_TOKEN/ROLLUP/STAKE: txver=5
     hf.by_type[cryptonote::BURN]  = make_burn_rules_carrot(TRANSACTION_VERSION_ENABLE_TOKENS);
-    hf.by_type[cryptonote::BURN].assets.allowed_assets = {"SAL","SAL1"};
+    hf.by_type[cryptonote::BURN].assets.allowed_assets = {"SAL1"};
     hf.by_type[cryptonote::BURN].rct.allowed_rct_types.set(static_cast<size_t>(rct::RCTTypeSalviumOne));
     hf.by_type[cryptonote::CREATE_TOKEN] = make_create_token_rules("SAL1", TRANSACTION_VERSION_ENABLE_TOKENS, /*carrot*/true);
     hf.by_type[cryptonote::CREATE_TOKEN].rct.allowed_rct_types.set(static_cast<size_t>(rct::RCTTypeSalviumOne));

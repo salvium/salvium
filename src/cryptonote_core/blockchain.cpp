@@ -1412,7 +1412,7 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, 
     const std::size_t max_extra_size = 1060 + b.miner_tx.vout.size() * 32; //(1+32) + (1+1+16*32) + (1+16*32) = 1060
     if (!(b.miner_tx.extra.size() < max_extra_size)) { MERROR("miner transaction extra too big"); return false; }
 
-    if (b.miner_tx.vout.size() > 10000) { MERROR("too many miner transaction outputs"); return false; }
+    if (b.miner_tx.vout.size() > MAX_MINER_VOUTS) { MERROR("too many miner transaction outputs"); return false; }
   }
 
 
