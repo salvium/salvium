@@ -201,11 +201,10 @@ namespace cryptonote
      *
      * @param max_txpool_weight the max weight in bytes
      * @param mine_stem_txes whether to mine txes in stem relay mode
-     * @param spam_filter whether to reject known spam fingerprints from the local txpool
      *
      * @return true
      */
-    bool init(size_t max_txpool_weight = 0, bool mine_stem_txes = false, bool spam_filter = true);
+    bool init(size_t max_txpool_weight = 0, bool mine_stem_txes = false);
 
     /**
      * @brief attempts to save the transaction pool state to disk
@@ -672,7 +671,6 @@ private:
     size_t m_txpool_max_weight;
     size_t m_txpool_weight;
     bool m_mine_stem_txes;
-    bool m_spam_filter;
 
     mutable std::unordered_map<crypto::hash, std::tuple<bool, tx_verification_context, uint64_t, crypto::hash>> m_input_cache;
 
@@ -716,5 +714,6 @@ namespace boost
 }
 BOOST_CLASS_VERSION(cryptonote::tx_memory_pool, CURRENT_MEMPOOL_ARCHIVE_VER)
 BOOST_CLASS_VERSION(cryptonote::tx_memory_pool::tx_details, CURRENT_MEMPOOL_TX_DETAILS_ARCHIVE_VER)
+
 
 

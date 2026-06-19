@@ -60,30 +60,6 @@ namespace cryptonote
 {
   namespace
   {
-    constexpr size_t SALVIUM_SPAM_V1_BLOB_SIZE = 3580;
-    constexpr size_t SALVIUM_SPAM_V1_WEIGHT = 5013;
-    constexpr uint64_t SALVIUM_SPAM_V1_FEE = 1585600;
-    constexpr size_t SALVIUM_SPAM_V1_EXTRA_SIZE = 269;
-    constexpr size_t SALVIUM_SPAM_V1_INPUTS = 1;
-    constexpr size_t SALVIUM_SPAM_V1_OUTPUTS = 8;
-
-    bool matches_salvium_spam_v1(const transaction_prefix &tx, const size_t blob_size, const size_t tx_weight, const uint64_t fee)
-    {
-      return tx.type == cryptonote::transaction_type::TRANSFER
-        && tx.version == TRANSACTION_VERSION_ENABLE_TOKENS
-        && tx.source_asset_type == "SAL1"
-        && tx.destination_asset_type == "SAL1"
-        && tx.unlock_time == 0
-        && tx.amount_burnt == 0
-        && tx.amount_slippage_limit == 0
-        && tx.vin.size() == SALVIUM_SPAM_V1_INPUTS
-        && tx.vout.size() == SALVIUM_SPAM_V1_OUTPUTS
-        && tx.extra.size() == SALVIUM_SPAM_V1_EXTRA_SIZE
-        && blob_size == SALVIUM_SPAM_V1_BLOB_SIZE
-        && tx_weight == SALVIUM_SPAM_V1_WEIGHT
-        && fee == SALVIUM_SPAM_V1_FEE;
-    }
-
     /*! The Dandelion++ has formula for calculating the average embargo timeout:
                           (-k*(k-1)*hop)/(2*log(1-ep))
         where k is the number of hops before this node and ep is the probability
@@ -144,7 +120,7 @@ namespace cryptonote
   }
   //---------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------
-  tx_memory_pool::tx_memory_pool(Blockchain& bchs): m_blockchain(bchs), m_cookie(0), m_txpool_max_weight(DEFAULT_TXPOOL_MAX_WEIGHT), m_txpool_weight(0), m_mine_stem_txes(false), m_spam_filter(true), m_next_check(std::time(nullptr))
+  tx_memory_pool::tx_memory_pool(Blockchain& bchs): m_blockchain(bchs), m_cookie(0), m_txpool_max_weight(DEFAULT_TXPOOL_MAX_WEIGHT), m_txpool_weight(0), m_mine_stem_txes(false), m_next_check(std::time(nullptr))
   {
     // class code expects unsigned values throughout
     if (m_next_check < time_t(0))
@@ -236,23 +212,6 @@ namespace cryptonote
 
     if (!kept_by_block && !m_blockchain.check_fee(tx_weight, fee))
     {
-      tvc.m_verifivation_failed = true;
-      tvc.m_fee_too_low = true;
-      tvc.m_no_drop_offense = true;
-      return false;
-    }
-
-    if (!kept_by_block && m_spam_filter && matches_salvium_spam_v1(tx, blob.size(), tx_weight, fee))
-    {
-      MERROR("Rejecting known txpool spam fingerprint: txid " << id
-        << ", type " << (unsigned)tx.type
-        << ", version " << tx.version
-        << ", vin " << tx.vin.size()
-        << ", vout " << tx.vout.size()
-        << ", extra " << tx.extra.size()
-        << ", blob " << blob.size()
-        << ", weight " << tx_weight
-        << ", fee " << fee);
       tvc.m_verifivation_failed = true;
       tvc.m_fee_too_low = true;
       tvc.m_no_drop_offense = true;
@@ -2045,11 +2004,10 @@ namespace cryptonote
     }
   }
   //---------------------------------------------------------------------------------
-  bool tx_memory_pool::init(size_t max_txpool_weight, bool mine_stem_txes, bool spam_filter)
+  bool tx_memory_pool::init(size_t max_txpool_weight, bool mine_stem_txes)
   {
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
-    m_spam_filter = spam_filter;
 
     m_txpool_max_weight = max_txpool_weight ? max_txpool_weight : DEFAULT_TXPOOL_MAX_WEIGHT;
     m_txs_by_fee_and_receive_time.clear();
@@ -2073,12 +2031,6 @@ namespace cryptonote
         if (!parse_and_validate_tx_prefix_from_blob(*bd, tx))
         {
           MWARNING("Failed to parse tx from txpool, removing");
-          remove.push_back(txid);
-          return true;
-        }
-        if (!kept && m_spam_filter && matches_salvium_spam_v1(tx, bd->size(), meta.weight, meta.fee))
-        {
-          MWARNING("Removing known txpool spam fingerprint from stored pool: " << txid);
           remove.push_back(txid);
           return true;
         }
