@@ -188,6 +188,11 @@ namespace cryptonote
   , "Set maximum txpool weight in bytes."
   , DEFAULT_TXPOOL_MAX_WEIGHT
   };
+  static const command_line::arg_descriptor<bool> arg_disable_txpool_spam_filter  = {
+    "disable-txpool-spam-filter"
+  , "Disable the default local txpool filter for known spam transaction fingerprints."
+  , false
+  };
   static const command_line::arg_descriptor<std::string> arg_block_notify = {
     "block-notify"
   , "Run a program for each new block, '%s' will be replaced by the block hash"
@@ -349,6 +354,7 @@ namespace cryptonote
     command_line::add_arg(desc, arg_block_download_max_size);
     command_line::add_arg(desc, arg_sync_pruned_blocks);
     command_line::add_arg(desc, arg_max_txpool_weight);
+    command_line::add_arg(desc, arg_disable_txpool_spam_filter);
     command_line::add_arg(desc, arg_block_notify);
     command_line::add_arg(desc, arg_prune_blockchain);
     command_line::add_arg(desc, arg_reorg_notify);
@@ -485,6 +491,7 @@ namespace cryptonote
     uint64_t blocks_threads = command_line::get_arg(vm, arg_prep_blocks_threads);
     std::string check_updates_string = command_line::get_arg(vm, arg_check_updates);
     size_t max_txpool_weight = command_line::get_arg(vm, arg_max_txpool_weight);
+    bool txpool_spam_filter = !command_line::get_arg(vm, arg_disable_txpool_spam_filter);
     bool prune_blockchain = command_line::get_arg(vm, arg_prune_blockchain);
     bool keep_alt_blocks = command_line::get_arg(vm, arg_keep_alt_blocks);
     bool keep_fakechain = command_line::get_arg(vm, arg_keep_fakechain);
@@ -687,7 +694,7 @@ namespace cryptonote
     r = m_blockchain_storage.init(db.release(), m_nettype, m_offline, regtest ? &regtest_test_options : test_options, fixed_difficulty, get_checkpoints);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize blockchain storage");
 
-    r = m_mempool.init(max_txpool_weight, m_nettype == FAKECHAIN);
+    r = m_mempool.init(max_txpool_weight, m_nettype == FAKECHAIN, txpool_spam_filter);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize memory pool");
 
     // now that we have a valid m_blockchain_storage, we can clean out any
