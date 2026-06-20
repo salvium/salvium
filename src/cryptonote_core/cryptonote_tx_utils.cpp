@@ -55,6 +55,27 @@ extern "C"
 }
 using namespace crypto;
 
+namespace
+{
+  boost::optional<cryptonote::subaddress_index> sanity_check_change_address(
+    const cryptonote::account_public_address& change_addr,
+    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index>& subaddresses,
+    const cryptonote::account_keys &keys)
+  {
+    cryptonote::subaddress_index subaddr_index{};
+    const auto subaddr_it = subaddresses.find(change_addr.m_spend_public_key);
+    if (subaddr_it != subaddresses.cend())
+      subaddr_index = subaddr_it->second;
+
+    hw::device &hwdev = keys.get_device();
+    const auto recomputed_addr = hwdev.get_subaddress(keys, subaddr_index);
+    if (change_addr != recomputed_addr)
+      return boost::none;
+
+    return subaddr_index;
+  }
+}
+
 namespace cryptonote
 {
   rct::key sm(rct::key y, int n, const rct::key &x)
@@ -761,6 +782,10 @@ namespace cryptonote
       return false;
     }
 
+    boost::optional<cryptonote::subaddress_index> recognized_change_index;
+    if (change_addr)
+      recognized_change_index = sanity_check_change_address(*change_addr, subaddresses, sender_account_keys);
+
     std::vector<rct::key> amount_keys;
     tx.set_null();
     amount_keys.clear();
@@ -1007,6 +1032,10 @@ namespace cryptonote
     for(const tx_destination_entry& dst_entr: destinations)
     {
       CHECK_AND_ASSERT_MES(dst_entr.amount > 0 || tx.version > 1, false, "Destination with wrong amount: " << dst_entr.amount);
+      const bool matches_change_addr = change_addr && dst_entr.addr == *change_addr;
+      const bool is_bad_change_dst = (matches_change_addr || dst_entr.is_change) && dst_entr.amount > 0 && !recognized_change_index;
+      CHECK_AND_ASSERT_MES(!is_bad_change_dst, false,
+        "Non-zero amount change address is not recognized as belonging to the sender account");
       crypto::public_key out_eph_public_key;
       crypto::view_tag view_tag;
 
