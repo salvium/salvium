@@ -9665,9 +9665,9 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
     {
       // check we're clear enough of rct start, to avoid corner cases below
       THROW_WALLET_EXCEPTION_IF(rct_offsets.size() <= CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE,
-          error::get_output_distribution, "Not enough rct outputs");
+                                error::get_output_distribution, "Not enough rct outputs : " + std::to_string(max_rct_index));
       THROW_WALLET_EXCEPTION_IF(rct_offsets.back() < max_rct_index,
-          error::get_output_distribution, "Daemon reports suspicious number of rct outputs");
+                                error::get_output_distribution, "Daemon reports suspicious number of rct outputs : " + std::to_string(rct_offsets.back()) + " < " + std::to_string(max_rct_index));
     }
 
     // get histogram for the amounts we need
@@ -10200,6 +10200,12 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
             if (daemon_resp.outs[i].mask == mask)
               if (daemon_resp.outs[i].unlocked)
                 real_out_found = true;
+              else
+                LOG_ERROR("output id " << td.m_global_output_index << " (" << rct_asset_type << ") is still locked");
+            else
+              LOG_ERROR("output id " << td.m_global_output_index << " (" << rct_asset_type << ") has incorrect mask : expected " << mask << " but found " << daemon_resp.outs[i].mask);
+          else
+            LOG_ERROR("output id " << td.m_global_output_index << " (" << rct_asset_type << ") has incorrect key : expected " << td.get_public_key() << " but found " << daemon_resp.outs[i].key);
       }
       THROW_WALLET_EXCEPTION_IF(!real_out_found, error::wallet_internal_error,
           "Daemon response did not include the requested real output");
