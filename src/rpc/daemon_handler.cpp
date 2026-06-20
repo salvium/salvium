@@ -39,6 +39,7 @@
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_basic/blobdatatype.h"
+#include "cryptonote_config.h"
 #include "ringct/rctSigs.h"
 #include "version.h"
 
@@ -374,10 +375,19 @@ namespace rpc
 
   void DaemonHandler::handle(const SendRawTxHex::Request& req, SendRawTxHex::Response& res)
   {
+    constexpr size_t max_tx_hex_size = CRYPTONOTE_MAX_TX_SIZE * 2;
+    if (req.tx_as_hex.size() > max_tx_hex_size)
+    {
+      MERROR("[SendRawTxHex]: Rejected oversized tx hex: " << req.tx_as_hex.size() << " chars, max " << max_tx_hex_size);
+      res.status = Message::STATUS_FAILED;
+      res.error_details = "Transaction blob is too large";
+      return;
+    }
+
     std::string tx_blob;
     if(!epee::string_tools::parse_hexstr_to_binbuff(req.tx_as_hex, tx_blob))
     {
-      MERROR("[SendRawTxHex]: Failed to parse tx from hexbuff: " << req.tx_as_hex);
+      MERROR("[SendRawTxHex]: Failed to parse tx hex, length " << req.tx_as_hex.size());
       res.status = Message::STATUS_FAILED;
       res.error_details = "Invalid hex";
       return;

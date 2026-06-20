@@ -40,6 +40,7 @@
 #include <ctime>
 
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "cryptonote_config.h"
 #include "profile_tools.h"
 #include "net/network_throttle-detail.hpp"
 #include "common/pruning.h"
@@ -74,6 +75,8 @@
 #define DROP_ON_SYNC_WEDGE_THRESHOLD (30 * 1000000000ull) // nanoseconds
 #define LAST_ACTIVITY_STALL_THRESHOLD (2.0f) // seconds
 #define DROP_PEERS_ON_SCORE -2
+static constexpr size_t MAX_TX_NOTIFY_COUNT = 1000;
+static constexpr size_t MAX_TXPOOL_COMPLEMENT_HASHES = 50000;
 
 namespace cryptonote
 {
@@ -952,6 +955,12 @@ namespace cryptonote
     MLOG_P2P_MESSAGE("Received NOTIFY_GET_TXPOOL_COMPLEMENT (" << arg.hashes.size() << " txes)");
     if(context.m_state != cryptonote_connection_context::state_normal)
       return 1;
+    if (arg.hashes.size() > MAX_TXPOOL_COMPLEMENT_HASHES)
+    {
+      LOG_PRINT_CCONTEXT_L1("Too many txpool complement hashes (" << arg.hashes.size() << "), dropping connection");
+      drop_connection(context, false, false);
+      return 1;
+    }
 
     std::vector<std::pair<cryptonote::blobdata, block>> local_blocks;
     std::vector<cryptonote::blobdata> local_txs;
@@ -961,6 +970,11 @@ namespace cryptonote
     {
       LOG_ERROR_CCONTEXT("failed to get txpool complement");
       return 1;
+    }
+    if (txes.size() > MAX_TX_NOTIFY_COUNT)
+    {
+      MDEBUG("Clamping txpool complement response from " << txes.size() << " to " << MAX_TX_NOTIFY_COUNT << " txes");
+      txes.resize(MAX_TX_NOTIFY_COUNT);
     }
 
     NOTIFY_NEW_TRANSACTIONS::request new_txes;
@@ -980,9 +994,22 @@ namespace cryptonote
   int t_cryptonote_protocol_handler<t_core>::handle_notify_new_transactions(int command, NOTIFY_NEW_TRANSACTIONS::request& arg, cryptonote_connection_context& context)
   {
     MLOG_P2P_MESSAGE("Received NOTIFY_NEW_TRANSACTIONS (" << arg.txs.size() << " txes)");
+    if (arg.txs.size() > MAX_TX_NOTIFY_COUNT)
+    {
+      LOG_PRINT_CCONTEXT_L1("Too many transactions in notification (" << arg.txs.size() << "), dropping connection");
+      drop_connection(context, false, false);
+      return 1;
+    }
+
     std::unordered_set<blobdata> seen;
     for (const auto &blob: arg.txs)
     {
+      if (blob.size() > CRYPTONOTE_MAX_TX_SIZE)
+      {
+        LOG_PRINT_CCONTEXT_L1("Oversized transaction blob in notification (" << blob.size() << " bytes), dropping connection");
+        drop_connection(context, false, false);
+        return 1;
+      }
       MLOGIF_P2P_MESSAGE(cryptonote::transaction tx; crypto::hash hash; bool ret = cryptonote::parse_and_validate_tx_from_blob(blob, tx, hash);, ret, "Including transaction " << hash);
       if (seen.find(blob) != seen.end())
       {
@@ -3019,4 +3046,3 @@ skip:
     m_core.stop();
   }
 } // namespace
-

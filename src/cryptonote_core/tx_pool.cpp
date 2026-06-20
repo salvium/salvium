@@ -784,12 +784,12 @@ namespace cryptonote
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
 
-    m_blockchain.for_all_txpool_txes([this, &hashes, &txes](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata_ref*) {
+    const std::unordered_set<crypto::hash> known_hashes(hashes.begin(), hashes.end());
+    m_blockchain.for_all_txpool_txes([this, &known_hashes, &txes](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata_ref*) {
       const auto tx_relay_method = meta.get_relay_method();
       if (tx_relay_method != relay_method::block && tx_relay_method != relay_method::fluff)
         return true;
-      const auto i = std::find(hashes.begin(), hashes.end(), txid);
-      if (i == hashes.end())
+      if (known_hashes.count(txid) == 0)
       {
         cryptonote::blobdata bd;
         try

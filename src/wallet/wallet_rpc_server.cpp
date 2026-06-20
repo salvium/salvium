@@ -135,6 +135,17 @@ namespace
   const command_line::arg_descriptor<std::size_t> arg_rpc_response_soft_limit = {"rpc-response-soft-limit", "Max response bytes that can be queued, enforced at next response attempt", DEFAULT_RPC_SOFT_LIMIT_SIZE};
 
   constexpr const char default_rpc_username[] = "monero";
+  constexpr size_t MAX_RPC_HEX_BLOB_SIZE = 128 * 1024 * 1024; // 64 MiB decoded
+
+  bool check_hex_blob_size(const std::string &hex, const char *field, epee::json_rpc::error &er)
+  {
+    if (hex.size() <= MAX_RPC_HEX_BLOB_SIZE)
+      return true;
+
+    er.code = WALLET_RPC_ERROR_CODE_BAD_HEX;
+    er.message = std::string(field) + " is too large.";
+    return false;
+  }
 
   boost::optional<tools::password_container> password_prompter(const char *prompt, bool verify)
   {
@@ -1691,6 +1702,8 @@ namespace tools
     CHECK_IF_BACKGROUND_SYNCING();
 
     cryptonote::blobdata blob;
+    if (!check_hex_blob_size(req.unsigned_txset, "unsigned_txset", er))
+      return false;
     if (!epee::string_tools::parse_hexstr_to_binbuff(req.unsigned_txset, blob))
     {
       er.code = WALLET_RPC_ERROR_CODE_BAD_HEX;
@@ -1783,6 +1796,8 @@ namespace tools
       try {
         tools::wallet2::unsigned_tx_set exported_txs;
         cryptonote::blobdata blob;
+        if (!check_hex_blob_size(req.unsigned_txset, "unsigned_txset", er))
+          return false;
         if (!epee::string_tools::parse_hexstr_to_binbuff(req.unsigned_txset, blob)) {
           er.code = WALLET_RPC_ERROR_CODE_BAD_HEX;
           er.message = "Failed to parse hex.";
@@ -1804,6 +1819,8 @@ namespace tools
       try {
         tools::wallet2::multisig_tx_set exported_txs;
         cryptonote::blobdata blob;
+        if (!check_hex_blob_size(req.multisig_txset, "multisig_txset", er))
+          return false;
         if (!epee::string_tools::parse_hexstr_to_binbuff(req.multisig_txset, blob)) {
           er.code = WALLET_RPC_ERROR_CODE_BAD_HEX;
           er.message = "Failed to parse hex.";
@@ -1986,6 +2003,8 @@ namespace tools
     }
 
     cryptonote::blobdata blob;
+    if (!check_hex_blob_size(req.tx_data_hex, "tx_data_hex", er))
+      return false;
     if (!epee::string_tools::parse_hexstr_to_binbuff(req.tx_data_hex, blob))
     {
       er.code = WALLET_RPC_ERROR_CODE_BAD_HEX;
@@ -2215,6 +2234,8 @@ namespace tools
     if (!m_wallet) return not_open(er);
 
     cryptonote::blobdata blob;
+    if (!check_hex_blob_size(req.hex, "hex", er))
+      return false;
     if (!epee::string_tools::parse_hexstr_to_binbuff(req.hex, blob))
     {
       er.code = WALLET_RPC_ERROR_CODE_BAD_HEX;
@@ -3481,6 +3502,8 @@ namespace tools
     CHECK_IF_BACKGROUND_SYNCING();
 
     cryptonote::blobdata blob;
+    if (!check_hex_blob_size(req.outputs_data_hex, "outputs_data_hex", er))
+      return false;
     if (!epee::string_tools::parse_hexstr_to_binbuff(req.outputs_data_hex, blob))
     {
       er.code = WALLET_RPC_ERROR_CODE_BAD_HEX;
@@ -4797,6 +4820,8 @@ namespace tools
     info.resize(req.info.size());
     for (size_t n = 0; n < info.size(); ++n)
     {
+      if (!check_hex_blob_size(req.info[n], "info", er))
+        return false;
       if (!epee::string_tools::parse_hexstr_to_binbuff(req.info[n], info[n]))
       {
         er.code = WALLET_RPC_ERROR_CODE_BAD_HEX;
@@ -4952,6 +4977,8 @@ namespace tools
     CHECK_MULTISIG_ENABLED();
 
     cryptonote::blobdata blob;
+    if (!check_hex_blob_size(req.tx_data_hex, "tx_data_hex", er))
+      return false;
     if (!epee::string_tools::parse_hexstr_to_binbuff(req.tx_data_hex, blob))
     {
       er.code = WALLET_RPC_ERROR_CODE_BAD_HEX;
@@ -5022,6 +5049,8 @@ namespace tools
     CHECK_MULTISIG_ENABLED();
 
     cryptonote::blobdata blob;
+    if (!check_hex_blob_size(req.tx_data_hex, "tx_data_hex", er))
+      return false;
     if (!epee::string_tools::parse_hexstr_to_binbuff(req.tx_data_hex, blob))
     {
       er.code = WALLET_RPC_ERROR_CODE_BAD_HEX;

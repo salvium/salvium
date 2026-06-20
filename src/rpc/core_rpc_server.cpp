@@ -46,6 +46,7 @@ using namespace epee;
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
+#include "cryptonote_config.h"
 #include "cryptonote_basic/merge_mining.h"
 #include "cryptonote_core/tx_sanity_check.h"
 #include "misc_language.h"
@@ -68,6 +69,7 @@ using namespace epee;
 #define MAX_RESTRICTED_GLOBAL_FAKE_OUTS_COUNT 5000
 
 #define OUTPUT_HISTOGRAM_RECENT_CUTOFF_RESTRICTION (3 * 86400) // 3 days max, the wallet requests 1.8 days
+static constexpr size_t BLOCK_SIZE_SANITY_LEEWAY_RPC = 100;
 
 #define DEFAULT_PAYMENT_DIFFICULTY 1000
 #define DEFAULT_PAYMENT_CREDITS_PER_HASH 100
@@ -76,6 +78,9 @@ using namespace epee;
 #define RESTRICTED_TRANSACTIONS_COUNT 100
 #define RESTRICTED_SPENT_KEY_IMAGES_COUNT 5000
 #define RESTRICTED_BLOCK_COUNT 1000
+static constexpr size_t MAX_GET_TRANSACTIONS_COUNT = 1000;
+static constexpr size_t MAX_GET_OUTPUTS_COUNT = 50000;
+static constexpr size_t MAX_SPENT_KEY_IMAGES_COUNT = 50000;
 
 #define RPC_TRACKER(rpc) \
   PERF_TIMER(rpc); \
@@ -926,6 +931,12 @@ namespace cryptonote
 
     res.status = "Failed";
 
+    if (req.outputs.size() > MAX_GET_OUTPUTS_COUNT)
+    {
+      res.status = "Too many outs requested";
+      return true;
+    }
+
     const bool restricted = m_restricted && ctx;
     if (restricted)
     {
@@ -955,6 +966,12 @@ namespace cryptonote
     CHECK_PAYMENT_MIN1(req, res, req.outputs.size() * COST_PER_OUT, false);
 
     res.status = "Failed";
+
+    if (req.outputs.size() > MAX_GET_OUTPUTS_COUNT)
+    {
+      res.status = "Too many outs requested";
+      return true;
+    }
 
     const bool restricted = m_restricted && ctx;
     if (restricted)
@@ -1033,6 +1050,11 @@ namespace cryptonote
     if (restricted && req.txs_hashes.size() > RESTRICTED_TRANSACTIONS_COUNT)
     {
       res.status = "Too many transactions requested in restricted mode";
+      return true;
+    }
+    if (req.txs_hashes.size() > MAX_GET_TRANSACTIONS_COUNT)
+    {
+      res.status = "Too many transactions requested";
       return true;
     }
 
@@ -1282,6 +1304,11 @@ namespace cryptonote
       res.status = "Too many key images queried in restricted mode";
       return true;
     }
+    if (req.key_images.size() > MAX_SPENT_KEY_IMAGES_COUNT)
+    {
+      res.status = "Too many key images queried";
+      return true;
+    }
 
     CHECK_PAYMENT_MIN1(req, res, req.key_images.size() * COST_PER_KEY_IMAGE, false);
 
@@ -1297,6 +1324,7 @@ namespace cryptonote
       if(b.size() != sizeof(crypto::key_image))
       {
         res.status = "Failed, size of data mismatch";
+        return true;
       }
       key_images.push_back(*reinterpret_cast<const crypto::key_image*>(b.data()));
     }
@@ -1376,11 +1404,22 @@ namespace cryptonote
 
     CHECK_PAYMENT_MIN1(req, res, COST_PER_TX_RELAY, false);
 
+    constexpr size_t max_tx_hex_size = CRYPTONOTE_MAX_TX_SIZE * 2;
+    if (req.tx_as_hex.size() > max_tx_hex_size)
+    {
+      LOG_PRINT_L0("[on_send_raw_tx]: Rejected oversized tx hex: " << req.tx_as_hex.size() << " chars, max " << max_tx_hex_size);
+      res.status = "Failed";
+      res.reason = "Transaction blob is too large";
+      res.too_big = true;
+      return true;
+    }
+
     std::string tx_blob;
     if(!string_tools::parse_hexstr_to_binbuff(req.tx_as_hex, tx_blob))
     {
-      LOG_PRINT_L0("[on_send_raw_tx]: Failed to parse tx from hexbuff: " << req.tx_as_hex);
+      LOG_PRINT_L0("[on_send_raw_tx]: Failed to parse tx hex, length " << req.tx_as_hex.size());
       res.status = "Failed";
+      res.reason = "Failed to parse transaction hex";
       return true;
     }
 
@@ -2102,6 +2141,14 @@ namespace cryptonote
   {
     RPC_TRACKER(calcpow);
 
+    const size_t max_block_hex_size = (m_core.get_blockchain_storage().get_current_cumulative_block_weight_limit() + BLOCK_SIZE_SANITY_LEEWAY_RPC) * 2;
+    if (req.block_blob.size() > max_block_hex_size)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_BLOCKBLOB_SIZE;
+      error_resp.message = "Block blob size is too big, rejecting block";
+      return false;
+    }
+
     blobdata blockblob;
     if(!string_tools::parse_hexstr_to_binbuff(req.block_blob, blockblob))
     {
@@ -2273,6 +2320,14 @@ namespace cryptonote
       error_resp.message = "Wrong param";
       return false;
     }
+    const size_t max_block_hex_size = (m_core.get_blockchain_storage().get_current_cumulative_block_weight_limit() + BLOCK_SIZE_SANITY_LEEWAY_RPC) * 2;
+    if (req[0].size() > max_block_hex_size)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_BLOCKBLOB_SIZE;
+      error_resp.message = "Block blob size is too big, rejecting block";
+      return false;
+    }
+
     blobdata blockblob;
     if(!string_tools::parse_hexstr_to_binbuff(req[0], blockblob))
     {
