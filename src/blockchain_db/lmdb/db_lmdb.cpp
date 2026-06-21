@@ -5066,6 +5066,198 @@ uint64_t BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::s
   return oat->output_id;
 }
 
+void BlockchainLMDB::get_output_amount_index_from_asset_type_output_index(const std::string asset_type_str, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &amount_indices) const
+{
+  if (amounts.size() != 1 && amounts.size() != asset_type_output_indices.size())
+    throw0(DB_ERROR("Invalid sizes of amounts and asset type output indices"));
+
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  amount_indices.assign(asset_type_output_indices.size(), 0);
+
+  std::vector<uint64_t> output_ids;
+  get_output_id_from_asset_type_output_index(asset_type_str, asset_type_output_indices, output_ids);
+
+  TXN_PREFIX_RDONLY();
+  RCURSOR(output_amounts);
+
+  struct lookup
+  {
+    uint64_t amount;
+    uint64_t output_id;
+    size_t pos;
+    bool found;
+  };
+  std::vector<lookup> lookups;
+  lookups.reserve(output_ids.size());
+  for (size_t i = 0; i < output_ids.size(); ++i)
+    lookups.push_back({amounts.size() == 1 ? amounts[0] : amounts[i], output_ids[i], i, false});
+
+  std::sort(lookups.begin(), lookups.end(), [](const lookup &a, const lookup &b) {
+    return a.amount == b.amount ? a.output_id < b.output_id : a.amount < b.amount;
+  });
+
+  for (size_t begin = 0; begin < lookups.size();)
+  {
+    size_t end = begin + 1;
+    while (end < lookups.size() && lookups[end].amount == lookups[begin].amount)
+      ++end;
+
+    const uint64_t amount = lookups[begin].amount;
+    MDB_val_set(k, amount);
+    MDB_val v;
+    int result = mdb_cursor_get(m_cur_output_amounts, &k, &v, MDB_SET);
+    if (result == MDB_NOTFOUND)
+      throw1(OUTPUT_DNE((std::string("No outputs exist for requested amount ") + boost::lexical_cast<std::string>(amount)).c_str()));
+    else if (result)
+      throw0(DB_ERROR(lmdb_error("Error attempting to retrieve output amount from the db", result).c_str()));
+
+    size_t current = begin;
+    while (result == MDB_SUCCESS && current < end)
+    {
+      const pre_rct_outkey *okp = (const pre_rct_outkey *)v.mv_data;
+      while (current < end && lookups[current].output_id < okp->output_id)
+        ++current;
+      if (current < end && lookups[current].output_id == okp->output_id)
+      {
+        amount_indices[lookups[current].pos] = okp->amount_index;
+        lookups[current].found = true;
+        ++current;
+      }
+      result = mdb_cursor_get(m_cur_output_amounts, &k, &v, MDB_NEXT_DUP);
+    }
+    if (result != MDB_NOTFOUND && result != MDB_SUCCESS)
+      throw0(DB_ERROR(lmdb_error("Error enumerating output amounts from the db", result).c_str()));
+
+    for (size_t i = begin; i < end; ++i)
+    {
+      if (!lookups[i].found)
+        throw1(OUTPUT_DNE((std::string("Asset type output index ") + boost::lexical_cast<std::string>(asset_type_output_indices[lookups[i].pos]) + " for asset " + asset_type_str + " maps to global output " + boost::lexical_cast<std::string>(lookups[i].output_id) + ", but no output exists for requested amount " + boost::lexical_cast<std::string>(lookups[i].amount)).c_str()));
+    }
+    begin = end;
+  }
+
+  TXN_POSTFIX_RDONLY();
+}
+
+void BlockchainLMDB::get_output_amount_index_from_asset_type_rct_ordinal(const std::string asset_type_str, const std::vector<uint64_t> &asset_type_rct_ordinals, std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  amount_indices.assign(asset_type_rct_ordinals.size(), 0);
+  asset_type_output_indices.assign(asset_type_rct_ordinals.size(), 0);
+
+  TXN_PREFIX_RDONLY();
+  RCURSOR(output_amounts);
+  RCURSOR(output_types);
+
+  uint32_t asset_type = cryptonote::asset_id_from_type(asset_type_str);
+  std::map<uint64_t, uint64_t> asset_index_by_output_id;
+  MDB_val_copy<uint32_t> k_type(asset_type);
+  MDB_val v_type;
+  int result = mdb_cursor_get(m_cur_output_types, &k_type, &v_type, MDB_SET);
+  while (result == MDB_SUCCESS)
+  {
+    const outassettype *oat = (const outassettype *)v_type.mv_data;
+    asset_index_by_output_id.emplace(oat->output_id, oat->asset_type_output_index);
+    result = mdb_cursor_get(m_cur_output_types, &k_type, &v_type, MDB_NEXT_DUP);
+  }
+  if (result != MDB_NOTFOUND)
+    throw0(DB_ERROR(lmdb_error("Error enumerating output types from the db", result).c_str()));
+
+  std::vector<size_t> order(asset_type_rct_ordinals.size());
+  for (size_t i = 0; i < order.size(); ++i)
+    order[i] = i;
+  std::sort(order.begin(), order.end(), [&asset_type_rct_ordinals](size_t a, size_t b) {
+    return asset_type_rct_ordinals[a] < asset_type_rct_ordinals[b];
+  });
+
+  const uint64_t rct_amount = 0;
+  MDB_val_set(k_amount, rct_amount);
+  MDB_val v_amount;
+  result = mdb_cursor_get(m_cur_output_amounts, &k_amount, &v_amount, MDB_SET);
+  if (result == MDB_NOTFOUND && !asset_type_rct_ordinals.empty())
+    throw1(OUTPUT_DNE("No RCT outputs exist"));
+  else if (result)
+    throw0(DB_ERROR(lmdb_error("Error attempting to retrieve RCT outputs from the db", result).c_str()));
+
+  uint64_t rct_ordinal = 0;
+  size_t current = 0;
+  while (result == MDB_SUCCESS && current < order.size())
+  {
+    const outkey *okp = (const outkey *)v_amount.mv_data;
+    const auto asset_index = asset_index_by_output_id.find(okp->output_id);
+    if (okp->data.asset_type == asset_type && asset_index != asset_index_by_output_id.end())
+    {
+      while (current < order.size() && asset_type_rct_ordinals[order[current]] == rct_ordinal)
+      {
+        amount_indices[order[current]] = okp->amount_index;
+        asset_type_output_indices[order[current]] = asset_index->second;
+        ++current;
+      }
+      ++rct_ordinal;
+    }
+    result = mdb_cursor_get(m_cur_output_amounts, &k_amount, &v_amount, MDB_NEXT_DUP);
+  }
+  if (result != MDB_NOTFOUND && result != MDB_SUCCESS)
+    throw0(DB_ERROR(lmdb_error("Error enumerating RCT outputs from the db", result).c_str()));
+  if (current != order.size())
+    throw1(OUTPUT_DNE((std::string("Asset RCT ordinal ") + boost::lexical_cast<std::string>(asset_type_rct_ordinals[order[current]]) + " for asset " + asset_type_str + " does not exist").c_str()));
+
+  TXN_POSTFIX_RDONLY();
+}
+
+void BlockchainLMDB::get_output_asset_type_output_index_from_amount_index(const std::string asset_type_str, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const
+{
+  if (amounts.size() != 1 && amounts.size() != amount_indices.size())
+    throw0(DB_ERROR("Invalid sizes of amounts and amount indices"));
+
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  asset_type_output_indices.assign(amount_indices.size(), 0);
+
+  TXN_PREFIX_RDONLY();
+  RCURSOR(output_amounts);
+  RCURSOR(output_types);
+
+  uint32_t asset_type = cryptonote::asset_id_from_type(asset_type_str);
+  std::map<uint64_t, uint64_t> asset_index_by_output_id;
+  MDB_val_copy<uint32_t> k_type(asset_type);
+  MDB_val v_type;
+  int result = mdb_cursor_get(m_cur_output_types, &k_type, &v_type, MDB_SET);
+  while (result == MDB_SUCCESS)
+  {
+    const outassettype *oat = (const outassettype *)v_type.mv_data;
+    asset_index_by_output_id.emplace(oat->output_id, oat->asset_type_output_index);
+    result = mdb_cursor_get(m_cur_output_types, &k_type, &v_type, MDB_NEXT_DUP);
+  }
+  if (result != MDB_NOTFOUND)
+    throw0(DB_ERROR(lmdb_error("Error enumerating output types from the db", result).c_str()));
+
+  for (size_t i = 0; i < amount_indices.size(); ++i)
+  {
+    const uint64_t amount = amounts.size() == 1 ? amounts[0] : amounts[i];
+    MDB_val_set(k_amount, amount);
+    MDB_val_set(v_amount, amount_indices[i]);
+    result = mdb_cursor_get(m_cur_output_amounts, &k_amount, &v_amount, MDB_GET_BOTH);
+    if (result == MDB_NOTFOUND)
+      throw1(OUTPUT_DNE((std::string("Amount output index does not exist: amount ") + boost::lexical_cast<std::string>(amount) + ", index " + boost::lexical_cast<std::string>(amount_indices[i])).c_str()));
+    else if (result)
+      throw0(DB_ERROR(lmdb_error("Error attempting to retrieve output amount from the db", result).c_str()));
+
+    const pre_rct_outkey *okp = (const pre_rct_outkey *)v_amount.mv_data;
+    const uint32_t output_asset_type = amount == 0 ? ((const outkey *)v_amount.mv_data)->data.asset_type : ((const pre_rct_outkey *)v_amount.mv_data)->data.asset_type;
+    if (output_asset_type != asset_type)
+      throw1(OUTPUT_DNE((std::string("Amount output index is for the wrong asset type: expected ") + asset_type_str).c_str()));
+    const auto asset_index = asset_index_by_output_id.find(okp->output_id);
+    if (asset_index == asset_index_by_output_id.end())
+      throw1(OUTPUT_DNE((std::string("Output id ") + boost::lexical_cast<std::string>(okp->output_id) + " was not found in asset type index for " + asset_type_str).c_str()));
+    asset_type_output_indices[i] = asset_index->second;
+  }
+
+  TXN_POSTFIX_RDONLY();
+}
+
 tx_out_index BlockchainLMDB::get_output_tx_and_index_from_global(const uint64_t& output_id) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);

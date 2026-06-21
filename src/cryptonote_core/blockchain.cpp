@@ -165,13 +165,13 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   if(!tx_in_to_key.key_offsets.size())
     return false;
 
-  // cryptonote_format_utils uses relative offsets for indexing to the global
-  // outputs list.  that is to say that absolute offset #2 is absolute offset
+  // cryptonote_format_utils uses relative offsets for indexing to the asset
+  // output list.  that is to say that absolute offset #2 is absolute offset
   // #1 plus relative offset #2.
   // TODO: Investigate if this is necessary / why this is done.
   std::vector<uint64_t> asset_offsets = relative_output_offsets_to_absolute(tx_in_to_key.key_offsets);
-  std::vector<uint64_t> absolute_offsets;
-  m_db->get_output_id_from_asset_type_output_index(tx_in_to_key.asset_type, asset_offsets, absolute_offsets);
+  std::vector<uint64_t> amount_offsets;
+  m_db->get_output_amount_index_from_asset_type_output_index(tx_in_to_key.asset_type, epee::span<const uint64_t>(&tx_in_to_key.amount, 1), asset_offsets, amount_offsets);
   std::vector<output_data_t> outputs;
 
   bool found = false;
@@ -192,8 +192,8 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   {
     try
     {
-      m_db->get_output_key(epee::span<const uint64_t>(&tx_in_to_key.amount, 1), absolute_offsets, outputs, true);
-      if (absolute_offsets.size() != outputs.size())
+      m_db->get_output_key(epee::span<const uint64_t>(&tx_in_to_key.amount, 1), amount_offsets, outputs, true);
+      if (amount_offsets.size() != outputs.size())
       {
         MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount);
         return false;
@@ -208,14 +208,14 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   else
   {
     // check for partial results and add the rest if needed;
-    if (outputs.size() < absolute_offsets.size() && outputs.size() > 0)
+    if (outputs.size() < amount_offsets.size() && outputs.size() > 0)
     {
-      MDEBUG("Additional outputs needed: " << absolute_offsets.size() - outputs.size());
+      MDEBUG("Additional outputs needed: " << amount_offsets.size() - outputs.size());
       std::vector < uint64_t > add_offsets;
       std::vector<output_data_t> add_outputs;
-      add_outputs.reserve(absolute_offsets.size() - outputs.size());
-      for (size_t i = outputs.size(); i < absolute_offsets.size(); i++)
-        add_offsets.push_back(absolute_offsets[i]);
+      add_outputs.reserve(amount_offsets.size() - outputs.size());
+      for (size_t i = outputs.size(); i < amount_offsets.size(); i++)
+        add_offsets.push_back(amount_offsets[i]);
       try
       {
         m_db->get_output_key(epee::span<const uint64_t>(&tx_in_to_key.amount, 1), add_offsets, add_outputs, true);
@@ -235,7 +235,7 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   }
 
   size_t count = 0;
-  for (const uint64_t& i : absolute_offsets)
+  for (const uint64_t& i : amount_offsets)
   {
     try
     {
@@ -251,18 +251,18 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
         // call to the passed boost visitor to grab the public key for the output
         if (!vis.handle_output(output_index.unlock_time, cryptonote::asset_type_from_id(output_index.asset_type), output_index.pubkey, output_index.commitment))
         {
-          MERROR_VER("Failed to handle_output for output no = " << count << ", with absolute offset " << i);
+          MERROR_VER("Failed to handle_output for output no = " << count << ", with amount offset " << i);
           return false;
         }
       }
       catch (...)
       {
-        MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount << ", absolute_offset = " << i);
+        MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount << ", amount_offset = " << i);
         return false;
       }
 
       // if on last output and pmax_related_block_height not null pointer
-      if(++count == absolute_offsets.size() && pmax_related_block_height)
+      if(++count == amount_offsets.size() && pmax_related_block_height)
       {
         // set *pmax_related_block_height to tx block height for this output
         auto h = output_index.height;
@@ -3130,51 +3130,105 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
   res.outs.clear();
   res.outs.reserve(req.outputs.size());
 
-  // if an asset type is provided in the request, most indexes provided in the request are asset type output id's.
-  // need to use the asset type output id's provided to retrieve the respective global output id's
-  std::map<uint64_t, uint64_t> global_outs_by_asset_type_output_id;
-  if (!req.asset_type.empty())
-  {
-    std::vector<uint64_t> asset_type_output_indices;
-    for (const auto &i: req.outputs)
-    {
-      // some inputs in the request have already been used in attempted rings in the past. These inputs will
-      // have the is_global_out flag set to true, since they already have the global output id saved
-      if (!i.is_global_out)
-        asset_type_output_indices.push_back(i.index);
-    }
-
-    std::vector<uint64_t> global_out_ids;
-    global_out_ids.reserve(asset_type_output_indices.size());
-
-    m_db->get_output_id_from_asset_type_output_index(req.asset_type, asset_type_output_indices, global_out_ids);
-
-    uint64_t global_outs = 0;
-    for (const auto &i: req.outputs)
-    {
-      if (!i.is_global_out)
-      {
-        global_outs_by_asset_type_output_id[i.index] = global_out_ids[global_outs];
-        ++global_outs;
-      }
-    }
-  }
-
   std::vector<cryptonote::output_data_t> data;
   try
   {
     std::vector<uint64_t> amounts, offsets;
     amounts.reserve(req.outputs.size());
-    offsets.reserve(req.outputs.size());
-    for (const auto &i: req.outputs)
+    offsets.assign(req.outputs.size(), 0);
+    std::vector<uint64_t> response_output_ids(req.outputs.size(), 0);
+
+    if (req.asset_type.empty())
     {
-      amounts.push_back(i.amount);
-      // if no asset type provided, the offsets provided are already global output id's unless specifically set
-      if (req.asset_type.empty() || i.is_global_out)
-        offsets.push_back(i.index);
-      else
-        offsets.push_back(global_outs_by_asset_type_output_id[i.index]);
+      for (size_t n = 0; n < req.outputs.size(); ++n)
+      {
+        amounts.push_back(req.outputs[n].amount);
+        offsets[n] = req.outputs[n].index;
+        response_output_ids[n] = req.outputs[n].index;
+      }
     }
+    else
+    {
+      struct pending_index
+      {
+        size_t request_pos;
+        uint64_t amount;
+        uint64_t index;
+      };
+      std::vector<pending_index> asset_type_indices;
+      std::vector<pending_index> asset_rct_ordinals;
+      std::vector<pending_index> amount_indices;
+
+      for (size_t n = 0; n < req.outputs.size(); ++n)
+      {
+        const auto &i = req.outputs[n];
+        amounts.push_back(i.amount);
+        if (i.is_asset_rct_ordinal)
+          asset_rct_ordinals.push_back({n, i.amount, i.index});
+        else if (i.is_global_out)
+          amount_indices.push_back({n, i.amount, i.index});
+        else
+          asset_type_indices.push_back({n, i.amount, i.index});
+      }
+
+      if (!asset_type_indices.empty())
+      {
+        std::vector<uint64_t> local_amounts, requested_asset_indices, translated_amount_indices;
+        local_amounts.reserve(asset_type_indices.size());
+        requested_asset_indices.reserve(asset_type_indices.size());
+        for (const auto &entry: asset_type_indices)
+        {
+          local_amounts.push_back(entry.amount);
+          requested_asset_indices.push_back(entry.index);
+        }
+        m_db->get_output_amount_index_from_asset_type_output_index(req.asset_type, epee::span<const uint64_t>(local_amounts.data(), local_amounts.size()), requested_asset_indices, translated_amount_indices);
+        for (size_t n = 0; n < asset_type_indices.size(); ++n)
+        {
+          offsets[asset_type_indices[n].request_pos] = translated_amount_indices[n];
+          response_output_ids[asset_type_indices[n].request_pos] = requested_asset_indices[n];
+        }
+      }
+
+      if (!asset_rct_ordinals.empty())
+      {
+        std::vector<uint64_t> requested_ordinals, translated_amount_indices, translated_asset_indices;
+        requested_ordinals.reserve(asset_rct_ordinals.size());
+        for (const auto &entry: asset_rct_ordinals)
+        {
+          if (entry.amount != 0)
+          {
+            MERROR("Asset RCT ordinal requested for non-RCT amount " << entry.amount);
+            return false;
+          }
+          requested_ordinals.push_back(entry.index);
+        }
+        m_db->get_output_amount_index_from_asset_type_rct_ordinal(req.asset_type, requested_ordinals, translated_amount_indices, translated_asset_indices);
+        for (size_t n = 0; n < asset_rct_ordinals.size(); ++n)
+        {
+          offsets[asset_rct_ordinals[n].request_pos] = translated_amount_indices[n];
+          response_output_ids[asset_rct_ordinals[n].request_pos] = translated_asset_indices[n];
+        }
+      }
+
+      if (!amount_indices.empty())
+      {
+        std::vector<uint64_t> local_amounts, requested_amount_indices, translated_asset_indices;
+        local_amounts.reserve(amount_indices.size());
+        requested_amount_indices.reserve(amount_indices.size());
+        for (const auto &entry: amount_indices)
+        {
+          local_amounts.push_back(entry.amount);
+          requested_amount_indices.push_back(entry.index);
+        }
+        m_db->get_output_asset_type_output_index_from_amount_index(req.asset_type, epee::span<const uint64_t>(local_amounts.data(), local_amounts.size()), requested_amount_indices, translated_asset_indices);
+        for (size_t n = 0; n < amount_indices.size(); ++n)
+        {
+          offsets[amount_indices[n].request_pos] = requested_amount_indices[n];
+          response_output_ids[amount_indices[n].request_pos] = translated_asset_indices[n];
+        }
+      }
+    }
+
     m_db->get_output_key(epee::span<const uint64_t>(amounts.data(), amounts.size()), offsets, data);
     if (data.size() != req.outputs.size())
     {
@@ -3203,11 +3257,12 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
     if (!req.asset_type.empty())
     {
       for (size_t i = 0; i < req.outputs.size(); ++i)
-        res.outs[i].output_id = offsets[i];
+        res.outs[i].output_id = response_output_ids[i];
     }
   }
   catch (const std::exception &e)
   {
+    MERROR("Failed to get outs: " << e.what());
     return false;
   }
   return true;

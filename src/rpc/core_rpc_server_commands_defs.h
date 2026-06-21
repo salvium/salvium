@@ -541,11 +541,13 @@ namespace cryptonote
     uint64_t amount;
     uint64_t index;
     bool is_global_out;
+    bool is_asset_rct_ordinal;
 
     BEGIN_KV_SERIALIZE_MAP()
       KV_SERIALIZE(amount)
       KV_SERIALIZE(index)
       KV_SERIALIZE_OPT(is_global_out, false)
+      KV_SERIALIZE_OPT(is_asset_rct_ordinal, false)
     END_KV_SERIALIZE_MAP()
   };
 

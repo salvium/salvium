@@ -4569,8 +4569,14 @@ bool wallet2::get_rct_distribution(const bool use_global_outs, const std::string
     THROW_ON_RPC_RESPONSE_ERROR_GENERIC(r, {}, res, "/get_output_distribution.bin");
     check_rpc_cost("/get_output_distribution.bin", res.credits, pre_call_credits, COST_PER_OUTPUT_DISTRIBUTION_0);
   }
+  catch(const std::exception &e)
+  {
+    MWARNING("Failed to request RCT output distribution for asset " << (use_global_outs ? std::string("<global>") : rct_asset_type) << ": " << e.what() << ", status " << get_rpc_status(res.status));
+    return false;
+  }
   catch(...)
   {
+    MWARNING("Failed to request RCT output distribution for asset " << (use_global_outs ? std::string("<global>") : rct_asset_type) << ": unknown error, status " << get_rpc_status(res.status));
     return false;
   }
   if (res.distributions.size() != 1)
@@ -4588,6 +4594,7 @@ bool wallet2::get_rct_distribution(const bool use_global_outs, const std::string
     res.distributions[0].data.distribution[i] += res.distributions[0].data.distribution[i-1];
   start_height = res.distributions[0].data.start_height;
   distribution = std::move(res.distributions[0].data.distribution);
+  MDEBUG("Got RCT output distribution for asset " << (use_global_outs ? std::string("<global>") : rct_asset_type) << ": start_height " << start_height << ", entries " << distribution.size() << ", total " << (distribution.empty() ? 0 : distribution.back()) << ", spendable global outs " << num_spendable_global_outs);
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -9590,7 +9597,8 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
 
         has_rct = true;
         //use_global_outs = !transfers[idx].m_asset_type_output_index_known;
-        max_rct_index = std::max(max_rct_index, use_global_outs ? transfers[idx].m_global_output_index : transfers[idx].m_asset_type_output_index);
+        if (use_global_outs)
+          max_rct_index = std::max(max_rct_index, transfers[idx].m_global_output_index);
       }
     }
     
@@ -9604,7 +9612,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       // check we're clear enough of rct start, to avoid corner cases below
       THROW_WALLET_EXCEPTION_IF(rct_offsets.size() <= CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE,
                                 error::get_output_distribution, "Not enough rct outputs : " + std::to_string(max_rct_index));
-      THROW_WALLET_EXCEPTION_IF(rct_offsets.back() < max_rct_index,
+      THROW_WALLET_EXCEPTION_IF(use_global_outs && rct_offsets.back() < max_rct_index,
                                 error::get_output_distribution, "Daemon reports suspicious number of rct outputs : " + std::to_string(rct_offsets.back()) + " < " + std::to_string(max_rct_index));
     }
 
@@ -9734,6 +9742,14 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
     // Each ring section of req.outputs gets sorted later after selecting all outputs for that ring
     const auto add_output_to_lists = [&req, &secret_picking_order](const get_outputs_out &goo)
       { req.outputs.push_back(goo); secret_picking_order.push_back(goo); };
+    const auto add_asset_rct_ordinal_to_lists = [&add_output_to_lists](uint64_t ordinal)
+    {
+      get_outputs_out goo = AUTO_VAL_INIT(goo);
+      goo.amount = 0;
+      goo.index = ordinal;
+      goo.is_asset_rct_ordinal = true;
+      add_output_to_lists(goo);
+    };
 
     std::unique_ptr<gamma_picker> gamma;
     if (has_rct)
@@ -9904,12 +9920,22 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       if (num_outs <= requested_outputs_count)
       {
         for (uint64_t i = 0; i < num_outs; i++)
-          add_output_to_lists({amount, i});
+        {
+          if (amount == 0 && !use_global_outs)
+            add_asset_rct_ordinal_to_lists(i);
+          else
+            add_output_to_lists({amount, i});
+        }
         // duplicate to make up shortfall: this will be caught after the RPC call,
         // so we can also output the amounts for which we can't reach the required
         // mixin after checking the actual unlockedness
         for (uint64_t i = num_outs; i < requested_outputs_count; ++i)
-          add_output_to_lists({amount, num_outs - 1});
+        {
+          if (amount == 0 && !use_global_outs)
+            add_asset_rct_ordinal_to_lists(num_outs - 1);
+          else
+            add_output_to_lists({amount, num_outs - 1});
+        }
       }
       else
       {
@@ -10027,7 +10053,10 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
           seen_indices.emplace(i);
 
           picks[type].insert(i);
-          add_output_to_lists({amount, i});
+          if (amount == 0 && !use_global_outs)
+            add_asset_rct_ordinal_to_lists(i);
+          else
+            add_output_to_lists({amount, i});
           ++num_found;
           MDEBUG("picked " << i << ", " << num_found << " now picked");
         }
@@ -10041,7 +10070,10 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
         // we'll error out later
         while (num_found < requested_outputs_count)
         {
-          add_output_to_lists({amount, 0});
+          if (amount == 0 && !use_global_outs)
+            add_asset_rct_ordinal_to_lists(0);
+          else
+            add_output_to_lists({amount, 0});
           ++num_found;
         }
       }
@@ -10133,17 +10165,25 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       for (size_t n = 0; n < requested_outputs_count; ++n)
       {
         size_t i = base + n;
-        if ((use_global_outs ? req.outputs[i].index : daemon_resp.outs[i].output_id) == td.m_global_output_index)
+        const uint64_t response_index = use_global_outs ? req.outputs[i].index : daemon_resp.outs[i].output_id;
+        const uint64_t real_index = use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index;
+        if (response_index == real_index)
+        {
           if (daemon_resp.outs[i].key == td.get_public_key())
+          {
             if (daemon_resp.outs[i].mask == mask)
+            {
               if (daemon_resp.outs[i].unlocked)
                 real_out_found = true;
               else
                 LOG_ERROR("output id " << td.m_global_output_index << " (" << rct_asset_type << ") is still locked");
+            }
             else
               LOG_ERROR("output id " << td.m_global_output_index << " (" << rct_asset_type << ") has incorrect mask : expected " << mask << " but found " << daemon_resp.outs[i].mask);
+          }
           else
             LOG_ERROR("output id " << td.m_global_output_index << " (" << rct_asset_type << ") has incorrect key : expected " << td.get_public_key() << " but found " << daemon_resp.outs[i].key);
+        }
       }
       THROW_WALLET_EXCEPTION_IF(!real_out_found, error::wallet_internal_error,
           "Daemon response did not include the requested real output");
@@ -10174,10 +10214,11 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
                   size_t i = base + o;
                   // HERE BE DRAGONS!!!
                   // SRCG: DO NOT COMMIT THIS CHANGE UNTIL VERIFIED AS WORKING
-                  if (req.outputs[i].index == out /*&& req.outputs[i].is_global_out*/)
+                  if (req.outputs[i].index == out && !req.outputs[i].is_asset_rct_ordinal /*&& req.outputs[i].is_global_out*/)
                   {
-                    LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << req.outputs[i].index << " (real " << td.m_global_output_index << "), unlocked " << daemon_resp.outs[i].unlocked << ", key " << daemon_resp.outs[i].key << " (from existing ring)");
-                    tx_add_fake_output(outs, req.outputs[i].index, daemon_resp.outs[i].key, daemon_resp.outs[i].mask, use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index, daemon_resp.outs[i].unlocked, valid_public_keys_cache);
+                    const uint64_t ring_index = use_global_outs ? req.outputs[i].index : daemon_resp.outs[i].output_id;
+                    LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << ring_index << " (real " << (use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index) << "), unlocked " << daemon_resp.outs[i].unlocked << ", key " << daemon_resp.outs[i].key << " (from existing ring)");
+                    tx_add_fake_output(outs, ring_index, daemon_resp.outs[i].key, daemon_resp.outs[i].mask, use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index, daemon_resp.outs[i].unlocked, valid_public_keys_cache);
                     found = true;
                     break;
                   }
@@ -10199,14 +10240,15 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
         // Find the index i of our pick in the request/response arrays
         size_t i;
         for (i = base; i < base + requested_outputs_count; ++i)
-          if (req.outputs[i].index == attempted_output.index)
+          if (req.outputs[i].index == attempted_output.index && req.outputs[i].is_global_out == attempted_output.is_global_out && req.outputs[i].is_asset_rct_ordinal == attempted_output.is_asset_rct_ordinal)
             break;
         THROW_WALLET_EXCEPTION_IF(i == base + requested_outputs_count, error::wallet_internal_error,
           "Could not find index of picked output in requested outputs");
 
         // Try adding this output's information to result ring if output isn't invalid
-        LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << req.outputs[i].index << " (real " << td.m_global_output_index << "), unlocked " << daemon_resp.outs[i].unlocked << ", key " << daemon_resp.outs[i].key);
-        tx_add_fake_output(outs, req.outputs[i].index, daemon_resp.outs[i].key, daemon_resp.outs[i].mask, td.m_global_output_index, daemon_resp.outs[i].unlocked, valid_public_keys_cache);
+        const uint64_t ring_index = use_global_outs ? req.outputs[i].index : daemon_resp.outs[i].output_id;
+        LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << ring_index << " (real " << (use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index) << "), unlocked " << daemon_resp.outs[i].unlocked << ", key " << daemon_resp.outs[i].key);
+        tx_add_fake_output(outs, ring_index, daemon_resp.outs[i].key, daemon_resp.outs[i].mask, use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index, daemon_resp.outs[i].unlocked, valid_public_keys_cache);
       }
       if (outs.back().size() < fake_outputs_count + 1)
       {

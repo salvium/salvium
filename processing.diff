@@ -1,0 +1,674 @@
+diff --git a/src/blockchain_db/blockchain_db.h b/src/blockchain_db/blockchain_db.h
+index 93748e8..7b211a3 100644
+--- a/src/blockchain_db/blockchain_db.h
++++ b/src/blockchain_db/blockchain_db.h
+@@ -1550,6 +1550,10 @@ public:
+   */
+   virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const = 0;
+ 
++  virtual void get_output_amount_index_from_asset_type_output_index(const std::string asset_type, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &amount_indices) const = 0;
++  virtual void get_output_amount_index_from_asset_type_rct_ordinal(const std::string asset_type, const std::vector<uint64_t> &asset_type_rct_ordinals, std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const = 0;
++  virtual void get_output_asset_type_output_index_from_amount_index(const std::string asset_type, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const = 0;
++
+   /**
+    * @brief gets an output's tx hash and index
+    *
+diff --git a/src/blockchain_db/lmdb/db_lmdb.cpp b/src/blockchain_db/lmdb/db_lmdb.cpp
+index 391f641..e686762 100644
+--- a/src/blockchain_db/lmdb/db_lmdb.cpp
++++ b/src/blockchain_db/lmdb/db_lmdb.cpp
+@@ -5066,6 +5066,198 @@ uint64_t BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::s
+   return oat->output_id;
+ }
+ 
++void BlockchainLMDB::get_output_amount_index_from_asset_type_output_index(const std::string asset_type_str, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &amount_indices) const
++{
++  if (amounts.size() != 1 && amounts.size() != asset_type_output_indices.size())
++    throw0(DB_ERROR("Invalid sizes of amounts and asset type output indices"));
++
++  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
++  check_open();
++  amount_indices.assign(asset_type_output_indices.size(), 0);
++
++  std::vector<uint64_t> output_ids;
++  get_output_id_from_asset_type_output_index(asset_type_str, asset_type_output_indices, output_ids);
++
++  TXN_PREFIX_RDONLY();
++  RCURSOR(output_amounts);
++
++  struct lookup
++  {
++    uint64_t amount;
++    uint64_t output_id;
++    size_t pos;
++    bool found;
++  };
++  std::vector<lookup> lookups;
++  lookups.reserve(output_ids.size());
++  for (size_t i = 0; i < output_ids.size(); ++i)
++    lookups.push_back({amounts.size() == 1 ? amounts[0] : amounts[i], output_ids[i], i, false});
++
++  std::sort(lookups.begin(), lookups.end(), [](const lookup &a, const lookup &b) {
++    return a.amount == b.amount ? a.output_id < b.output_id : a.amount < b.amount;
++  });
++
++  for (size_t begin = 0; begin < lookups.size();)
++  {
++    size_t end = begin + 1;
++    while (end < lookups.size() && lookups[end].amount == lookups[begin].amount)
++      ++end;
++
++    const uint64_t amount = lookups[begin].amount;
++    MDB_val_set(k, amount);
++    MDB_val v;
++    int result = mdb_cursor_get(m_cur_output_amounts, &k, &v, MDB_SET);
++    if (result == MDB_NOTFOUND)
++      throw1(OUTPUT_DNE((std::string("No outputs exist for requested amount ") + boost::lexical_cast<std::string>(amount)).c_str()));
++    else if (result)
++      throw0(DB_ERROR(lmdb_error("Error attempting to retrieve output amount from the db", result).c_str()));
++
++    size_t current = begin;
++    while (result == MDB_SUCCESS && current < end)
++    {
++      const pre_rct_outkey *okp = (const pre_rct_outkey *)v.mv_data;
++      while (current < end && lookups[current].output_id < okp->output_id)
++        ++current;
++      if (current < end && lookups[current].output_id == okp->output_id)
++      {
++        amount_indices[lookups[current].pos] = okp->amount_index;
++        lookups[current].found = true;
++        ++current;
++      }
++      result = mdb_cursor_get(m_cur_output_amounts, &k, &v, MDB_NEXT_DUP);
++    }
++    if (result != MDB_NOTFOUND && result != MDB_SUCCESS)
++      throw0(DB_ERROR(lmdb_error("Error enumerating output amounts from the db", result).c_str()));
++
++    for (size_t i = begin; i < end; ++i)
++    {
++      if (!lookups[i].found)
++        throw1(OUTPUT_DNE((std::string("Asset type output index ") + boost::lexical_cast<std::string>(asset_type_output_indices[lookups[i].pos]) + " for asset " + asset_type_str + " maps to global output " + boost::lexical_cast<std::string>(lookups[i].output_id) + ", but no output exists for requested amount " + boost::lexical_cast<std::string>(lookups[i].amount)).c_str()));
++    }
++    begin = end;
++  }
++
++  TXN_POSTFIX_RDONLY();
++}
++
++void BlockchainLMDB::get_output_amount_index_from_asset_type_rct_ordinal(const std::string asset_type_str, const std::vector<uint64_t> &asset_type_rct_ordinals, std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const
++{
++  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
++  check_open();
++  amount_indices.assign(asset_type_rct_ordinals.size(), 0);
++  asset_type_output_indices.assign(asset_type_rct_ordinals.size(), 0);
++
++  TXN_PREFIX_RDONLY();
++  RCURSOR(output_amounts);
++  RCURSOR(output_types);
++
++  uint32_t asset_type = cryptonote::asset_id_from_type(asset_type_str);
++  std::map<uint64_t, uint64_t> asset_index_by_output_id;
++  MDB_val_copy<uint32_t> k_type(asset_type);
++  MDB_val v_type;
++  int result = mdb_cursor_get(m_cur_output_types, &k_type, &v_type, MDB_SET);
++  while (result == MDB_SUCCESS)
++  {
++    const outassettype *oat = (const outassettype *)v_type.mv_data;
++    asset_index_by_output_id.emplace(oat->output_id, oat->asset_type_output_index);
++    result = mdb_cursor_get(m_cur_output_types, &k_type, &v_type, MDB_NEXT_DUP);
++  }
++  if (result != MDB_NOTFOUND)
++    throw0(DB_ERROR(lmdb_error("Error enumerating output types from the db", result).c_str()));
++
++  std::vector<size_t> order(asset_type_rct_ordinals.size());
++  for (size_t i = 0; i < order.size(); ++i)
++    order[i] = i;
++  std::sort(order.begin(), order.end(), [&asset_type_rct_ordinals](size_t a, size_t b) {
++    return asset_type_rct_ordinals[a] < asset_type_rct_ordinals[b];
++  });
++
++  const uint64_t rct_amount = 0;
++  MDB_val_set(k_amount, rct_amount);
++  MDB_val v_amount;
++  result = mdb_cursor_get(m_cur_output_amounts, &k_amount, &v_amount, MDB_SET);
++  if (result == MDB_NOTFOUND && !asset_type_rct_ordinals.empty())
++    throw1(OUTPUT_DNE("No RCT outputs exist"));
++  else if (result)
++    throw0(DB_ERROR(lmdb_error("Error attempting to retrieve RCT outputs from the db", result).c_str()));
++
++  uint64_t rct_ordinal = 0;
++  size_t current = 0;
++  while (result == MDB_SUCCESS && current < order.size())
++  {
++    const outkey *okp = (const outkey *)v_amount.mv_data;
++    const auto asset_index = asset_index_by_output_id.find(okp->output_id);
++    if (okp->data.asset_type == asset_type && asset_index != asset_index_by_output_id.end())
++    {
++      while (current < order.size() && asset_type_rct_ordinals[order[current]] == rct_ordinal)
++      {
++        amount_indices[order[current]] = okp->amount_index;
++        asset_type_output_indices[order[current]] = asset_index->second;
++        ++current;
++      }
++      ++rct_ordinal;
++    }
++    result = mdb_cursor_get(m_cur_output_amounts, &k_amount, &v_amount, MDB_NEXT_DUP);
++  }
++  if (result != MDB_NOTFOUND && result != MDB_SUCCESS)
++    throw0(DB_ERROR(lmdb_error("Error enumerating RCT outputs from the db", result).c_str()));
++  if (current != order.size())
++    throw1(OUTPUT_DNE((std::string("Asset RCT ordinal ") + boost::lexical_cast<std::string>(asset_type_rct_ordinals[order[current]]) + " for asset " + asset_type_str + " does not exist").c_str()));
++
++  TXN_POSTFIX_RDONLY();
++}
++
++void BlockchainLMDB::get_output_asset_type_output_index_from_amount_index(const std::string asset_type_str, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const
++{
++  if (amounts.size() != 1 && amounts.size() != amount_indices.size())
++    throw0(DB_ERROR("Invalid sizes of amounts and amount indices"));
++
++  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
++  check_open();
++  asset_type_output_indices.assign(amount_indices.size(), 0);
++
++  TXN_PREFIX_RDONLY();
++  RCURSOR(output_amounts);
++  RCURSOR(output_types);
++
++  uint32_t asset_type = cryptonote::asset_id_from_type(asset_type_str);
++  std::map<uint64_t, uint64_t> asset_index_by_output_id;
++  MDB_val_copy<uint32_t> k_type(asset_type);
++  MDB_val v_type;
++  int result = mdb_cursor_get(m_cur_output_types, &k_type, &v_type, MDB_SET);
++  while (result == MDB_SUCCESS)
++  {
++    const outassettype *oat = (const outassettype *)v_type.mv_data;
++    asset_index_by_output_id.emplace(oat->output_id, oat->asset_type_output_index);
++    result = mdb_cursor_get(m_cur_output_types, &k_type, &v_type, MDB_NEXT_DUP);
++  }
++  if (result != MDB_NOTFOUND)
++    throw0(DB_ERROR(lmdb_error("Error enumerating output types from the db", result).c_str()));
++
++  for (size_t i = 0; i < amount_indices.size(); ++i)
++  {
++    const uint64_t amount = amounts.size() == 1 ? amounts[0] : amounts[i];
++    MDB_val_set(k_amount, amount);
++    MDB_val_set(v_amount, amount_indices[i]);
++    result = mdb_cursor_get(m_cur_output_amounts, &k_amount, &v_amount, MDB_GET_BOTH);
++    if (result == MDB_NOTFOUND)
++      throw1(OUTPUT_DNE((std::string("Amount output index does not exist: amount ") + boost::lexical_cast<std::string>(amount) + ", index " + boost::lexical_cast<std::string>(amount_indices[i])).c_str()));
++    else if (result)
++      throw0(DB_ERROR(lmdb_error("Error attempting to retrieve output amount from the db", result).c_str()));
++
++    const pre_rct_outkey *okp = (const pre_rct_outkey *)v_amount.mv_data;
++    const uint32_t output_asset_type = amount == 0 ? ((const outkey *)v_amount.mv_data)->data.asset_type : ((const pre_rct_outkey *)v_amount.mv_data)->data.asset_type;
++    if (output_asset_type != asset_type)
++      throw1(OUTPUT_DNE((std::string("Amount output index is for the wrong asset type: expected ") + asset_type_str).c_str()));
++    const auto asset_index = asset_index_by_output_id.find(okp->output_id);
++    if (asset_index == asset_index_by_output_id.end())
++      throw1(OUTPUT_DNE((std::string("Output id ") + boost::lexical_cast<std::string>(okp->output_id) + " was not found in asset type index for " + asset_type_str).c_str()));
++    asset_type_output_indices[i] = asset_index->second;
++  }
++
++  TXN_POSTFIX_RDONLY();
++}
++
+ tx_out_index BlockchainLMDB::get_output_tx_and_index_from_global(const uint64_t& output_id) const
+ {
+   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+diff --git a/src/blockchain_db/lmdb/db_lmdb.h b/src/blockchain_db/lmdb/db_lmdb.h
+index 9e978bc..f54fb28 100644
+--- a/src/blockchain_db/lmdb/db_lmdb.h
++++ b/src/blockchain_db/lmdb/db_lmdb.h
+@@ -335,6 +335,9 @@ public:
+ 
+   virtual void get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const;
+   virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const;
++  virtual void get_output_amount_index_from_asset_type_output_index(const std::string asset_type, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &amount_indices) const;
++  virtual void get_output_amount_index_from_asset_type_rct_ordinal(const std::string asset_type, const std::vector<uint64_t> &asset_type_rct_ordinals, std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const;
++  virtual void get_output_asset_type_output_index_from_amount_index(const std::string asset_type, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const;
+ 
+   virtual tx_out_index get_output_tx_and_index_from_global(const uint64_t& index) const;
+   virtual void get_output_tx_and_index_from_global(const std::vector<uint64_t> &global_indices,
+diff --git a/src/blockchain_db/testdb.h b/src/blockchain_db/testdb.h
+index c8a2635..81f9d53 100644
+--- a/src/blockchain_db/testdb.h
++++ b/src/blockchain_db/testdb.h
+@@ -111,6 +111,9 @@ public:
+   virtual void get_output_key(const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &offsets, std::vector<cryptonote::output_data_t> &outputs, bool allow_partial = false) const override {}
+   virtual void get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const override {}
+   virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const override { return 1; }
++  virtual void get_output_amount_index_from_asset_type_output_index(const std::string asset_type, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &amount_indices) const override {}
++  virtual void get_output_amount_index_from_asset_type_rct_ordinal(const std::string asset_type, const std::vector<uint64_t> &asset_type_rct_ordinals, std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const override {}
++  virtual void get_output_asset_type_output_index_from_amount_index(const std::string asset_type, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const override {}
+   virtual bool can_thread_bulk_indices() const override { return false; }
+   virtual std::vector<std::vector<std::pair<uint64_t, uint64_t>>> get_tx_amount_output_indices(const uint64_t tx_index, size_t n_txes) const override { return std::vector<std::vector<std::pair<uint64_t, uint64_t>>>(); }
+   virtual bool has_key_image(const crypto::key_image& img) const override { return false; }
+diff --git a/src/cryptonote_core/blockchain.cpp b/src/cryptonote_core/blockchain.cpp
+index fd2bcf2..5bd5b07 100644
+--- a/src/cryptonote_core/blockchain.cpp
++++ b/src/cryptonote_core/blockchain.cpp
+@@ -165,13 +165,13 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
+   if(!tx_in_to_key.key_offsets.size())
+     return false;
+ 
+-  // cryptonote_format_utils uses relative offsets for indexing to the global
+-  // outputs list.  that is to say that absolute offset #2 is absolute offset
++  // cryptonote_format_utils uses relative offsets for indexing to the asset
++  // output list.  that is to say that absolute offset #2 is absolute offset
+   // #1 plus relative offset #2.
+   // TODO: Investigate if this is necessary / why this is done.
+   std::vector<uint64_t> asset_offsets = relative_output_offsets_to_absolute(tx_in_to_key.key_offsets);
+-  std::vector<uint64_t> absolute_offsets;
+-  m_db->get_output_id_from_asset_type_output_index(tx_in_to_key.asset_type, asset_offsets, absolute_offsets);
++  std::vector<uint64_t> amount_offsets;
++  m_db->get_output_amount_index_from_asset_type_output_index(tx_in_to_key.asset_type, epee::span<const uint64_t>(&tx_in_to_key.amount, 1), asset_offsets, amount_offsets);
+   std::vector<output_data_t> outputs;
+ 
+   bool found = false;
+@@ -192,8 +192,8 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
+   {
+     try
+     {
+-      m_db->get_output_key(epee::span<const uint64_t>(&tx_in_to_key.amount, 1), absolute_offsets, outputs, true);
+-      if (absolute_offsets.size() != outputs.size())
++      m_db->get_output_key(epee::span<const uint64_t>(&tx_in_to_key.amount, 1), amount_offsets, outputs, true);
++      if (amount_offsets.size() != outputs.size())
+       {
+         MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount);
+         return false;
+@@ -208,14 +208,14 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
+   else
+   {
+     // check for partial results and add the rest if needed;
+-    if (outputs.size() < absolute_offsets.size() && outputs.size() > 0)
++    if (outputs.size() < amount_offsets.size() && outputs.size() > 0)
+     {
+-      MDEBUG("Additional outputs needed: " << absolute_offsets.size() - outputs.size());
++      MDEBUG("Additional outputs needed: " << amount_offsets.size() - outputs.size());
+       std::vector < uint64_t > add_offsets;
+       std::vector<output_data_t> add_outputs;
+-      add_outputs.reserve(absolute_offsets.size() - outputs.size());
+-      for (size_t i = outputs.size(); i < absolute_offsets.size(); i++)
+-        add_offsets.push_back(absolute_offsets[i]);
++      add_outputs.reserve(amount_offsets.size() - outputs.size());
++      for (size_t i = outputs.size(); i < amount_offsets.size(); i++)
++        add_offsets.push_back(amount_offsets[i]);
+       try
+       {
+         m_db->get_output_key(epee::span<const uint64_t>(&tx_in_to_key.amount, 1), add_offsets, add_outputs, true);
+@@ -235,7 +235,7 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
+   }
+ 
+   size_t count = 0;
+-  for (const uint64_t& i : absolute_offsets)
++  for (const uint64_t& i : amount_offsets)
+   {
+     try
+     {
+@@ -251,18 +251,18 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
+         // call to the passed boost visitor to grab the public key for the output
+         if (!vis.handle_output(output_index.unlock_time, cryptonote::asset_type_from_id(output_index.asset_type), output_index.pubkey, output_index.commitment))
+         {
+-          MERROR_VER("Failed to handle_output for output no = " << count << ", with absolute offset " << i);
++          MERROR_VER("Failed to handle_output for output no = " << count << ", with amount offset " << i);
+           return false;
+         }
+       }
+       catch (...)
+       {
+-        MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount << ", absolute_offset = " << i);
++        MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount << ", amount_offset = " << i);
+         return false;
+       }
+ 
+       // if on last output and pmax_related_block_height not null pointer
+-      if(++count == absolute_offsets.size() && pmax_related_block_height)
++      if(++count == amount_offsets.size() && pmax_related_block_height)
+       {
+         // set *pmax_related_block_height to tx block height for this output
+         auto h = output_index.height;
+@@ -3130,51 +3130,105 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
+   res.outs.clear();
+   res.outs.reserve(req.outputs.size());
+ 
+-  // if an asset type is provided in the request, most indexes provided in the request are asset type output id's.
+-  // need to use the asset type output id's provided to retrieve the respective global output id's
+-  std::map<uint64_t, uint64_t> global_outs_by_asset_type_output_id;
+-  if (!req.asset_type.empty())
++  std::vector<cryptonote::output_data_t> data;
++  try
+   {
+-    std::vector<uint64_t> asset_type_output_indices;
+-    for (const auto &i: req.outputs)
++    std::vector<uint64_t> amounts, offsets;
++    amounts.reserve(req.outputs.size());
++    offsets.assign(req.outputs.size(), 0);
++    std::vector<uint64_t> response_output_ids(req.outputs.size(), 0);
++
++    if (req.asset_type.empty())
+     {
+-      // some inputs in the request have already been used in attempted rings in the past. These inputs will
+-      // have the is_global_out flag set to true, since they already have the global output id saved
+-      if (!i.is_global_out)
+-        asset_type_output_indices.push_back(i.index);
++      for (size_t n = 0; n < req.outputs.size(); ++n)
++      {
++        amounts.push_back(req.outputs[n].amount);
++        offsets[n] = req.outputs[n].index;
++        response_output_ids[n] = req.outputs[n].index;
++      }
+     }
++    else
++    {
++      struct pending_index
++      {
++        size_t request_pos;
++        uint64_t amount;
++        uint64_t index;
++      };
++      std::vector<pending_index> asset_type_indices;
++      std::vector<pending_index> asset_rct_ordinals;
++      std::vector<pending_index> amount_indices;
+ 
+-    std::vector<uint64_t> global_out_ids;
+-    global_out_ids.reserve(asset_type_output_indices.size());
++      for (size_t n = 0; n < req.outputs.size(); ++n)
++      {
++        const auto &i = req.outputs[n];
++        amounts.push_back(i.amount);
++        if (i.is_asset_rct_ordinal)
++          asset_rct_ordinals.push_back({n, i.amount, i.index});
++        else if (i.is_global_out)
++          amount_indices.push_back({n, i.amount, i.index});
++        else
++          asset_type_indices.push_back({n, i.amount, i.index});
++      }
+ 
+-    m_db->get_output_id_from_asset_type_output_index(req.asset_type, asset_type_output_indices, global_out_ids);
++      if (!asset_type_indices.empty())
++      {
++        std::vector<uint64_t> local_amounts, requested_asset_indices, translated_amount_indices;
++        local_amounts.reserve(asset_type_indices.size());
++        requested_asset_indices.reserve(asset_type_indices.size());
++        for (const auto &entry: asset_type_indices)
++        {
++          local_amounts.push_back(entry.amount);
++          requested_asset_indices.push_back(entry.index);
++        }
++        m_db->get_output_amount_index_from_asset_type_output_index(req.asset_type, epee::span<const uint64_t>(local_amounts.data(), local_amounts.size()), requested_asset_indices, translated_amount_indices);
++        for (size_t n = 0; n < asset_type_indices.size(); ++n)
++        {
++          offsets[asset_type_indices[n].request_pos] = translated_amount_indices[n];
++          response_output_ids[asset_type_indices[n].request_pos] = requested_asset_indices[n];
++        }
++      }
+ 
+-    uint64_t global_outs = 0;
+-    for (const auto &i: req.outputs)
+-    {
+-      if (!i.is_global_out)
++      if (!asset_rct_ordinals.empty())
+       {
+-        global_outs_by_asset_type_output_id[i.index] = global_out_ids[global_outs];
+-        ++global_outs;
++        std::vector<uint64_t> requested_ordinals, translated_amount_indices, translated_asset_indices;
++        requested_ordinals.reserve(asset_rct_ordinals.size());
++        for (const auto &entry: asset_rct_ordinals)
++        {
++          if (entry.amount != 0)
++          {
++            MERROR("Asset RCT ordinal requested for non-RCT amount " << entry.amount);
++            return false;
++          }
++          requested_ordinals.push_back(entry.index);
++        }
++        m_db->get_output_amount_index_from_asset_type_rct_ordinal(req.asset_type, requested_ordinals, translated_amount_indices, translated_asset_indices);
++        for (size_t n = 0; n < asset_rct_ordinals.size(); ++n)
++        {
++          offsets[asset_rct_ordinals[n].request_pos] = translated_amount_indices[n];
++          response_output_ids[asset_rct_ordinals[n].request_pos] = translated_asset_indices[n];
++        }
+       }
+-    }
+-  }
+ 
+-  std::vector<cryptonote::output_data_t> data;
+-  try
+-  {
+-    std::vector<uint64_t> amounts, offsets;
+-    amounts.reserve(req.outputs.size());
+-    offsets.reserve(req.outputs.size());
+-    for (const auto &i: req.outputs)
+-    {
+-      amounts.push_back(i.amount);
+-      // if no asset type provided, the offsets provided are already global output id's unless specifically set
+-      if (req.asset_type.empty() || i.is_global_out)
+-        offsets.push_back(i.index);
+-      else
+-        offsets.push_back(global_outs_by_asset_type_output_id[i.index]);
++      if (!amount_indices.empty())
++      {
++        std::vector<uint64_t> local_amounts, requested_amount_indices, translated_asset_indices;
++        local_amounts.reserve(amount_indices.size());
++        requested_amount_indices.reserve(amount_indices.size());
++        for (const auto &entry: amount_indices)
++        {
++          local_amounts.push_back(entry.amount);
++          requested_amount_indices.push_back(entry.index);
++        }
++        m_db->get_output_asset_type_output_index_from_amount_index(req.asset_type, epee::span<const uint64_t>(local_amounts.data(), local_amounts.size()), requested_amount_indices, translated_asset_indices);
++        for (size_t n = 0; n < amount_indices.size(); ++n)
++        {
++          offsets[amount_indices[n].request_pos] = requested_amount_indices[n];
++          response_output_ids[amount_indices[n].request_pos] = translated_asset_indices[n];
++        }
++      }
+     }
++
+     m_db->get_output_key(epee::span<const uint64_t>(amounts.data(), amounts.size()), offsets, data);
+     if (data.size() != req.outputs.size())
+     {
+@@ -3203,11 +3257,12 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
+     if (!req.asset_type.empty())
+     {
+       for (size_t i = 0; i < req.outputs.size(); ++i)
+-        res.outs[i].output_id = offsets[i];
++        res.outs[i].output_id = response_output_ids[i];
+     }
+   }
+   catch (const std::exception &e)
+   {
++    MERROR("Failed to get outs: " << e.what());
+     return false;
+   }
+   return true;
+diff --git a/src/rpc/core_rpc_server_commands_defs.h b/src/rpc/core_rpc_server_commands_defs.h
+index eecd8ef..7b96267 100644
+--- a/src/rpc/core_rpc_server_commands_defs.h
++++ b/src/rpc/core_rpc_server_commands_defs.h
+@@ -541,11 +541,13 @@ namespace cryptonote
+     uint64_t amount;
+     uint64_t index;
+     bool is_global_out;
++    bool is_asset_rct_ordinal;
+ 
+     BEGIN_KV_SERIALIZE_MAP()
+       KV_SERIALIZE(amount)
+       KV_SERIALIZE(index)
+       KV_SERIALIZE_OPT(is_global_out, false)
++      KV_SERIALIZE_OPT(is_asset_rct_ordinal, false)
+     END_KV_SERIALIZE_MAP()
+   };
+ 
+diff --git a/src/wallet/wallet2.cpp b/src/wallet/wallet2.cpp
+index 910dfa7..7db7674 100644
+--- a/src/wallet/wallet2.cpp
++++ b/src/wallet/wallet2.cpp
+@@ -4569,8 +4569,14 @@ bool wallet2::get_rct_distribution(const bool use_global_outs, const std::string
+     THROW_ON_RPC_RESPONSE_ERROR_GENERIC(r, {}, res, "/get_output_distribution.bin");
+     check_rpc_cost("/get_output_distribution.bin", res.credits, pre_call_credits, COST_PER_OUTPUT_DISTRIBUTION_0);
+   }
++  catch(const std::exception &e)
++  {
++    MWARNING("Failed to request RCT output distribution for asset " << (use_global_outs ? std::string("<global>") : rct_asset_type) << ": " << e.what() << ", status " << get_rpc_status(res.status));
++    return false;
++  }
+   catch(...)
+   {
++    MWARNING("Failed to request RCT output distribution for asset " << (use_global_outs ? std::string("<global>") : rct_asset_type) << ": unknown error, status " << get_rpc_status(res.status));
+     return false;
+   }
+   if (res.distributions.size() != 1)
+@@ -4588,6 +4594,7 @@ bool wallet2::get_rct_distribution(const bool use_global_outs, const std::string
+     res.distributions[0].data.distribution[i] += res.distributions[0].data.distribution[i-1];
+   start_height = res.distributions[0].data.start_height;
+   distribution = std::move(res.distributions[0].data.distribution);
++  MDEBUG("Got RCT output distribution for asset " << (use_global_outs ? std::string("<global>") : rct_asset_type) << ": start_height " << start_height << ", entries " << distribution.size() << ", total " << (distribution.empty() ? 0 : distribution.back()) << ", spendable global outs " << num_spendable_global_outs);
+   return true;
+ }
+ //----------------------------------------------------------------------------------------------------
+@@ -9590,7 +9597,8 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>>
+ 
+         has_rct = true;
+         //use_global_outs = !transfers[idx].m_asset_type_output_index_known;
+-        max_rct_index = std::max(max_rct_index, use_global_outs ? transfers[idx].m_global_output_index : transfers[idx].m_asset_type_output_index);
++        if (use_global_outs)
++          max_rct_index = std::max(max_rct_index, transfers[idx].m_global_output_index);
+       }
+     }
+     
+@@ -9604,7 +9612,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>>
+       // check we're clear enough of rct start, to avoid corner cases below
+       THROW_WALLET_EXCEPTION_IF(rct_offsets.size() <= CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE,
+                                 error::get_output_distribution, "Not enough rct outputs : " + std::to_string(max_rct_index));
+-      THROW_WALLET_EXCEPTION_IF(rct_offsets.back() < max_rct_index,
++      THROW_WALLET_EXCEPTION_IF(use_global_outs && rct_offsets.back() < max_rct_index,
+                                 error::get_output_distribution, "Daemon reports suspicious number of rct outputs : " + std::to_string(rct_offsets.back()) + " < " + std::to_string(max_rct_index));
+     }
+ 
+@@ -9734,6 +9742,14 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>>
+     // Each ring section of req.outputs gets sorted later after selecting all outputs for that ring
+     const auto add_output_to_lists = [&req, &secret_picking_order](const get_outputs_out &goo)
+       { req.outputs.push_back(goo); secret_picking_order.push_back(goo); };
++    const auto add_asset_rct_ordinal_to_lists = [&add_output_to_lists](uint64_t ordinal)
++    {
++      get_outputs_out goo = AUTO_VAL_INIT(goo);
++      goo.amount = 0;
++      goo.index = ordinal;
++      goo.is_asset_rct_ordinal = true;
++      add_output_to_lists(goo);
++    };
+ 
+     std::unique_ptr<gamma_picker> gamma;
+     if (has_rct)
+@@ -9904,12 +9920,22 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>>
+       if (num_outs <= requested_outputs_count)
+       {
+         for (uint64_t i = 0; i < num_outs; i++)
+-          add_output_to_lists({amount, i});
++        {
++          if (amount == 0 && !use_global_outs)
++            add_asset_rct_ordinal_to_lists(i);
++          else
++            add_output_to_lists({amount, i});
++        }
+         // duplicate to make up shortfall: this will be caught after the RPC call,
+         // so we can also output the amounts for which we can't reach the required
+         // mixin after checking the actual unlockedness
+         for (uint64_t i = num_outs; i < requested_outputs_count; ++i)
+-          add_output_to_lists({amount, num_outs - 1});
++        {
++          if (amount == 0 && !use_global_outs)
++            add_asset_rct_ordinal_to_lists(num_outs - 1);
++          else
++            add_output_to_lists({amount, num_outs - 1});
++        }
+       }
+       else
+       {
+@@ -10027,7 +10053,10 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>>
+           seen_indices.emplace(i);
+ 
+           picks[type].insert(i);
+-          add_output_to_lists({amount, i});
++          if (amount == 0 && !use_global_outs)
++            add_asset_rct_ordinal_to_lists(i);
++          else
++            add_output_to_lists({amount, i});
+           ++num_found;
+           MDEBUG("picked " << i << ", " << num_found << " now picked");
+         }
+@@ -10041,7 +10070,10 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>>
+         // we'll error out later
+         while (num_found < requested_outputs_count)
+         {
+-          add_output_to_lists({amount, 0});
++          if (amount == 0 && !use_global_outs)
++            add_asset_rct_ordinal_to_lists(0);
++          else
++            add_output_to_lists({amount, 0});
+           ++num_found;
+         }
+       }
+@@ -10133,17 +10165,25 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>>
+       for (size_t n = 0; n < requested_outputs_count; ++n)
+       {
+         size_t i = base + n;
+-        if ((use_global_outs ? req.outputs[i].index : daemon_resp.outs[i].output_id) == td.m_global_output_index)
++        const uint64_t response_index = use_global_outs ? req.outputs[i].index : daemon_resp.outs[i].output_id;
++        const uint64_t real_index = use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index;
++        if (response_index == real_index)
++        {
+           if (daemon_resp.outs[i].key == td.get_public_key())
++          {
+             if (daemon_resp.outs[i].mask == mask)
++            {
+               if (daemon_resp.outs[i].unlocked)
+                 real_out_found = true;
+               else
+                 LOG_ERROR("output id " << td.m_global_output_index << " (" << rct_asset_type << ") is still locked");
++            }
+             else
+               LOG_ERROR("output id " << td.m_global_output_index << " (" << rct_asset_type << ") has incorrect mask : expected " << mask << " but found " << daemon_resp.outs[i].mask);
++          }
+           else
+             LOG_ERROR("output id " << td.m_global_output_index << " (" << rct_asset_type << ") has incorrect key : expected " << td.get_public_key() << " but found " << daemon_resp.outs[i].key);
++        }
+       }
+       THROW_WALLET_EXCEPTION_IF(!real_out_found, error::wallet_internal_error,
+           "Daemon response did not include the requested real output");
+@@ -10174,10 +10214,11 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>>
+                   size_t i = base + o;
+                   // HERE BE DRAGONS!!!
+                   // SRCG: DO NOT COMMIT THIS CHANGE UNTIL VERIFIED AS WORKING
+-                  if (req.outputs[i].index == out /*&& req.outputs[i].is_global_out*/)
++                  if (req.outputs[i].index == out && !req.outputs[i].is_asset_rct_ordinal /*&& req.outputs[i].is_global_out*/)
+                   {
+-                    LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << req.outputs[i].index << " (real " << td.m_global_output_index << "), unlocked " << daemon_resp.outs[i].unlocked << ", key " << daemon_resp.outs[i].key << " (from existing ring)");
+-                    tx_add_fake_output(outs, req.outputs[i].index, daemon_resp.outs[i].key, daemon_resp.outs[i].mask, use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index, daemon_resp.outs[i].unlocked, valid_public_keys_cache);
++                    const uint64_t ring_index = use_global_outs ? req.outputs[i].index : daemon_resp.outs[i].output_id;
++                    LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << ring_index << " (real " << (use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index) << "), unlocked " << daemon_resp.outs[i].unlocked << ", key " << daemon_resp.outs[i].key << " (from existing ring)");
++                    tx_add_fake_output(outs, ring_index, daemon_resp.outs[i].key, daemon_resp.outs[i].mask, use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index, daemon_resp.outs[i].unlocked, valid_public_keys_cache);
+                     found = true;
+                     break;
+                   }
+@@ -10199,14 +10240,15 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>>
+         // Find the index i of our pick in the request/response arrays
+         size_t i;
+         for (i = base; i < base + requested_outputs_count; ++i)
+-          if (req.outputs[i].index == attempted_output.index)
++          if (req.outputs[i].index == attempted_output.index && req.outputs[i].is_global_out == attempted_output.is_global_out && req.outputs[i].is_asset_rct_ordinal == attempted_output.is_asset_rct_ordinal)
+             break;
+         THROW_WALLET_EXCEPTION_IF(i == base + requested_outputs_count, error::wallet_internal_error,
+           "Could not find index of picked output in requested outputs");
+ 
+         // Try adding this output's information to result ring if output isn't invalid
+-        LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << req.outputs[i].index << " (real " << td.m_global_output_index << "), unlocked " << daemon_resp.outs[i].unlocked << ", key " << daemon_resp.outs[i].key);
+-        tx_add_fake_output(outs, req.outputs[i].index, daemon_resp.outs[i].key, daemon_resp.outs[i].mask, td.m_global_output_index, daemon_resp.outs[i].unlocked, valid_public_keys_cache);
++        const uint64_t ring_index = use_global_outs ? req.outputs[i].index : daemon_resp.outs[i].output_id;
++        LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << ring_index << " (real " << (use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index) << "), unlocked " << daemon_resp.outs[i].unlocked << ", key " << daemon_resp.outs[i].key);
++        tx_add_fake_output(outs, ring_index, daemon_resp.outs[i].key, daemon_resp.outs[i].mask, use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index, daemon_resp.outs[i].unlocked, valid_public_keys_cache);
+       }
+       if (outs.back().size() < fake_outputs_count + 1)
+       {

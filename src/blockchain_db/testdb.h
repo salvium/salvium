@@ -111,6 +111,9 @@ public:
   virtual void get_output_key(const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &offsets, std::vector<cryptonote::output_data_t> &outputs, bool allow_partial = false) const override {}
   virtual void get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const override {}
   virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const override { return 1; }
+  virtual void get_output_amount_index_from_asset_type_output_index(const std::string asset_type, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &amount_indices) const override {}
+  virtual void get_output_amount_index_from_asset_type_rct_ordinal(const std::string asset_type, const std::vector<uint64_t> &asset_type_rct_ordinals, std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const override {}
+  virtual void get_output_asset_type_output_index_from_amount_index(const std::string asset_type, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const override {}
   virtual bool can_thread_bulk_indices() const override { return false; }
   virtual std::vector<std::vector<std::pair<uint64_t, uint64_t>>> get_tx_amount_output_indices(const uint64_t tx_index, size_t n_txes) const override { return std::vector<std::vector<std::pair<uint64_t, uint64_t>>>(); }
   virtual bool has_key_image(const crypto::key_image& img) const override { return false; }

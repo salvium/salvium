@@ -335,6 +335,9 @@ public:
 
   virtual void get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const;
   virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const;
+  virtual void get_output_amount_index_from_asset_type_output_index(const std::string asset_type, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &amount_indices) const;
+  virtual void get_output_amount_index_from_asset_type_rct_ordinal(const std::string asset_type, const std::vector<uint64_t> &asset_type_rct_ordinals, std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const;
+  virtual void get_output_asset_type_output_index_from_amount_index(const std::string asset_type, const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &asset_type_output_indices) const;
 
   virtual tx_out_index get_output_tx_and_index_from_global(const uint64_t& index) const;
   virtual void get_output_tx_and_index_from_global(const std::vector<uint64_t> &global_indices,
