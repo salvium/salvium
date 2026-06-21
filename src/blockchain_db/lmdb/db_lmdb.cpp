@@ -35,6 +35,7 @@
 
 #include <memory>  // std::unique_ptr
 #include <cstring>  // memcpy
+#include <algorithm>  // std::sort
 
 #ifdef WIN32
 #include <winioctl.h>
@@ -44,6 +45,7 @@
 #include "common/util.h"
 #include "common/pruning.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "cryptonote_config.h"  // HF_VERSION_RCT_ONLY_INDEX
 #include "cryptonote_core/cryptonote_tx_utils.h"
 #include "crypto/crypto.h"
 #include "profile_tools.h"
@@ -64,7 +66,7 @@ using epee::string_tools::pod_to_hex;
 using namespace crypto;
 
 // Increase when the DB structure changes
-#define VERSION 3
+#define VERSION 4
 
 namespace
 {
@@ -412,7 +414,8 @@ typedef struct outtx {
 
 typedef struct outassettype {
   uint64_t asset_type_output_index;
-  uint64_t output_id;
+  uint64_t output_id;       // global output id
+  uint64_t amount_index;    // amount-0 (RCT) dup index, resolves get_output_key(amount=0, .)
 } outassettype;
 
 typedef struct circ_supply_tally {
@@ -2242,6 +2245,17 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
       throw0(DB_ERROR(lmdb_error("Failed to add output pubkey to db transaction: ", result).c_str()));
 
   
+  // Gate the RCT-only per-asset index on HF13. Before the fork the original behavior is
+  // preserved exactly: every output is indexed in m_output_types and the per-asset index
+  // counts all outputs of the asset type. From HF13 only RCT (amount==0) outputs are
+  // indexed (the only outputs eligible to be ring members), and the per-asset index must
+  // resolve to the amount-0 dup position via get_output_key(amount=0, .); non-RCT outputs
+  // are not indexed and report a sentinel asset index.
+  const bool rct_only = (m_hardfork && m_hardfork->get_ideal_version(m_height) >= HF_VERSION_RCT_ONLY_INDEX);
+
+  if (rct_only && tx_output.amount != 0)
+    return std::make_pair(ok.amount_index, std::numeric_limits<uint64_t>::max());
+
   MDB_val_copy<uint32_t> k(asset_type);
   MDB_val v;
   
@@ -2259,7 +2273,12 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
   outassettype oat;
   oat.asset_type_output_index = num_outputs_of_asset_type;
   oat.output_id = ok.output_id;
+  oat.amount_index = ok.amount_index;
   MDB_val_set(voat, oat);
+  // Pre-fork records use the original 16-byte {asset_type_output_index, output_id} layout
+  // (DUPFIXED requires a single dup size per key); HF13+ records add amount_index.
+  if (!rct_only)
+    voat.mv_size = sizeof(uint64_t) * 2;
 
   MDB_val_copy<uint32_t> koat(asset_type);
   if ((result = mdb_cursor_put(m_cur_output_types, &koat, &voat, MDB_APPENDDUP)))
@@ -2347,26 +2366,37 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
     throw1(DB_ERROR(lmdb_error("Error adding removal of output tx to db transaction", result).c_str()));
   }
 
-  uint32_t output_asset_type = cryptonote::asset_id_from_type(output_asset_type_str);
-  MDB_val_copy<uint32_t> koat(output_asset_type);
-  MDB_val_set(voat, asset_type_output_id);
-  
-  result = mdb_cursor_get(m_cur_output_types, &koat, &voat, MDB_GET_BOTH);
-  if (result == MDB_NOTFOUND)
+  // Gate on the HF version at the height the output was created so removal mirrors how
+  // add_output indexed it. Pre-fork (every output indexed): validate and remove the
+  // m_output_types entry for all outputs, matching the original by out_index. From HF13
+  // only RCT (amount==0) outputs are indexed; non-RCT outputs carry the add_output
+  // sentinel and have no m_output_types entry to validate or remove.
+  const bool rct_only = (m_hardfork && m_hardfork->get_ideal_version(ok->data.height) >= HF_VERSION_RCT_ONLY_INDEX);
+  const bool touch_output_types = rct_only ? (amount == 0) : true;
+  if (touch_output_types)
   {
-    throw0(DB_ERROR("Unexpected: asset type output id not found in m_output_types"));
-  }
-  else if (result)
-  {
-    throw1(DB_ERROR(lmdb_error("Error adding removal of output type to db transaction", result).c_str()));
-  }
+    uint32_t output_asset_type = cryptonote::asset_id_from_type(output_asset_type_str);
+    MDB_val_copy<uint32_t> koat(output_asset_type);
+    MDB_val_set(voat, asset_type_output_id);
 
-  const outassettype *oat = (const outassettype *)voat.mv_data;
-  if (oat->output_id != out_index)
-    throw0(DB_ERROR(std::string("Unexpected: output_id ")
-                    .append(boost::lexical_cast<std::string>(oat->output_id))
-                    .append(" from m_output_types does not match expected output index ")
-                    .append(boost::lexical_cast<std::string>(out_index)).c_str()));
+    result = mdb_cursor_get(m_cur_output_types, &koat, &voat, MDB_GET_BOTH);
+    if (result == MDB_NOTFOUND)
+    {
+      throw0(DB_ERROR("Unexpected: asset type output id not found in m_output_types"));
+    }
+    else if (result)
+    {
+      throw1(DB_ERROR(lmdb_error("Error adding removal of output type to db transaction", result).c_str()));
+    }
+
+    const outassettype *oat = (const outassettype *)voat.mv_data;
+    const uint64_t expected = rct_only ? ok->output_id : out_index;
+    if (oat->output_id != expected)
+      throw0(DB_ERROR(std::string("Unexpected: output_id ")
+                      .append(boost::lexical_cast<std::string>(oat->output_id))
+                      .append(" from m_output_types does not match expected ")
+                      .append(boost::lexical_cast<std::string>(expected)).c_str()));
+  }
 
 
   result = mdb_cursor_del(m_cur_output_txs, 0);
@@ -2378,9 +2408,12 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
   if (result)
     throw0(DB_ERROR(lmdb_error(std::string("Error deleting amount for output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
 
-  result = mdb_cursor_del(m_cur_output_types, 0);
-  if (result)
-    throw0(DB_ERROR(lmdb_error(std::string("Error deleting type for output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
+  if (touch_output_types)
+  {
+    result = mdb_cursor_del(m_cur_output_types, 0);
+    if (result)
+      throw0(DB_ERROR(lmdb_error(std::string("Error deleting type for output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
+  }
 }
 
 void BlockchainLMDB::prune_outputs(uint64_t amount)
@@ -5013,7 +5046,7 @@ output_data_t BlockchainLMDB::get_output_key(const uint64_t& amount, const uint6
   return ret;
 }
 
-void BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::string asset_type_str, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const
+void BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::string asset_type_str, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices, bool use_rct_index) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -5040,7 +5073,10 @@ void BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::strin
       throw0(DB_ERROR(lmdb_error("Error attempting to retrieve an output id by asset type output id from the db", get_result).c_str()));
 
     const outassettype *oat = (const outassettype *)v.mv_data;
-    output_indices.push_back(oat->output_id);
+    // From HF13 (use_rct_index) return the amount-0 (RCT) dup index so
+    // get_output_key(amount=0, .) resolves the ring member. Pre-fork return the global
+    // output_id, exactly as the original resolver did.
+    output_indices.push_back(use_rct_index ? oat->amount_index : oat->output_id);
   }
 
   TXN_POSTFIX_RDONLY();
@@ -5069,6 +5105,8 @@ uint64_t BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::s
   const outassettype *oat = (const outassettype *)v.mv_data;
 
   TXN_POSTFIX_RDONLY();
+  // Scalar overload returns the global output id; its sole caller (get_num_mature_outputs)
+  // feeds get_output_tx_and_index_from_global, which keys m_output_txs by global output id.
   return oat->output_id;
 }
 
@@ -6374,10 +6412,288 @@ void BlockchainLMDB::migrate_2_3()
   txn.commit();
 }
 
+void BlockchainLMDB::rebuild_output_types_rct_only()
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  int result;
+  mdb_txn_safe txn(false);
+  MDB_val k, v;
+
+  // This runs migration-style with its own LMDB transactions, so it cannot share a thread
+  // with an open write/batch txn. If a block batch is active (live HF13 activation during
+  // sync), commit it first and resume an equivalent batch afterwards.
+  const bool resume_batch = m_batch_active;
+  if (resume_batch)
+    batch_stop();
+
+  // Idempotent: once the rebuild has run the stored DB version is bumped to VERSION (4).
+  // The HF13 activation trigger may fire on a node that already rebuilt; do nothing then.
+  {
+    result = mdb_txn_begin(m_env, NULL, MDB_RDONLY, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+    MDB_val_str(vk, "version");
+    MDB_val vv;
+    uint32_t stored_version = 0;
+    result = mdb_get(txn, m_properties, &vk, &vv);
+    if (result == MDB_SUCCESS && vv.mv_size == sizeof(uint32_t))
+      stored_version = *(const uint32_t *)vv.mv_data;
+    txn.abort();
+    if (stored_version >= 4)
+    {
+      if (resume_batch)
+        batch_start();
+      return;
+    }
+  }
+
+  MGINFO_YELLOW("Rebuilding output_types RCT-only for HF13 - this may take a while:");
+
+  // Rebuild m_output_types to contain ONLY RCT (amount==0) outputs, and re-sync
+  // m_tx_outputs.second (the reported per-asset asset_type_output_index) accordingly.
+  // Non-RCT outputs are dropped from m_output_types and report a sentinel asset index.
+  // Pre-spam RCT indices are unchanged; only post-spam (unreferenced) indices shift,
+  // so historical ring validation is preserved.
+
+  uint64_t num_outs;
+  {
+    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+    num_outs = num_outputs();
+    txn.abort();
+  }
+
+  // Pass 1: walk m_output_amounts amount==0 dups in output_id order. Each dup yields
+  // (amount_index, output_id, asset_type). Assign a per-asset running RCT counter as the
+  // new asset_type_output_index. Record output_id -> new asset_type_output_index so the
+  // tx_outputs re-sync can look it up by reconstructed output_id.
+  // value layout (outkey, packed): amount_index(8) output_id(8) pubkey(32)
+  // unlock_time(8) height(8) asset_type(4) commitment(32) => asset_type @64.
+  std::vector<uint64_t> oid_to_asset_index(num_outs, std::numeric_limits<uint64_t>::max());
+  // collected RCT outputs in output_id order: (asset_type, asset_type_output_index, output_id, amount_index)
+  struct rct_entry { uint32_t asset_type; uint64_t asset_index; uint64_t output_id; uint64_t amount_index; };
+  std::vector<rct_entry> rct_entries;
+
+  {
+    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+    MDB_cursor *c_amounts;
+    result = mdb_cursor_open(txn, m_output_amounts, &c_amounts);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_amounts: ", result).c_str()));
+
+    const uint64_t zero_amount = 0;
+    MDB_val_set(k_zero, zero_amount);
+    result = mdb_cursor_get(c_amounts, &k_zero, &v, MDB_SET);
+    if (result == MDB_NOTFOUND)
+    {
+      MGINFO_YELLOW("No RCT outputs found; m_output_types will be empty");
+    }
+    else if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to seek amount==0 in output_amounts: ", result).c_str()));
+    else
+    {
+      // First gather all amount==0 dups (they are ordered by amount_index, which is
+      // monotonic in output_id for a single amount), then sort by output_id to be safe.
+      MDB_cursor_op op = MDB_FIRST_DUP;
+      while (1)
+      {
+        result = mdb_cursor_get(c_amounts, &k_zero, &v, op);
+        op = MDB_NEXT_DUP;
+        if (result == MDB_NOTFOUND)
+          break;
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to enumerate amount==0 dups: ", result).c_str()));
+
+        const char *p = (const char *)v.mv_data;
+        const uint64_t amount_index = *(const uint64_t *)(p + 0);
+        const uint64_t output_id   = *(const uint64_t *)(p + 8);
+        const uint32_t asset_type  = *(const uint32_t *)(p + 64);
+        rct_entry e; e.asset_type = asset_type; e.asset_index = 0; e.output_id = output_id; e.amount_index = amount_index;
+        rct_entries.push_back(e);
+      }
+    }
+    txn.abort();
+  }
+
+  // Sort RCT outputs by output_id and assign per-asset running asset_type_output_index.
+  std::sort(rct_entries.begin(), rct_entries.end(),
+            [](const rct_entry &a, const rct_entry &b){ return a.output_id < b.output_id; });
+  {
+    std::map<uint32_t, uint64_t> per_asset_count;
+    for (auto &e : rct_entries)
+    {
+      e.asset_index = per_asset_count[e.asset_type]++;
+      if (e.output_id < oid_to_asset_index.size())
+        oid_to_asset_index[e.output_id] = e.asset_index;
+    }
+  }
+  MGINFO_YELLOW("collected " << rct_entries.size() << " RCT outputs for m_output_types rebuild");
+
+  // Drop and rebuild m_output_types. Group entries per asset and APPENDDUP in ascending
+  // asset_type_output_index order (m_output_types is DUPSORT/DUPFIXED on this field).
+  {
+    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+    if ((result = mdb_drop(txn, m_output_types, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_types: ", result).c_str()));
+    txn.commit();
+  }
+
+  // Order by (asset_type, asset_index) so APPENDDUP receives ascending dups per key.
+  std::vector<const rct_entry*> by_asset;
+  by_asset.reserve(rct_entries.size());
+  for (const auto &e : rct_entries) by_asset.push_back(&e);
+  std::sort(by_asset.begin(), by_asset.end(),
+            [](const rct_entry *a, const rct_entry *b){
+              if (a->asset_type != b->asset_type) return a->asset_type < b->asset_type;
+              return a->asset_index < b->asset_index;
+            });
+
+  {
+    MDB_cursor *c_types = NULL;
+    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+    uint64_t i = 0;
+    for (const rct_entry *e : by_asset)
+    {
+      if (i && !(i % 1000000))
+      {
+        LOGIF(el::Level::Info) { std::cout << i << " / " << by_asset.size() << " output_types written  \r" << std::flush; }
+        txn.commit();
+        result = mdb_txn_begin(m_env, NULL, 0, txn);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+        c_types = NULL;
+      }
+      if (c_types == NULL)
+      {
+        result = mdb_cursor_open(txn, m_output_types, &c_types);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_types: ", result).c_str()));
+      }
+      outassettype oat;
+      oat.asset_type_output_index = e->asset_index;
+      oat.output_id = e->output_id;
+      oat.amount_index = e->amount_index;
+      MDB_val_copy<uint32_t> koat(e->asset_type);
+      MDB_val_set(voat, oat);
+      result = mdb_cursor_put(c_types, &koat, &voat, MDB_APPENDDUP);
+      if (result)
+        throw0(DB_ERROR(lmdb_error("Failed to APPENDDUP output_types: ", result).c_str()));
+      ++i;
+    }
+    txn.commit();
+  }
+  MGINFO_YELLOW("m_output_types rebuilt RCT-only");
+
+  // Re-sync m_tx_outputs.second. Walk tx rows in tx_id order, reconstruct each output_id
+  // from a dense running counter (output_id is assigned monotonically in (tx_id, output)
+  // order in add_output), and set .second to the new RCT asset index, or the sentinel for
+  // non-RCT outputs (oid_to_asset_index == max).
+  uint64_t num_txes;
+  {
+    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+    MDB_stat db_stats;
+    if ((result = mdb_stat(txn, m_tx_outputs, &db_stats)))
+      throw0(DB_ERROR(lmdb_error("Failed to query m_tx_outputs: ", result).c_str()));
+    num_txes = db_stats.ms_entries;
+    txn.abort();
+  }
+
+  uint64_t next_output_id = 0;
+  uint64_t rewritten = 0;
+  uint64_t tx_id = 0;
+  std::vector<std::pair<uint64_t, uint64_t>> row;
+  while (tx_id < num_txes)
+  {
+    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+    MDB_cursor *c_tx_outputs;
+    result = mdb_cursor_open(txn, m_tx_outputs, &c_tx_outputs);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for tx_outputs: ", result).c_str()));
+
+    uint64_t batch = 0;
+    while (tx_id < num_txes && batch < 10000)
+    {
+      MDB_val_set(k_tx_id, tx_id);
+      result = mdb_cursor_get(c_tx_outputs, &k_tx_id, &v, MDB_SET);
+      if (result == MDB_NOTFOUND)
+      {
+        ++tx_id; ++batch;
+        continue;
+      }
+      if (result)
+        throw0(DB_ERROR(lmdb_error("Failed to get a record from tx_outputs: ", result).c_str()));
+
+      const size_t num_outputs = v.mv_size / sizeof(std::pair<uint64_t, uint64_t>);
+      const std::pair<uint64_t, uint64_t>* src = (const std::pair<uint64_t, uint64_t>*)v.mv_data;
+      bool changed = false;
+      row.assign(src, src + num_outputs);
+      for (size_t o = 0; o < num_outputs; ++o)
+      {
+        const uint64_t output_id = next_output_id + o;
+        uint64_t want = std::numeric_limits<uint64_t>::max();
+        if (output_id < oid_to_asset_index.size())
+          want = oid_to_asset_index[output_id];
+        if (row[o].second != want)
+        {
+          row[o].second = want;
+          changed = true;
+          ++rewritten;
+        }
+      }
+      if (changed)
+      {
+        MDB_val nv;
+        nv.mv_data = (void *)row.data();
+        nv.mv_size = sizeof(std::pair<uint64_t, uint64_t>) * num_outputs;
+        result = mdb_cursor_put(c_tx_outputs, &k_tx_id, &nv, MDB_CURRENT);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to update a record in tx_outputs: ", result).c_str()));
+      }
+      next_output_id += num_outputs;
+      ++tx_id; ++batch;
+    }
+    mdb_cursor_close(c_tx_outputs);
+    txn.commit();
+    LOGIF(el::Level::Info) {
+      std::cout << tx_id << " / " << num_txes << "  (rewritten " << rewritten << ")  \r" << std::flush;
+    }
+  }
+  MGINFO_YELLOW("tx_outputs re-sync complete: " << rewritten << " asset indices rewritten");
+
+  uint32_t version = VERSION;
+  v.mv_data = (void *)&version;
+  v.mv_size = sizeof(version);
+  MDB_val_str(vk, "version");
+  result = mdb_txn_begin(m_env, NULL, 0, txn);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+  result = mdb_put(txn, m_properties, &vk, &v, 0);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to update version for the db: ", result).c_str()));
+  txn.commit();
+
+  if (resume_batch)
+    batch_start();
+}
+
 void BlockchainLMDB::migrate(const uint32_t oldversion)
 {
   if (oldversion < 3)
     migrate_2_3();
+  // The v3 -> v4 change (RCT-only output_types) is a consensus change gated on HF13. It is
+  // NOT run here at startup because m_hardfork is not set during open()/migrate(); the
+  // Blockchain layer triggers rebuild_output_types_rct_only() once the chain reaches HF13.
 }
 
 }  // namespace cryptonote

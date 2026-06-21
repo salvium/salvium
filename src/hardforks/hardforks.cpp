@@ -67,6 +67,11 @@ const hardfork_t mainnet_hard_forks[] = {
 
   // version 12 Spam TX HF - starts from block 513000, which is on or around the 19th of June, 2026. Fork time finalised on 2026-06-19. No fork voting occurs for the v12 fork.
   {12, 513100, 0, 1781865000 },
+
+  // version 13 RCT-only asset index (repairs SAL1 spendability after the spam). Start height is a
+  // PLACEHOLDER and must be finalised when the fork is scheduled. Kept far ahead of the tip so it
+  // stays dormant until then.
+  {13, 999999999, 0, 1999999999 },
 };
 const size_t num_mainnet_hard_forks = sizeof(mainnet_hard_forks) / sizeof(mainnet_hard_forks[0]);
 const uint64_t mainnet_hard_fork_version_1_till = ((uint64_t)-1);
@@ -107,6 +112,9 @@ const hardfork_t testnet_hard_forks[] = {
   
   // version 12
   {12, 1300, 0, 1781865000 },
+
+  // version 13 (placeholder height - finalise when scheduled)
+  {13, 999999999, 0, 1999999999 },
 };
 const size_t num_testnet_hard_forks = sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]);
 const uint64_t testnet_hard_fork_version_1_till = ((uint64_t)-1);

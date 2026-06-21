@@ -117,7 +117,8 @@ Blockchain::Blockchain(tx_memory_pool& tx_pool) :
   m_btc_valid(false),
   m_batch_success(true),
   m_prepare_height(0),
-  m_rct_ver_cache()
+  m_rct_ver_cache(),
+  m_rct_index_rebuilt(false)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
 }
@@ -169,7 +170,9 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   // TODO: Investigate if this is necessary / why this is done.
   std::vector<uint64_t> asset_offsets = relative_output_offsets_to_absolute(tx_in_to_key.key_offsets);
   std::vector<uint64_t> absolute_offsets;
-  m_db->get_output_id_from_asset_type_output_index(tx_in_to_key.asset_type, asset_offsets, absolute_offsets);
+  // From HF13 the per-asset index resolves to the amount-0 (RCT) dup index.
+  const bool use_rct_index = m_hardfork->get_current_version() >= HF_VERSION_RCT_ONLY_INDEX;
+  m_db->get_output_id_from_asset_type_output_index(tx_in_to_key.asset_type, asset_offsets, absolute_offsets, use_rct_index);
   std::vector<output_data_t> outputs;
 
   bool found = false;
@@ -402,6 +405,18 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
   MINFO("Blockchain initialized. last block: " << m_db->height() - 1 << ", " << epee::misc_utils::get_time_interval_string(timestamp_diff) << " time ago, current difficulty: " << get_difficulty_for_next_block());
 
   rtxn_guard.stop();
+
+  // HF13 safety net: if the chain is already at/past HF13 but the DB has not yet been
+  // rebuilt RCT-only (e.g. an upgraded node restarting past the fork), run it now. Idempotent
+  // at the DB layer; normal sync triggers it per-block in handle_block_to_main_chain.
+  if (!m_rct_index_rebuilt && !m_db->is_read_only() &&
+      m_hardfork->get_current_version() >= HF_VERSION_RCT_ONLY_INDEX)
+  {
+    // rebuild_output_types_rct_only() manages its own LMDB transactions (like a migration),
+    // so it must not run inside a batch/wtxn guard.
+    m_db->rebuild_output_types_rct_only();
+    m_rct_index_rebuilt = true;
+  }
 
   uint64_t num_popped_blocks = 0;
   while (!m_db->is_read_only())
@@ -3145,7 +3160,9 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
     std::vector<uint64_t> global_out_ids;
     global_out_ids.reserve(asset_type_output_indices.size());
 
-    m_db->get_output_id_from_asset_type_output_index(req.asset_type, asset_type_output_indices, global_out_ids);
+    // From HF13 the per-asset index resolves to the amount-0 (RCT) dup index.
+    const bool use_rct_index = m_hardfork->get_current_version() >= HF_VERSION_RCT_ONLY_INDEX;
+    m_db->get_output_id_from_asset_type_output_index(req.asset_type, asset_type_output_indices, global_out_ids, use_rct_index);
 
     uint64_t global_outs = 0;
     for (const auto &i: req.outputs)
@@ -3194,7 +3211,11 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
     {
       for (size_t i = 0; i < req.outputs.size(); ++i)
       {
-        tx_out_index toi = m_db->get_output_tx_and_index(req.outputs[i].amount, req.outputs[i].index);
+        // From HF13 the asset-type index no longer equals the amount_index, so resolve
+        // the txid through the global offset. Pre-fork keep the original direct index.
+        const bool use_rct_index = hf_version >= HF_VERSION_RCT_ONLY_INDEX;
+        const uint64_t idx = (req.asset_type.empty() || !use_rct_index) ? req.outputs[i].index : offsets[i];
+        tx_out_index toi = m_db->get_output_tx_and_index(req.outputs[i].amount, idx);
         res.outs[i].txid = toi.first;
       }
     }
@@ -6046,6 +6067,14 @@ leave:
   {
     try
     {
+      // HF13 activation: rebuild the RCT-only output index before the first HF13 block's
+      // outputs are written, so add_output's new (24-byte) records are never mixed with the
+      // pre-fork (16-byte) DUPFIXED records. Idempotent at the DB layer (no-op if already done).
+      if (!m_rct_index_rebuilt && bl.major_version >= HF_VERSION_RCT_ONLY_INDEX)
+      {
+        m_db->rebuild_output_types_rct_only();
+        m_rct_index_rebuilt = true;
+      }
       uint64_t long_term_block_weight = get_next_long_term_block_weight(block_weight);
       cryptonote::blobdata bd = cryptonote::block_to_blob(bl);
       yield_block_info new_ybi;
