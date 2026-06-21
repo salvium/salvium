@@ -1537,7 +1537,7 @@ public:
    * @param asset_type_output_indices a list of asset type output indices
    * @param offsets return-by-reference list of outputs' global id
   */
-  virtual void get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const = 0;
+  virtual void get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices, bool use_rct_index) const = 0;
 
   /**
    * @brief gets output id for an asset type output index
@@ -1549,6 +1549,14 @@ public:
    * @param asset_type_output_index asset type output index to retrieve output id for
   */
   virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const = 0;
+
+  /**
+   * @brief rebuild m_output_types to index RCT (amount==0) outputs only and re-sync the
+   * reported per-asset output indices, then bump the DB schema version. Invoked once by the
+   * Blockchain layer when the chain reaches HF13 (the change is consensus-gated; see
+   * HF_VERSION_RCT_ONLY_INDEX). Idempotent: a no-op once already rebuilt.
+   */
+  virtual void rebuild_output_types_rct_only() = 0;
 
   /**
    * @brief gets an output's tx hash and index

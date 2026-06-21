@@ -1324,6 +1324,9 @@ namespace cryptonote
 
     std::atomic<bool> m_cancel;
 
+    // set once the HF13 RCT-only output index rebuild has been triggered this run
+    bool m_rct_index_rebuilt;
+
     // block template cache
     block m_btc;
     account_public_address m_btc_address;
