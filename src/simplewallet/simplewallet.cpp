@@ -8072,11 +8072,30 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, bool locked, co
   std::string asset_type = (m_wallet->get_current_hard_fork() >= HF_VERSION_SALVIUM_ONE_PROOFS) ? "SAL1" : "SAL";
   if (local_args.size() >= 2)
   {
-    std::string asset_type_check = local_args.back();
-    if (cryptonote::is_valid_asset_type(asset_type_check)) {
-      asset_type = asset_type_check;
-      local_args.pop_back();
+    std::string strLastArg = local_args.back();
+    if (strLastArg == "SAL" or strLastArg == "SAL1") {
+      asset_type = strLastArg;
+    } else {
+      std::transform(strLastArg.begin() + 3, strLastArg.end(), strLastArg.begin() + 3, ::toupper);
+      std::vector<std::string> asset_types = m_wallet->list_asset_types();
+
+      // check if the last argument is a known asset type
+      bool found = false;
+      for (const auto& asset : asset_types) {
+        if (strLastArg == asset) {
+          asset_type = strLastArg;
+          found = true;
+          break;
+        }
+      }
+    
+      if (!found) {
+        fail_msg_writer() << tr("Unknown asset type: ") << strLastArg;
+        return true;
+      }
     }
+
+    local_args.pop_back();
   }
   
   cryptonote::address_parse_info info;
@@ -8755,9 +8774,15 @@ bool simple_wallet::burn(const std::vector<std::string> &args_)
     return true;
   }
 
+  uint8_t hf_version = m_wallet->get_current_hard_fork();
+  if (hf_version >= HF_VERSION_CARROT && hf_version < HF_VERSION_ENABLE_TOKENS) {
+    fail_msg_writer() << tr("BURN command is disabled until hard fork ") << HF_VERSION_ENABLE_TOKENS;
+    return true;
+  }
+    
   std::vector<std::string> local_args;
   carrot::AddressDeriveType derive_type;
-  if (m_wallet->use_fork_rules(HF_VERSION_CARROT, 0)) {
+  if (hf_version >= HF_VERSION_CARROT) {
     derive_type = carrot::AddressDeriveType::Carrot;
   } else {
     derive_type = carrot::AddressDeriveType::PreCarrot;
@@ -8776,7 +8801,7 @@ bool simple_wallet::burn(const std::vector<std::string> &args_)
   asset_type = strLastArg;
   local_args.pop_back();
   
-  if (m_wallet->get_current_hard_fork() >= HF_VERSION_ENABLE_TOKENS) {
+  if (hf_version >= HF_VERSION_ENABLE_TOKENS) {
     transfer_main(Burn, asset_type, asset_type, local_args, false);
   } else {
     transfer_main(Burn, asset_type, "BURN", local_args, false);

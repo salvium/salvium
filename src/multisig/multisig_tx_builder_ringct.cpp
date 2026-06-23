@@ -516,6 +516,12 @@ static bool compute_keys_for_destinations(
         amount_burnt += destinations[i].amount;
         continue;
       }
+    } else if (tx_type == cryptonote::transaction_type::AUDIT) {
+      // Do not create outputs that are staked for yield - discard them as unused
+      if (!destinations[i].is_change) {
+        amount_burnt += destinations[i].amount;
+        continue;
+      }
     }
 
     crypto::view_tag vt; // Temporary variable to hold the view tag in case we create one
@@ -726,7 +732,7 @@ static bool set_tx_return_address_information(const uint8_t hf_version,
                                               cryptonote::transaction& unsigned_tx
                                               )
 {
-  if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER || unsigned_tx.type == cryptonote::transaction_type::STAKE) {
+  if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER || unsigned_tx.type == cryptonote::transaction_type::STAKE || unsigned_tx.type == cryptonote::transaction_type::AUDIT) {
 
     // Get the output public key for the change output
     crypto::public_key P_change = crypto::null_pkey;
@@ -736,8 +742,8 @@ static bool set_tx_return_address_information(const uint8_t hf_version,
       } else {
         CHECK_AND_ASSERT_MES(unsigned_tx.vout.size() == 2, false, "Internal error - incorrect number of outputs (!=2) for TRANSFER tx");
       }
-    } else if (unsigned_tx.type == cryptonote::transaction_type::STAKE) {
-      CHECK_AND_ASSERT_MES(unsigned_tx.vout.size() == 1, false, "Internal error - incorrect number of outputs (!=1) for STAKE tx");
+    } else if (unsigned_tx.type == cryptonote::transaction_type::STAKE || unsigned_tx.type == cryptonote::transaction_type::AUDIT) {
+      CHECK_AND_ASSERT_MES(unsigned_tx.vout.size() == 1, false, "Internal error - incorrect number of outputs (!=1) for STAKE/AUDIT tx");
     }
     CHECK_AND_ASSERT_MES(change_index < unsigned_tx.vout.size(), false, "Internal error - invalid change_index");
     CHECK_AND_ASSERT_MES(cryptonote::get_output_public_key(unsigned_tx.vout[change_index], P_change), false, "Internal error - failed to get TX change output public key");
@@ -1315,7 +1321,7 @@ bool tx_builder_ringct_t::init(
       x_change = rct::sk2rct(s_change);
     }
 
-  } else if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER || unsigned_tx.type == cryptonote::transaction_type::STAKE) {
+  } else if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER || unsigned_tx.type == cryptonote::transaction_type::STAKE || unsigned_tx.type == cryptonote::transaction_type::AUDIT) {
 
     // Get the tx public key
     crypto::public_key txkey_pub = crypto::null_pkey;

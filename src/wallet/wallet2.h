@@ -380,6 +380,10 @@ private:
       std::string asset_type;
       crypto::public_key m_recovered_spend_pubkey; // spend pubkey recovered from the output 
 
+      bool m_sa_proof_ok;
+      uint8_t m_return_payment_change_index;
+      crypto::public_key m_return_payment_change_key;
+      
       bool is_rct() const { return m_rct; }
       uint64_t amount() const { return m_amount; }
       const crypto::public_key get_public_key() const {
@@ -439,6 +443,10 @@ private:
         FIELD(m_multisig_info)
         FIELD(m_uses)
         FIELD(asset_type)
+        FIELD(m_recovered_spend_pubkey)
+        FIELD(m_sa_proof_ok)
+        FIELD(m_return_payment_change_index)
+        FIELD(m_return_payment_change_key)
       END_SERIALIZE()
     };
 
@@ -1346,7 +1354,7 @@ private:
 
     std::vector<cryptonote::public_node> get_public_nodes(bool white_only = true);
 
-    bool verify_spend_authority_proof(const cryptonote::transaction &tx, const size_t i, const tx_scan_info_t &tx_scan_info);
+    bool verify_spend_authority_proof(const cryptonote::transaction &tx, const size_t i, std::string *reason, crypto::public_key* P_change_out = nullptr, uint8_t* change_index_out = nullptr);
     
     template <class t_archive>
     inline void serialize(t_archive &a, const unsigned int ver)
@@ -2323,7 +2331,7 @@ private:
   };
 }
 BOOST_CLASS_VERSION(tools::wallet2, 32)
-BOOST_CLASS_VERSION(tools::wallet2::transfer_details, 12)
+BOOST_CLASS_VERSION(tools::wallet2::transfer_details, 13)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_info, 1)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_info::LR, 0)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_tx_set, 1)
@@ -2401,6 +2409,16 @@ namespace boost
         if (ver < 12)
         {
           x.m_frozen = false;
+        }
+        if (ver < 13)
+        {
+          x.m_asset_type_output_index = std::numeric_limits<uint64_t>::max();
+          x.m_td_origin_idx = std::numeric_limits<uint64_t>::max();
+          x.asset_type = "";
+          x.m_recovered_spend_pubkey = crypto::null_pkey;
+          x.m_sa_proof_ok = false;
+          x.m_return_payment_change_index = 0xff;
+          x.m_return_payment_change_key = crypto::null_pkey;
         }
     }
 
@@ -2501,6 +2519,18 @@ namespace boost
         return;
       }
       a & x.m_frozen;
+      if (ver < 13)
+      {
+        initialize_transfer_details(a, x, ver);
+        return;
+      }
+      a & x.m_asset_type_output_index;
+      a & x.m_td_origin_idx;
+      a & x.asset_type;
+      a & x.m_recovered_spend_pubkey;
+      a & x.m_sa_proof_ok;
+      a & x.m_return_payment_change_index;
+      a & x.m_return_payment_change_key;
     }
 
     template <class Archive>

@@ -181,32 +181,6 @@ namespace cryptonote
       // Clear the pubkey, because it isn't used
       F_txkey_pub = crypto::null_pkey;
 
-      /*
-      // SANITY CHECK - PERFORM --ALL-- THE STEPS REQUIRED TO VERIFY THIS PROCESS WILL WORK
-      crypto::secret_key s = keypair::generate(hw::get_device("default")).sec;
-      crypto::key_derivation derivation_syF = AUTO_VAL_INIT(derivation_syF);
-      bool r = hwdev.generate_key_derivation(rct::rct2pk(key_aP_change), s, derivation_syF);
-      crypto::public_key onetime = crypto::null_pkey;
-      r = hwdev.derive_public_key(derivation_syF, 0, P_change, onetime);
-      crypto::public_key R = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(P_change), rct::sk2rct(s)));
-
-      crypto::key_derivation derivation_ret = AUTO_VAL_INIT(derivation_ret);
-      r = hwdev.generate_key_derivation(R, sender_account_keys.m_view_secret_key, derivation_ret);
-      crypto::public_key P_change_ver = crypto::null_pkey;
-      r = hwdev.derive_subaddress_public_key(onetime, derivation_ret, 0, P_change_ver);
-      CHECK_AND_ASSERT_MES(P_change == P_change_ver, false, "at get_return_address: failed to verify ALL steps");
-
-      LOG_ERROR("*****************************************************************************");
-      LOG_ERROR("TX type   : TRANSFER");
-      LOG_ERROR("txkey_pub : " << txkey_pub);
-      LOG_ERROR("a         : " << sender_account_keys.m_view_secret_key);
-      LOG_ERROR("y         : " << key_y);
-      LOG_ERROR("P_change  : " << P_change);
-      LOG_ERROR("aP_change : " << pk_aP_change);
-      LOG_ERROR("F         : " << F);
-      LOG_ERROR("*****************************************************************************");
-      */
-      
       // We are done here - return to caller
       return true;
       
@@ -242,19 +216,7 @@ namespace cryptonote
       // All is well - copy the return address
       F = out_eph_public_key;
 
-      /*
-      LOG_ERROR("*****************************************************************************");
-      LOG_ERROR("txkey_pub : " << txkey_pub);
-      LOG_ERROR("a         : " << sender_account_keys.m_view_secret_key);
-      LOG_ERROR("s         : " << s);
-      LOG_ERROR("y         : " << key_y);
-      LOG_ERROR("P_change  : " << P_change);
-      LOG_ERROR("aP_change : " << pk_aP_change);
-      LOG_ERROR("F         : " << F);
-      LOG_ERROR("*****************************************************************************");
-      */
-      
-      // We are done here - return to caller
+     // We are done here - return to caller
       return true;
     }
     
@@ -459,7 +421,17 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, network_type nettype, const std::vector<hardfork_t>& hardforks, const blobdata& extra_nonce, size_t max_outs, uint8_t hard_fork_version) {
+  carrot::janus_anchor_t get_deterministic_treasury_anchor_from_height(uint64_t height)
+  {
+    carrot::janus_anchor_t treasury_anchor{};
+    for (int i = 0; i < 8; ++i)
+      treasury_anchor.bytes[i] = (height >> (8 * i)) & 0xff;
+    for (int i = 8; i < 16; ++i)
+      treasury_anchor.bytes[i] = 0;
+    return treasury_anchor;
+  }
+  //---------------------------------------------------------------
+  bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, crypto::public_key& miner_reward_tx_key, transaction& tx, network_type nettype, const std::vector<hardfork_t>& hardforks, const blobdata& extra_nonce, size_t max_outs, uint8_t hard_fork_version) {
 
     // Clear the TX contents
     tx.set_null();
@@ -487,33 +459,70 @@ namespace cryptonote
     {
       try
       {
-        // Build the miner payout
-        carrot::CarrotDestinationV1 destination;
+        // miner destination
+        carrot::CarrotDestinationV1 miner_destination;
         carrot::make_carrot_main_address_v1(miner_address.m_spend_public_key,
           miner_address.m_view_public_key,
-          destination);
+          miner_destination);
+        
+        CHECK_AND_ASSERT_THROW_MES(!miner_destination.is_subaddress,
+                                   "construct_miner_tx: subaddresses are not allowed in miner transactions");
+        CHECK_AND_ASSERT_THROW_MES(miner_destination.payment_id == carrot::null_payment_id,
+                                   "construct_miner_tx: integrated addresses are not allowed in miner transactions");
 
-        CHECK_AND_ASSERT_THROW_MES(!destination.is_subaddress,
-                                   "make_single_enote_carrot_coinbase_transaction_v1: subaddress are not allowed in miner transactions");
-        CHECK_AND_ASSERT_THROW_MES(destination.payment_id == carrot::null_payment_id,
-                                   "make_single_enote_carrot_coinbase_transaction_v1: integrated addresses are not allowed in miner transactions");
+        const bool do_new_split = (hard_fork_version >= HF_VERSION_ENABLE_TOKENS);
+        uint64_t treasury_reward = do_new_split ? (block_reward * BLOCK_REWARD_TREASURY_PCT / 100) : 0;
+        uint64_t stake_reward = (block_reward - treasury_reward) * BLOCK_REWARD_STAKER_PCT / 100;
+        uint64_t miner_reward = (block_reward - treasury_reward - stake_reward);
 
-        uint64_t stake_reward = block_reward / 5;
-
-        const carrot::CarrotPaymentProposalV1 payment_proposal{
-          .destination = destination,
-          .amount = block_reward - stake_reward,
+        //miner enote
+        const carrot::CarrotPaymentProposalV1 miner_proposal{
+          .destination = miner_destination,
+          .amount = miner_reward,
           .asset_type = "SAL1",
           .randomness = carrot::gen_janus_anchor()
         };
 
-        std::vector<carrot::CarrotCoinbaseEnoteV1> enotes(treasury_payout_exists ? 2 : 1);
-        carrot::get_coinbase_output_proposal_v1(payment_proposal, height, enotes.front());
+        // Determine number of enotes: miner + optional treasury_reward + optional treasury_mint
+        size_t num_enotes = 1;
+        if (do_new_split) num_enotes++;           // treasury reward output
+        if (treasury_payout_exists) num_enotes++; 
+        std::vector<carrot::CarrotCoinbaseEnoteV1> enotes(num_enotes);
+        carrot::get_coinbase_output_proposal_v1(miner_proposal, height, enotes[0]);
 
-        // Check to see if there needs to be a treasury payout
+        // STORE THE MINER TX_PUB_KEY NOW
+        miner_reward_tx_key = carrot::raw_byte_convert<crypto::public_key>(enotes[0].enote_ephemeral_pubkey);
+        
+        size_t enote_idx = 1;
+
+        // Add the treasury reward enote (25% of block reward) for HF11+
+        if (do_new_split) {
+
+          //treasury address for HF11+ block reward split
+          address_parse_info treasury_addr_info;
+          bool treasury_ok = cryptonote::get_account_address_from_str(treasury_addr_info, nettype, get_config(nettype).TREASURY_ADDRESS_CARROT);
+          CHECK_AND_ASSERT_MES(treasury_ok, false, "Failed to parse treasury address for block reward split"); // maybe more check can be added here, but it's enough for now (bcs validation)
+
+          carrot::CarrotDestinationV1 treasury_destination;
+          carrot::make_carrot_main_address_v1(treasury_addr_info.address.m_spend_public_key,
+                                              treasury_addr_info.address.m_view_public_key,
+                                              treasury_destination);
+
+          // Derive a deterministic janus anchor from height so validators can independently recompute the expected treasury K_o
+          const carrot::janus_anchor_t treasury_anchor = get_deterministic_treasury_anchor_from_height(height);
+          const carrot::CarrotPaymentProposalV1 treasury_proposal{
+            .destination = treasury_destination,
+            .amount = treasury_reward,
+            .asset_type = "SAL1",
+            .randomness = treasury_anchor
+          };
+
+          carrot::get_coinbase_output_proposal_v1(treasury_proposal, height, enotes[enote_idx]);
+          enote_idx++;
+        }
+
+        // 
         if (treasury_payout_exists) {
-
-          // Convert the strings into meaningful data
           const auto [tx_public_key_str, onetime_address_str, anchor_enc_str, view_tag_str] = treasury_payout_data.at(height);
           mx25519_pubkey tx_public_key;
           CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(tx_public_key_str, tx_public_key), "fail to deserialize treasury tx public key");
@@ -524,8 +533,8 @@ namespace cryptonote
           carrot::view_tag_t view_tag;
           CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(view_tag_str, view_tag), "fail to deserialize treasury tx view_tag");
           
-          // Manually produce an enote for the treasury payout using the hardcoded keys
-          carrot::CarrotCoinbaseEnoteV1 &treasury_enote = enotes.back();
+          //
+          carrot::CarrotCoinbaseEnoteV1 &treasury_enote = enotes[enote_idx];
           treasury_enote.onetime_address = onetime_address;
           treasury_enote.amount = TREASURY_SAL1_MINT_AMOUNT;
           treasury_enote.asset_type = "SAL1";
@@ -533,12 +542,12 @@ namespace cryptonote
           treasury_enote.view_tag = view_tag;
           treasury_enote.enote_ephemeral_pubkey = tx_public_key;
           treasury_enote.block_index = height;
-        
-          // sort enotes by K_o
-          if (enotes[0].onetime_address > enotes[1].onetime_address) {
-            std::swap(enotes[0], enotes[1]);
-          }
         }
+
+        // Sort enotes by K_o
+        std::sort(enotes.begin(), enotes.end(), [](const carrot::CarrotCoinbaseEnoteV1 &a, const carrot::CarrotCoinbaseEnoteV1 &b) {
+          return a.onetime_address < b.onetime_address;
+        });
 
         tx = carrot::store_carrot_to_coinbase_transaction_v1(enotes, extra_nonce, cryptonote::transaction_type::MINER, height);
         tx.version = (hard_fork_version >= HF_VERSION_ENABLE_TOKENS) ? TRANSACTION_VERSION_ENABLE_TOKENS : TRANSACTION_VERSION_CARROT;
@@ -556,6 +565,8 @@ namespace cryptonote
 
     keypair txkey = keypair::generate(hw::get_device("default"));
     add_tx_pub_key_to_extra(tx, txkey.pub);
+    // STORE THE MINER TX_PUB_KEY NOW
+    miner_reward_tx_key = txkey.pub;
     if(!extra_nonce.empty())
       if(!add_extra_nonce_to_tx_extra(tx.extra, extra_nonce))
         return false;
@@ -600,6 +611,7 @@ namespace cryptonote
       case HF_VERSION_AUDIT2_PAUSE:
       case HF_VERSION_CARROT:
       case HF_VERSION_ENABLE_TOKENS:
+      case HF_VERSION_REJECT_CLEARTEXT_AMOUNTS:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;
@@ -679,6 +691,7 @@ namespace cryptonote
     // Step 4: Encrypt the data (AES-256-CBC or ChaCha20)
     std::string ciphertext(sizeof(crypto::secret_key), '\0');
     crypto::chacha_key symmetric_key;
+    static_assert(sizeof(symmetric_key) == sizeof(symmetric_key_hash), "chacha_key/hash size mismatch");
     memcpy(&symmetric_key, &symmetric_key_hash, sizeof(symmetric_key));
     crypto::chacha_iv iv = crypto::rand<crypto::chacha_iv>();
     crypto::chacha20(pvk.data, sizeof(crypto::secret_key), symmetric_key, iv, &ciphertext[0]);
@@ -697,11 +710,14 @@ namespace cryptonote
     std::string encrypted_data;
     for (size_t i = 0; i < encrypted_data_hex.length(); i += 2) {
       std::istringstream iss(encrypted_data_hex.substr(i, 2));
-      int byte;
+      unsigned int byte;
       iss >> std::hex >> byte;
-      encrypted_data += static_cast<char>(byte);
+      if (iss.fail()) return false;
+      encrypted_data += static_cast<char>(static_cast<uint8_t>(byte));
     }
     const char *data_ptr = encrypted_data.data();
+    if (encrypted_data.size() < sizeof(crypto::public_key) + sizeof(crypto::chacha_iv))
+      return false;
     crypto::public_key ephemeral_pk;
     memcpy(&ephemeral_pk, data_ptr, sizeof(ephemeral_pk));
     data_ptr += sizeof(ephemeral_pk);
@@ -727,6 +743,7 @@ namespace cryptonote
     // Step 4: Decrypt the data
     std::string plaintext(ciphertext.size(), '\0');
     crypto::chacha_key symmetric_key;
+    static_assert(sizeof(symmetric_key) == sizeof(symmetric_key_hash), "chacha_key/hash size mismatch");
     memcpy(&symmetric_key, &symmetric_key_hash, sizeof(symmetric_key));
     crypto::chacha20(ciphertext.data(), ciphertext.size(), symmetric_key, iv, &plaintext[0]);
 
@@ -1022,15 +1039,6 @@ namespace cryptonote
         found_change = true;
       }
 
-      LOG_ERROR("*****************************************************************************");
-      LOG_ERROR("in construct_tx_With_tx_key()");
-      LOG_ERROR("TX type   : TRANSFER");
-      LOG_ERROR("tx_key    : " << crypto::secret_key_explicit_print_ref{tx_key});
-      LOG_ERROR("tx_pubkey : " << txkey_pub);
-      LOG_ERROR("P_change  : " << dst_entr.addr.m_spend_public_key);
-      LOG_ERROR("aP_change : " << dst_entr.addr.m_view_public_key);
-      LOG_ERROR("*****************************************************************************");
-      
       hwdev.generate_output_ephemeral_keys(tx.version,sender_account_keys, txkey_pub, tx_key,
                                            dst_entr, change_addr, output_index,
                                            need_additional_txkeys, additional_tx_keys,
@@ -1094,7 +1102,7 @@ namespace cryptonote
           rct::key amount_key;
         } buf;
         std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-        std::strncpy(buf.domain_separator, "RETURN", 7);
+        std::strncpy(buf.domain_separator, "RETURN", sizeof(buf.domain_separator));
         buf.amount_key = amount_keys[op_index];
         crypto::hash_to_scalar(&buf, sizeof(buf), y);
         
@@ -1117,8 +1125,8 @@ namespace cryptonote
           char domain_separator[8];
           rct::key amount_key;
         } eci_buf;
-        std::memset(eci_buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-        std::strncpy(eci_buf.domain_separator, "CHG_IDX", 8);
+        std::memset(eci_buf.domain_separator, 0x0, sizeof(eci_buf.domain_separator));
+        std::strncpy(eci_buf.domain_separator, "CHG_IDX", sizeof(eci_buf.domain_separator));
         eci_buf.amount_key = amount_keys[op_index];
         crypto::secret_key eci_out;
         keccak((uint8_t *)&eci_buf, sizeof(eci_buf), (uint8_t*)&eci_out, sizeof(eci_out));
@@ -1144,7 +1152,7 @@ namespace cryptonote
         crypto::public_key pubkey;
       } buf;
       std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-      std::strncpy(buf.domain_separator, "RETURN", 6);
+      std::strncpy(buf.domain_separator, "RETURN", sizeof(buf.domain_separator));
       buf.pubkey = P_change;
       crypto::hash_to_scalar(&buf, sizeof(buf), y);
 

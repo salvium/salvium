@@ -1215,7 +1215,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     LOG_PRINT_L3("Getting output enote proposals");
     std::vector<carrot::RCTOutputEnoteProposal> output_enote_proposals;
     carrot::encrypted_payment_id_t encrypted_payment_id;
-    size_t change_index;
+    size_t change_index = static_cast<size_t>(-1); // sentinel if no change output;
     carrot::RCTOutputEnoteProposal return_enote_out;
     std::unordered_map<crypto::public_key, size_t> payments_indices;
     carrot::get_output_enote_proposals(tx_proposal.normal_payment_proposals,
@@ -1368,6 +1368,11 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
             change_address_spend_pubkey = p.destination_address_spend_pubkey;
         }
     }
+    // need exactly one change output here; bail instead of indexing with the sentinel
+    THROW_WALLET_EXCEPTION_IF(change_index >= output_enote_proposals.size()
+            || change_address_spend_pubkey == crypto::public_key{},
+        error::wallet_internal_error, "carrot tx build: no change output in proposal");
+    
     const carrot::RCTOutputEnoteProposal &change_enote_proposal = output_enote_proposals.at(change_index);
     const carrot::input_context_t input_context = carrot::make_carrot_input_context(tx_proposal.key_images_sorted.at(0));
     crypto::hash s_sender_receiver;

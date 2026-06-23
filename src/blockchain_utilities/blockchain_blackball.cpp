@@ -119,7 +119,7 @@ static bool parse_db_sync_mode(std::string db_sync_mode)
   if(options.size() >= 2 && !safemode)
   {
     char *endptr;
-    uint64_t bps = strtoull(options[1].c_str(), &endptr, 0);
+    uint64_t bps = strtoull(options[1].c_str(), &endptr, 10);
     if (*endptr == '\0')
       records_per_sync = bps;
   }

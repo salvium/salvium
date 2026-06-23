@@ -426,6 +426,16 @@ namespace rct {
         return toPointCheckOrder(&p3, A.bytes);
     }
 
+    bool verPointsForTorsion(const keyV &points)
+    {
+        for (const key &point : points)
+        {
+            if (!isInMainSubgroup(point))
+                return false;
+        }
+        return true;
+    }
+
     //Curve addition / subtractions
 
     //for curve points: AB = A + B

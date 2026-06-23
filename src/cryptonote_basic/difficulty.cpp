@@ -271,7 +271,8 @@ namespace cryptonote {
     // adjust=0.99 for 90 < N < 130
     const long double adjust = 0.998;
     // The divisor k normalizes LWMA.
-    const long double k = N * (N + 1) / 2;
+    // const long double k = N * (N + 1) / 2;
+    const long double k = static_cast<long double>(N) * static_cast<long double>(N + 1) / 2.0L;
 
     long double LWMA(0), sum_inverse_D(0), harmonic_mean_D(0), nextDifficulty(0);
     int64_t solveTime(0);

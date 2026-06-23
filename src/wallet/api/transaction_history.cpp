@@ -178,7 +178,8 @@ void TransactionHistoryImpl::refresh()
         uint64_t amount = pd.m_amount_in - change - fee;
         if (pd.m_tx.type == cryptonote::transaction_type::AUDIT ||
             pd.m_tx.type == cryptonote::transaction_type::BURN ||
-            pd.m_tx.type == cryptonote::transaction_type::STAKE) {
+            pd.m_tx.type == cryptonote::transaction_type::STAKE ||
+            pd.m_tx.type == cryptonote::transaction_type::ROLLUP) {
           amount = pd.m_tx.amount_burnt;
           if (fee > amount) fee -= amount;
         }
@@ -223,7 +224,8 @@ void TransactionHistoryImpl::refresh()
         uint64_t amount = pd.m_amount_in - change - fee;
         if (pd.m_tx.type == cryptonote::transaction_type::AUDIT ||
             pd.m_tx.type == cryptonote::transaction_type::BURN ||
-            pd.m_tx.type == cryptonote::transaction_type::STAKE) {
+            pd.m_tx.type == cryptonote::transaction_type::STAKE ||
+            pd.m_tx.type == cryptonote::transaction_type::ROLLUP) {
           amount = pd.m_tx.amount_burnt;
           if (fee > amount) fee -= amount;
         }

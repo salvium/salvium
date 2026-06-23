@@ -217,6 +217,7 @@ void make_carrot_transaction_proposal_v1(const std::vector<CarrotPaymentProposal
     }
     uint64_t fee = tx_proposal_out.fee;
     if (asset_type != "SAL1") {
+    // check here
       if (tx_type != cryptonote::transaction_type::BURN || asset_type != "SAL") {
         CARROT_CHECK_AND_THROW(cryptonote::is_valid_custom_asset_type(asset_type),
                                carrot_logic_error, "make_carrot_transaction_proposal_v1: invalid asset type in payment proposals: " << asset_type);

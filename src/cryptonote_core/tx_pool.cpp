@@ -29,11 +29,16 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <algorithm>
+#include <limits>
 #include <boost/filesystem.hpp>
 #include <unordered_set>
 #include <vector>
 
 #include "tx_pool.h"
+
+#include "tx_rules_engine.h"
+#include "tx_rules_adapters.h"
+
 #include "cryptonote_tx_utils.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
 #include "cryptonote_config.h"
@@ -159,6 +164,26 @@ namespace cryptonote
       return false;
     }
 
+    // HERE BE DRAGONS!!!
+    // SRCG: add the rules-based consensus checks to clean up the code
+    cryptonote::txrules::validation_env txrules_env;
+    txrules_env.hf = version;
+    txrules_env.height = m_blockchain.get_current_blockchain_height();
+    txrules_env.mode = cryptonote::txrules::validation_mode::mempool;
+    txrules_env.nettype = m_blockchain.get_nettype();
+    txrules_env.token_state = cryptonote::txrules::make_db_token_state_view(m_blockchain.get_db());
+    txrules_env.block_overlay = nullptr;
+
+    cryptonote::txrules::consensus_result txrules_result;
+
+    if (!cryptonote::txrules::check_tx_consensus(tx, txrules_env, &txrules_result))
+    {
+      MERROR("TX Rules mempool consensus failure: " << txrules_result.reason);
+      tvc.m_verifivation_failed = true;
+      return false;
+    }
+    // LAND AHOY!!!
+    
     // Reject ALL TXs except miner + protocol for v5
     if (version == HF_VERSION_SHUTDOWN_USER_TXS) {
       if (tx.type != cryptonote::transaction_type::MINER && tx.type != cryptonote::transaction_type::PROTOCOL) {
@@ -258,6 +283,16 @@ namespace cryptonote
       LOG_PRINT_L1("Transaction with id= "<< id << " has at least one invalid output");
       tvc.m_verifivation_failed = true;
       tvc.m_invalid_output = true;
+      return false;
+    }
+
+    // reject confidential txs that leak a cleartext amount
+    if (!kept_by_block && tx_has_cleartext_confidential_amount(tx))
+    {
+      LOG_PRINT_L1("Transaction with id= "<< id << " has a nonzero cleartext amount on a confidential input or output");
+      tvc.m_verifivation_failed = true;
+      tvc.m_invalid_output = true;
+      tvc.m_no_drop_offense = true;
       return false;
     }
     
@@ -593,6 +628,23 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------------------------
+  void tx_memory_pool::remove_keyimages_by_txid(const crypto::hash &txid)
+  {
+    for (auto it = m_spent_key_images.begin(); it != m_spent_key_images.end(); )
+    {
+      it->second.erase(txid);
+      if (it->second.empty())
+      {
+        it = m_spent_key_images.erase(it);
+      }
+      else
+      {
+        ++it;
+      }
+    }
+    ++m_cookie;
+  }
+  //---------------------------------------------------------------------------------
   bool tx_memory_pool::take_tx(const crypto::hash &id, transaction &tx, cryptonote::blobdata &txblob, size_t& tx_weight, uint64_t& fee, bool &relayed, bool &do_not_relay, bool &double_spend_seen, bool &pruned)
   {
     CRITICAL_REGION_LOCAL(m_transactions_lock);
@@ -806,8 +858,11 @@ namespace cryptonote
           cryptonote::transaction_prefix tx;
           if (!parse_and_validate_tx_prefix_from_blob(bd, tx))
           {
-            MERROR("Failed to parse tx from txpool");
-            // continue
+            MERROR("Failed to parse tx " << txid << " from txpool - purging key images by reverse lookup");
+            m_blockchain.remove_txpool_tx(txid);
+            reduce_txpool_weight(entry.second);
+            remove_keyimages_by_txid(txid);
+            continue;
           }
           else
           {
@@ -1717,6 +1772,7 @@ namespace cryptonote
           LOG_PRINT_L2("  would exceed maximum block weight");
           continue;
         }
+        if (block_reward > std::numeric_limits<uint64_t>::max() - fee || block_reward + fee > std::numeric_limits<uint64_t>::max() - meta.fee) continue;
         coinbase = block_reward + fee + meta.fee;
         if (coinbase < template_accept_threshold(best_coinbase))
         {
@@ -1822,6 +1878,7 @@ namespace cryptonote
 
       bl.tx_hashes.push_back(sorted_it->second);
       total_weight += meta.weight;
+      if (fee > std::numeric_limits<uint64_t>::max() - meta.fee) continue;
       fee += meta.fee;
       best_coinbase = coinbase;
       append_key_images(k_images, tx);

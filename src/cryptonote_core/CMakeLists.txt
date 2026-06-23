@@ -33,6 +33,11 @@ set(cryptonote_core_sources
   tx_sanity_check.cpp
   cryptonote_tx_utils.cpp
   tx_verification_utils.cpp
+  tx_consensus_checks.cpp
+  tx_rules_adapters.cpp
+  tx_rules_analyze.cpp
+  tx_rules_engine.cpp
+  tx_rules_validate.cpp
 )
 
 set(cryptonote_core_headers)

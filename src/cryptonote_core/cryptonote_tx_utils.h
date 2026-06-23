@@ -77,7 +77,9 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool construct_protocol_tx(const size_t height, transaction& tx, std::vector<protocol_data_entry>& protocol_data, const uint8_t hf_version);
   //---------------------------------------------------------------
-  bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, transaction& tx, network_type nettype = network_type::FAKECHAIN, const std::vector<hardfork_t>& hardforks = {}, const blobdata& extra_nonce = blobdata(), size_t max_outs = 999, uint8_t hard_fork_version = 1);
+  carrot::janus_anchor_t get_deterministic_treasury_anchor_from_height(uint64_t height);
+  //---------------------------------------------------------------
+  bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, uint64_t fee, const account_public_address &miner_address, crypto::public_key& miner_reward_tx_key, transaction& tx, network_type nettype = network_type::FAKECHAIN, const std::vector<hardfork_t>& hardforks = {}, const blobdata& extra_nonce = blobdata(), size_t max_outs = 999, uint8_t hard_fork_version = 1);
 
   struct tx_source_entry
   {
@@ -181,6 +183,26 @@ namespace cryptonote
   };
 
   //---------------------------------------------------------------
+
+inline bool output_checked_for_torsion(const cryptonote::txout_target_v &tx_out)
+  {
+    struct tx_out_visitor
+    {
+      bool operator()(const cryptonote::txout_to_carrot_v1&) const
+      { return true; }
+      bool operator()(const cryptonote::txout_to_script&) const
+      { return false; }
+      bool operator()(const cryptonote::txout_to_tagged_key&) const
+      { return false; }
+      bool operator()(const cryptonote::txout_to_key&) const
+      { return false; }
+      bool operator()(const cryptonote::txout_to_scripthash&) const
+      { return false; }
+    };
+
+    return boost::apply_visitor(tx_out_visitor{}, tx_out);
+  }
+
   crypto::public_key get_destination_view_key_pub(const std::vector<tx_destination_entry> &destinations, const boost::optional<cryptonote::account_public_address>& change_addr);
   bool construct_tx(const account_keys& sender_account_keys, std::vector<tx_source_entry> &sources, const std::vector<tx_destination_entry>& destinations, const uint8_t hf_version, const std::string& asset_type, const cryptonote::transaction_type& tx_type, const boost::optional<cryptonote::account_public_address>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time);
 
