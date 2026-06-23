@@ -27,6 +27,9 @@
 #pragma once
 
 #include <atomic>
+#include <set>
+#include <vector>
+#include <limits>
 
 #include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic/blobdatatype.h" // for type blobdata
@@ -335,6 +338,10 @@ public:
 
   virtual void get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const;
   virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const;
+  // SAL1 spam-index repair (read path; see db_lmdb.cpp). SAL1_RCT_INDEX_NONE = no exact preimage.
+  static constexpr uint64_t SAL1_RCT_INDEX_NONE = std::numeric_limits<uint64_t>::max();
+  uint64_t rct_index_for_amount_index(uint32_t asset_id, const uint64_t amount_index) const;
+  std::vector<uint64_t> poisoned_decoy_indices(const std::string &asset_type) const;
 
   virtual tx_out_index get_output_tx_and_index_from_global(const uint64_t& index) const;
   virtual void get_output_tx_and_index_from_global(const std::vector<uint64_t> &global_indices,
@@ -564,6 +571,15 @@ private:
   MDB_dbi m_rollup_tx_info;
 
   mutable uint64_t m_cum_size;	// used in batch size estimation
+  mutable std::map<uint32_t, std::vector<uint64_t>> m_asset_output_ids;
+  mutable std::map<uint32_t, std::set<uint64_t>> m_asset_poisoned_decoys;
+  mutable std::set<uint32_t> m_asset_oids_built;
+  mutable std::set<uint32_t> m_asset_poison_built;
+  mutable boost::mutex m_asset_caches_mutex;
+  void build_asset_oids(uint32_t asset_id) const;    // fills m_asset_output_ids[asset_id] (caller holds the mutex)
+  void ensure_asset_caches(uint32_t asset_id) const; // builds an asset oid cache on first use
+  void ensure_asset_poison(uint32_t asset_id) const; // builds an asset poison-decoy set lazily on demand
+  void invalidate_asset_caches() const;              // drops them all on block add/pop/reorg
   mutable unsigned int m_cum_count;
   std::string m_folder;
   mdb_txn_safe* m_write_txn; // may point to either a short-lived txn or a batch txn

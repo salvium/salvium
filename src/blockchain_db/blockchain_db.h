@@ -32,6 +32,8 @@
 #pragma once
 
 #include <string>
+#include <limits>
+#include <vector>
 #include <exception>
 #include <boost/program_options.hpp>
 #include "common/command_line.h"
@@ -1549,6 +1551,12 @@ public:
    * @param asset_type_output_index asset type output index to retrieve output id for
   */
   virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const = 0;
+
+  // SAL1 spam-index read-path repair (see lmdb impl). SAL1_RCT_INDEX_NONE = no exact preimage,
+  // caller leaves the asset index unchanged. Base default = no-op.
+  static constexpr uint64_t SAL1_RCT_INDEX_NONE = std::numeric_limits<uint64_t>::max();
+  virtual uint64_t rct_index_for_amount_index(uint32_t asset_id, const uint64_t amount_index) const { return SAL1_RCT_INDEX_NONE; }
+  virtual std::vector<uint64_t> poisoned_decoy_indices(const std::string &asset_type) const { return {}; }
 
   /**
    * @brief gets an output's tx hash and index
