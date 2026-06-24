@@ -6505,17 +6505,19 @@ void BlockchainLMDB::realign_rct_index()
   txn.commit();
   MGINFO_YELLOW("realign: rebuilt " << n << " ring index entries across " << next_rank.size() << " assets");
 
-  // rewrite each tx output's reported rank (tx_outputs.second) to its rct rank so a
-  // wallet rescan rings the realigned index and reorg removal finds the right entry.
-  // transparent outputs are inert; if their amount bucket index collides into the map
-  // they get a harmless value (they are never ring members or removed from output_types).
+  // rewrite each rct output's reported rank to its realigned rct rank so wallet rescans
+  // ring the realigned index and reorg removal finds the right entry. read the tx to tell
+  // rct outputs from transparent spam, the spam keeps its old value so no real rank lands on it.
   result = mdb_txn_begin(m_env, NULL, 0, txn);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to create a write transaction: ", result).c_str()));
-  MDB_cursor *c_txo;
+  MDB_cursor *c_txo, *c_pruned;
   result = mdb_cursor_open(txn, m_tx_outputs, &c_txo);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to open a cursor for tx_outputs: ", result).c_str()));
+  result = mdb_cursor_open(txn, m_txs_pruned, &c_pruned);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to open a cursor for txs_pruned: ", result).c_str()));
   typedef std::pair<uint64_t, uint64_t> oidx;
   MDB_val ktxo, vtxo;
   uint64_t tn = 0;
@@ -6524,9 +6526,26 @@ void BlockchainLMDB::realign_rct_index()
   {
     const size_t cnt = vtxo.mv_size / sizeof(oidx);
     std::vector<oidx> pairs((const oidx *)vtxo.mv_data, (const oidx *)vtxo.mv_data + cnt);
-    for (auto &pr : pairs)
-      if (pr.first < rank_by_ai.size())
-        pr.second = rank_by_ai[pr.first];
+
+    const uint64_t tx_id = *(const uint64_t *)ktxo.mv_data;
+    MDB_val_set(kp, tx_id);
+    MDB_val vp;
+    int pres = mdb_cursor_get(c_pruned, &kp, &vp, MDB_SET);
+    if (pres)
+      throw0(DB_ERROR(lmdb_error("Failed to load tx for realign: ", pres).c_str()));
+    transaction tx;
+    blobdata_ref bd{reinterpret_cast<char *>(vp.mv_data), vp.mv_size};
+    if (!parse_and_validate_tx_base_from_blob(bd, tx))
+      throw0(DB_ERROR("Failed to parse tx for realign"));
+    // miner outputs are stored at amount zero, mirror that, then rct is amount zero
+    const bool is_pseudo_rct = tx.version >= 2 && tx.vin.size() == 1 && tx.vin[0].type() == typeid(txin_gen);
+    for (size_t i = 0; i < pairs.size() && i < tx.vout.size(); ++i)
+    {
+      const uint64_t amount = is_pseudo_rct ? 0 : tx.vout[i].amount;
+      if (amount == 0 && pairs[i].first < rank_by_ai.size())
+        pairs[i].second = rank_by_ai[pairs[i].first];
+    }
+
     MDB_val nv;
     nv.mv_data = cnt ? (void *)pairs.data() : (void *)"";
     nv.mv_size = sizeof(oidx) * cnt;
