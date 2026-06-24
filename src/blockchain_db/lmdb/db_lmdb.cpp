@@ -2380,7 +2380,8 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
   // post realign the ring index holds only rct outputs keyed to amount_index; pre realign it
   // holds every output keyed to the global id. transparent outputs are skipped post realign.
   const bool in_ring_index = !m_rct_index_realigned || (amount == 0);
-  const uint64_t expected_output_id = m_rct_index_realigned ? ok->amount_index : out_index;
+  // pre realign output_types stores the global id, post realign it stores the amount_index
+  const uint64_t expected_output_id = m_rct_index_realigned ? ok->amount_index : ok->output_id;
   uint32_t output_asset_type = cryptonote::asset_id_from_type(output_asset_type_str);
   if (in_ring_index)
   {
