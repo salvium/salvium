@@ -253,6 +253,7 @@
 #define HF_VERSION_CARROT                       10
 #define HF_VERSION_ENABLE_TOKENS                11
 #define HF_VERSION_REJECT_CLEARTEXT_AMOUNTS     12
+#define HF_VERSION_REALIGN_RCT_INDEX            13
 
 #define HF_VERSION_REQUIRE_VIEW_TAGS            255
 #define HF_VERSION_ENABLE_CONVERT               255

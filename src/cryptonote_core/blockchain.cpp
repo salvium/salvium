@@ -399,6 +399,14 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
     load_compiled_in_block_hashes(get_checkpoints);
 #endif
 
+  // catch a node that starts already at or past the HF13 fork without the realign having run,
+  // such as an imported db or a crash mid fork; the normal crossing is handled in add_new_block
+  if (m_db->height() && !m_db->rct_index_realigned() &&
+      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX))
+  {
+    m_db->realign_rct_index();
+  }
+
   MINFO("Blockchain initialized. last block: " << m_db->height() - 1 << ", " << epee::misc_utils::get_time_interval_string(timestamp_diff) << " time ago, current difficulty: " << get_difficulty_for_next_block());
 
   rtxn_guard.stop();
@@ -1645,6 +1653,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
     break;
   case HF_VERSION_ENABLE_TOKENS:
   case HF_VERSION_REJECT_CLEARTEXT_AMOUNTS:
+  case HF_VERSION_REALIGN_RCT_INDEX:
     // HF11: block reward split is 60% miner + 25% treasury + 15% staker (amount_burnt)
     if (already_generated_coins != 0) {
 
@@ -3101,10 +3110,9 @@ uint64_t Blockchain::get_num_mature_outputs(const std::string asset_type) const
   const uint64_t blockchain_height = m_db->height();
   while (num_outs_of_asset_type > 0)
   {
-    uint64_t output_id = m_db->get_output_id_from_asset_type_output_index(asset_type, num_outs_of_asset_type - 1);
-    const tx_out_index toi = m_db->get_output_tx_and_index_from_global(output_id);
-
-    const uint64_t height = m_db->get_tx_block_height(toi.first);
+    // output_types now keys to the rct amount_index; read height straight off the output
+    uint64_t output_amount_index = m_db->get_output_id_from_asset_type_output_index(asset_type, num_outs_of_asset_type - 1);
+    const uint64_t height = m_db->get_output_key(0, output_amount_index).height;
     if (height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE <= blockchain_height)
       break;
     --num_outs_of_asset_type;
@@ -6293,6 +6301,18 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc)
   }
 
   rtxn_guard.stop();
+
+  // at the HF13 fork height, repair the rct ring index once before the first v13 block is
+  // validated. the realign needs a committed db, so close any open batch and reopen it.
+  if (!m_db->rct_index_realigned() &&
+      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX))
+  {
+    const bool batched = m_db->is_batch_active();
+    if (batched) m_db->batch_stop();
+    m_db->realign_rct_index();
+    if (batched) m_db->batch_start();
+  }
+
   return handle_block_to_main_chain(bl, id, bvc);
 
   }

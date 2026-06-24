@@ -2244,28 +2244,58 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
   
   MDB_val_copy<uint32_t> k(asset_type);
   MDB_val v;
-  
+
   mdb_size_t num_outputs_of_asset_type = 0;
-  result = mdb_cursor_get(m_cur_output_types, &k, &v, MDB_SET);
-  if (!result)
-    {
-      result = mdb_cursor_count(m_cur_output_types, &num_outputs_of_asset_type);
-      if (result)
-        throw0(DB_ERROR(std::string("Failed to get number of outputs for type: ").append(mdb_strerror(result)).c_str()));
-    }
-  else if (result != MDB_NOTFOUND)
-    throw0(DB_ERROR(lmdb_error("Failed to get output types in db transaction: ", result).c_str()));
+  if (!m_rct_index_realigned)
+  {
+    // pre HF13 layout: every output is indexed and output_id is the global counter
+    result = mdb_cursor_get(m_cur_output_types, &k, &v, MDB_SET);
+    if (!result)
+      {
+        result = mdb_cursor_count(m_cur_output_types, &num_outputs_of_asset_type);
+        if (result)
+          throw0(DB_ERROR(std::string("Failed to get number of outputs for type: ").append(mdb_strerror(result)).c_str()));
+      }
+    else if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to get output types in db transaction: ", result).c_str()));
 
-  outassettype oat;
-  oat.asset_type_output_index = num_outputs_of_asset_type;
-  oat.output_id = ok.output_id;
-  MDB_val_set(voat, oat);
+    outassettype oat;
+    oat.asset_type_output_index = num_outputs_of_asset_type;
+    oat.output_id = ok.output_id;
+    MDB_val_set(voat, oat);
 
-  MDB_val_copy<uint32_t> koat(asset_type);
-  if ((result = mdb_cursor_put(m_cur_output_types, &koat, &voat, MDB_APPENDDUP)))
-    throw0(DB_ERROR(lmdb_error("Failed to add output type to db transaction: ", result).c_str()));
+    MDB_val_copy<uint32_t> koat(asset_type);
+    if ((result = mdb_cursor_put(m_cur_output_types, &koat, &voat, MDB_APPENDDUP)))
+      throw0(DB_ERROR(lmdb_error("Failed to add output type to db transaction: ", result).c_str()));
 
-  return std::make_pair(ok.amount_index, oat.asset_type_output_index);
+    return std::make_pair(ok.amount_index, oat.asset_type_output_index);
+  }
+
+  // post HF13 realign: index only rct (amount==0) outputs, keyed to amount_index, so a
+  // rank resolves to the right same asset output and the transparent outputs stay out
+  if (tx_output.amount == 0)
+  {
+    result = mdb_cursor_get(m_cur_output_types, &k, &v, MDB_SET);
+    if (!result)
+      {
+        result = mdb_cursor_count(m_cur_output_types, &num_outputs_of_asset_type);
+        if (result)
+          throw0(DB_ERROR(std::string("Failed to get number of outputs for type: ").append(mdb_strerror(result)).c_str()));
+      }
+    else if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to get output types in db transaction: ", result).c_str()));
+
+    outassettype oat;
+    oat.asset_type_output_index = num_outputs_of_asset_type;
+    oat.output_id = ok.amount_index;
+    MDB_val_set(voat, oat);
+
+    MDB_val_copy<uint32_t> koat(asset_type);
+    if ((result = mdb_cursor_put(m_cur_output_types, &koat, &voat, MDB_APPENDDUP)))
+      throw0(DB_ERROR(lmdb_error("Failed to add output type to db transaction: ", result).c_str()));
+  }
+
+  return std::make_pair(ok.amount_index, num_outputs_of_asset_type);
 }
 
 void BlockchainLMDB::add_tx_amount_output_indices(const uint64_t tx_id,
@@ -2347,26 +2377,33 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
     throw1(DB_ERROR(lmdb_error("Error adding removal of output tx to db transaction", result).c_str()));
   }
 
+  // post realign the ring index holds only rct outputs keyed to amount_index; pre realign it
+  // holds every output keyed to the global id. transparent outputs are skipped post realign.
+  const bool in_ring_index = !m_rct_index_realigned || (amount == 0);
+  const uint64_t expected_output_id = m_rct_index_realigned ? ok->amount_index : out_index;
   uint32_t output_asset_type = cryptonote::asset_id_from_type(output_asset_type_str);
-  MDB_val_copy<uint32_t> koat(output_asset_type);
-  MDB_val_set(voat, asset_type_output_id);
-  
-  result = mdb_cursor_get(m_cur_output_types, &koat, &voat, MDB_GET_BOTH);
-  if (result == MDB_NOTFOUND)
+  if (in_ring_index)
   {
-    throw0(DB_ERROR("Unexpected: asset type output id not found in m_output_types"));
-  }
-  else if (result)
-  {
-    throw1(DB_ERROR(lmdb_error("Error adding removal of output type to db transaction", result).c_str()));
-  }
+    MDB_val_copy<uint32_t> koat(output_asset_type);
+    MDB_val_set(voat, asset_type_output_id);
 
-  const outassettype *oat = (const outassettype *)voat.mv_data;
-  if (oat->output_id != out_index)
-    throw0(DB_ERROR(std::string("Unexpected: output_id ")
-                    .append(boost::lexical_cast<std::string>(oat->output_id))
-                    .append(" from m_output_types does not match expected output index ")
-                    .append(boost::lexical_cast<std::string>(out_index)).c_str()));
+    result = mdb_cursor_get(m_cur_output_types, &koat, &voat, MDB_GET_BOTH);
+    if (result == MDB_NOTFOUND)
+    {
+      throw0(DB_ERROR("Unexpected: asset type output id not found in m_output_types"));
+    }
+    else if (result)
+    {
+      throw1(DB_ERROR(lmdb_error("Error adding removal of output type to db transaction", result).c_str()));
+    }
+
+    const outassettype *oat = (const outassettype *)voat.mv_data;
+    if (oat->output_id != expected_output_id)
+      throw0(DB_ERROR(std::string("Unexpected: output_id ")
+                      .append(boost::lexical_cast<std::string>(oat->output_id))
+                      .append(" from m_output_types does not match expected ")
+                      .append(boost::lexical_cast<std::string>(expected_output_id)).c_str()));
+  }
 
 
   result = mdb_cursor_del(m_cur_output_txs, 0);
@@ -2378,9 +2415,12 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
   if (result)
     throw0(DB_ERROR(lmdb_error(std::string("Error deleting amount for output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
 
-  result = mdb_cursor_del(m_cur_output_types, 0);
-  if (result)
-    throw0(DB_ERROR(lmdb_error(std::string("Error deleting type for output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
+  if (in_ring_index)
+  {
+    result = mdb_cursor_del(m_cur_output_types, 0);
+    if (result)
+      throw0(DB_ERROR(lmdb_error(std::string("Error deleting type for output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
+  }
 }
 
 void BlockchainLMDB::prune_outputs(uint64_t amount)
@@ -2833,6 +2873,16 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
         return;
       }
     }
+  }
+
+  // read the HF13 realign flag so the output_types layout is selected correctly;
+  // defaults to not realigned on a pre fork db
+  {
+    MDB_val_str(rk, "rct_realigned");
+    MDB_val rv;
+    m_rct_index_realigned = (mdb_get(txn, m_properties, &rk, &rv) == MDB_SUCCESS
+                             && rv.mv_size == sizeof(uint32_t)
+                             && *(const uint32_t*)rv.mv_data == 1);
   }
 
   // commit the transaction
@@ -6372,6 +6422,139 @@ void BlockchainLMDB::migrate_2_3()
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to update version for the db: ", result).c_str()));
   txn.commit();
+}
+
+void BlockchainLMDB::realign_rct_index()
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  if (m_rct_index_realigned)
+    return;
+  int result;
+  mdb_txn_safe txn(false);
+
+  MGINFO_YELLOW("HF13: realigning the rct ring index, runs once at the fork:");
+
+  // read every rct (amount==0) output's (amount_index, asset) in amount_index order
+  std::vector<std::pair<uint64_t, uint32_t>> rct_outs;
+  {
+    result = mdb_txn_begin(m_env, NULL, MDB_RDONLY, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a read transaction: ", result).c_str()));
+    MDB_cursor *c_amounts;
+    result = mdb_cursor_open(txn, m_output_amounts, &c_amounts);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_amounts: ", result).c_str()));
+    uint64_t amount0 = 0;
+    MDB_val v;
+    MDB_val_set(k0, amount0);
+    result = mdb_cursor_get(c_amounts, &k0, &v, MDB_SET);
+    if (result == 0)
+    {
+      result = mdb_cursor_get(c_amounts, &k0, &v, MDB_FIRST_DUP);
+      while (result == 0)
+      {
+        const outkey *ok = (const outkey *)v.mv_data;
+        rct_outs.emplace_back(ok->amount_index, ok->data.asset_type);
+        result = mdb_cursor_get(c_amounts, &k0, &v, MDB_NEXT_DUP);
+      }
+    }
+    else if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to scan output_amounts: ", result).c_str()));
+    txn.commit();
+  }
+  MGINFO_YELLOW("realign: read " << rct_outs.size() << " rct outputs");
+
+  // wipe output_types and rebuild it rct only, per asset ranked, keyed to amount_index
+  result = mdb_txn_begin(m_env, NULL, 0, txn);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to create a write transaction: ", result).c_str()));
+  if ((result = mdb_drop(txn, m_output_types, 0)))
+    throw0(DB_ERROR(lmdb_error("Failed to clear output_types: ", result).c_str()));
+  MDB_cursor *c_types;
+  result = mdb_cursor_open(txn, m_output_types, &c_types);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_types: ", result).c_str()));
+  std::map<uint32_t, uint64_t> next_rank;
+  std::vector<uint64_t> rank_by_ai;   // amount_index -> rct rank (rct outputs are dense in amount_index)
+  rank_by_ai.reserve(rct_outs.size());
+  uint64_t n = 0;
+  for (const auto &p : rct_outs)
+  {
+    outassettype oat;
+    oat.asset_type_output_index = next_rank[p.second]++;
+    oat.output_id = p.first;
+    rank_by_ai.push_back(oat.asset_type_output_index);
+    MDB_val_set(voat, oat);
+    MDB_val_copy<uint32_t> koat(p.second);
+    if ((result = mdb_cursor_put(c_types, &koat, &voat, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to rebuild output_types: ", result).c_str()));
+    if (!(++n % 200000))
+    {
+      LOGIF(el::Level::Info) { std::cout << n << " / " << rct_outs.size() << "  \r" << std::flush; }
+      txn.commit();
+      result = mdb_txn_begin(m_env, NULL, 0, txn);
+      if (result)
+        throw0(DB_ERROR(lmdb_error("Failed to create a write transaction: ", result).c_str()));
+      result = mdb_cursor_open(txn, m_output_types, &c_types);
+      if (result)
+        throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_types: ", result).c_str()));
+    }
+  }
+  txn.commit();
+  MGINFO_YELLOW("realign: rebuilt " << n << " ring index entries across " << next_rank.size() << " assets");
+
+  // rewrite each tx output's reported rank (tx_outputs.second) to its rct rank so a
+  // wallet rescan rings the realigned index and reorg removal finds the right entry.
+  // transparent outputs are inert; if their amount bucket index collides into the map
+  // they get a harmless value (they are never ring members or removed from output_types).
+  result = mdb_txn_begin(m_env, NULL, 0, txn);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to create a write transaction: ", result).c_str()));
+  MDB_cursor *c_txo;
+  result = mdb_cursor_open(txn, m_tx_outputs, &c_txo);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to open a cursor for tx_outputs: ", result).c_str()));
+  typedef std::pair<uint64_t, uint64_t> oidx;
+  MDB_val ktxo, vtxo;
+  uint64_t tn = 0;
+  result = mdb_cursor_get(c_txo, &ktxo, &vtxo, MDB_FIRST);
+  while (result == 0)
+  {
+    const size_t cnt = vtxo.mv_size / sizeof(oidx);
+    std::vector<oidx> pairs((const oidx *)vtxo.mv_data, (const oidx *)vtxo.mv_data + cnt);
+    for (auto &pr : pairs)
+      if (pr.first < rank_by_ai.size())
+        pr.second = rank_by_ai[pr.first];
+    MDB_val nv;
+    nv.mv_data = cnt ? (void *)pairs.data() : (void *)"";
+    nv.mv_size = sizeof(oidx) * cnt;
+    if ((result = mdb_cursor_put(c_txo, &ktxo, &nv, MDB_CURRENT)))
+      throw0(DB_ERROR(lmdb_error("Failed to rewrite tx_outputs: ", result).c_str()));
+    if (!(++tn % 200000))
+    {
+      LOGIF(el::Level::Info) { std::cout << tn << " txs  \r" << std::flush; }
+    }
+    result = mdb_cursor_get(c_txo, &ktxo, &vtxo, MDB_NEXT);
+  }
+  if (result != MDB_NOTFOUND)
+    throw0(DB_ERROR(lmdb_error("Failed iterating tx_outputs: ", result).c_str()));
+  txn.commit();
+  MGINFO_YELLOW("realign: rewrote reported ranks for " << tn << " txs");
+
+  result = mdb_txn_begin(m_env, NULL, 0, txn);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+  uint32_t realigned = 1;
+  MDB_val vv;
+  vv.mv_data = (void *)&realigned;
+  vv.mv_size = sizeof(realigned);
+  MDB_val_str(vk, "rct_realigned");
+  result = mdb_put(txn, m_properties, &vk, &vv, 0);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to record the rct realign flag: ", result).c_str()));
+  txn.commit();
+  m_rct_index_realigned = true;
 }
 
 void BlockchainLMDB::migrate(const uint32_t oldversion)

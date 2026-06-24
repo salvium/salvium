@@ -1956,6 +1956,12 @@ public:
    */
   virtual uint64_t get_database_size() const = 0;
 
+  // HF13 rct ring index realign: rebuild output_types as the rct only index, once at the fork
+  virtual void realign_rct_index() {}
+  virtual bool rct_index_realigned() const { return false; }
+  // whether a batch write transaction is currently open
+  virtual bool is_batch_active() const { return false; }
+
   virtual int get_audit_block_info(const uint64_t height, audit_block_info& abi) const = 0;
   virtual int get_audit_tx_info(const uint64_t height, std::vector<yield_tx_info>& ati_container) const = 0;
 

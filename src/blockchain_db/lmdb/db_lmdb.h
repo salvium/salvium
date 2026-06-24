@@ -501,7 +501,12 @@ private:
 
   // migrate from DB version 2 to 3
   void migrate_2_3();
-  
+
+  // HF13: rebuild output_types as the rct only ring index, once at the fork height
+  virtual void realign_rct_index() override;
+  virtual bool rct_index_realigned() const override { return m_rct_index_realigned; }
+  virtual bool is_batch_active() const override { return m_batch_active; }
+
   void cleanup_batch();
 
   virtual int get_audit_block_info(const uint64_t height, audit_block_info& abi) const;
@@ -546,6 +551,9 @@ private:
 
   MDB_dbi m_circ_supply;
   MDB_dbi m_circ_supply_tally;
+
+  // true once the HF13 rct ring index realign has run; gates the output_types write/read layout
+  bool m_rct_index_realigned = false;
 
   MDB_dbi m_yield_txs;
   MDB_dbi m_yield_blocks;
