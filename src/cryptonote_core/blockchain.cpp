@@ -3108,11 +3108,19 @@ uint64_t Blockchain::get_num_mature_outputs(const std::string asset_type) const
   // ensure we don't include outputs that aren't yet eligible to be used
   // outpouts are sorted by height
   const uint64_t blockchain_height = m_db->height();
+  // post realign output_types keys to the rct amount_index, pre realign it keys to the global id
+  const bool realigned = m_db->rct_index_realigned();
   while (num_outs_of_asset_type > 0)
   {
-    // output_types now keys to the rct amount_index; read height straight off the output
-    uint64_t output_amount_index = m_db->get_output_id_from_asset_type_output_index(asset_type, num_outs_of_asset_type - 1);
-    const uint64_t height = m_db->get_output_key(0, output_amount_index).height;
+    const uint64_t resolved = m_db->get_output_id_from_asset_type_output_index(asset_type, num_outs_of_asset_type - 1);
+    uint64_t height;
+    if (realigned)
+      height = m_db->get_output_key(0, resolved).height;
+    else
+    {
+      const tx_out_index toi = m_db->get_output_tx_and_index_from_global(resolved);
+      height = m_db->get_tx_block_height(toi.first);
+    }
     if (height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE <= blockchain_height)
       break;
     --num_outs_of_asset_type;
