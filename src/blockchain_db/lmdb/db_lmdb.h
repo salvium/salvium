@@ -89,7 +89,12 @@ typedef struct mdb_txn_cursors
   MDB_cursor *m_txc_rct_count_info;
   
   MDB_cursor *m_txc_rollup_tx_info;
-  
+
+  MDB_cursor *m_txc_output_records;
+  MDB_cursor *m_txc_output_amount_refs;
+  MDB_cursor *m_txc_output_type_refs;
+
+
 } mdb_txn_cursors;
 
 #define m_cur_blocks	m_cursors->m_txc_blocks
@@ -126,6 +131,10 @@ typedef struct mdb_txn_cursors
 #define m_cur_rct_count_info m_cursors->m_txc_rct_count_info
 
 #define m_cur_rollup_tx_info m_cursors->m_txc_rollup_tx_info
+
+#define m_cur_output_records	    m_cursors->m_txc_output_records
+#define m_cur_output_amount_refs	m_cursors->m_txc_output_amount_refs
+#define m_cur_output_type_refs      m_cursors->m_txc_output_type_refs
 
 typedef struct mdb_rflags
 {
@@ -165,6 +174,10 @@ typedef struct mdb_rflags
 
   bool m_rf_rollup_tx_info;
   
+  bool m_rf_output_records;
+  bool m_rf_output_amount_refs;
+  bool m_rf_output_type_refs;
+
 } mdb_rflags;
 
 typedef struct mdb_threadinfo
@@ -333,6 +346,29 @@ public:
   virtual output_data_t get_output_key(const uint64_t& amount, const uint64_t& index, bool include_commitmemt) const;
   virtual void get_output_key(const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &offsets, std::vector<output_data_t> &outputs, bool allow_partial = false) const;
 
+  virtual output_record_t get_output_record_by_id(const uint64_t output_id) const;
+  virtual cryptonote::output_data_t get_output_data_by_id(uint64_t output_id) const;
+  virtual void get_output_data_by_id(const std::vector<uint64_t>& output_ids, std::vector<output_data_t>& outputs) const;
+
+  uint64_t get_output_id_by_asset_index(
+                                        const std::string& asset_type,
+                                        uint64_t asset_type_output_index) const;
+
+  void get_output_ids_by_asset_index(
+                                     const std::string& asset_type,
+                                     const std::vector<uint64_t>& asset_type_output_indices,
+                                     std::vector<uint64_t>& output_ids) const;
+
+  uint64_t get_output_id_by_amount_index(
+                                         uint64_t amount,
+                                         uint64_t amount_index) const;
+
+  void get_output_ids_by_amount_index(
+                                      uint64_t amount,
+                                      const std::vector<uint64_t>& amount_indices,
+                                      std::vector<uint64_t>& output_ids) const;
+
+  
   virtual void get_output_id_from_asset_type_output_index(const std::string asset_type, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const;
   virtual uint64_t get_output_id_from_asset_type_output_index(const std::string asset_type, const uint64_t &asset_type_output_index) const;
 
@@ -420,6 +456,7 @@ public:
   bool get_output_distribution(uint64_t amount, uint64_t from_height, uint64_t to_height, std::vector<uint64_t> &distribution, uint64_t &base) const;
 
   // helper functions
+  static int compare_uint32(const MDB_val *a, const MDB_val *b);
   static int compare_uint64(const MDB_val *a, const MDB_val *b);
   static int compare_hash32(const MDB_val *a, const MDB_val *b);
   static int compare_string(const MDB_val *a, const MDB_val *b);
@@ -501,6 +538,9 @@ private:
 
   // migrate from DB version 2 to 3
   void migrate_2_3();
+
+  // migrate from DB version 3 to 4
+  void migrate_3_4();
   
   void cleanup_batch();
 
@@ -562,6 +602,10 @@ private:
   MDB_dbi m_rct_count_info;
 
   MDB_dbi m_rollup_tx_info;
+
+  MDB_dbi m_output_records;
+  MDB_dbi m_output_amount_refs;
+  MDB_dbi m_output_type_refs;
 
   mutable uint64_t m_cum_size;	// used in batch size estimation
   mutable unsigned int m_cum_count;
