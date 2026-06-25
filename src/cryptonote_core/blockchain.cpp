@@ -172,6 +172,28 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   std::vector<uint64_t> output_ids;
   std::vector<output_data_t> outputs;
 
+  std::vector<uint64_t> old_ids;
+  m_db->get_output_id_from_asset_type_output_index(
+                                                   tx_in_to_key.asset_type,
+                                                   asset_offsets,
+                                                   old_ids);
+
+  std::vector<uint64_t> new_ids;
+  m_db->get_output_ids_by_asset_index(
+                                      tx_in_to_key.asset_type,
+                                      asset_offsets,
+                                      new_ids);
+
+  std::vector<output_data_t> canonical_outputs;
+  m_db->get_output_data_by_id(new_ids, canonical_outputs);
+
+  std::vector<output_data_t> legacy_outputs;
+  m_db->get_output_key(
+                       epee::span<const uint64_t>(&tx_in_to_key.amount, 1),
+                       old_ids,
+                       legacy_outputs,
+                       true);
+
 #if SALVIUM_USE_CANONICAL_OUTPUT_REFS
   m_db->get_output_ids_by_asset_index(tx_in_to_key.asset_type, asset_offsets, output_ids);
   try
