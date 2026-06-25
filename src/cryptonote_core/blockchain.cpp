@@ -4808,7 +4808,9 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
       return false;
 
   // enforce min output age
-  if (*pmax_used_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE > m_db->height()) { MERROR("Transaction spends at least one output which is too young"); return false; }
+  if (*pmax_used_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE > m_db->height()) {
+    MERROR("Transaction spends at least one output which is too young"); return false;
+  }
 
   // Warn that new RCT types are present, and thus the cache is not being used effectively
   static constexpr const std::uint8_t RCT_CACHE_TYPE = rct::RCTTypeSalviumOne;
