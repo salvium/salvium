@@ -538,14 +538,18 @@ namespace cryptonote
   //-----------------------------------------------
   struct get_outputs_out
   {
-    uint64_t amount;
-    uint64_t index;
-    bool is_global_out;
+    uint64_t amount = 0;
+    uint64_t index = 0;
+    bool is_global_out = false;
+    crypto::public_key key = crypto::null_pkey;
+
+    bool key_set() const { return key != crypto::null_pkey; }
 
     BEGIN_KV_SERIALIZE_MAP()
       KV_SERIALIZE(amount)
       KV_SERIALIZE(index)
       KV_SERIALIZE_OPT(is_global_out, false)
+      KV_SERIALIZE_VAL_POD_AS_BLOB_OPT(key, crypto::null_pkey)
     END_KV_SERIALIZE_MAP()
   };
 
@@ -574,6 +578,7 @@ namespace cryptonote
       uint64_t height;
       crypto::hash txid;
       uint64_t output_id;
+      bool key_provided; // true if the key was provided by the wallet (not index-resolved)
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE_VAL_POD_AS_BLOB(key)
@@ -582,6 +587,7 @@ namespace cryptonote
         KV_SERIALIZE(height)
         KV_SERIALIZE_VAL_POD_AS_BLOB(txid)
         KV_SERIALIZE(output_id)
+        KV_SERIALIZE_OPT(key_provided, false)
       END_KV_SERIALIZE_MAP()
     };
 
