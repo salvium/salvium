@@ -105,6 +105,13 @@ public:
   virtual uint64_t get_num_outputs_of_asset_type(const std::string asset_type) const override { return 1; }
   virtual uint64_t get_indexing_base() const override { return 0; }
   virtual cryptonote::output_data_t get_output_key(const uint64_t& amount, const uint64_t& index, bool include_commitmemt) const override { return cryptonote::output_data_t(); }
+  virtual cryptonote::output_record_t get_output_record_by_id(const uint64_t output_id) const override { return cryptonote::output_record_t(); }
+  virtual cryptonote::output_data_t get_output_data_by_id(uint64_t output_id) const override { return cryptonote::output_data_t(); }
+  virtual void get_output_data_by_id(const std::vector<uint64_t>& output_ids, std::vector<cryptonote::output_data_t>& outputs) const override {}
+  virtual uint64_t get_output_id_by_asset_index(const std::string& asset_type, uint64_t asset_type_output_index) const override { return 0; }
+  virtual void get_output_ids_by_asset_index(const std::string& asset_type, const std::vector<uint64_t>& asset_type_output_indices, std::vector<uint64_t>& output_ids) const override {}
+  virtual uint64_t get_output_id_by_amount_index(uint64_t amount, uint64_t amount_index) const override { return 0; }
+  virtual void get_output_ids_by_amount_index(uint64_t amount, const std::vector<uint64_t>& amount_indices, std::vector<uint64_t>& output_ids) const override {}
   virtual cryptonote::tx_out_index get_output_tx_and_index_from_global(const uint64_t& index) const override { return cryptonote::tx_out_index(); }
   virtual cryptonote::tx_out_index get_output_tx_and_index(const uint64_t& amount, const uint64_t& index) const override { return cryptonote::tx_out_index(); }
   virtual void get_output_tx_and_index(const uint64_t& amount, const std::vector<uint64_t> &offsets, std::vector<cryptonote::tx_out_index> &indices) const override {}

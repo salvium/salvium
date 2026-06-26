@@ -78,6 +78,7 @@
 #include "storages/http_abstract_invoke.h"
 
 #include "common/debugging.h"
+#include "blockchain_db/output_ref_config.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "blockchain"
@@ -170,83 +171,35 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   // #1 plus relative offset #2.
   // TODO: Investigate if this is necessary / why this is done.
   std::vector<uint64_t> asset_offsets = relative_output_offsets_to_absolute(tx_in_to_key.key_offsets);
-  std::vector<uint64_t> absolute_offsets;
-  m_db->get_output_id_from_asset_type_output_index(tx_in_to_key.asset_type, asset_offsets, absolute_offsets);
+  std::vector<uint64_t> output_ids;
   std::vector<output_data_t> outputs;
 
-  bool found = false;
-  /*
-  auto it = m_scan_table.find(tx_prefix_hash);
-  if (it != m_scan_table.end())
+  try
   {
-    auto its = it->second.find(tx_in_to_key.k_image);
-    if (its != it->second.end())
-    {
-      outputs = its->second;
-      found = true;
-    }
-  }
-  */
-
-  if (!found)
-  {
-    try
-    {
-      m_db->get_output_key(epee::span<const uint64_t>(&tx_in_to_key.amount, 1), absolute_offsets, outputs, true);
-      if (absolute_offsets.size() != outputs.size())
-      {
-        MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount);
-        return false;
-      }
-    }
-    catch (...)
+    m_db->get_output_ids_by_asset_index(tx_in_to_key.asset_type, asset_offsets, output_ids);
+    m_db->get_output_data_by_id(output_ids, outputs);
+    if (output_ids.size() != outputs.size())
     {
       MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount);
       return false;
     }
   }
-  else
+  catch (...)
   {
-    // check for partial results and add the rest if needed;
-    if (outputs.size() < absolute_offsets.size() && outputs.size() > 0)
-    {
-      MDEBUG("Additional outputs needed: " << absolute_offsets.size() - outputs.size());
-      std::vector < uint64_t > add_offsets;
-      std::vector<output_data_t> add_outputs;
-      add_outputs.reserve(absolute_offsets.size() - outputs.size());
-      for (size_t i = outputs.size(); i < absolute_offsets.size(); i++)
-        add_offsets.push_back(absolute_offsets[i]);
-      try
-      {
-        m_db->get_output_key(epee::span<const uint64_t>(&tx_in_to_key.amount, 1), add_offsets, add_outputs, true);
-        if (add_offsets.size() != add_outputs.size())
-        {
-          MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount);
-          return false;
-        }
-      }
-      catch (...)
-      {
-        MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount);
-        return false;
-      }
-      outputs.insert(outputs.end(), add_outputs.begin(), add_outputs.end());
-    }
+    MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount);
+    return false;
   }
 
   size_t count = 0;
-  for (const uint64_t& i : absolute_offsets)
+  for (const uint64_t& i : output_ids)
   {
     try
     {
       output_data_t output_index;
       try
       {
-        // get tx hash and output index for output
-        if (count < outputs.size())
-          output_index = outputs.at(count);
-        else
-          output_index = m_db->get_output_key(tx_in_to_key.amount, i);
+        // get output data for the already resolved canonical output id
+        output_index = outputs.at(count);
 
         // call to the passed boost visitor to grab the public key for the output
         if (!vis.handle_output(output_index.unlock_time, cryptonote::asset_type_from_id(output_index.asset_type), output_index.pubkey, output_index.commitment))
@@ -262,7 +215,7 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
       }
 
       // if on last output and pmax_related_block_height not null pointer
-      if(++count == absolute_offsets.size() && pmax_related_block_height)
+      if(++count == output_ids.size() && pmax_related_block_height)
       {
         // set *pmax_related_block_height to tx block height for this output
         auto h = output_index.height;
@@ -3103,7 +3056,7 @@ uint64_t Blockchain::get_num_mature_outputs(const std::string asset_type) const
   const uint64_t blockchain_height = m_db->height();
   while (num_outs_of_asset_type > 0)
   {
-    uint64_t output_id = m_db->get_output_id_from_asset_type_output_index(asset_type, num_outs_of_asset_type - 1);
+    uint64_t output_id = m_db->get_output_id_by_asset_index(asset_type, num_outs_of_asset_type - 1);
     const tx_out_index toi = m_db->get_output_tx_and_index_from_global(output_id);
 
     const uint64_t height = m_db->get_tx_block_height(toi.first);
@@ -3130,52 +3083,24 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
   res.outs.clear();
   res.outs.reserve(req.outputs.size());
 
-  // if an asset type is provided in the request, most indexes provided in the request are asset type output id's.
-  // need to use the asset type output id's provided to retrieve the respective global output id's
-  std::map<uint64_t, uint64_t> global_outs_by_asset_type_output_id;
-  if (!req.asset_type.empty())
-  {
-    std::vector<uint64_t> asset_type_output_indices;
-    for (const auto &i: req.outputs)
-    {
-      // some inputs in the request have already been used in attempted rings in the past. These inputs will
-      // have the is_global_out flag set to true, since they already have the global output id saved
-      if (!i.is_global_out)
-        asset_type_output_indices.push_back(i.index);
-    }
-
-    std::vector<uint64_t> global_out_ids;
-    global_out_ids.reserve(asset_type_output_indices.size());
-
-    m_db->get_output_id_from_asset_type_output_index(req.asset_type, asset_type_output_indices, global_out_ids);
-
-    uint64_t global_outs = 0;
-    for (const auto &i: req.outputs)
-    {
-      if (!i.is_global_out)
-      {
-        global_outs_by_asset_type_output_id[i.index] = global_out_ids[global_outs];
-        ++global_outs;
-      }
-    }
-  }
-
   std::vector<cryptonote::output_data_t> data;
+  std::vector<uint64_t> resolved_output_ids;
+  resolved_output_ids.reserve(req.outputs.size());
+
   try
   {
-    std::vector<uint64_t> amounts, offsets;
-    amounts.reserve(req.outputs.size());
-    offsets.reserve(req.outputs.size());
     for (const auto &i: req.outputs)
     {
-      amounts.push_back(i.amount);
-      // if no asset type provided, the offsets provided are already global output id's unless specifically set
-      if (req.asset_type.empty() || i.is_global_out)
-        offsets.push_back(i.index);
+      if (i.is_global_out)
+        resolved_output_ids.push_back(i.index);
+      else if (req.asset_type.empty())
+        resolved_output_ids.push_back(m_db->get_output_id_by_amount_index(i.amount, i.index));
       else
-        offsets.push_back(global_outs_by_asset_type_output_id[i.index]);
+        resolved_output_ids.push_back(m_db->get_output_id_by_asset_index(req.asset_type, i.index));
     }
-    m_db->get_output_key(epee::span<const uint64_t>(amounts.data(), amounts.size()), offsets, data);
+
+    m_db->get_output_data_by_id(resolved_output_ids, data);
+
     if (data.size() != req.outputs.size())
     {
       MERROR("Unexpected output data size: expected " << req.outputs.size() << ", got " << data.size());
@@ -3196,14 +3121,14 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
     {
       for (size_t i = 0; i < req.outputs.size(); ++i)
       {
-        tx_out_index toi = m_db->get_output_tx_and_index(req.outputs[i].amount, req.outputs[i].index);
+        tx_out_index toi = m_db->get_output_tx_and_index_from_global(resolved_output_ids[i]);
         res.outs[i].txid = toi.first;
       }
     }
     if (!req.asset_type.empty())
     {
       for (size_t i = 0; i < req.outputs.size(); ++i)
-        res.outs[i].output_id = offsets[i];
+        res.outs[i].output_id = resolved_output_ids[i];
     }
   }
   catch (const std::exception &e)
@@ -3863,8 +3788,49 @@ bool Blockchain::get_tx_outputs_gindexs(const crypto::hash& tx_id, size_t n_txes
     MERROR_VER("get_tx_outputs_gindexs failed to find transaction with id = " << tx_id);
     return false;
   }
+  
   indexs = m_db->get_tx_amount_output_indices(tx_index, n_txes);
   CHECK_AND_ASSERT_MES(n_txes == indexs.size(), false, "Wrong indexs size");
+
+#if SALVIUM_VALIDATE_CANONICAL_OUTPUT_REFS
+  std::vector<cryptonote::blobdata> tx_blobs;
+  if (!m_db->get_pruned_tx_blobs_from(tx_id, n_txes, tx_blobs))
+  {
+    MERROR_VER("get_tx_outputs_gindexs failed to load transaction blobs from id = " << tx_id);
+    return false;
+  }
+  CHECK_AND_ASSERT_MES(tx_blobs.size() == indexs.size(), false, "Wrong transaction blob count");
+
+  for (size_t i = 0; i < indexs.size(); ++i)
+  {
+    transaction tx;
+    if (!parse_and_validate_tx_base_from_blob(tx_blobs[i], tx))
+    {
+      MERROR_VER("get_tx_outputs_gindexs failed to parse transaction prefix for tx group = " << i);
+      return false;
+    }
+    CHECK_AND_ASSERT_MES(tx.vout.size() == indexs[i].size(), false, "Wrong tx output index count");
+
+    for (size_t j = 0; j < indexs[i].size(); ++j)
+    {
+      std::string asset_type;
+      if (!get_output_asset_type(tx.vout[j], asset_type))
+      {
+        MERROR_VER("get_tx_outputs_gindexs failed to get asset type for tx group = " << i << ", output = " << j);
+        return false;
+      }
+
+      const uint64_t amount_output_id = m_db->get_output_id_by_amount_index(tx.vout[j].amount, indexs[i][j].first);
+      const uint64_t asset_output_id = m_db->get_output_id_by_asset_index(asset_type, indexs[i][j].second);
+      if (amount_output_id != asset_output_id)
+      {
+        MERROR_VER("get_tx_outputs_gindexs ref mismatch for tx group = " << i << ", output = " << j
+                   << ", amount_output_id = " << amount_output_id << ", asset_output_id = " << asset_output_id);
+        return false;
+      }
+    }
+  }
+#endif
 
   return true;
 }
@@ -3873,13 +3839,9 @@ bool Blockchain::get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<s
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
-  uint64_t tx_index;
-  if (!m_db->tx_exists(tx_id, tx_index))
-  {
-    MERROR_VER("get_tx_outputs_gindexs failed to find transaction with id = " << tx_id);
+  std::vector<std::vector<std::pair<uint64_t, uint64_t>>> indices;
+  if (!get_tx_outputs_gindexs(tx_id, 1, indices))
     return false;
-  }
-  std::vector<std::vector<std::pair<uint64_t, uint64_t>>> indices = m_db->get_tx_amount_output_indices(tx_index, 1);
   CHECK_AND_ASSERT_MES(indices.size() == 1, false, "Wrong indices size");
   indexs = indices.front();
   return true;
@@ -4754,7 +4716,9 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
       return false;
 
   // enforce min output age
-  if (*pmax_used_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE > m_db->height()) { MERROR("Transaction spends at least one output which is too young"); return false; }
+  if (*pmax_used_block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE > m_db->height()) {
+    MERROR("Transaction spends at least one output which is too young"); return false;
+  }
 
   // Warn that new RCT types are present, and thus the cache is not being used effectively
   static constexpr const std::uint8_t RCT_CACHE_TYPE = rct::RCTTypeSalviumOne;
