@@ -172,32 +172,9 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   std::vector<uint64_t> output_ids;
   std::vector<output_data_t> outputs;
 
-  std::vector<uint64_t> old_ids;
-  m_db->get_output_id_from_asset_type_output_index(
-                                                   tx_in_to_key.asset_type,
-                                                   asset_offsets,
-                                                   old_ids);
-
-  std::vector<uint64_t> new_ids;
-  m_db->get_output_ids_by_asset_index(
-                                      tx_in_to_key.asset_type,
-                                      asset_offsets,
-                                      new_ids);
-
-  std::vector<output_data_t> canonical_outputs;
-  m_db->get_output_data_by_id(new_ids, canonical_outputs);
-
-  std::vector<output_data_t> legacy_outputs;
-  m_db->get_output_key(
-                       epee::span<const uint64_t>(&tx_in_to_key.amount, 1),
-                       old_ids,
-                       legacy_outputs,
-                       true);
-
-#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
-  m_db->get_output_ids_by_asset_index(tx_in_to_key.asset_type, asset_offsets, output_ids);
   try
   {
+    m_db->get_output_ids_by_asset_index(tx_in_to_key.asset_type, asset_offsets, output_ids);
     m_db->get_output_data_by_id(output_ids, outputs);
     if (output_ids.size() != outputs.size())
     {
@@ -210,24 +187,6 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
     MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount);
     return false;
   }
-#else
-  m_db->get_output_id_from_asset_type_output_index(tx_in_to_key.asset_type, asset_offsets, output_ids);
-  std::vector<uint64_t> amounts(output_ids.size(), tx_in_to_key.amount);
-  try
-  {
-    m_db->get_output_key(epee::span<const uint64_t>(amounts.data(), amounts.size()), output_ids, outputs);
-    if (output_ids.size() != outputs.size())
-    {
-      MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount);
-      return false;
-    }
-  }
-  catch (...)
-  {
-    MERROR_VER("Output does not exist! amount = " << tx_in_to_key.amount);
-    return false;
-  }
-#endif
 
   size_t count = 0;
   for (const uint64_t& i : output_ids)
@@ -3095,11 +3054,7 @@ uint64_t Blockchain::get_num_mature_outputs(const std::string asset_type) const
   const uint64_t blockchain_height = m_db->height();
   while (num_outs_of_asset_type > 0)
   {
-#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
     uint64_t output_id = m_db->get_output_id_by_asset_index(asset_type, num_outs_of_asset_type - 1);
-#else
-    uint64_t output_id = m_db->get_output_id_from_asset_type_output_index(asset_type, num_outs_of_asset_type - 1);
-#endif
     const tx_out_index toi = m_db->get_output_tx_and_index_from_global(output_id);
 
     const uint64_t height = m_db->get_tx_block_height(toi.first);
@@ -3132,7 +3087,6 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
 
   try
   {
-#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
     for (const auto &i: req.outputs)
     {
       if (i.is_global_out)
@@ -3144,46 +3098,6 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
     }
 
     m_db->get_output_data_by_id(resolved_output_ids, data);
-#else
-    std::map<uint64_t, uint64_t> global_outs_by_asset_type_output_id;
-    if (!req.asset_type.empty())
-    {
-      std::vector<uint64_t> asset_type_output_indices;
-      for (const auto &i: req.outputs)
-      {
-        if (!i.is_global_out)
-          asset_type_output_indices.push_back(i.index);
-      }
-
-      std::vector<uint64_t> global_out_ids;
-      global_out_ids.reserve(asset_type_output_indices.size());
-      m_db->get_output_id_from_asset_type_output_index(req.asset_type, asset_type_output_indices, global_out_ids);
-
-      uint64_t global_outs = 0;
-      for (const auto &i: req.outputs)
-      {
-        if (!i.is_global_out)
-        {
-          global_outs_by_asset_type_output_id[i.index] = global_out_ids[global_outs];
-          ++global_outs;
-        }
-      }
-    }
-
-    std::vector<uint64_t> amounts, offsets;
-    amounts.reserve(req.outputs.size());
-    offsets.reserve(req.outputs.size());
-    for (const auto &i: req.outputs)
-    {
-      amounts.push_back(i.amount);
-      if (req.asset_type.empty() || i.is_global_out)
-        offsets.push_back(i.index);
-      else
-        offsets.push_back(global_outs_by_asset_type_output_id[i.index]);
-    }
-    m_db->get_output_key(epee::span<const uint64_t>(amounts.data(), amounts.size()), offsets, data);
-    resolved_output_ids = offsets;
-#endif
 
     if (data.size() != req.outputs.size())
     {
@@ -3205,15 +3119,7 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
     {
       for (size_t i = 0; i < req.outputs.size(); ++i)
       {
-#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
         tx_out_index toi = m_db->get_output_tx_and_index_from_global(resolved_output_ids[i]);
-#else
-        tx_out_index toi;
-        if (req.asset_type.empty() && !req.outputs[i].is_global_out)
-          toi = m_db->get_output_tx_and_index(req.outputs[i].amount, req.outputs[i].index);
-        else
-          toi = m_db->get_output_tx_and_index_from_global(resolved_output_ids[i]);
-#endif
         res.outs[i].txid = toi.first;
       }
     }

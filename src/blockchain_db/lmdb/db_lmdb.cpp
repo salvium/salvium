@@ -2211,8 +2211,6 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
   CURSOR(output_records)
   CURSOR(output_amount_refs)
   CURSOR(output_type_refs)
-  CURSOR(tx_indices)
-  CURSOR(tx_outputs)
 
   std::string output_asset_type;
   if (!get_output_asset_type(tx_output, output_asset_type))
@@ -2434,82 +2432,142 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to add output type ref to db transaction: ", result).c_str()));
 
+  /*
+   * Forward-resolution/backpatch step.
+   *
+   * If this new output is an amount-0 output whose amount_index is different
+   * from its global output_id, then this insert has just created:
+   *
+   *   output_amount_refs[0][ok.amount_index] = ok.output_id
+   *
+   * For every old output_types row whose raw target was ok.amount_index, the
+   * legacy effective lookup is now:
+   *
+   *   output_types[asset][asset_index] -> ok.amount_index
+   *   output_amounts[0][ok.amount_index] -> ok.output_id
+   *
+   * Update the matching output_type_refs rows to encode that exact one-step
+   * legacy result. Do not scan by the current output_type_ref target: that
+   * would recursively chase later amount-0 refs and change historical ring
+   * members away from the stock consensus answer.
+   */
   if (tx_output.amount == 0 && ok.amount_index != ok.output_id)
   {
     const uint64_t legacy_raw_output_id = ok.amount_index;
     const uint64_t resolved_output_id = ok.output_id;
 
-    bool patched_any = false;
-
-    MDB_val k_scan_type_ref;
-    MDB_val v_scan_type_ref;
-
-    result = mdb_cursor_get(m_cur_output_type_refs, &k_scan_type_ref, &v_scan_type_ref, MDB_FIRST);
-    while (result == MDB_SUCCESS)
+    struct pending_type_ref_update
     {
-      if (k_scan_type_ref.mv_size != sizeof(uint32_t))
-        throw0(DB_ERROR("Invalid output_type_refs key size while scanning for pending ref"));
+      uint32_t asset_type;
+      uint64_t asset_type_output_index;
+    };
 
-      if (v_scan_type_ref.mv_size != sizeof(output_type_ref))
-        throw0(DB_ERROR("Invalid output_type_ref size while scanning for pending ref"));
+    std::vector<pending_type_ref_update> pending_updates;
 
-      uint32_t scan_asset_type = 0;
-      std::memcpy(&scan_asset_type, k_scan_type_ref.mv_data, sizeof(scan_asset_type));
+    MDB_val k_scan_type;
+    MDB_val v_scan_type;
+    for (result = mdb_cursor_get(m_cur_output_types, &k_scan_type, &v_scan_type, MDB_FIRST);
+         result == MDB_SUCCESS;
+         result = mdb_cursor_get(m_cur_output_types, &k_scan_type, &v_scan_type, MDB_NEXT))
+    {
+      if (k_scan_type.mv_size != sizeof(uint32_t))
+        throw0(DB_ERROR("Invalid output_types asset key size while resolving pending output_type_ref"));
 
-      const output_type_ref *scan_ref =
-        static_cast<const output_type_ref *>(v_scan_type_ref.mv_data);
+      if (v_scan_type.mv_size != sizeof(outassettype))
+        throw0(DB_ERROR("Invalid output_types value size while resolving pending output_type_ref"));
 
-      if (scan_ref->output_id == legacy_raw_output_id)
+      uint32_t pending_asset_type = 0;
+      std::memcpy(&pending_asset_type, k_scan_type.mv_data, sizeof(pending_asset_type));
+
+      const outassettype *scan_oat =
+        static_cast<const outassettype *>(v_scan_type.mv_data);
+
+      if (scan_oat->output_id == legacy_raw_output_id)
       {
-        const uint64_t pending_asset_type_output_index =
-          scan_ref->asset_type_output_index;
-
-        result = mdb_cursor_del(m_cur_output_type_refs, 0);
-        if (result)
-          throw0(DB_ERROR(lmdb_error("Failed to delete pending output_type_ref while backpatching: ", result).c_str()));
-
-        output_type_ref resolved_ref;
-        resolved_ref.asset_type_output_index = pending_asset_type_output_index;
-        resolved_ref.output_id = resolved_output_id;
-
-        MDB_val_copy<uint32_t> k_resolved_type_ref(scan_asset_type);
-        MDB_val_set(v_resolved_type_ref, resolved_ref);
-
-        result = mdb_cursor_put(m_cur_output_type_refs, &k_resolved_type_ref, &v_resolved_type_ref, 0);
-        if (result)
-          throw0(DB_ERROR(lmdb_error("Failed to insert resolved output_type_ref while backpatching: ", result).c_str()));
-
-        patched_any = true;
-
-        MDEBUG("Resolved pending output_type_ref by scan: "
-               << "legacy_raw_output_id=" << legacy_raw_output_id
-               << ", resolved_output_id=" << resolved_output_id
-               << ", asset_type=" << scan_asset_type
-               << ", asset_type_output_index=" << pending_asset_type_output_index);
-
-        /*
-         * Restart because deleting/inserting while iterating a DUPSORT cursor can
-         * invalidate the current traversal position.
-         */
-        result = mdb_cursor_get(m_cur_output_type_refs, &k_scan_type_ref, &v_scan_type_ref, MDB_FIRST);
-        continue;
+        pending_type_ref_update update;
+        update.asset_type = pending_asset_type;
+        update.asset_type_output_index = scan_oat->asset_type_output_index;
+        pending_updates.push_back(update);
       }
-
-      result = mdb_cursor_get(m_cur_output_type_refs, &k_scan_type_ref, &v_scan_type_ref, MDB_NEXT);
     }
 
     if (result != MDB_NOTFOUND)
-      throw0(DB_ERROR(lmdb_error("Failed to scan output_type_refs while backpatching: ", result).c_str()));
+      throw0(DB_ERROR(lmdb_error("Failed to scan output_types while resolving pending output_type_ref: ", result).c_str()));
 
-    if (!patched_any)
+    for (const pending_type_ref_update &update : pending_updates)
     {
-      /*
-       * This is not necessarily fatal: it can happen if no output_type_ref had
-       * fallen back to legacy_raw_output_id. But during debugging it is useful.
-       */
-      MDEBUG("No output_type_ref required backpatching: "
-             << "legacy_raw_output_id=" << legacy_raw_output_id
-             << ", resolved_output_id=" << resolved_output_id);
+      output_type_ref old_type_ref;
+      old_type_ref.asset_type_output_index = update.asset_type_output_index;
+      old_type_ref.output_id = legacy_raw_output_id;
+
+      MDB_val_copy<uint32_t> k_pending_type_ref(update.asset_type);
+      MDB_val_set(v_old_type_ref, old_type_ref);
+
+      result = mdb_cursor_get(m_cur_output_type_refs, &k_pending_type_ref, &v_old_type_ref, MDB_GET_BOTH);
+      if (result == MDB_SUCCESS)
+      {
+        if (v_old_type_ref.mv_size != sizeof(output_type_ref))
+          throw0(DB_ERROR("Invalid output_type_ref size while updating pending output_type_ref"));
+
+        const output_type_ref *existing_ref =
+          static_cast<const output_type_ref *>(v_old_type_ref.mv_data);
+
+        if (existing_ref->asset_type_output_index != update.asset_type_output_index)
+          throw0(DB_ERROR("output_type_ref asset index mismatch while updating pending output_type_ref"));
+
+        if (existing_ref->output_id == resolved_output_id)
+          continue;
+
+        if (existing_ref->output_id != legacy_raw_output_id)
+        {
+          throw0(DB_ERROR(
+            (std::string("output_type_ref target mismatch while updating pending output_type_ref: asset_type=") +
+             std::to_string(update.asset_type) +
+             ", asset_type_output_index=" +
+             std::to_string(update.asset_type_output_index) +
+             ", expected_current_output_id=" +
+             std::to_string(legacy_raw_output_id) +
+             ", found_output_id=" +
+             std::to_string(existing_ref->output_id) +
+             ", resolved_output_id=" +
+             std::to_string(resolved_output_id)).c_str()));
+        }
+
+        result = mdb_cursor_del(m_cur_output_type_refs, 0);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to delete pending canonical output_type_ref: ", result).c_str()));
+
+        output_type_ref new_type_ref;
+        new_type_ref.asset_type_output_index = update.asset_type_output_index;
+        new_type_ref.output_id = resolved_output_id;
+
+        MDB_val_set(v_new_type_ref, new_type_ref);
+
+        result = mdb_cursor_put(m_cur_output_type_refs, &k_pending_type_ref, &v_new_type_ref, 0);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to store resolved pending output_type_ref: ", result).c_str()));
+      }
+      else if (result == MDB_NOTFOUND)
+      {
+        throw0(DB_ERROR(
+          (std::string("Missing output_type_ref while resolving pending output_type_ref: asset_type=") +
+           std::to_string(update.asset_type) +
+           ", asset_type_output_index=" +
+           std::to_string(update.asset_type_output_index) +
+           ", legacy_raw_output_id=" +
+           std::to_string(legacy_raw_output_id) +
+           ", resolved_output_id=" +
+           std::to_string(resolved_output_id)).c_str()));
+      }
+      else
+        throw0(DB_ERROR(lmdb_error("Failed to locate pending output_type_ref: ", result).c_str()));
+    }
+
+    if (pending_updates.empty())
+    {
+      MDEBUG("No old output_types rows require pending output_type_ref resolution: "
+          << "legacy_raw_output_id=" << legacy_raw_output_id
+          << ", resolved_output_id=" << resolved_output_id);
     }
   }
   return std::make_pair(ok.amount_index, oat.asset_type_output_index);
