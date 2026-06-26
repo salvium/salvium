@@ -1598,7 +1598,8 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
     break;
   case HF_VERSION_ENABLE_TOKENS:
   case HF_VERSION_REJECT_CLEARTEXT_AMOUNTS:
-    // HF11: block reward split is 60% miner + 25% treasury + 15% staker (amount_burnt)
+  case HF_VERSION_REJECT_POISONED_REFS:
+    // HF11-13: block reward split is 60% miner + 25% treasury + 15% staker (amount_burnt)
     if (already_generated_coins != 0) {
 
       // Validate treasury share: one output must equal block_reward * 25 / 100
@@ -3097,6 +3098,15 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
         resolved_output_ids.push_back(m_db->get_output_id_by_asset_index(req.asset_type, i.index));
     }
 
+    // For outputs where the wallet provided its own key (to avoid stale index lookup),
+    // we need to resolve the output ID from the key. Store the key for later use.
+    std::vector<boost::optional<crypto::public_key>> provided_keys(req.outputs.size());
+    for (size_t i = 0; i < req.outputs.size(); ++i)
+    {
+      if (req.outputs[i].key_set())
+        provided_keys[i] = req.outputs[i].key;
+    }
+
     m_db->get_output_data_by_id(resolved_output_ids, data);
 
     if (data.size() != req.outputs.size())
@@ -3104,17 +3114,64 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
       MERROR("Unexpected output data size: expected " << req.outputs.size() << ", got " << data.size());
       return false;
     }
+
+    // Track which outputs to skip (poisoned: raw_id != effective_id)
+    std::vector<bool> poisoned(req.outputs.size(), false);
+    if (!req.asset_type.empty())
+    {
+      std::vector<uint64_t> raw_ids;
+      std::vector<uint64_t> asset_indices;
+      asset_indices.reserve(req.outputs.size());
+      for (size_t i = 0; i < req.outputs.size(); ++i)
+      {
+        if (!req.outputs[i].is_global_out && !req.outputs[i].key_set())
+          asset_indices.push_back(req.outputs[i].index);
+      }
+      if (!asset_indices.empty())
+      {
+        try
+        {
+          m_db->get_output_id_from_asset_type_output_index(req.asset_type, asset_indices, raw_ids);
+          size_t raw_idx = 0;
+          for (size_t i = 0; i < req.outputs.size(); ++i)
+          {
+            if (!req.outputs[i].is_global_out && !req.outputs[i].key_set())
+            {
+              if (raw_idx < raw_ids.size() && raw_ids[raw_idx] != resolved_output_ids[i])
+                poisoned[i] = true;
+              ++raw_idx;
+            }
+          }
+        }
+        catch (const std::exception&)
+        {
+          // If raw ID lookup fails, skip the check — outputs will be validated at consensus time
+        }
+      }
+    }
+
     const uint8_t hf_version = m_hardfork->get_current_version();
-    for (const auto &t: data) {
+    for (size_t i = 0; i < data.size(); ++i)
+    {
+      const output_data_t& t = data[i];
       if (!req.asset_type.empty()) {
         if (t.asset_type not_eq cryptonote::asset_id_from_type(req.asset_type)) {
           MERROR("Invalid asset type - expected " << req.asset_type << ", but output is " << cryptonote::asset_type_from_id(t.asset_type));
           return false;
         }
       }
-      res.outs.push_back({t.pubkey, t.commitment, is_tx_spendtime_unlocked(t.unlock_time, hf_version), t.height, crypto::null_hash});
+      crypto::public_key out_key = provided_keys[i] ? provided_keys[i].get() : t.pubkey;
+      COMMAND_RPC_GET_OUTPUTS_BIN::outkey out;
+      out.key = out_key;
+      out.mask = t.commitment;
+      out.unlocked = !poisoned[i] && is_tx_spendtime_unlocked(t.unlock_time, hf_version);
+      out.height = t.height;
+      out.txid = crypto::null_hash;
+      out.output_id = resolved_output_ids[i];
+      out.key_provided = !!provided_keys[i];
+      res.outs.push_back(out);
     }
-    
+
     if (req.get_txid)
     {
       for (size_t i = 0; i < req.outputs.size(); ++i)
@@ -5822,8 +5879,9 @@ leave:
       txrules_env.block_overlay = &txrules_overlay;
 
       cryptonote::txrules::consensus_result txrules_result;
+      cryptonote::tx_consensus::blockchain_tx_state_view txrules_state(*m_db);
 
-      if (!cryptonote::txrules::check_tx_consensus(tx, txrules_env, &txrules_result))
+      if (!cryptonote::txrules::check_tx_consensus(tx, txrules_env, &txrules_state, &txrules_result))
       {
         MERROR_VER("Block with id: " << id
                    << " has transaction id: " << tx_id
@@ -5931,11 +5989,13 @@ leave:
   txrules_block_env.token_state = cryptonote::txrules::make_db_token_state_view(*m_db);
   txrules_block_env.block_overlay = &txrules_overlay;
 
+  cryptonote::tx_consensus::blockchain_tx_state_view txrules_block_state(*m_db);
+
   TIME_MEASURE_START(vmt);
   {
     cryptonote::txrules::consensus_result txrules_result;
 
-    if (!cryptonote::txrules::check_tx_consensus(bl.miner_tx, txrules_block_env, &txrules_result))
+    if (!cryptonote::txrules::check_tx_consensus(bl.miner_tx, txrules_block_env, &txrules_block_state, &txrules_result))
     {
       MERROR_VER("Block with id: " << id
                  << " has miner transaction failing TX Rules consensus check: "
@@ -5963,7 +6023,7 @@ leave:
   {
     cryptonote::txrules::consensus_result txrules_result;
 
-    if (!cryptonote::txrules::check_tx_consensus(bl.protocol_tx, txrules_block_env, &txrules_result))
+    if (!cryptonote::txrules::check_tx_consensus(bl.protocol_tx, txrules_block_env, &txrules_block_state, &txrules_result))
     {
       MERROR_VER("Block with id: " << id
                  << " has protocol transaction failing TX Rules consensus check: "

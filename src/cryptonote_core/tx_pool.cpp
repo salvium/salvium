@@ -175,8 +175,9 @@ namespace cryptonote
     txrules_env.block_overlay = nullptr;
 
     cryptonote::txrules::consensus_result txrules_result;
+    cryptonote::tx_consensus::blockchain_tx_state_view txrules_state(m_blockchain.get_db());
 
-    if (!cryptonote::txrules::check_tx_consensus(tx, txrules_env, &txrules_result))
+    if (!cryptonote::txrules::check_tx_consensus(tx, txrules_env, &txrules_state, &txrules_result))
     {
       MERROR("TX Rules mempool consensus failure: " << txrules_result.reason);
       tvc.m_verifivation_failed = true;

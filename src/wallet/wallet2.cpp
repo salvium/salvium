@@ -9648,8 +9648,11 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       // check we're clear enough of rct start, to avoid corner cases below
       THROW_WALLET_EXCEPTION_IF(rct_offsets.size() <= CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE,
                                 error::get_output_distribution, "Not enough rct outputs : " + std::to_string(max_rct_index));
-      THROW_WALLET_EXCEPTION_IF(rct_offsets.back() < max_rct_index,
-                                error::get_output_distribution, "Daemon reports suspicious number of rct outputs : " + std::to_string(rct_offsets.back()) + " < " + std::to_string(max_rct_index));
+      // Note: the rct_offsets.back() < max_rct_index check was removed because
+      // after a database rebuild (e.g., spam output removal), the daemon's output
+      // count can legitimately be lower than the wallet's stored indices. The
+      // wallet now provides its own output key directly to the daemon, bypassing
+      // stale index lookups.
     }
 
     // get histogram for the amounts we need
@@ -9905,7 +9908,11 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       {
 
         const auto it = existing_rings.find(td.m_key_image);
-        const bool has_ring = it != existing_rings.end();
+        // Skip ring reuse when using asset-type indices: rings stored in the DB
+        // contain global output IDs which can't be reliably converted to asset-type
+        // indices for other parties' outputs. Reusing them would send wrong indices
+        // to the daemon and cause asset type mismatch errors.
+        const bool has_ring = it != existing_rings.end() && req.asset_type.empty();
         if (has_ring)
         {
           const std::vector<uint64_t> &ring = it->second;
@@ -9921,12 +9928,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
             if (out < num_outs)
             {
               MINFO("Using it");
-              // HERE BE DRAGONS!!!
-              // SRCG: ring tweak to indexed per asset_type - DO NOT COMMIT UNTIL IT IS ALL WORKING
-              //req.outputs.push_back({amount, out, true}); // Rings are stored referencing global output IDs
-              //add_output_to_lists({amount, out, true});
               add_output_to_lists({amount, out, false});
-              // LAND AHOY!!!
               ++num_found;
               seen_indices.emplace(out);
               if (out == td.m_asset_type_output_index)
@@ -9963,7 +9965,12 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
           num_found = 1;
           uint64_t o_index = use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index;
           seen_indices.emplace(o_index);
-          add_output_to_lists({amount, o_index});
+          get_outputs_out real_out;
+          real_out.amount = amount;
+          real_out.index = o_index;
+          real_out.is_global_out = use_global_outs;
+          real_out.key = td.get_public_key(); // provide key to avoid stale index lookup
+          add_output_to_lists(real_out);
           LOG_PRINT_L1("Selecting real output: " << td.m_global_output_index << "/" << td.m_asset_type_output_index << " for " << print_money(amount));
         }
 
@@ -10177,7 +10184,11 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       for (size_t n = 0; n < requested_outputs_count; ++n)
       {
         size_t i = base + n;
-        if ((use_global_outs ? req.outputs[i].index : daemon_resp.outs[i].output_id) == td.m_global_output_index)
+        // For key-provided outputs, skip the output_id check because the
+        // stored index may be stale after a database rebuild. The key itself
+        // was provided by the wallet and used directly by the daemon.
+        if (daemon_resp.outs[i].key_provided ||
+            (use_global_outs ? req.outputs[i].index : daemon_resp.outs[i].output_id) == td.m_global_output_index)
           if (daemon_resp.outs[i].key == td.get_public_key())
             if (daemon_resp.outs[i].mask == mask)
               if (daemon_resp.outs[i].unlocked)

@@ -38,7 +38,7 @@
 #include "version.h"
 
 #include "cryptonote_core/tx_rules_engine.h"
-#include "cryptonote_core/tx_consensus_checks.h"
+#include "cryptonote_core/tx_rules_adapters.h"
 
 namespace po = boost::program_options;
 using namespace epee;
@@ -145,6 +145,7 @@ namespace
                        const std::string &block_hash_hex,
                        const std::unordered_set<std::string>& known_tokens,
                        cryptonote::txrules::block_state_overlay* block_overlay,
+                       const cryptonote::tx_consensus::tx_chain_state_view* state,
                        std::vector<failure_record> &failures,
                        std::map<uint8_t, counters> &per_hf,
                        std::map<std::string, counters> &per_type,
@@ -161,7 +162,7 @@ namespace
 
     cryptonote::txrules::consensus_result result;
 
-    bool ok = cryptonote::txrules::check_tx_consensus(tx, env, &result);
+    bool ok = cryptonote::txrules::check_tx_consensus(tx, env, state, &result);
 
     std::string why = result.reason;
 
@@ -423,6 +424,8 @@ int main(int argc, const char* argv[])
   bool aborted_early = false;
 
   std::unordered_set<std::string> known_tokens;
+
+  cryptonote::tx_consensus::blockchain_tx_state_view state_view(db);
   
   try
   {
@@ -455,6 +458,7 @@ int main(int argc, const char* argv[])
             blk_hash_hex,
             known_tokens,
             &block_overlay,
+            &state_view,
             failures,
             per_hf,
             per_type,
@@ -509,6 +513,7 @@ int main(int argc, const char* argv[])
             blk_hash_hex,
             known_tokens,
             &block_overlay,
+            &state_view,
             failures,
             per_hf,
             per_type,
