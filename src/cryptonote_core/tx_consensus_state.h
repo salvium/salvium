@@ -4,11 +4,16 @@
 #include <string>
 #include <vector>
 
+namespace cryptonote
+{
+  struct validation_env;
+  class transaction;
+}
+
 namespace cryptonote::tx_consensus
 {
-  class tx_chain_state_view
+  struct tx_chain_state_view
   {
-  public:
     virtual ~tx_chain_state_view() = default;
 
     virtual bool get_raw_output_ids_by_asset_index(
