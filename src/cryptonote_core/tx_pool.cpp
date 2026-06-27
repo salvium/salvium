@@ -169,7 +169,7 @@ namespace cryptonote
     cryptonote::txrules::validation_env txrules_env;
     txrules_env.hf = version;
     txrules_env.height = m_blockchain.get_current_blockchain_height();
-    txrules_env.mode = cryptonote::txrules::validation_mode::mempool;
+    txrules_env.mode = kept_by_block ? cryptonote::txrules::validation_mode::block : cryptonote::txrules::validation_mode::mempool;
     txrules_env.nettype = m_blockchain.get_nettype();
     txrules_env.token_state = cryptonote::txrules::make_db_token_state_view(m_blockchain.get_db());
     txrules_env.block_overlay = nullptr;

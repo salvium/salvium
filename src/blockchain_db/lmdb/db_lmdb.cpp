@@ -2702,11 +2702,16 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
     throw1(DB_ERROR(lmdb_error("Error finding asset type output ref for removal", result).c_str()));
 
   const output_type_ref *type_ref = (const output_type_ref *)v_type_ref.mv_data;
-  if (type_ref->output_id != output_id)
-    throw0(DB_ERROR(std::string("Unexpected: output_id ")
-                    .append(boost::lexical_cast<std::string>(type_ref->output_id))
-                    .append(" from m_output_type_refs does not match expected output id ")
-                    .append(boost::lexical_cast<std::string>(output_id)).c_str()));
+  // For poisoned outputs, the effective ID (type_refs) intentionally differs
+  // from the raw ID (output_types). Only enforce the match for non-poisoned.
+  if (type_ref->output_id == oat->output_id)
+  {
+    if (type_ref->output_id != output_id)
+      throw0(DB_ERROR(std::string("Unexpected: output_id ")
+                      .append(boost::lexical_cast<std::string>(type_ref->output_id))
+                      .append(" from m_output_type_refs does not match expected output id ")
+                      .append(boost::lexical_cast<std::string>(output_id)).c_str()));
+  }
 
 
   result = mdb_cursor_del(m_cur_output_txs, 0);

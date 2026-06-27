@@ -16,7 +16,7 @@ namespace cryptonote::tx_consensus
       const bool enforce_poisoned_ref_reject =
           env.mode == validation_mode::mempool
           || (env.mode == validation_mode::block &&
-              env.height >= HF_VERSION_REJECT_POISONED_REFS);
+              env.hf >= HF_VERSION_REJECT_POISONED_REFS);
 
       if (!enforce_poisoned_ref_reject)
         return true;
