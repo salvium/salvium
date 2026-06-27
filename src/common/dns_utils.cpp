@@ -31,7 +31,10 @@
 #include "unbound.h"
 
 #include <deque>
+#include <fstream>
+#include <iomanip>
 #include <set>
+#include <stdexcept>
 #include <stdlib.h>
 #include "include_base_utils.h"
 #include "common/threadpool.h"
@@ -47,11 +50,20 @@ using namespace epee;
 
 static const char *DEFAULT_DNS_PUBLIC_ADDR[] =
 {
-  "194.150.168.168",    // CCC (Germany)
-  "80.67.169.40",       // FDN (France)
-  "89.233.43.71",       // http://censurfridns.dk (Denmark)
-  "109.69.8.51",        // punCAT (Spain)
-  "193.58.251.251",     // SkyDNS (Russia)
+  "1.1.1.1@853#one.one.one.one",
+  "1.0.0.1@853#one.one.one.one",
+  "8.8.8.8@853#dns.google",
+  "8.8.4.4@853#dns.google",
+  "9.9.9.9@853#dns.quad9.net",
+};
+
+static const char *DEFAULT_DNS_PLAINTEXT_ADDR[] =
+{
+  "1.1.1.1",
+  "1.0.0.1",
+  "8.8.8.8",
+  "8.8.4.4",
+  "9.9.9.9",
 };
 
 static boost::mutex instance_lock;
@@ -104,8 +116,8 @@ get_builtin_ds(void)
 {
   static const char * const ds[] =
   {
-    ". IN DS 19036 8 2 49AAC11D7B6F6446702E54A1607371607A1A41855200FD2CE1CDDE32F24E8FB5\n",
     ". IN DS 20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D\n",
+    ". IN DS 38696 8 2 683D2D0ACB8C9B712A1948B27F741219298D0A450D612C483AF444A4C0FB2B16\n",
     NULL
   };
   return ds;
@@ -159,27 +171,23 @@ boost::optional<std::string> ipv4_to_string(const char* src, size_t len)
 // stop-gap measure and to make the tests pass at least...
 boost::optional<std::string> ipv6_to_string(const char* src, size_t len)
 {
-  if (len < 8)
+  if (len != 16)
   {
-    MERROR("Invalid IPv4 address: " << std::string(src, len));
+    MERROR("Invalid IPv6 address length: " << len);
     return boost::none;
   }
 
   std::stringstream ss;
-  unsigned int bytes[8];
-  for (int i = 0; i < 8; i++)
+  ss << std::hex;
+  for (size_t i = 0; i < 16; i += 2)
   {
-    unsigned char a = src[i];
-    bytes[i] = a;
+    if (i != 0)
+      ss << ':';
+    const uint16_t group =
+        (static_cast<uint16_t>(static_cast<unsigned char>(src[i])) << 8)
+        | static_cast<unsigned char>(src[i + 1]);
+    ss << group;
   }
-  ss << bytes[0] << ":"
-     << bytes[1] << ":"
-     << bytes[2] << ":"
-     << bytes[3] << ":"
-     << bytes[4] << ":"
-     << bytes[5] << ":"
-     << bytes[6] << ":"
-     << bytes[7];
   return ss.str();
 }
 
@@ -187,7 +195,21 @@ boost::optional<std::string> txt_to_string(const char* src, size_t len)
 {
   if (len == 0)
     return boost::none;
-  return std::string(src+1, len-1);
+
+  std::string value;
+  size_t offset = 0;
+  while (offset < len)
+  {
+    const size_t segment_size = static_cast<unsigned char>(src[offset++]);
+    if (segment_size > len - offset)
+    {
+      MWARNING("Discarding malformed DNS TXT record");
+      return boost::none;
+    }
+    value.append(src + offset, segment_size);
+    offset += segment_size;
+  }
+  return value;
 }
 
 boost::optional<std::string> tlsa_to_string(const char* src, size_t len)
@@ -248,8 +270,71 @@ static void add_anchors(ub_ctx *ctx)
   while (*ds)
   {
     MINFO("adding trust anchor: " << *ds);
-    ub_ctx_add_ta(ctx, string_copy(*ds++));
+    const int result = ub_ctx_add_ta(ctx, string_copy(*ds++));
+    if (result != 0)
+      throw std::runtime_error(std::string("Failed to add DNSSEC trust anchor: ") + ub_strerror(result));
   }
+}
+
+static void set_unbound_forwarder(ub_ctx *ctx, const char *address)
+{
+  const int result = ub_ctx_set_fwd(ctx, string_copy(address));
+  if (result != 0)
+    throw std::runtime_error(std::string("Failed to configure DNS forwarder: ") + ub_strerror(result));
+}
+
+static void set_unbound_option(ub_ctx *ctx, const char *name, const char *value)
+{
+  const int result = ub_ctx_set_option(ctx, string_copy(name), string_copy(value));
+  if (result != 0)
+    throw std::runtime_error(std::string("Failed to configure DNS option ") + name + ": " + ub_strerror(result));
+}
+
+static bool file_exists(const char *path)
+{
+  std::ifstream file(path);
+  return file.good();
+}
+
+static void enable_unbound_tls(ub_ctx *ctx)
+{
+  const int tls_result = ub_ctx_set_tls(ctx, 1);
+  if (tls_result != 0)
+    throw std::runtime_error(std::string("Failed to enable DNS-over-TLS: ") + ub_strerror(tls_result));
+
+#ifdef _WIN32
+  set_unbound_option(ctx, "tls-win-cert:", "yes");
+#else
+  const char *configured_bundle = getenv("SSL_CERT_FILE");
+  const char *bundle = nullptr;
+  if (configured_bundle && file_exists(configured_bundle))
+  {
+    bundle = configured_bundle;
+  }
+  else
+  {
+    static const char * const candidates[] = {
+      "/etc/ssl/certs/ca-certificates.crt",
+      "/etc/pki/tls/certs/ca-bundle.crt",
+      "/etc/ssl/ca-bundle.pem",
+      "/etc/ssl/cert.pem",
+      nullptr
+    };
+    for (const char * const *candidate = candidates; *candidate; ++candidate)
+    {
+      if (file_exists(*candidate))
+      {
+        bundle = *candidate;
+        break;
+      }
+    }
+  }
+
+  if (!bundle)
+    throw std::runtime_error("DNS-over-TLS requires a CA certificate bundle; set SSL_CERT_FILE");
+
+  set_unbound_option(ctx, "tls-cert-bundle:", bundle);
+#endif
 }
 
 DNSResolver::DNSResolver() : m_data(new DNSResolverData())
@@ -262,7 +347,8 @@ DNSResolver::DNSResolver() : m_data(new DNSResolverData())
     dns_public_addr = tools::dns_utils::parse_dns_public(DNS_PUBLIC);
     if (!dns_public_addr.empty())
     {
-      MGINFO("Using public DNS server(s): " << boost::join(dns_public_addr, ", ") << " (TCP)");
+      MWARNING("Plaintext DNS explicitly enabled through DNS_PUBLIC; using server(s): "
+          << boost::join(dns_public_addr, ", ") << " (TCP)");
       use_dns_public = 1;
     }
     else
@@ -273,41 +359,38 @@ DNSResolver::DNSResolver() : m_data(new DNSResolverData())
 
   // init libunbound context
   m_data->m_ub_context = ub_ctx_create();
-
-  if (use_dns_public)
+  if (m_data->m_ub_context == nullptr)
   {
-    for (const auto &ip: dns_public_addr)
-      ub_ctx_set_fwd(m_data->m_ub_context, string_copy(ip.c_str()));
-    ub_ctx_set_option(m_data->m_ub_context, string_copy("do-udp:"), string_copy("no"));
-    ub_ctx_set_option(m_data->m_ub_context, string_copy("do-tcp:"), string_copy("yes"));
-  }
-  else {
-    // look for "/etc/resolv.conf" and "/etc/hosts" or platform equivalent
-    ub_ctx_resolvconf(m_data->m_ub_context, NULL);
-    ub_ctx_hosts(m_data->m_ub_context, NULL);
+    delete m_data;
+    m_data = nullptr;
+    throw std::runtime_error("Failed to create DNS resolver context");
   }
 
-  add_anchors(m_data->m_ub_context);
-
-  if (!DNS_PUBLIC)
+  try
   {
-    // if no DNS_PUBLIC specified, we try a lookup to what we know
-    // should be a valid DNSSEC record, and switch to known good
-    // DNSSEC resolvers if verification fails
-    bool available, valid;
-    static const char *probe_hostname = "updates.moneropulse.org";
-    auto records = get_txt_record(probe_hostname, available, valid);
-    if (!valid)
+    if (use_dns_public)
     {
-      MINFO("Failed to verify DNSSEC record from " << probe_hostname << ", falling back to TCP with well known DNSSEC resolvers");
-      ub_ctx_delete(m_data->m_ub_context);
-      m_data->m_ub_context = ub_ctx_create();
-      add_anchors(m_data->m_ub_context);
-      for (const auto &ip: DEFAULT_DNS_PUBLIC_ADDR)
-        ub_ctx_set_fwd(m_data->m_ub_context, string_copy(ip));
-      ub_ctx_set_option(m_data->m_ub_context, string_copy("do-udp:"), string_copy("no"));
-      ub_ctx_set_option(m_data->m_ub_context, string_copy("do-tcp:"), string_copy("yes"));
+      for (const auto &ip: dns_public_addr)
+        set_unbound_forwarder(m_data->m_ub_context, ip.c_str());
+      set_unbound_option(m_data->m_ub_context, "do-udp:", "no");
+      set_unbound_option(m_data->m_ub_context, "do-tcp:", "yes");
     }
+    else
+    {
+      MGINFO("Using authenticated DNS-over-TLS with built-in DNSSEC-capable resolvers");
+      for (const auto &ip: DEFAULT_DNS_PUBLIC_ADDR)
+        set_unbound_forwarder(m_data->m_ub_context, ip);
+      enable_unbound_tls(m_data->m_ub_context);
+    }
+
+    add_anchors(m_data->m_ub_context);
+  }
+  catch (...)
+  {
+    ub_ctx_delete(m_data->m_ub_context);
+    delete m_data;
+    m_data = nullptr;
+    throw;
   }
 }
 
@@ -335,12 +418,16 @@ std::vector<std::string> DNSResolver::get_record(const std::string& url, int rec
   MDEBUG("Performing DNSSEC " << get_record_name(record_type) << " record query for " << url);
 
   // call DNS resolver, blocking.  if return value not zero, something went wrong
-  if (!ub_resolve(m_data->m_ub_context, string_copy(url.c_str()), record_type, DNS_CLASS_IN, &result))
+  const int resolve_result = ub_resolve(m_data->m_ub_context, string_copy(url.c_str()), record_type, DNS_CLASS_IN, &result);
+  if (resolve_result == 0 && result)
   {
     dnssec_available = (result->secure || result->bogus);
     dnssec_valid = result->secure && !result->bogus;
     if (dnssec_available && !dnssec_valid)
+    {
       MWARNING("Invalid DNSSEC " << get_record_name(record_type) << " record signature for " << url << ": " << result->why_bogus);
+      return addresses;
+    }
     if (result->havedata)
     {
       for (size_t i=0; result->data[i] != NULL; i++)
@@ -354,6 +441,10 @@ std::vector<std::string> DNSResolver::get_record(const std::string& url, int rec
         }
       }
     }
+  }
+  else if (resolve_result != 0)
+  {
+    MWARNING("DNS " << get_record_name(record_type) << " query failed for " << url << ": " << ub_strerror(resolve_result));
   }
 
   return addresses;
@@ -593,8 +684,8 @@ std::vector<std::string> parse_dns_public(const char *s)
   std::vector<std::string> dns_public_addr;
   if (!strcmp(s, "tcp"))
   {
-    for (size_t i = 0; i < sizeof(DEFAULT_DNS_PUBLIC_ADDR) / sizeof(DEFAULT_DNS_PUBLIC_ADDR[0]); ++i)
-      dns_public_addr.push_back(DEFAULT_DNS_PUBLIC_ADDR[i]);
+    for (size_t i = 0; i < sizeof(DEFAULT_DNS_PLAINTEXT_ADDR) / sizeof(DEFAULT_DNS_PLAINTEXT_ADDR[0]); ++i)
+      dns_public_addr.push_back(DEFAULT_DNS_PLAINTEXT_ADDR[i]);
     LOG_PRINT_L0("Using default public DNS server(s): " << boost::join(dns_public_addr, ", ") << " (TCP)");
   }
   else if (sscanf(s, "tcp://%u.%u.%u.%u%c", &ip0, &ip1, &ip2, &ip3, &c) == 4)
