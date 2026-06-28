@@ -311,6 +311,15 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
 
   m_db->set_hard_fork(m_hardfork);
 
+  // HF13 safety net: a node that starts already at or past the fork without the
+  // realign having run (imported db, crash mid-fork) repairs the index here. The
+  // normal crossing is handled in add_new_block.
+  if (!m_db->is_read_only() && m_db->height() && !m_db->rct_index_realigned() &&
+      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX))
+  {
+    m_db->realign_rct_index();
+  }
+
   // if the blockchain is new, add the genesis block
   // this feels kinda kludgy to do it this way, but can be looked at later.
   // TODO: add function to create and store genesis block,
@@ -6295,6 +6304,18 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc)
   crypto::hash id = get_block_hash(bl);
   CRITICAL_REGION_LOCAL(m_tx_pool);//to avoid deadlock lets lock tx_pool for whole add/reorganize process
   CRITICAL_REGION_LOCAL1(m_blockchain_lock);
+
+  // HF13: at the fork crossing, realign the rct ring index once before the first
+  // v13 block is validated. coordinated across nodes by the fork height.
+  if (!m_db->rct_index_realigned() &&
+      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX))
+  {
+    const bool batched = m_db->is_batch_active();
+    if (batched) m_db->batch_stop();
+    m_db->realign_rct_index();
+    if (batched) m_db->batch_start();
+  }
+
   db_rtxn_guard rtxn_guard(m_db);
   if(have_block(id))
   {
