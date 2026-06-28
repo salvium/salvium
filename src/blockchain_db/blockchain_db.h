@@ -2042,6 +2042,7 @@ public:
 
   // HF13 rct ring index realign hooks; only the lmdb backend implements them
   virtual void realign_rct_index() {}
+  virtual void restore_legacy_output_index() {}
   virtual bool rct_index_realigned() const { return false; }
   virtual bool is_batch_active() const { return false; }
 

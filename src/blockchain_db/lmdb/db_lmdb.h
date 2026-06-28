@@ -545,6 +545,7 @@ private:
   // HF13: rebuild output_types and output_type_refs as the rct-only ring index,
   // once at the fork height, so a rank resolves to the right same-asset rct output
   virtual void realign_rct_index() override;
+  virtual void restore_legacy_output_index() override;
   virtual bool rct_index_realigned() const override { return m_rct_index_realigned; }
   virtual bool is_batch_active() const override { return m_batch_active; }
 

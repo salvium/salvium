@@ -3445,6 +3445,7 @@ void BlockchainLMDB::reset()
   txn.commit();
   m_cum_size = 0;
   m_cum_count = 0;
+  m_rct_index_realigned = false;
 }
 
 std::vector<std::string> BlockchainLMDB::get_filenames() const
@@ -7229,6 +7230,21 @@ void BlockchainLMDB::migrate_3_4()
 
   MGINFO_YELLOW("Migrating blockchain from DB version 3 to 4 - this may take a while:");
 
+  // The migration commits in batches. Always clear its derived tables first
+  // so restarting after interruption cannot collide with partially committed
+  // rows from the previous attempt.
+  {
+    if ((result = mdb_txn_begin(m_env, NULL, 0, txn)))
+      throw0(DB_ERROR(lmdb_error("Failed to create migration reset transaction: ", result).c_str()));
+    if ((result = mdb_drop(txn, m_output_amount_refs, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_amount_refs before migration: ", result).c_str()));
+    if ((result = mdb_drop(txn, m_output_records, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_records before migration: ", result).c_str()));
+    if ((result = mdb_drop(txn, m_output_type_refs, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_type_refs before migration: ", result).c_str()));
+    txn.commit();
+  }
+
   // Pass 1: rebuild output_amount_refs and output_records from the legacy
   // output_amounts table, which is keyed by amount_index and untouched by the
   // transparent-output slip, joined with output_txs by global output id.
@@ -7425,6 +7441,118 @@ void BlockchainLMDB::migrate_3_4()
   MGINFO_GREEN("Migration from DB version 3 to 4 complete.");
 }
 
+// Restore the pre-HF13 all-output index after a reorg crosses back below the
+// fork. This also restores tx_outputs' per-asset ranks, which remove_output()
+// needs while detaching additional legacy blocks.
+void BlockchainLMDB::restore_legacy_output_index()
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  if (!m_rct_index_realigned)
+    return;
+
+  int result;
+  mdb_txn_safe txn(false);
+  if ((result = mdb_txn_begin(m_env, NULL, 0, txn)))
+    throw0(DB_ERROR(lmdb_error("Failed to create legacy index restore transaction: ", result).c_str()));
+
+  if ((result = mdb_drop(txn, m_output_types, 0)))
+    throw0(DB_ERROR(lmdb_error("Failed to clear output_types for legacy restore: ", result).c_str()));
+  if ((result = mdb_drop(txn, m_output_type_refs, 0)))
+    throw0(DB_ERROR(lmdb_error("Failed to clear output_type_refs for legacy restore: ", result).c_str()));
+
+  MDB_cursor *c_records, *c_amount_refs, *c_types, *c_type_refs, *c_tx_indices, *c_tx_outputs;
+  if ((result = mdb_cursor_open(txn, m_output_records, &c_records)) ||
+      (result = mdb_cursor_open(txn, m_output_amount_refs, &c_amount_refs)) ||
+      (result = mdb_cursor_open(txn, m_output_types, &c_types)) ||
+      (result = mdb_cursor_open(txn, m_output_type_refs, &c_type_refs)) ||
+      (result = mdb_cursor_open(txn, m_tx_indices, &c_tx_indices)) ||
+      (result = mdb_cursor_open(txn, m_tx_outputs, &c_tx_outputs)))
+    throw0(DB_ERROR(lmdb_error("Failed to open cursor for legacy index restore: ", result).c_str()));
+
+  typedef std::pair<uint64_t, uint64_t> oidx;
+  std::map<uint32_t, uint64_t> next_rank;
+  MDB_val k_record, v_record;
+  result = mdb_cursor_get(c_records, &k_record, &v_record, MDB_FIRST);
+  while (result == MDB_SUCCESS)
+  {
+    if (k_record.mv_size != sizeof(uint64_t) || v_record.mv_size != sizeof(output_record_t))
+      throw0(DB_ERROR("Invalid output_record while restoring legacy output index"));
+
+    const uint64_t output_id = *(const uint64_t *)k_record.mv_data;
+    output_record_t record;
+    memcpy(&record, v_record.mv_data, sizeof(record));
+    const uint32_t asset = record.od.asset_type;
+    const uint64_t rank = next_rank[asset]++;
+
+    outassettype oat;
+    oat.asset_type_output_index = rank;
+    oat.output_id = output_id;
+    MDB_val_copy<uint32_t> k_type(asset);
+    MDB_val_set(v_type, oat);
+    if ((result = mdb_cursor_put(c_types, &k_type, &v_type, MDB_APPENDDUP)))
+      throw0(DB_ERROR(lmdb_error("Failed to restore output_types: ", result).c_str()));
+
+    uint64_t resolved_output_id = output_id;
+    const uint64_t amount_zero = 0;
+    output_amount_ref lookup;
+    lookup.amount_index = output_id;
+    lookup.output_id = 0;
+    MDB_val_copy<uint64_t> k_zero(amount_zero);
+    MDB_val_set(v_lookup, lookup);
+    const int lookup_result = mdb_cursor_get(c_amount_refs, &k_zero, &v_lookup, MDB_GET_BOTH);
+    if (lookup_result == MDB_SUCCESS)
+    {
+      if (v_lookup.mv_size != sizeof(output_amount_ref))
+        throw0(DB_ERROR("Invalid output_amount_ref while restoring legacy output index"));
+      resolved_output_id = ((const output_amount_ref *)v_lookup.mv_data)->output_id;
+    }
+    else if (lookup_result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to resolve legacy output_type_ref: ", lookup_result).c_str()));
+
+    output_type_ref otr;
+    otr.asset_type_output_index = rank;
+    otr.output_id = resolved_output_id;
+    MDB_val_set(v_type_ref, otr);
+    if ((result = mdb_cursor_put(c_type_refs, &k_type, &v_type_ref, MDB_APPENDDUP)))
+      throw0(DB_ERROR(lmdb_error("Failed to restore output_type_refs: ", result).c_str()));
+
+    MDB_val_set(v_tx_index, record.tx_hash);
+    if ((result = mdb_cursor_get(c_tx_indices, (MDB_val *)&zerokval, &v_tx_index, MDB_GET_BOTH)))
+      throw0(DB_ERROR(lmdb_error("Failed to find transaction while restoring tx_outputs: ", result).c_str()));
+    if (v_tx_index.mv_size != sizeof(txindex))
+      throw0(DB_ERROR("Invalid txindex while restoring tx_outputs"));
+    const uint64_t tx_id = ((const txindex *)v_tx_index.mv_data)->data.tx_id;
+
+    MDB_val_copy<uint64_t> k_tx_outputs(tx_id);
+    MDB_val v_tx_outputs;
+    if ((result = mdb_cursor_get(c_tx_outputs, &k_tx_outputs, &v_tx_outputs, MDB_SET)))
+      throw0(DB_ERROR(lmdb_error("Failed to find tx_outputs during legacy restore: ", result).c_str()));
+    if (v_tx_outputs.mv_size % sizeof(oidx) != 0 ||
+        record.local_vout_index >= v_tx_outputs.mv_size / sizeof(oidx))
+      throw0(DB_ERROR("Invalid tx_outputs while restoring legacy output index"));
+
+    const oidx *stored = (const oidx *)v_tx_outputs.mv_data;
+    std::vector<oidx> outputs(stored, stored + v_tx_outputs.mv_size / sizeof(oidx));
+    outputs[record.local_vout_index].second = rank;
+    MDB_val updated = {outputs.size() * sizeof(oidx), outputs.data()};
+    if ((result = mdb_cursor_put(c_tx_outputs, &k_tx_outputs, &updated, MDB_CURRENT)))
+      throw0(DB_ERROR(lmdb_error("Failed to restore tx_outputs rank: ", result).c_str()));
+
+    result = mdb_cursor_get(c_records, &k_record, &v_record, MDB_NEXT);
+  }
+  if (result != MDB_NOTFOUND)
+    throw0(DB_ERROR(lmdb_error("Failed to iterate output_records during legacy restore: ", result).c_str()));
+
+  MDB_val_str(k_property, "rct_realigned");
+  result = mdb_del(txn, m_properties, &k_property, NULL);
+  if (result != MDB_SUCCESS && result != MDB_NOTFOUND)
+    throw0(DB_ERROR(lmdb_error("Failed to clear rct_realigned property: ", result).c_str()));
+
+  txn.commit();
+  m_rct_index_realigned = false;
+  MGINFO_GREEN("Restored pre-HF13 legacy output index after reorg.");
+}
+
 // HF13: rebuild output_types and output_type_refs rct-only, rank-compacted per
 // asset and keyed to the real global output id, then rewrite tx_outputs so a
 // rescan rings the corrected index. Runs once at the fork, gated on the
@@ -7494,6 +7622,8 @@ void BlockchainLMDB::realign_rct_index()
       const uint64_t global = p.second.first;
       const uint32_t asset = p.second.second;
       const uint64_t rank = next_rank[asset]++;
+      if (p.first != rank_by_ai.size())
+        throw0(DB_ERROR("Non-contiguous RCT amount index during realignment"));
       rank_by_ai.push_back(rank);
 
       outassettype oat;
@@ -7528,40 +7658,66 @@ void BlockchainLMDB::realign_rct_index()
     MGINFO_YELLOW("realign: rebuilt " << n << " ring index entries across " << next_rank.size() << " assets");
   }
 
-  // rewrite each tx output's reported rank (tx_outputs.second) to its rct rank so
-  // a wallet rescan rings the corrected index. entries whose amount-bucket index
-  // falls outside the rct map (transparent) are left untouched.
+  // Rewrite only RCT outputs' reported ranks. A transparent amount index is in
+  // a different amount bucket and may numerically overlap an RCT amount index,
+  // so tx_outputs cannot safely be rewritten by inspecting the number alone.
   {
     result = mdb_txn_begin(m_env, NULL, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a write transaction: ", result).c_str()));
-    MDB_cursor *c_txo;
-    if ((result = mdb_cursor_open(txn, m_tx_outputs, &c_txo)))
-      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for tx_outputs: ", result).c_str()));
+    MDB_cursor *c_records, *c_tx_indices, *c_tx_outputs;
+    if ((result = mdb_cursor_open(txn, m_output_records, &c_records)) ||
+        (result = mdb_cursor_open(txn, m_tx_indices, &c_tx_indices)) ||
+        (result = mdb_cursor_open(txn, m_tx_outputs, &c_tx_outputs)))
+      throw0(DB_ERROR(lmdb_error("Failed to open cursor while rewriting RCT ranks: ", result).c_str()));
+
     typedef std::pair<uint64_t, uint64_t> oidx;
-    MDB_val ktxo, vtxo;
     uint64_t tn = 0;
-    result = mdb_cursor_get(c_txo, &ktxo, &vtxo, MDB_FIRST);
-    while (result == 0)
+    for (const auto &p : rct_outs)
     {
-      const size_t cnt = vtxo.mv_size / sizeof(oidx);
-      std::vector<oidx> pairs((const oidx *)vtxo.mv_data, (const oidx *)vtxo.mv_data + cnt);
-      for (auto &pr : pairs)
-        if (pr.first < rank_by_ai.size())
-          pr.second = rank_by_ai[pr.first];
-      MDB_val nv;
-      nv.mv_data = cnt ? (void *)pairs.data() : (void *)"";
-      nv.mv_size = sizeof(oidx) * cnt;
-      if ((result = mdb_cursor_put(c_txo, &ktxo, &nv, MDB_CURRENT)))
-        throw0(DB_ERROR(lmdb_error("Failed to rewrite tx_outputs: ", result).c_str()));
+      const uint64_t amount_index = p.first;
+      const uint64_t output_id = p.second.first;
+
+      MDB_val_copy<uint64_t> k_record(output_id);
+      MDB_val v_record;
+      if ((result = mdb_cursor_get(c_records, &k_record, &v_record, MDB_SET)))
+        throw0(DB_ERROR(lmdb_error("Failed to find RCT output record during realignment: ", result).c_str()));
+      if (v_record.mv_size != sizeof(output_record_t))
+        throw0(DB_ERROR("Invalid output_record during RCT rank rewrite"));
+      output_record_t record;
+      memcpy(&record, v_record.mv_data, sizeof(record));
+      if (!(record.flags & output_record_flag_rct))
+        throw0(DB_ERROR("Non-RCT output found in RCT realignment set"));
+
+      MDB_val_set(v_tx_index, record.tx_hash);
+      if ((result = mdb_cursor_get(c_tx_indices, (MDB_val *)&zerokval, &v_tx_index, MDB_GET_BOTH)))
+        throw0(DB_ERROR(lmdb_error("Failed to find transaction during RCT rank rewrite: ", result).c_str()));
+      if (v_tx_index.mv_size != sizeof(txindex))
+        throw0(DB_ERROR("Invalid txindex during RCT rank rewrite"));
+      const uint64_t tx_id = ((const txindex *)v_tx_index.mv_data)->data.tx_id;
+
+      MDB_val_copy<uint64_t> k_tx_outputs(tx_id);
+      MDB_val v_tx_outputs;
+      if ((result = mdb_cursor_get(c_tx_outputs, &k_tx_outputs, &v_tx_outputs, MDB_SET)))
+        throw0(DB_ERROR(lmdb_error("Failed to find tx_outputs during RCT rank rewrite: ", result).c_str()));
+      if (v_tx_outputs.mv_size % sizeof(oidx) != 0 ||
+          record.local_vout_index >= v_tx_outputs.mv_size / sizeof(oidx))
+        throw0(DB_ERROR("Invalid tx_outputs during RCT rank rewrite"));
+
+      const oidx *stored = (const oidx *)v_tx_outputs.mv_data;
+      std::vector<oidx> outputs(stored, stored + v_tx_outputs.mv_size / sizeof(oidx));
+      if (outputs[record.local_vout_index].first != amount_index)
+        throw0(DB_ERROR("RCT amount index mismatch while rewriting tx_outputs"));
+      outputs[record.local_vout_index].second = rank_by_ai[amount_index];
+      MDB_val updated = {outputs.size() * sizeof(oidx), outputs.data()};
+      if ((result = mdb_cursor_put(c_tx_outputs, &k_tx_outputs, &updated, MDB_CURRENT)))
+        throw0(DB_ERROR(lmdb_error("Failed to rewrite RCT tx_outputs rank: ", result).c_str()));
+
       if (!(++tn % 200000))
-        LOGIF(el::Level::Info) { std::cout << tn << " txs  \r" << std::flush; }
-      result = mdb_cursor_get(c_txo, &ktxo, &vtxo, MDB_NEXT);
+        LOGIF(el::Level::Info) { std::cout << tn << " RCT outputs  \r" << std::flush; }
     }
-    if (result != MDB_NOTFOUND)
-      throw0(DB_ERROR(lmdb_error("Failed iterating tx_outputs: ", result).c_str()));
     txn.commit();
-    MGINFO_YELLOW("realign: rewrote reported ranks for " << tn << " txs");
+    MGINFO_YELLOW("realign: rewrote reported ranks for " << tn << " RCT outputs");
   }
 
   // set the rct_realigned property so the flag gates the add_output layout
