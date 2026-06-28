@@ -315,9 +315,10 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
 
   // HF13 safety net: a node that starts already at or past the fork without the
   // realign having run (imported db, crash mid-fork) repairs the index here. The
-  // normal crossing is handled in add_new_block.
+  // normal crossing is handled in add_new_block. Triggers one block early because
+  // add_new_block checks height BEFORE the block is added.
   if (!m_db->is_read_only() && m_db->height() && !m_db->rct_index_realigned() &&
-      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX))
+      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX) - 1)
   {
     m_db->realign_rct_index();
   }
@@ -6284,9 +6285,10 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc)
   CRITICAL_REGION_LOCAL1(m_blockchain_lock);
 
   // HF13: at the fork crossing, realign the rct ring index once before the first
-  // v13 block is validated. coordinated across nodes by the fork height.
+  // v13 block is validated. m_db->height() is the current tip (one below the
+  // incoming block), so subtract 1 to trigger when adding the HF13 block.
   if (!m_db->rct_index_realigned() &&
-      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX))
+      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX) - 1)
   {
     const bool batched = m_db->is_batch_active();
     if (batched) m_db->batch_stop();
