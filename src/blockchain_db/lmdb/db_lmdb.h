@@ -541,6 +541,11 @@ private:
 
   // migrate from DB version 3 to 4
   void migrate_3_4();
+
+  // HF13: rebuild the per-asset ring indexes once at the fork height.
+  virtual void realign_rct_index() override;
+  virtual bool rct_index_realigned() const override { return m_rct_index_realigned; }
+  virtual bool is_batch_active() const override { return m_batch_active; }
   
   void cleanup_batch();
 
@@ -586,6 +591,8 @@ private:
 
   MDB_dbi m_circ_supply;
   MDB_dbi m_circ_supply_tally;
+
+  bool m_rct_index_realigned = false;
 
   MDB_dbi m_yield_txs;
   MDB_dbi m_yield_blocks;

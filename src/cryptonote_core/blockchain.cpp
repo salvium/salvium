@@ -358,6 +358,14 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
 
   rtxn_guard.stop();
 
+  // Imported and previously-opened databases may start at or beyond HF13
+  // without having run the one-time index transition.
+  if (!m_db->is_read_only() && m_db->height() && !m_db->rct_index_realigned() &&
+      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX))
+  {
+    m_db->realign_rct_index();
+  }
+
   uint64_t num_popped_blocks = 0;
   while (!m_db->is_read_only())
   {
@@ -1600,6 +1608,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
     break;
   case HF_VERSION_ENABLE_TOKENS:
   case HF_VERSION_REJECT_CLEARTEXT_AMOUNTS:
+  case HF_VERSION_REALIGN_RCT_INDEX:
   case HF_VERSION_REJECT_POISONED_REFS:
     // HF11-13: block reward split is 60% miner + 25% treasury + 15% staker (amount_burnt)
     if (already_generated_coins != 0) {
@@ -6295,6 +6304,18 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc)
   }
 
   rtxn_guard.stop();
+
+  // Run the transition immediately before validating the first HF13 block.
+  if (!m_db->rct_index_realigned() &&
+      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX))
+  {
+    const bool batched = m_db->is_batch_active();
+    if (batched)
+      m_db->batch_stop();
+    m_db->realign_rct_index();
+    if (batched)
+      m_db->batch_start();
+  }
   return handle_block_to_main_chain(bl, id, bvc);
 
   }
