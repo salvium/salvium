@@ -2040,6 +2040,11 @@ public:
    */
   virtual bool is_read_only() const = 0;
 
+  // HF13 rct ring index realign hooks; only the lmdb backend implements them
+  virtual void realign_rct_index() {}
+  virtual bool rct_index_realigned() const { return false; }
+  virtual bool is_batch_active() const { return false; }
+
   /**
    * @brief get disk space requirements
    *
