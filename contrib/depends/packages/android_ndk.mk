@@ -1,13 +1,14 @@
 package=android_ndk
-$(package)_version=18b
+$(package)_version=29
 $(package)_download_path=https://dl.google.com/android/repository/
-$(package)_file_name=android-ndk-r$($(package)_version)-linux-x86_64.zip
-$(package)_sha256_hash=4f61cbe4bbf6406aa5ef2ae871def78010eed6271af72de83f8bd0b07a9fd3fd
-$(package)_patches=api_definition.patch
+$(package)_file_name=android-ndk-r$($(package)_version)-linux.zip
+$(package)_sha256_hash=4abbbcdc842f3d4879206e9695d52709603e52dd68d3c1fff04b3b5e7a308ecf
 
 define $(package)_set_vars
-$(package)_config_opts_arm=--arch arm
-$(package)_config_opts_aarch64=--arch arm64
+$(package)_target_arm=armv7a-linux-androideabi
+$(package)_target_aarch64=aarch64-linux-android
+$(package)_target_i686=i686-linux-android
+$(package)_target_x86_64=x86_64-linux-android
 endef
 
 define $(package)_extract_cmds
@@ -15,14 +16,15 @@ define $(package)_extract_cmds
   unzip -q $($(1)_source_dir)/$($(package)_file_name)
 endef
 
-define $(package)_preprocess_cmds
-  cd android-ndk-r$($(package)_version) && \
-  patch -p1 < $($(package)_patch_dir)/api_definition.patch
-endef
-
 define $(package)_stage_cmds
-  android-ndk-r$($(package)_version)/build/tools/make_standalone_toolchain.py --api 21 \
-    --install-dir $(build_prefix) --stl=libc++ $($(package)_config_opts) &&\
-  mv $(build_prefix) $($(package)_staging_dir)/$(host_prefix)
+  mkdir -p $($(package)_staging_dir)/$(host_prefix)/native &&\
+  cp -a android-ndk-r$($(package)_version)/toolchains/llvm/prebuilt/linux-x86_64/* \
+        $($(package)_staging_dir)/$(host_prefix)/native/ &&\
+  cd $($(package)_staging_dir)/$(host_prefix)/native/bin &&\
+  ln -sf $($(package)_target_$(host_arch))$(ANDROID_API)-clang $(host_toolchain)clang &&\
+  ln -sf $($(package)_target_$(host_arch))$(ANDROID_API)-clang++ $(host_toolchain)clang++ &&\
+  ln -sf llvm-ar $(host_toolchain)ar &&\
+  ln -sf llvm-nm $(host_toolchain)nm &&\
+  ln -sf llvm-ranlib $(host_toolchain)ranlib &&\
+  ln -sf llvm-strip $(host_toolchain)strip
 endef
-

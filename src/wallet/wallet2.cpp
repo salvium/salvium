@@ -1262,7 +1262,7 @@ wallet2::wallet2(network_type nettype, uint64_t kdf_rounds, bool unattended, std
   m_original_keys_available(false),
   m_message_store(http_client_factory->create()),
   m_key_device_type(hw::device::device_type::SOFTWARE),
-  m_ring_history_saved(false),
+  m_ring_history_saved(true),
   m_ringdb(),
   m_last_block_reward(0),
   m_unattended(unattended),
@@ -6882,15 +6882,6 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
 
   try
   {
-    find_and_save_rings(false);
-  }
-  catch (const std::exception &e)
-  {
-    MERROR("Failed to save rings, will try again next time");
-  }
-
-  try
-  {
     if (use_fs)
       m_message_store.read_from_file(get_multisig_wallet_state(), m_mms_file, m_load_deprecated_formats);
   }
@@ -6921,71 +6912,63 @@ void wallet2::load_wallet_cache(const bool use_fs, const std::string& cache_buf)
   }
   else
   {
-    wallet2::cache_file_data cache_file_data;
-    std::string cache_file_buf;
-    bool r = true;
-    if (use_fs)
-    {
-      r = load_from_file(m_wallet_file, cache_file_buf, std::numeric_limits<size_t>::max());
-      THROW_WALLET_EXCEPTION_IF(!r, error::file_read_error, m_wallet_file);
-    }
-
-    // try to read it as an encrypted cache
     try
     {
-      LOG_PRINT_L1("Trying to decrypt cache data");
+      wallet2::cache_file_data cache_file_data;
+      std::string cache_file_buf;
+      bool r = true;
+      if (use_fs)
+      {
+        r = load_from_file(m_wallet_file, cache_file_buf, std::numeric_limits<size_t>::max());
+        THROW_WALLET_EXCEPTION_IF(!r, error::file_read_error, m_wallet_file);
+      }
 
-      r = ::serialization::parse_binary(use_fs ? cache_file_buf : cache_buf, cache_file_data);
-      THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "internal error: failed to deserialize \"" + m_wallet_file + '\"');
-      std::string cache_data;
-      cache_data.resize(cache_file_data.cache_data.size());
-      crypto::chacha20(cache_file_data.cache_data.data(), cache_file_data.cache_data.size(), get_cache_key(), cache_file_data.iv, &cache_data[0]);
+      // try to read it as an encrypted cache
+      try
+      {
+        LOG_PRINT_L1("Trying to decrypt cache data");
 
-      try {
-        bool loaded = false;
+        r = ::serialization::parse_binary(use_fs ? cache_file_buf : cache_buf, cache_file_data);
+        THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "internal error: failed to deserialize \"" + m_wallet_file + '\"');
+        std::string cache_data;
+        cache_data.resize(cache_file_data.cache_data.size());
+        crypto::chacha20(cache_file_data.cache_data.data(), cache_file_data.cache_data.size(), get_cache_key(), cache_file_data.iv, &cache_data[0]);
 
-        try
-        {
-          binary_archive<false> ar{epee::strspan<std::uint8_t>(cache_data)};
-          if (::serialization::serialize(ar, *this))
-            if (::serialization::check_stream_state(ar))
-              loaded = true;
-          if (!loaded)
+        try {
+          bool loaded = false;
+
+          try
           {
             binary_archive<false> ar{epee::strspan<std::uint8_t>(cache_data)};
-            ar.enable_varint_bug_backward_compatibility();
             if (::serialization::serialize(ar, *this))
               if (::serialization::check_stream_state(ar))
                 loaded = true;
+            if (!loaded)
+            {
+              binary_archive<false> ar{epee::strspan<std::uint8_t>(cache_data)};
+              ar.enable_varint_bug_backward_compatibility();
+              if (::serialization::serialize(ar, *this))
+                if (::serialization::check_stream_state(ar))
+                  loaded = true;
+            }
+          }
+          catch(...) { }
+
+          if (!loaded)
+          {
+            std::stringstream iss;
+            iss << cache_data;
+            boost::archive::portable_binary_iarchive ar(iss);
+            ar >> *this;
           }
         }
-        catch(...) { }
-
-        if (!loaded)
+        catch(...)
         {
-          std::stringstream iss;
-          iss << cache_data;
-          boost::archive::portable_binary_iarchive ar(iss);
-          ar >> *this;
-        }
-      }
-      catch(...)
-      {
-        // try with previous scheme: direct from keys
-        crypto::chacha_key key;
-        generate_chacha_key_from_secret_keys(key);
-        crypto::chacha20(cache_file_data.cache_data.data(), cache_file_data.cache_data.size(), key, cache_file_data.iv, &cache_data[0]);
-        try {
-          std::stringstream iss;
-          iss << cache_data;
-          boost::archive::portable_binary_iarchive ar(iss);
-          ar >> *this;
-        }
-        catch (...)
-        {
-          crypto::chacha8(cache_file_data.cache_data.data(), cache_file_data.cache_data.size(), key, cache_file_data.iv, &cache_data[0]);
-          try
-          {
+          // try with previous scheme: direct from keys
+          crypto::chacha_key key;
+          generate_chacha_key_from_secret_keys(key);
+          crypto::chacha20(cache_file_data.cache_data.data(), cache_file_data.cache_data.size(), key, cache_file_data.iv, &cache_data[0]);
+          try {
             std::stringstream iss;
             iss << cache_data;
             boost::archive::portable_binary_iarchive ar(iss);
@@ -6993,49 +6976,75 @@ void wallet2::load_wallet_cache(const bool use_fs, const std::string& cache_buf)
           }
           catch (...)
           {
-            LOG_PRINT_L0("Failed to open portable binary, trying unportable");
-            //if (use_fs) boost::filesystem::copy_file(m_wallet_file, m_wallet_file + ".unportable", boost::filesystem::copy_option::overwrite_if_exists);
-            if (use_fs) tools::copy_file(m_wallet_file, m_wallet_file + ".unportable");
-	    std::stringstream iss;
-            iss.str("");
-            iss << cache_data;
-            boost::archive::binary_iarchive ar(iss);
-            ar >> *this;
+            crypto::chacha8(cache_file_data.cache_data.data(), cache_file_data.cache_data.size(), key, cache_file_data.iv, &cache_data[0]);
+            try
+            {
+              std::stringstream iss;
+              iss << cache_data;
+              boost::archive::portable_binary_iarchive ar(iss);
+              ar >> *this;
+            }
+            catch (...)
+            {
+              LOG_PRINT_L0("Failed to open portable binary, trying unportable");
+              //if (use_fs) boost::filesystem::copy_file(m_wallet_file, m_wallet_file + ".unportable", boost::filesystem::copy_option::overwrite_if_exists);
+              if (use_fs) tools::copy_file(m_wallet_file, m_wallet_file + ".unportable");
+              std::stringstream iss;
+              iss.str("");
+              iss << cache_data;
+              boost::archive::binary_iarchive ar(iss);
+              ar >> *this;
+            }
           }
         }
       }
+      catch (...)
+      {
+        LOG_PRINT_L1("Failed to load encrypted cache, trying unencrypted");
+        try {
+          std::stringstream iss;
+          iss << cache_file_buf;
+          boost::archive::portable_binary_iarchive ar(iss);
+          ar >> *this;
+        }
+        catch (...)
+        {
+          LOG_PRINT_L0("Failed to open portable binary, trying unportable");
+          //if (use_fs) boost::filesystem::copy_file(m_wallet_file, m_wallet_file + ".unportable", boost::filesystem::copy_option::overwrite_if_exists);
+          if (use_fs) tools::copy_file(m_wallet_file, m_wallet_file + ".unportable");
+          std::stringstream iss;
+          iss.str("");
+          iss << cache_file_buf;
+          boost::archive::binary_iarchive ar(iss);
+          ar >> *this;
+        }
+      }
+
+      if (m_watch_only) {
+        THROW_WALLET_EXCEPTION_IF(
+          m_account_public_address.m_spend_public_key != m_account.get_keys().m_carrot_main_address.m_spend_public_key ||
+          m_account_public_address.m_view_public_key  != m_account.get_keys().m_carrot_main_address.m_view_public_key,
+          error::wallet_files_doesnt_correspond, m_keys_file, m_wallet_file);
+      } else {
+        THROW_WALLET_EXCEPTION_IF(
+          m_account_public_address.m_spend_public_key != m_account.get_keys().m_account_address.m_spend_public_key ||
+          m_account_public_address.m_view_public_key  != m_account.get_keys().m_account_address.m_view_public_key,
+          error::wallet_files_doesnt_correspond, m_keys_file, m_wallet_file);
+      }
+    }
+    catch (const std::exception &ex)
+    {
+      LOG_PRINT_L0("Failed to load wallet cache \"" << m_wallet_file << "\": " << ex.what() << "; starting with empty cache");
+      clear();
+      m_account_public_address = m_account.get_keys().m_account_address;
+      m_force_rescan = true;
     }
     catch (...)
     {
-      LOG_PRINT_L1("Failed to load encrypted cache, trying unencrypted");
-      try {
-        std::stringstream iss;
-        iss << cache_file_buf;
-        boost::archive::portable_binary_iarchive ar(iss);
-        ar >> *this;
-      }
-      catch (...)
-      {
-        LOG_PRINT_L0("Failed to open portable binary, trying unportable");
-        //if (use_fs) boost::filesystem::copy_file(m_wallet_file, m_wallet_file + ".unportable", boost::filesystem::copy_option::overwrite_if_exists);
-	if (use_fs) tools::copy_file(m_wallet_file, m_wallet_file + ".unportable");
-        std::stringstream iss;
-        iss.str("");
-        iss << cache_file_buf;
-        boost::archive::binary_iarchive ar(iss);
-        ar >> *this;
-      }
-    }
-    if (m_watch_only) {
-      THROW_WALLET_EXCEPTION_IF(
-        m_account_public_address.m_spend_public_key != m_account.get_keys().m_carrot_main_address.m_spend_public_key ||
-        m_account_public_address.m_view_public_key  != m_account.get_keys().m_carrot_main_address.m_view_public_key,
-        error::wallet_files_doesnt_correspond, m_keys_file, m_wallet_file);
-    } else {
-      THROW_WALLET_EXCEPTION_IF(
-        m_account_public_address.m_spend_public_key != m_account.get_keys().m_account_address.m_spend_public_key ||
-        m_account_public_address.m_view_public_key  != m_account.get_keys().m_account_address.m_view_public_key,
-        error::wallet_files_doesnt_correspond, m_keys_file, m_wallet_file);
+      LOG_PRINT_L0("Failed to load wallet cache \"" << m_wallet_file << "\": unknown exception; starting with empty cache");
+      clear();
+      m_account_public_address = m_account.get_keys().m_account_address;
+      m_force_rescan = true;
     }
   }
 }
@@ -8719,6 +8728,8 @@ bool wallet2::parse_multisig_tx_from_str(std::string multisig_tx_st, multisig_tx
     for (size_t idx: get_construction_data(ptx).selected_transfers)
       CHECK_AND_ASSERT_MES(idx < m_transfers.size(), false, "Transfer index out of range");
     CHECK_AND_ASSERT_MES(get_construction_data(ptx).sources.size() == ptx.tx.vin.size(), false, "Mismatched sources/vin sizes");
+    CHECK_AND_ASSERT_MES(!ptx.tx.vin.empty(), false, "Multisig tx has no inputs");
+    CHECK_AND_ASSERT_MES(!get_construction_data(ptx).sources.empty(), false, "Multisig tx has no sources");
   }
 
   return true;
@@ -9356,67 +9367,12 @@ bool wallet2::unset_ring(const crypto::hash &txid)
 
 bool wallet2::find_and_save_rings(bool force)
 {
-  if (!force && m_ring_history_saved)
-    return true;
-  if (!m_ringdb)
+  if (force)
+  {
+    MWARNING("wallet2::find_and_save_rings() is deprecated");
     return false;
-
-  COMMAND_RPC_GET_TRANSACTIONS::request req = AUTO_VAL_INIT(req);
-  COMMAND_RPC_GET_TRANSACTIONS::response res = AUTO_VAL_INIT(res);
-
-  MDEBUG("Finding and saving rings...");
-
-  // get payments we made
-  std::vector<crypto::hash> txs_hashes;
-  std::list<std::pair<crypto::hash,wallet2::confirmed_transfer_details>> payments;
-  get_payments_out(payments, 0, std::numeric_limits<uint64_t>::max(), boost::none, std::set<uint32_t>());
-  for (const std::pair<crypto::hash,wallet2::confirmed_transfer_details> &entry: payments)
-  {
-    const crypto::hash &txid = entry.first;
-    txs_hashes.push_back(txid);
   }
 
-  MDEBUG("Found " << std::to_string(txs_hashes.size()) << " transactions");
-
-  // get those transactions from the daemon
-  auto it = txs_hashes.begin();
-  static const size_t SLICE_SIZE = 200;
-  for (size_t slice = 0; slice < txs_hashes.size(); slice += SLICE_SIZE)
-  {
-    req.decode_as_json = false;
-    req.prune = true;
-    req.txs_hashes.clear();
-    size_t ntxes = slice + SLICE_SIZE > txs_hashes.size() ? txs_hashes.size() - slice : SLICE_SIZE;
-    for (size_t s = slice; s < slice + ntxes; ++s)
-      req.txs_hashes.push_back(epee::string_tools::pod_to_hex(txs_hashes[s]));
-
-    {
-      const boost::lock_guard<boost::recursive_mutex> lock{m_daemon_rpc_mutex};
-      uint64_t pre_call_credits = m_rpc_payment_state.credits;
-      req.client = get_client_signature();
-      bool r = epee::net_utils::invoke_http_json("/gettransactions", req, res, *m_http_client, rpc_timeout);
-      THROW_ON_RPC_RESPONSE_ERROR_GENERIC(r, {}, res, "/gettransactions");
-      THROW_WALLET_EXCEPTION_IF(res.txs.size() != req.txs_hashes.size(), error::wallet_internal_error,
-        "daemon returned wrong response for gettransactions, wrong txs count = " +
-        std::to_string(res.txs.size()) + ", expected " + std::to_string(req.txs_hashes.size()));
-      check_rpc_cost("/gettransactions", res.credits, pre_call_credits, res.txs.size() * COST_PER_TX);
-    }
-
-    MDEBUG("Scanning " << res.txs.size() << " transactions");
-    THROW_WALLET_EXCEPTION_IF(slice + res.txs.size() > txs_hashes.size(), error::wallet_internal_error, "Unexpected tx array size");
-    for (size_t i = 0; i < res.txs.size(); ++i, ++it)
-    {
-    const auto &tx_info = res.txs[i];
-      cryptonote::transaction tx;
-      crypto::hash tx_hash;
-      THROW_WALLET_EXCEPTION_IF(!get_pruned_tx(tx_info, tx, tx_hash), error::wallet_internal_error,
-          "Failed to get transaction from daemon");
-      THROW_WALLET_EXCEPTION_IF(!(tx_hash == *it), error::wallet_internal_error, "Wrong txid received");
-      THROW_WALLET_EXCEPTION_IF(!add_rings(get_ringdb_key(), tx), error::wallet_internal_error, "Failed to save ring");
-    }
-  }
-
-  MINFO("Found and saved rings for " << txs_hashes.size() << " transactions");
   m_ring_history_saved = true;
   return true;
 }
@@ -12577,7 +12533,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
       crypto::public_key pubkey;
     } buf;
     std::memset(buf.domain_separator, 0x0, sizeof(buf.domain_separator));
-    std::strncpy(buf.domain_separator, "RETURN", 6);
+    std::memcpy(buf.domain_separator, "RETURN", 6);
     buf.pubkey = P_change;
     crypto::hash_to_scalar(&buf, sizeof(buf), y);
   }
@@ -12938,7 +12894,7 @@ uint8_t wallet2::estimate_current_hard_fork(const uint64_t height) const
     num_stagenet_hard_forks;
   
   // Iterate over the hard fork table, to see what the current fork is for the guessed height
-  for (size_t i = hfs_count-1; i>=0; --i) {
+  for (size_t i = hfs_count; i-- > 0; ) {
     if (hfs[i].height <= guessed_height)
       return hfs[i].version;
   }
@@ -13349,6 +13305,7 @@ std::string wallet2::get_spend_proof(const crypto::hash &txid, const std::string
   cryptonote::transaction tx;
   crypto::hash tx_hash;
   THROW_WALLET_EXCEPTION_IF(!get_pruned_tx(res.txs[0], tx, tx_hash), error::wallet_internal_error, "Failed to get tx from daemon");
+  THROW_WALLET_EXCEPTION_IF(tx_hash != txid, error::wallet_internal_error, "Failed to get the right transaction from daemon");
 
   std::vector<std::vector<crypto::signature>> signatures;
 
@@ -13475,6 +13432,7 @@ bool wallet2::check_spend_proof(const crypto::hash &txid, const std::string &mes
   cryptonote::transaction tx;
   crypto::hash tx_hash;
   THROW_WALLET_EXCEPTION_IF(!get_pruned_tx(res.txs[0], tx, tx_hash), error::wallet_internal_error, "failed to get tx from daemon");
+  THROW_WALLET_EXCEPTION_IF(tx_hash != txid, error::wallet_internal_error, "Failed to get the right transaction from daemon");
 
   // check signature size
   size_t num_sigs = 0;
@@ -13745,8 +13703,6 @@ std::string wallet2::get_tx_proof(const crypto::hash &txid, const cryptonote::ac
 std::string wallet2::get_tx_proof(const cryptonote::transaction &tx, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const cryptonote::account_public_address &address, bool is_subaddress, const std::string &message) const
 {
   hw::device &hwdev = m_account.get_device();
-  rct::key  aP;
-  
   // Lambda helper to select between carrot and normal tx proof generation
   auto generate_proof_fn = [&](
     const crypto::hash &prefix_hash, 
@@ -14375,11 +14331,26 @@ bool wallet2::check_reserve_proof(const cryptonote::account_public_address &addr
           loaded = true;
   }
   catch(...) {}
-  if (!loaded && m_load_deprecated_formats)
+  try
   {
-    std::istringstream iss(sig_decoded);
-    boost::archive::portable_binary_iarchive ar(iss);
-    ar >> proofs >> subaddr_spendkeys.parent();
+    if (!loaded && m_load_deprecated_formats)
+    {
+      std::istringstream iss(sig_decoded);
+      boost::archive::portable_binary_iarchive ar(iss);
+      ar >> proofs >> subaddr_spendkeys.parent();
+      loaded = true;
+    }
+  }
+  catch(...) {}
+
+  THROW_WALLET_EXCEPTION_IF(!loaded, error::wallet_internal_error, "Failed to parse reserve proof signature data");
+
+  std::unordered_set<crypto::key_image> seen_key_images;
+  std::set<std::pair<std::string, uint64_t>> seen_outputs;
+  for (const reserve_proof_entry &proof : proofs)
+  {
+    THROW_WALLET_EXCEPTION_IF(!seen_key_images.insert(proof.key_image).second, error::wallet_internal_error, "Duplicate key image in reserve proof");
+    THROW_WALLET_EXCEPTION_IF(!seen_outputs.emplace(epee::string_tools::pod_to_hex(proof.txid), proof.index_in_tx).second, error::wallet_internal_error, "Duplicate output in reserve proof");
   }
 
   THROW_WALLET_EXCEPTION_IF(subaddr_spendkeys.count(address.m_spend_public_key) == 0, error::wallet_internal_error,
@@ -14484,6 +14455,12 @@ bool wallet2::check_reserve_proof(const cryptonote::account_public_address &addr
       crypto::derivation_to_scalar(derivation, proof.index_in_tx, shared_secret);
       rct::ecdhTuple ecdh_info = tx.rct_signatures.ecdhInfo[proof.index_in_tx];
       rct::ecdhDecode(ecdh_info, rct::sk2rct(shared_secret), tx.rct_signatures.type == rct::RCTTypeBulletproof2 || tx.rct_signatures.type == rct::RCTTypeCLSAG || tx.rct_signatures.type == rct::RCTTypeBulletproofPlus || tx.rct_signatures.type == rct::RCTTypeFullProofs || tx.rct_signatures.type == rct::RCTTypeSalviumZero  || tx.rct_signatures.type == rct::RCTTypeSalviumOne);
+      const rct::key C = tx.rct_signatures.outPk[proof.index_in_tx].mask;
+      rct::key Ctmp;
+      THROW_WALLET_EXCEPTION_IF(sc_check(ecdh_info.mask.bytes) != 0, error::wallet_internal_error, "Bad ECDH input mask");
+      THROW_WALLET_EXCEPTION_IF(sc_check(ecdh_info.amount.bytes) != 0, error::wallet_internal_error, "Bad ECDH input amount");
+      rct::addKeys2(Ctmp, ecdh_info.mask, ecdh_info.amount, rct::H);
+      THROW_WALLET_EXCEPTION_IF(!rct::equalKeys(C, Ctmp), error::wallet_internal_error, "Amount decoded incorrectly");
       amount = rct::h2d(ecdh_info.amount);
     }
     total += amount;

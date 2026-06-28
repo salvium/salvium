@@ -1,8 +1,8 @@
 package=sodium
-$(package)_version=1.0.18
+$(package)_version=1.0.22
 $(package)_download_path=https://download.libsodium.org/libsodium/releases/
 $(package)_file_name=libsodium-$($(package)_version).tar.gz
-$(package)_sha256_hash=6f504490b342a4f8a4c4a02fc9b866cbef8622d5df4e5452b46be121e46636c1
+$(package)_sha256_hash=adbdd8f16149e81ac6078a03aca6fc03b592b89ef7b5ed83841c086191be3349
 $(package)_patches=disable-glibc-getrandom-getentropy.patch fix-whitespace.patch
 
 define $(package)_set_vars
@@ -12,7 +12,6 @@ endef
 
 define $(package)_preprocess_cmds
   patch -p1 < $($(package)_patch_dir)/disable-glibc-getrandom-getentropy.patch &&\
-  autoconf &&\
   patch -p1 < $($(package)_patch_dir)/fix-whitespace.patch
 endef
 
@@ -25,10 +24,14 @@ define $(package)_build_cmds
 endef
 
 define $(package)_stage_cmds
-  $(MAKE) DESTDIR=$($(package)_staging_dir) install
+  mkdir -p $($(package)_staging_prefix_dir)/lib/pkgconfig \
+           $($(package)_staging_prefix_dir)/include/sodium &&\
+  cp src/libsodium/.libs/libsodium.a $($(package)_staging_prefix_dir)/lib/ &&\
+  cp libsodium.pc $($(package)_staging_prefix_dir)/lib/pkgconfig/ &&\
+  cp src/libsodium/include/sodium.h $($(package)_staging_prefix_dir)/include/ &&\
+  cp src/libsodium/include/sodium/*.h $($(package)_staging_prefix_dir)/include/sodium/
 endef
 
 define $(package)_postprocess_cmds
-  rm lib/*.la
+  rm -f lib/*.la
 endef
-

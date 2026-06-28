@@ -235,7 +235,7 @@ namespace cryptonote::txrules
     std::string destination_asset_type;
 
     uint64_t amount_burnt = 0;
-    
+
     uint8_t rct_type = 0;
   };
 

@@ -3,6 +3,8 @@
 #include "net/net_parse_helpers.h"
 #include "misc_log_ex.h"
 
+#include <cmath>
+
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "net.http"
 

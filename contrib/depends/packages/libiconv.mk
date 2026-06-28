@@ -1,14 +1,14 @@
 package=libiconv
-$(package)_version=1.15
+$(package)_version=1.19
 $(package)_download_path=https://ftp.gnu.org/gnu/libiconv
 $(package)_file_name=libiconv-$($(package)_version).tar.gz
-$(package)_sha256_hash=ccf536620a45458d26ba83887a983b96827001e92a13847b45e4925cc8913178
+$(package)_sha256_hash=88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6
 $(package)_patches=fix-whitespace.patch
 
 define $(package)_set_vars
   $(package)_config_opts=--disable-nls
-  $(package)_config_opts=--enable-static
-  $(package)_config_opts=--disable-shared
+  $(package)_config_opts+=--enable-static
+  $(package)_config_opts+=--disable-shared
   $(package)_config_opts_linux=--with-pic
   $(package)_config_opts_freebsd=--with-pic
 endef

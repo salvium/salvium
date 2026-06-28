@@ -62,6 +62,7 @@ src/blockchain_utilities/blockchain_audit.cpp
 
 # Executables
 *.exe
+!install-depenencies.exe
 *.out
 *.app
 

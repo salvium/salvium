@@ -1,9 +1,9 @@
 package=gtest
-$(package)_version=1.8.1
-$(package)_download_path=https://github.com/google/googletest/archive/
-$(package)_download_file=release-$($(package)_version).tar.gz
+$(package)_version=1.17.0
+$(package)_download_path=https://github.com/google/googletest/archive/refs/tags/
+$(package)_download_file=v$($(package)_version).tar.gz
 $(package)_file_name=$(package)-$($(package)_version).tar.gz
-$(package)_sha256_hash=9bf1fe5182a604b4135edc1a425ae356c9ad15e9b23f9f12a02e80184c3a249c
+$(package)_sha256_hash=65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c
 $(package)_cxxflags=-std=c++11
 $(package)_cxxflags_linux=-fPIC
 

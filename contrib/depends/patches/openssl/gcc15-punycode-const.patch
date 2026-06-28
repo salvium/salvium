@@ -1,0 +1,82 @@
+--- a/crypto/punycode.c
++++ b/crypto/punycode.c
+@@ -277,5 +277,5 @@
+     while (1) {
+-        char *tmpptr = strchr(inptr, '.');
++        const char *tmpptr = strchr(inptr, '.');
+         size_t delta = tmpptr != NULL ? (size_t)(tmpptr - inptr) : strlen(inptr);
+ 
+         if (strncmp(inptr, "xn--", 4) != 0) {
+--- a/crypto/conf/conf_mod.c
++++ b/crypto/conf/conf_mod.c
+@@ -374,9 +374,9 @@
+ static CONF_MODULE *module_find(const char *name)
+ {
+     CONF_MODULE *tmod;
+     int i, nchar;
+-    char *p;
++    const char *p;
+     p = strrchr(name, '.');
+ 
+     if (p)
+         nchar = p - name;
+--- a/providers/common/der/oids_to_c.pm
++++ b/providers/common/der/oids_to_c.pm
+@@ -80,7 +80,6 @@
+         # print STDERR "-----BEGIN DEBUG-----\n";
+         # print STDERR $text;
+         # print STDERR "-----END DEBUG-----\n";
+-        use re 'debugcolor';
+         while ($text =~ m/${OID_def_re}/sg) {
+             my $comment = $&;
+             my $name = $1;
+--- a/crypto/x509/v3_cpols.c
++++ b/crypto/x509/v3_cpols.c
+@@ -246,7 +246,7 @@
+ 
+ static int displaytext_get_tag_len(const char *tagstr)
+ {
+-    char *colon = strchr(tagstr, ':');
++    const char *colon = strchr(tagstr, ':');
+ 
+     return (colon == NULL) ? -1 : colon - tagstr;
+ }
+--- a/crypto/x509/v3_san.c
++++ b/crypto/x509/v3_san.c
+@@ -641,7 +641,8 @@
+ 
+ static int do_othername(GENERAL_NAME *gen, const char *value, X509V3_CTX *ctx)
+ {
+-    char *objtmp = NULL, *p;
++    char *objtmp = NULL;
++    const char *p;
+     int objlen;
+ 
+     if ((p = strchr(value, ';')) == NULL)
+--- a/crypto/x509/v3_utl.c
++++ b/crypto/x509/v3_utl.c
+@@ -1097,12 +1097,13 @@
+ {
+     ASN1_OCTET_STRING *ret = NULL;
+     unsigned char ipout[32];
+     char *iptmp = NULL, *p;
++    const char *sep;
+     int iplen1, iplen2;
+ 
+-    p = strchr(ipasc, '/');
+-    if (p == NULL)
++    sep = strchr(ipasc, '/');
++    if (sep == NULL)
+         return NULL;
+     iptmp = OPENSSL_strdup(ipasc);
+     if (iptmp == NULL)
+         return NULL;
+@@ -1106,7 +1107,7 @@
+     iptmp = OPENSSL_strdup(ipasc);
+     if (iptmp == NULL)
+         return NULL;
+-    p = iptmp + (p - ipasc);
++    p = iptmp + (sep - ipasc);
+     *p++ = 0;
+ 
+     iplen1 = ossl_a2i_ipadd(ipout, iptmp);

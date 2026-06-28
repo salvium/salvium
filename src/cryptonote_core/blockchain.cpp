@@ -32,6 +32,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <limits>
+#include <set>
+#include <stdexcept>
 #include <boost/asio/dispatch.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptor/reversed.hpp>
@@ -433,7 +435,7 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
 
   // Preload the yield_block_info cache
   rebuild_ybi_cache();
-  
+
   return true;
 }
 //------------------------------------------------------------------
@@ -1135,7 +1137,7 @@ bool Blockchain::switch_to_alternative_blockchain(std::list<block_extended_info>
   CHECK_AND_ASSERT_THROW_MES(update_next_cumulative_weight_limit(), "Error updating next cumulative weight limit");
 
   auto split_height = m_db->height();
-  
+
   //connecting new alternative chain
   for(auto alt_ch_iter = alt_chain.begin(); alt_ch_iter != alt_chain.end(); alt_ch_iter++)
   {
@@ -1245,7 +1247,7 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
   } else {
     difficulty_blocks_count = DIFFICULTY_BLOCKS_COUNT_V2;
   }
-  
+
   // if the alt chain isn't long enough to calculate the difficulty target
   // based on its blocks alone, need to get more blocks from the main chain
   if(alt_chain.size()< difficulty_blocks_count)
@@ -1645,7 +1647,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
 
         // Check the output type is SAL1
         if (output.asset_type != "SAL1") { MERROR("Output of miner_tx is not SAL1"); return false; }
-        
+
         // Skip the premine remint
         if (treasury_payout_exists && (i == treasury_index_in_tx_outputs)) continue;
 
@@ -1724,10 +1726,10 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
     CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "genesis protocol transaction in the block has outputs");
     return true;
   }
-  
+
   // if nothing is created by this TX - check no money is included
   if (b.protocol_tx.vin.size() != 1) { MERROR("coinbase protocol transaction in the block has no inputs"); return false; }
-   
+
   // Can we have matured STAKE transactions yet?
   uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   if (height <= stake_lock_period) {
@@ -1761,7 +1763,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
         LOG_ERROR("Block at height: " << height << " - Both carrot and pre-carrot yield payout information found - aborting");
         return false;
       }
-      
+
     } else {
       if (!calculate_yield_payouts(matured_height, yield_payouts)) {
         LOG_ERROR("Block at height: " << height << " - Failed to obtain yield payout information - aborting");
@@ -1923,14 +1925,14 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
     if (hf_version >= HF_VERSION_ENABLE_TOKENS) {
       // Validate create_coin transaction outputs
       std::vector<std::pair<protocol_tx_data_t, token_metadata_t>> create_token_data;
-      
+
       for (const auto& tx_pair : txs) {
         const transaction& tx = tx_pair.first;
         if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
           create_token_data.push_back(std::make_pair(tx.protocol_tx_data, tx.token_metadata));
         }
       }
-      
+
       for (const auto& ct_data : create_token_data) {
         // Verify the output key
         crypto::public_key out_key;
@@ -1983,11 +1985,11 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
 
     return true;
   }
-  
+
   // Merge the yield and audit payouts into an iterable vector
   std::vector<std::pair<yield_tx_info, uint64_t>> payouts{yield_payouts};
   payouts.insert(payouts.end(), audit_payouts.begin(), audit_payouts.end());
-  
+
   size_t output_idx = 0;
   for (auto it = payouts.begin(); it != payouts.end(); it++, output_idx++) {
 
@@ -2252,7 +2254,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
     LOG_ERROR("mining to Carrot wallet address, but Carrot isn't supported yet");
     return false;
   }
-  
+
   std::map<std::string, uint64_t> circ_supply = get_db().get_circulating_supply();
 
   // Check if we are supposed to be obtaining PRs from the Oracle
@@ -2273,7 +2275,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
     // Nope - set it to an empty record - it won't get serialised anyway
     b.pricing_record = oracle::pricing_record();
   }
-  
+
   CHECK_AND_ASSERT_MES(diffic, false, "difficulty overhead.");
 
   std::vector<cryptonote::protocol_data_entry> protocol_entries;
@@ -2298,7 +2300,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
 
     // Iterate over the cached data for block yield, calculating the yield payouts due
     std::vector<std::pair<yield_tx_info, uint64_t>> yield_payouts;
-    std::vector<std::pair<yield_tx_info_carrot, uint64_t>> carrot_yield_payouts;  
+    std::vector<std::pair<yield_tx_info_carrot, uint64_t>> carrot_yield_payouts;
     if (hf_submitted >= HF_VERSION_CARROT) {
       if (!calculate_yield_payouts(start_height, carrot_yield_payouts)) {
         LOG_ERROR("Failed to obtain yield payout information - aborting");
@@ -2387,7 +2389,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
 
         // Get the asset types
         const std::pair<std::string, std::string> audit_asset_types = audit_hf.second.second;
-      
+
         // Create the protocol_metadata entries here
         for (const auto& audit_entry: audit_payouts) {
           cryptonote::protocol_data_entry entry;
@@ -2416,17 +2418,17 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
       // If origin block heights are different (only possible with mixed AUDIT+STAKE) sort by them first
       if (lhs.origin_height < rhs.origin_height) return true;
       if (lhs.origin_height > rhs.origin_height) return false;
-      
+
       // If output keys are different, sort by them second
       if (lhs.return_address < rhs.return_address) return true;
       if (lhs.return_address > rhs.return_address) return false;
-      
+
       // If block heights _and_ output keys are same, sort by amount third
       return lhs.amount_burnt < rhs.amount_burnt;
     });
   }
   */
-  
+
   // create the protocol transaction entries for CREATE_TOKEN TXs
   if (b.major_version >= HF_VERSION_ENABLE_TOKENS) {
     for (const auto& ct_data_entry: create_token_entries) {
@@ -2457,7 +2459,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   // Time to construct the protocol_tx
   ok = construct_protocol_tx(height, b.protocol_tx, protocol_entries, b.major_version);
   CHECK_AND_ASSERT_MES(ok, false, "Failed to construct protocol tx");
-  
+
   pool_cookie = m_tx_pool.cookie();
 #if defined(DEBUG_CREATE_BLOCK_TEMPLATE)
   size_t real_txs_weight = 0;
@@ -3316,7 +3318,7 @@ bool Blockchain::get_pricing_record(oracle::pricing_record &pr, std::map<std::st
   epee::net_utils::http::http_simple_client http_client;
   COMMAND_RPC_GET_PRICING_RECORD::request req = AUTO_VAL_INIT(req);
   COMMAND_RPC_GET_PRICING_RECORD::response res = AUTO_VAL_INIT(res);
-  
+
   std::array<std::string, 3> oracle_urls = get_config(m_nettype).ORACLE_URLS;
   std::shuffle(oracle_urls.begin(), oracle_urls.end(), std::default_random_engine(crypto::rand<unsigned>()));
   std::string url = "/price?height=" + std::to_string(height);
@@ -3332,7 +3334,7 @@ bool Blockchain::get_pricing_record(oracle::pricing_record &pr, std::map<std::st
     }
     LOG_PRINT_L1("Failed to obtain pricing record from Oracle : " << oracle_urls[n]);
   }
-    
+
   if (!r) {
     LOG_PRINT_L0("Failed to get pricing record from Oracle - returning empty PR");
     res.pr = oracle::pricing_record();
@@ -4105,7 +4107,7 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
       }
     }
   }
-  
+
   // from v1, forbid bulletproofs
   if (hf_version >= HF_VERSION_BULLETPROOF_PLUS) {
     if (tx.version >= 2) {
@@ -4150,7 +4152,7 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
         return false;
       }
     }
-    
+
   } else if (hf_version >= HF_VERSION_ENFORCE_FULL_PROOFS) {
     // from v4, only allow bulletproofs plus _with_ full proofs on RCT transactions
     if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT) {
@@ -4167,7 +4169,7 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
       }
     }
   }
-  
+
   // from v15, require view tags and asset types on outputs
   if (!check_output_types(tx, hf_version))
   {
@@ -4188,7 +4190,7 @@ bool Blockchain::check_tx_asset_types(const transaction& tx, tx_verification_con
 
     // Get the valid tokens according to the DB
     std::map<std::string, cryptonote::token_metadata_t> mapTokens = m_db->get_tokens();
-    
+
     if (tx.type == cryptonote::transaction_type::PROTOCOL || tx.type == cryptonote::transaction_type::MINER) {
       return true;
     } else if (
@@ -4198,13 +4200,13 @@ bool Blockchain::check_tx_asset_types(const transaction& tx, tx_verification_con
     ) {
       if (tx.source_asset_type != "SAL1" || tx.destination_asset_type != "SAL1") {
         MERROR_VER("Invalid source/dest asset type for CREATE_TOKEN / ROLLUP / STAKE - provided source asset: " << tx.source_asset_type << ", and destination asset: " << tx.destination_asset_type << ", expected SAL1");
-        tvc.m_verifivation_failed = true; 
+        tvc.m_verifivation_failed = true;
         return false;
       }
     } else if (tx.type == cryptonote::transaction_type::BURN) {
       if ((tx.source_asset_type != "SAL" && tx.source_asset_type != "SAL1") || (tx.source_asset_type != tx.destination_asset_type)) {
         MERROR_VER("Invalid source/dest asset type for BURN - provided source asset: " << tx.source_asset_type << ", and destination asset: " << tx.destination_asset_type << ", expected SAL/SAL1 for both");
-        tvc.m_verifivation_failed = true; 
+        tvc.m_verifivation_failed = true;
         return false;
       }
     } else if (tx.type == cryptonote::transaction_type::TRANSFER) {
@@ -4278,7 +4280,7 @@ bool Blockchain::check_tx_asset_types(const transaction& tx, tx_verification_con
   return true;
 }
 
- 
+
 //------------------------------------------------------------------
 bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verification_context &tvc) const
 {
@@ -4317,13 +4319,13 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
       if (tx.version != TRANSACTION_VERSION_ENABLE_TOKENS) {
       }
       if (tx.type == cryptonote::transaction_type::PROTOCOL) {
-        // Allowed multiple asset_types for `vout` entries 
+        // Allowed multiple asset_types for `vout` entries
       } else {
         // No mixing of asset_types permitted - verify here
       }
     }
   }
-  
+
   // After v2 allow N-out TXs for TRANSFER ONLY
   if (hf_version >= HF_VERSION_ENABLE_N_OUTS && hf_version < HF_VERSION_CARROT) {
     if (tx.version >= TRANSACTION_VERSION_N_OUTS && tx.type != cryptonote::transaction_type::TRANSFER) {
@@ -4529,7 +4531,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
         rv.p.CLSAGs[n].I = rct::ki2rct(boost::get<txin_to_key>(tx.vin[n]).k_image);
       }
     }
-  } 
+  }
   else if (rv.type == rct::RCTTypeSalviumOne)
   {
     if (!tx.pruned)
@@ -4606,7 +4608,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
             ++n_unmixable;
           else
             ++n_mixable;
-        }  
+        }
         else
         {
           uint64_t n_outputs = m_db->get_num_outputs(in_to_key.amount);
@@ -4807,7 +4809,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     // obviously, the original and simple rct APIs use a mixRing that's indexes
     // in opposite orders, because it'd be too simple otherwise...
     const rct::rctSig &rv = tx.rct_signatures;
-    
+
     // Check that after full proofs are enabled, the RCT version is set to enforce full proofs
     if (hf_version >= HF_VERSION_CARROT) {
       if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeSalviumOne) {
@@ -4825,7 +4827,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
         return false;
       }
     }
-    
+
     switch (rv.type)
     {
     case rct::RCTTypeNull: {
@@ -4979,7 +4981,7 @@ bool Blockchain::check_fee(size_t tx_weight, uint64_t fee) const
   uint64_t median = 0;
   uint64_t already_generated_coins = 0;
   uint64_t base_reward = 0;
-  
+
   median = m_current_block_cumul_weight_limit / 2;
   const uint64_t blockchain_height = m_db->height();
   already_generated_coins = blockchain_height ? m_db->get_block_already_generated_coins(blockchain_height - 1) : 0;
@@ -5244,7 +5246,7 @@ bool Blockchain::calculate_audit_payouts(const uint64_t start_height, std::vecto
   const std::set<std::string> txs_blacklist = {
     "017a79539e69ce16e91d9aa2267c102f336678c41636567c1129e3e72149499a"
   };
-  
+
   // Get the ABI information for the 21,600 blocks that the matured TX(s), we can calculate audit
   for (const auto& entry: audit_entries) {
     // Check to see if this entry is in the blacklist
@@ -5254,7 +5256,7 @@ bool Blockchain::calculate_audit_payouts(const uint64_t start_height, std::vecto
     }
     audit_container.emplace_back(std::make_pair(entry, entry.locked_coins));
   }
-  
+
   // Return success to caller
   return true;
 }
@@ -5262,7 +5264,7 @@ bool Blockchain::calculate_audit_payouts(const uint64_t start_height, std::vecto
 bool Blockchain::get_abi_entry(const uint64_t height, cryptonote::audit_block_info& abi)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-  
+
   // Clear the provided container
   std::memset(&abi, 0, sizeof(struct cryptonote::audit_block_info));
 
@@ -5275,12 +5277,67 @@ bool Blockchain::get_abi_entry(const uint64_t height, cryptonote::audit_block_in
   return true;
 }
 //------------------------------------------------------------------
+namespace
+{
+  template <typename YieldEntry>
+  bool calculate_yield_payouts_from_entries(
+      const char *context,
+      const cryptonote::network_type nettype,
+      const uint64_t start_height,
+      const std::vector<YieldEntry>& yield_entries,
+      const std::map<uint64_t, cryptonote::yield_block_info>& ybi_cache,
+      std::vector<std::pair<YieldEntry, uint64_t>>& yield_container)
+  {
+    yield_container.clear();
+
+    const std::set<std::string> txs_blacklist = {};
+
+    for (const auto& entry: yield_entries)
+    {
+      if (txs_blacklist.find(epee::string_tools::pod_to_hex(entry.tx_hash)) != txs_blacklist.end())
+      {
+        LOG_ERROR(context << " found blacklisted TX at height " << start_height << " - skipping payout");
+        continue;
+      }
+      yield_container.emplace_back(std::make_pair(entry, entry.locked_coins));
+    }
+
+    const uint64_t yield_lock_period = cryptonote::get_config(nettype).STAKE_LOCK_PERIOD;
+    for (uint64_t idx = start_height + 1; idx <= start_height + yield_lock_period; ++idx)
+    {
+      const auto ybi_it = ybi_cache.find(idx);
+      if (ybi_it == ybi_cache.end())
+      {
+        LOG_ERROR("failed to locate yield information for block height " << idx << " - aborting");
+        return false;
+      }
+
+      const yield_block_info& ybi = ybi_it->second;
+      if (ybi.slippage_total_this_block == 0 || ybi.locked_coins_tally == 0)
+        continue;
+
+      const boost::multiprecision::int128_t slippage_128 = ybi.slippage_total_this_block;
+      const boost::multiprecision::int128_t locked_total_128 = ybi.locked_coins_tally;
+
+      for (auto& entry: yield_container)
+      {
+        const boost::multiprecision::int128_t locked_coins_128 = entry.first.locked_coins;
+        const boost::multiprecision::int128_t yield_128 = (slippage_128 * locked_coins_128) / locked_total_128;
+        const uint64_t yield_u64 = boost::numeric_cast<uint64_t>(yield_128);
+
+        if (entry.second + yield_u64 < entry.second)
+          throw std::overflow_error("uint64_t addition overflow");
+        entry.second += yield_u64;
+      }
+    }
+
+    return true;
+  }
+}
+//------------------------------------------------------------------
 bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info_carrot, uint64_t>>& yield_container)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-
-  // Clear the yield payout amounts
-  yield_container.clear();
 
   // Get the YIELD TX information for matured staked coins
   std::vector<cryptonote::yield_tx_info_carrot> yield_entries;
@@ -5293,60 +5350,19 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
     return false;
   }
 
-  // Build a blacklist of staking TXs _not_ to pay out for
-  const std::set<std::string> txs_blacklist = {};
-  
-  // Get the YBI information for the 21,600 blocks that the matured TX(s), we can calculate yield
-  for (const auto& entry: yield_entries) {
-    // Check to see if this entry is in the blacklist
-    if (txs_blacklist.find(epee::string_tools::pod_to_hex(entry.tx_hash)) != txs_blacklist.end()) {
-      LOG_ERROR("calculate_yield_payouts() found blacklisted TX at height " << start_height << " - skipping payout");
-      continue;
-    }
-    yield_container.emplace_back(std::make_pair(entry, entry.locked_coins));
-  }
-  
-  // Iterate over the cached yield_block_info data
-  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
-  for (uint64_t idx = start_height+1; idx <= start_height + yield_lock_period; ++idx) {
-    // Get the next block
-    if (m_yield_block_info_cache.count(idx) == 0) {
-      LOG_ERROR("failed to locate yield information for block height " << idx <<"  - aborting");
-      return false;
-    }
-    yield_block_info ybi = m_yield_block_info_cache[idx];
-    if (ybi.slippage_total_this_block == 0) continue;
-    if (ybi.locked_coins_tally == 0) continue;
-    
-    boost::multiprecision::int128_t slippage_128 = ybi.slippage_total_this_block;
-
-    // Get the total number of coins locked at this height
-    boost::multiprecision::int128_t locked_total_128 = ybi.locked_coins_tally;
-    
-    // Iterate over the yield_container, adding each proportion of the yield
-    for (auto& entry: yield_container) {
-      boost::multiprecision::int128_t locked_coins_128 = entry.first.locked_coins;
-      boost::multiprecision::int128_t yield_128 = (slippage_128 * locked_coins_128) / locked_total_128;
-      uint64_t yield_u64 = boost::numeric_cast<uint64_t>(yield_128);
-
-      if (entry.second + yield_u64 < entry.second) {
-        throw std::overflow_error("uint64_t addition overflow");
-      }
-      entry.second += yield_u64;
-    }
-  }
-  
-  // Return success to caller
-  return true;
+  return calculate_yield_payouts_from_entries(
+      "calculate_yield_payouts(carrot)",
+      m_nettype,
+      start_height,
+      yield_entries,
+      m_yield_block_info_cache,
+      yield_container);
 }
 //------------------------------------------------------------------
 //------------------------------------------------------------------
 bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& yield_container)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-
-  // Clear the yield payout amounts
-  yield_container.clear();
 
   // Get the YIELD TX information for matured staked coins
   std::vector<cryptonote::yield_tx_info> yield_entries;
@@ -5359,62 +5375,24 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
     return false;
   }
 
-  // Build a blacklist of staking TXs _not_ to pay out for
-  const std::set<std::string> txs_blacklist = {};
-  
-  // Get the YBI information for the 21,600 blocks that the matured TX(s), we can calculate yield
-  for (const auto& entry: yield_entries) {
-    // Check to see if this entry is in the blacklist
-    if (txs_blacklist.find(epee::string_tools::pod_to_hex(entry.tx_hash)) != txs_blacklist.end()) {
-      LOG_ERROR("calculate_yield_payouts() found blacklisted TX at height " << start_height << " - skipping payout");
-      continue;
-    }
-    yield_container.emplace_back(std::make_pair(entry, entry.locked_coins));
-  }
-  
-  // Iterate over the cached yield_block_info data
-  uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
-  for (uint64_t idx = start_height+1; idx <= start_height + yield_lock_period; ++idx) {
-    // Get the next block
-    if (m_yield_block_info_cache.count(idx) == 0) {
-      LOG_ERROR("failed to locate yield information for block height " << idx <<"  - aborting");
-      return false;
-    }
-    yield_block_info ybi = m_yield_block_info_cache[idx];
-    if (ybi.slippage_total_this_block == 0) continue;
-    if (ybi.locked_coins_tally == 0) continue;
-    
-    boost::multiprecision::int128_t slippage_128 = ybi.slippage_total_this_block;
-
-    // Get the total number of coins locked at this height
-    boost::multiprecision::int128_t locked_total_128 = ybi.locked_coins_tally;
-    
-    // Iterate over the yield_container, adding each proportion of the yield
-    for (auto& entry: yield_container) {
-      boost::multiprecision::int128_t locked_coins_128 = entry.first.locked_coins;
-      boost::multiprecision::int128_t yield_128 = (slippage_128 * locked_coins_128) / locked_total_128;
-      uint64_t yield_u64 = boost::numeric_cast<uint64_t>(yield_128);
-
-      if (entry.second + yield_u64 < entry.second) {
-        throw std::overflow_error("uint64_t addition overflow");
-      }
-      entry.second += yield_u64;
-    }
-  }
-  
-  // Return success to caller
-  return true;
+  return calculate_yield_payouts_from_entries(
+      "calculate_yield_payouts",
+      m_nettype,
+      start_height,
+      yield_entries,
+      m_yield_block_info_cache,
+      yield_container);
 }
 //------------------------------------------------------------------
 bool Blockchain::rebuild_ybi_cache()
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-  
+
   // If we need to (re)build the cache, we need to pull the data from the blockchain directly
 
   // Clear the existing cache
   m_yield_block_info_cache.clear();
-  
+
   // Get the size that the cache should be when fully populated (could be less than the lock period if the chain is young)
   uint64_t height = m_db->height();
   uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
@@ -5443,7 +5421,7 @@ bool Blockchain::rebuild_ybi_cache()
 bool Blockchain::validate_ybi_cache()
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-  
+
   // Get the size that the cache should be if fully populated
   uint64_t height = m_db->height();
   uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
@@ -5453,14 +5431,14 @@ bool Blockchain::validate_ybi_cache()
     LOG_ERROR("YBI cache is incorrect size - should be " << ybi_cache_expected_size << ", but found " << m_yield_block_info_cache.size() << " - aborting");
     return false;
   }
-    
+
   // It's the right size - check we have the correct limits
   if (m_yield_block_info_cache.count(height - 1) == 0) {
     // Missing the latest block - report error and bail out
     LOG_ERROR("Failed to locate YBI entry for height " << (height - 1) << " - aborting");
     return false;
   }
-  
+
   if (m_yield_block_info_cache.count(height - ybi_cache_expected_size) == 0) {
     // Missing the latest block - report error and bail out
     LOG_ERROR("Failed to locate YBI entry for height " << (height - ybi_cache_expected_size) << " - aborting");
@@ -5473,10 +5451,10 @@ bool Blockchain::validate_ybi_cache()
 bool Blockchain::get_ybi_cache(std::map<uint64_t, yield_block_info>& ybi_cache)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-  
+
   // Clear the provided container
   ybi_cache.clear();
-  
+
   // Make sure the cache is fully populated and up to date
   if (!validate_ybi_cache()) {
     LOG_PRINT_L1("yield information cache is invalid - rebuilding cache");
@@ -5494,10 +5472,10 @@ bool Blockchain::get_ybi_cache(std::map<uint64_t, yield_block_info>& ybi_cache)
 bool Blockchain::get_ybi_entry(const uint64_t height, cryptonote::yield_block_info& ybi)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-  
+
   // Clear the provided container
   std::memset(&ybi, 0, sizeof(struct cryptonote::yield_block_info));
-  
+
   // Make sure the cache is fully populated and up to date
   if (!validate_ybi_cache()) {
     LOG_PRINT_L1("yield information cache is invalid - rebuilding cache");
@@ -5772,7 +5750,7 @@ leave:
   TIME_MEASURE_START(t3);
 
   cryptonote::txrules::block_state_overlay txrules_overlay;
-  
+
   // sanity check basic miner tx properties;
   if(!prevalidate_miner_transaction(bl, blockchain_height, hf_version))
   {
@@ -5905,7 +5883,7 @@ leave:
       return_tx_to_pool(txs);
       goto leave;
     }
-    
+
 #if defined(PER_BLOCK_CHECKPOINT)
     if (!fast_check)
 #endif
@@ -5961,7 +5939,7 @@ leave:
       return_tx_to_pool(txs);
       goto leave;
     }
-    
+
     TIME_MEASURE_FINISH(cc);
     t_checktx += cc;
     fee_summary += fee;
@@ -6000,14 +5978,14 @@ leave:
       MERROR_VER("Block with id: " << id
                  << " has miner transaction failing TX Rules consensus check: "
                  << txrules_result.reason);
-      
+
       add_block_as_invalid(bl, id);
       bvc.m_verifivation_failed = true;
       return_tx_to_pool(txs);
       goto leave;
     }
   }
-  
+
   uint64_t base_reward = 0;
   uint64_t already_generated_coins = blockchain_height ? m_db->get_block_already_generated_coins(blockchain_height - 1) : 0;
   if(!validate_miner_transaction(bl, cumulative_block_weight, fee_summary, base_reward, already_generated_coins, bvc.m_partial_block_reward, m_hardfork->get_current_version()))
@@ -6028,14 +6006,14 @@ leave:
       MERROR_VER("Block with id: " << id
                  << " has protocol transaction failing TX Rules consensus check: "
                  << txrules_result.reason);
-      
+
       add_block_as_invalid(bl, id);
       bvc.m_verifivation_failed = true;
       return_tx_to_pool(txs);
       goto leave;
     }
   }
- 
+
   if(!validate_protocol_transaction(bl, blockchain_height, m_hardfork->get_current_version(), txs))
   {
     MERROR_VER("Block with id: " << id << " has incorrect protocol transaction");
@@ -6260,16 +6238,16 @@ bool Blockchain::update_next_cumulative_weight_limit(uint64_t *long_term_effecti
     long_term_median = m_long_term_block_weights_cache_rolling_median.median();
   }
   m_long_term_effective_median_block_weight = std::max<uint64_t>(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5, long_term_median);
-  
+
   std::vector<uint64_t> weights;
   get_last_n_blocks_weights(weights, CRYPTONOTE_REWARD_BLOCKS_WINDOW);
-  
+
   uint64_t short_term_median = epee::misc_utils::median(weights);
   uint64_t effective_median_block_weight;
   // effective median = short_term_median bounded to range [long_term_median, 50*long_term_median], but it can't be smaller than the
   // minimum penalty free zone (a.k.a. 'full reward zone')
   effective_median_block_weight = std::min<uint64_t>(std::max<uint64_t>(m_long_term_effective_median_block_weight, short_term_median), CRYPTONOTE_SHORT_TERM_BLOCK_WEIGHT_SURGE_FACTOR * m_long_term_effective_median_block_weight);
-  
+
   m_current_block_cumul_weight_median = effective_median_block_weight;
 
   if (m_current_block_cumul_weight_median <= full_reward_zone)

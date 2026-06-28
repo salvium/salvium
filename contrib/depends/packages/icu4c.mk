@@ -1,8 +1,8 @@
 package=icu4c
-$(package)_version=55.2
-$(package)_download_path=https://github.com/unicode-org/icu/releases/download/release-55-2/
-$(package)_file_name=$(package)-55_2-src.tgz
-$(package)_sha256_hash=eda2aa9f9c787748a2e2d310590720ca8bcc6252adf6b4cfb03b65bef9d66759
+$(package)_version=78.3
+$(package)_download_path=https://github.com/unicode-org/icu/releases/download/release-78.3/
+$(package)_file_name=$(package)-78.3-sources.tgz
+$(package)_sha256_hash=3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0
 $(package)_patches=icu-001-dont-build-static-dynamic-twice.patch
 
 define $(package)_set_vars

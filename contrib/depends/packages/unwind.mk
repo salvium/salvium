@@ -1,8 +1,8 @@
 package=unwind
-$(package)_version=1.5.0
+$(package)_version=1.6.2
 $(package)_download_path=https://download.savannah.nongnu.org/releases/libunwind
 $(package)_file_name=lib$(package)-$($(package)_version).tar.gz
-$(package)_sha256_hash=90337653d92d4a13de590781371c604f9031cdb50520366aa1e3a91e1efb1017
+$(package)_sha256_hash=4a6aec666991fb45d0889c44aede8ad6eb108071c3554fcdff671f9c94794976
 $(package)_patches=fix_obj_order.patch
 
 define $(package)_preprocess_cmds
@@ -26,4 +26,3 @@ endef
 define $(package)_postprocess_cmds
   rm lib/*.la
 endef
-

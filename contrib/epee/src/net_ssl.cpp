@@ -29,6 +29,7 @@
 
 #include <string.h>
 #include <thread>
+#include <boost/asio/bind_executor.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/cerrno.hpp>
@@ -81,41 +82,14 @@ namespace
   };
   using openssl_pkey = std::unique_ptr<EVP_PKEY, openssl_pkey_free>;
 
-  struct openssl_rsa_free
+  struct openssl_pkey_ctx_free
   {
-    void operator()(RSA* ptr) const noexcept
+    void operator()(EVP_PKEY_CTX* ptr) const noexcept
     {
-      RSA_free(ptr);
+      EVP_PKEY_CTX_free(ptr);
     }
   };
-  using openssl_rsa = std::unique_ptr<RSA, openssl_rsa_free>;
-
-  struct openssl_bignum_free
-  {
-    void operator()(BIGNUM* ptr) const noexcept
-    {
-      BN_free(ptr);
-    }
-  };
-  using openssl_bignum = std::unique_ptr<BIGNUM, openssl_bignum_free>;
-
-  struct openssl_ec_key_free
-  {
-    void operator()(EC_KEY* ptr) const noexcept
-    {
-      EC_KEY_free(ptr);
-    }
-  };
-  using openssl_ec_key = std::unique_ptr<EC_KEY, openssl_ec_key_free>;
-
-  struct openssl_group_free
-  {
-    void operator()(EC_GROUP* ptr) const noexcept
-    {
-      EC_GROUP_free(ptr);
-    }
-  };
-  using openssl_group = std::unique_ptr<EC_GROUP, openssl_group_free>;
+  using openssl_pkey_ctx = std::unique_ptr<EVP_PKEY_CTX, openssl_pkey_ctx_free>;
 
   boost::system::error_code load_ca_file(boost::asio::ssl::context& ctx, const std::string& path)
   {
@@ -143,44 +117,29 @@ namespace net_utils
 bool create_rsa_ssl_certificate(EVP_PKEY *&pkey, X509 *&cert)
 {
   MINFO("Generating SSL certificate");
-  pkey = EVP_PKEY_new();
-  if (!pkey)
+  openssl_pkey_ctx keygen_ctx{EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr)};
+  if (!keygen_ctx)
   {
-    MERROR("Failed to create new private key");
+    MERROR("Failed to create RSA key generation context");
     return false;
   }
-
-  openssl_pkey pkey_deleter{pkey};
-  openssl_rsa rsa{RSA_new()};
-  if (!rsa)
+  if (EVP_PKEY_keygen_init(keygen_ctx.get()) <= 0)
   {
-    MERROR("Error allocating RSA private key");
+    MERROR("Error initializing RSA key generation");
     return false;
   }
-
-  openssl_bignum exponent{BN_new()};
-  if (!exponent)
+  if (EVP_PKEY_CTX_set_rsa_keygen_bits(keygen_ctx.get(), 4096) <= 0)
   {
-    MERROR("Error allocating exponent");
+    MERROR("Error setting RSA key size");
     return false;
   }
-
-  BN_set_word(exponent.get(), RSA_F4);
-
-  if (RSA_generate_key_ex(rsa.get(), 4096, exponent.get(), nullptr) != 1)
+  pkey = nullptr;
+  if (EVP_PKEY_keygen(keygen_ctx.get(), &pkey) <= 0)
   {
     MERROR("Error generating RSA private key");
     return false;
   }
-
-  if (EVP_PKEY_assign_RSA(pkey, rsa.get()) <= 0)
-  {
-    MERROR("Error assigning RSA private key");
-    return false;
-  }
-
-  // the RSA key is now managed by the EVP_PKEY structure
-  (void)rsa.release();
+  openssl_pkey pkey_deleter{pkey};
 
   cert = X509_new();
   if (!cert)
@@ -197,7 +156,7 @@ bool create_rsa_ssl_certificate(EVP_PKEY *&pkey, X509 *&cert)
     X509_free(cert);
     return false;
   }
-  X509_NAME *name = X509_get_subject_name(cert);
+  const X509_NAME *name = X509_get_subject_name(cert);
   X509_set_issuer_name(cert, name);
 
   if (X509_sign(cert, pkey, EVP_sha256()) == 0)
@@ -213,55 +172,34 @@ bool create_rsa_ssl_certificate(EVP_PKEY *&pkey, X509 *&cert)
 bool create_ec_ssl_certificate(EVP_PKEY *&pkey, X509 *&cert, int type)
 {
   MINFO("Generating SSL certificate");
-  pkey = EVP_PKEY_new();
-  if (!pkey)
+  openssl_pkey_ctx keygen_ctx{EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr)};
+  if (!keygen_ctx)
   {
-    MERROR("Failed to create new private key");
+    MERROR("Failed to create EC key generation context");
     return false;
   }
-
-  openssl_pkey pkey_deleter{pkey};
-  openssl_ec_key ec_key{EC_KEY_new()};
-  if (!ec_key)
+  if (EVP_PKEY_keygen_init(keygen_ctx.get()) <= 0)
   {
-    MERROR("Error allocating EC private key");
+    MERROR("Error initializing EC key generation");
     return false;
   }
-
-  EC_GROUP *group = EC_GROUP_new_by_curve_name(type);
-  if (!group)
+  if (EVP_PKEY_CTX_set_ec_paramgen_curve_nid(keygen_ctx.get(), type) <= 0)
   {
-    MERROR("Error getting EC group " << type);
+    MERROR("Error setting EC curve " << type);
     return false;
   }
-  openssl_group group_deleter{group};
-
-  EC_GROUP_set_asn1_flag(group, OPENSSL_EC_NAMED_CURVE); 
-  EC_GROUP_set_point_conversion_form(group, POINT_CONVERSION_UNCOMPRESSED);
-
-  if (!EC_GROUP_check(group, NULL))
+  if (EVP_PKEY_CTX_set_ec_param_enc(keygen_ctx.get(), OPENSSL_EC_NAMED_CURVE) <= 0)
   {
-    MERROR("Group failed check: " << ERR_reason_error_string(ERR_get_error()));
+    MERROR("Error setting EC named-curve encoding");
     return false;
   }
-  if (EC_KEY_set_group(ec_key.get(), group) != 1)
-  {
-    MERROR("Error setting EC group");
-    return false;
-  }
-  if (EC_KEY_generate_key(ec_key.get()) != 1)
+  pkey = nullptr;
+  if (EVP_PKEY_keygen(keygen_ctx.get(), &pkey) <= 0)
   {
     MERROR("Error generating EC private key");
     return false;
   }
-  if (EVP_PKEY_assign_EC_KEY(pkey, ec_key.get()) <= 0)
-  {
-    MERROR("Error assigning EC private key");
-    return false;
-  }
-
-  // the key is now managed by the EVP_PKEY structure
-  (void)ec_key.release();
+  openssl_pkey pkey_deleter{pkey};
 
   cert = X509_new();
   if (!cert)
@@ -278,7 +216,7 @@ bool create_ec_ssl_certificate(EVP_PKEY *&pkey, X509 *&cert, int type)
     X509_free(cert);
     return false;
   }
-  X509_NAME *name = X509_get_subject_name(cert);
+  const X509_NAME *name = X509_get_subject_name(cert);
   X509_set_issuer_name(cert, name);
 
   if (X509_sign(cert, pkey, EVP_sha256()) == 0)
@@ -614,7 +552,7 @@ bool ssl_options_t::handshake(
         socket.async_handshake(
           type,
           boost::asio::buffer(buffer),
-          strand.wrap(on_handshake)
+          boost::asio::bind_executor(strand, on_handshake)
         );
       }
     );
@@ -753,4 +691,3 @@ static void add_windows_root_certs(SSL_CTX *ctx) noexcept
     SSL_CTX_set_cert_store(ctx, store);
 }
 #endif
-
