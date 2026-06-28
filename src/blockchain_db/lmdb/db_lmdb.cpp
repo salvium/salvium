@@ -2336,6 +2336,13 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to add output record to db transaction: ", result).c_str()));
 
+  // After the HF13 realignment, output_types and output_type_refs are the
+  // RCT-only ring index. Transparent outputs remain in the canonical output
+  // tables above, but must not consume a ring rank. remove_output() applies
+  // the same condition and ignores the unused second return value.
+  if (m_rct_index_realigned && tx_output.amount != 0)
+    return std::make_pair(ok.amount_index, 0);
+
   /*
    * output_types:
    *
