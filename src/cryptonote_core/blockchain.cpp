@@ -313,6 +313,16 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
 
   m_db->set_hard_fork(m_hardfork);
 
+  // HF13 safety net: a node that starts already at or past the fork without the
+  // realign having run (imported db, crash mid-fork) repairs the index here. The
+  // normal crossing is handled in add_new_block. Triggers one block early because
+  // add_new_block checks height BEFORE the block is added.
+  if (!m_db->is_read_only() && m_db->height() && !m_db->rct_index_realigned() &&
+      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX) - 1)
+  {
+    m_db->realign_rct_index();
+  }
+
   // if the blockchain is new, add the genesis block
   // this feels kinda kludgy to do it this way, but can be looked at later.
   // TODO: add function to create and store genesis block,
@@ -357,14 +367,6 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
   MINFO("Blockchain initialized. last block: " << m_db->height() - 1 << ", " << epee::misc_utils::get_time_interval_string(timestamp_diff) << " time ago, current difficulty: " << get_difficulty_for_next_block());
 
   rtxn_guard.stop();
-
-  // Imported and previously-opened databases may start at or beyond HF13
-  // without having run the one-time index transition.
-  if (!m_db->is_read_only() && m_db->height() && !m_db->rct_index_realigned() &&
-      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX))
-  {
-    m_db->realign_rct_index();
-  }
 
   uint64_t num_popped_blocks = 0;
   while (!m_db->is_read_only())
@@ -1608,7 +1610,6 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
     break;
   case HF_VERSION_ENABLE_TOKENS:
   case HF_VERSION_REJECT_CLEARTEXT_AMOUNTS:
-  case HF_VERSION_REALIGN_RCT_INDEX:
   case HF_VERSION_REJECT_POISONED_REFS:
     // HF11-13: block reward split is 60% miner + 25% treasury + 15% staker (amount_burnt)
     if (already_generated_coins != 0) {
@@ -6282,6 +6283,19 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc)
   crypto::hash id = get_block_hash(bl);
   CRITICAL_REGION_LOCAL(m_tx_pool);//to avoid deadlock lets lock tx_pool for whole add/reorganize process
   CRITICAL_REGION_LOCAL1(m_blockchain_lock);
+
+  // HF13: at the fork crossing, realign the rct ring index once before the first
+  // v13 block is validated. m_db->height() is the current tip (one below the
+  // incoming block), so subtract 1 to trigger when adding the HF13 block.
+  if (!m_db->rct_index_realigned() &&
+      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX) - 1)
+  {
+    const bool batched = m_db->is_batch_active();
+    if (batched) m_db->batch_stop();
+    m_db->realign_rct_index();
+    if (batched) m_db->batch_start();
+  }
+
   db_rtxn_guard rtxn_guard(m_db);
   if(have_block(id))
   {
@@ -6304,18 +6318,6 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc)
   }
 
   rtxn_guard.stop();
-
-  // Run the transition immediately before validating the first HF13 block.
-  if (!m_db->rct_index_realigned() &&
-      m_db->height() >= m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_REALIGN_RCT_INDEX))
-  {
-    const bool batched = m_db->is_batch_active();
-    if (batched)
-      m_db->batch_stop();
-    m_db->realign_rct_index();
-    if (batched)
-      m_db->batch_start();
-  }
   return handle_block_to_main_chain(bl, id, bvc);
 
   }

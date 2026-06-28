@@ -542,11 +542,12 @@ private:
   // migrate from DB version 3 to 4
   void migrate_3_4();
 
-  // HF13: rebuild the per-asset ring indexes once at the fork height.
+  // HF13: rebuild output_types and output_type_refs as the rct-only ring index,
+  // once at the fork height, so a rank resolves to the right same-asset rct output
   virtual void realign_rct_index() override;
   virtual bool rct_index_realigned() const override { return m_rct_index_realigned; }
   virtual bool is_batch_active() const override { return m_batch_active; }
-  
+
   void cleanup_batch();
 
   virtual int get_audit_block_info(const uint64_t height, audit_block_info& abi) const;
@@ -592,8 +593,6 @@ private:
   MDB_dbi m_circ_supply;
   MDB_dbi m_circ_supply_tally;
 
-  bool m_rct_index_realigned = false;
-
   MDB_dbi m_yield_txs;
   MDB_dbi m_yield_blocks;
   
@@ -623,6 +622,9 @@ private:
 
   bool m_batch_transactions; // support for batch transactions
   bool m_batch_active; // whether batch transaction is in progress
+
+  // true once the HF13 rct ring index realign has run; gates the output_type write/read layout
+  bool m_rct_index_realigned = false;
 
   mdb_txn_cursors m_wcursors;
   mutable boost::thread_specific_ptr<mdb_threadinfo> m_tinfo;
