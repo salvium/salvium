@@ -37,10 +37,11 @@ set(MINIUPNP_STATIC_LIBRARIES ${MINIUPNP_STATIC_LIBRARY})
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
-  MiniUPnPc DEFAULT_MSG
+  Miniupnpc DEFAULT_MSG
   MINIUPNP_INCLUDE_DIR
   MINIUPNP_LIBRARY
 )
+set(MINIUPNPC_FOUND ${Miniupnpc_FOUND})
 
 IF(MINIUPNPC_FOUND)
   file(STRINGS "${MINIUPNP_INCLUDE_DIR}/miniupnpc.h" MINIUPNPC_API_VERSION_STR REGEX "^#define[\t ]+MINIUPNPC_API_VERSION[\t ]+[0-9]+")

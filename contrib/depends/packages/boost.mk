@@ -1,8 +1,9 @@
 package=boost
-$(package)_version=1.84.0
+$(package)_version=1.91.0
 $(package)_download_path=https://archives.boost.io/release/$($(package)_version)/source/
 $(package)_file_name=$(package)_$(subst .,_,$($(package)_version)).tar.bz2
-$(package)_sha256_hash=cc4b893acf645c9d4b698e9a0f08ca8846aa5d6c68275c14c3e7949c24109454
+$(package)_sha256_hash=de5e6b0e4913395c6bdfa90537febd9028ea4c0735d2cdb0cd9b45d5f51264f5
+$(package)_patches=gcc15-wchar-from-mb-init.patch
 
 define $(package)_set_vars
 $(package)_config_opts_release=variant=release
@@ -20,8 +21,8 @@ $(package)_toolset_$(host_os)=gcc
 $(package)_archiver_$(host_os)=$($(package)_ar)
 $(package)_toolset_darwin=darwin
 $(package)_archiver_darwin=$($(package)_libtool)
-$(package)_config_libraries_$(host_os)="chrono,filesystem,program_options,system,thread,test,date_time,regex,serialization"
-$(package)_config_libraries_mingw32="chrono,filesystem,program_options,system,thread,test,date_time,regex,serialization,locale"
+$(package)_config_libraries_$(host_os)="chrono,filesystem,program_options,thread,test,date_time,regex,serialization"
+$(package)_config_libraries_mingw32="chrono,filesystem,program_options,thread,test,date_time,regex,serialization,locale"
 $(package)_cxxflags=-std=c++17
 $(package)_cxxflags_linux+=-fPIC
 $(package)_cxxflags_freebsd+=-fPIC
@@ -29,6 +30,7 @@ $(package)_cxxflags_darwin+=-ffile-prefix-map=$($(package)_extract_dir)=/usr
 endef
 
 define $(package)_preprocess_cmds
+  patch -p1 < $($(package)_patch_dir)/gcc15-wchar-from-mb-init.patch &&\
   echo "using $(boost_toolset_$(host_os)) : : $($(package)_cxx) : <cxxflags>\"$($(package)_cxxflags) $($(package)_cppflags)\" <linkflags>\"$($(package)_ldflags)\" <archiver>\"$(boost_archiver_$(host_os))\" <arflags>\"$($(package)_arflags)\" <striper>\"$(host_STRIP)\"  <ranlib>\"$(host_RANLIB)\" <rc>\"$(host_WINDRES)\" : ;" > user-config.jam
 endef
 

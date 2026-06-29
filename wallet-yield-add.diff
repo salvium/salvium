@@ -1,0 +1,118 @@
+diff --git a/src/simplewallet/simplewallet.cpp b/src/simplewallet/simplewallet.cpp
+index e562d7a9e..c317f7fd6 100644
+--- a/src/simplewallet/simplewallet.cpp
++++ b/src/simplewallet/simplewallet.cpp
+@@ -6529,14 +6529,22 @@ bool simple_wallet::show_balance_unlocked(bool detailed)
+     else if (time_to_unlock > 0)
+       unlock_time_message = (boost::format(" (%s to unlock)") % get_human_readable_timespan(time_to_unlock)).str();
+     
+-    success_msg_writer() << tr("Asset: ") << asset << tr(", balance: ") << print_money(m_wallet->balance(m_current_subaddress_account, asset, false)) << ", "
+-                         << tr("unlocked balance: ") << print_money(unlocked_balance) << unlock_time_message << extra;
++    uint64_t total_balance = m_wallet->balance(m_current_subaddress_account, asset, false);
+     std::map<uint32_t, uint64_t> balance_per_subaddress = m_wallet->balance_per_subaddress(m_current_subaddress_account, asset, false);
++    uint64_t non_staked_balance = 0;
++    for (const auto& subaddress_balance : balance_per_subaddress)
++      non_staked_balance += subaddress_balance.second;
++    uint64_t locked_balance = non_staked_balance > unlocked_balance ? non_staked_balance - unlocked_balance : 0;
++    std::string locked_balance_message = locked_balance > 0
++      ? (boost::format(tr(", locked balance: %s")) % print_money(locked_balance)).str()
++      : "";
++    success_msg_writer() << tr("Asset: ") << asset << tr(", balance: ") << print_money(total_balance) << ", "
++                         << tr("unlocked balance: ") << print_money(unlocked_balance) << locked_balance_message << unlock_time_message << extra;
+     std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddress = m_wallet->unlocked_balance_per_subaddress(m_current_subaddress_account, asset, false);
+     if (!detailed || balance_per_subaddress.empty())
+       continue;
+     success_msg_writer() << tr("Balance per address:");
+-    success_msg_writer() << boost::format("%16s  %21s %21s %7s %21s") % tr("Address") % tr("Balance") % tr("Unlocked balance") % tr("Outputs") % tr("Label");
++    success_msg_writer() << boost::format("%16s  %21s %21s %21s %7s %21s") % tr("Address") % tr("Balance") % tr("Unlocked balance") % tr("Locked balance") % tr("Outputs") % tr("Label");
+     std::vector<tools::wallet2::transfer_details> transfers;
+     m_wallet->get_transfers(transfers, asset);
+     for (const auto& i : balance_per_subaddress)
+@@ -6546,7 +6554,9 @@ bool simple_wallet::show_balance_unlocked(bool detailed)
+       cryptonote::subaddress_index subaddr_index = {m_current_subaddress_account, i.first};
+       std::string address_str = m_wallet->get_subaddress_as_str(subaddr).substr(0, 8);
+       uint64_t num_unspent_outputs = std::count_if(transfers.begin(), transfers.end(), [&subaddr_index](const tools::wallet2::transfer_details& td) { return !td.m_spent && td.m_subaddr_index == subaddr_index; });
+-      success_msg_writer() << boost::format(tr("%8u %8s %21s %21s %7u %21s")) % i.first % address_str % print_money(i.second) % print_money(unlocked_balance_per_subaddress[i.first].first) % num_unspent_outputs % m_wallet->get_subaddress_label(subaddr_index);
++      uint64_t subaddress_unlocked_balance = unlocked_balance_per_subaddress[i.first].first;
++      uint64_t subaddress_locked_balance = i.second > subaddress_unlocked_balance ? i.second - subaddress_unlocked_balance : 0;
++      success_msg_writer() << boost::format(tr("%8u %8s %21s %21s %21s %7u %21s")) % i.first % address_str % print_money(i.second) % print_money(subaddress_unlocked_balance) % print_money(subaddress_locked_balance) % num_unspent_outputs % m_wallet->get_subaddress_label(subaddr_index);
+     }
+   }
+   return true;
+@@ -9313,6 +9323,9 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
+   // Get the chain height
+   const uint64_t blockchain_height = m_wallet->get_blockchain_current_height();
+   uint64_t stake_lock_period = get_config(m_wallet->nettype()).STAKE_LOCK_PERIOD;
++  uint64_t completed_yield = 0;
++  uint64_t active_staked = 0;
++  uint64_t active_accrued = 0;
+   
+   message_writer(console_color_default, false) << boost::format(tr("\nSTAKED FUNDS:"));
+   for (auto &p: yield_payouts) {
+@@ -9320,7 +9333,9 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
+     std::string txid, asset_type;
+     std::tie(height, txid, asset_type, burnt, yield) = p;
+     epee::console_colors asset_type_color = (asset_type == "SAL") ? console_color_green : (asset_type == "SAL1") ? console_color_blue : console_color_green;
+-    if (blockchain_height > ybi_size + height)
++    const bool completed = blockchain_height > ybi_size + height;
++    if (completed) {
++      completed_yield += yield;
+       message_writer(asset_type_color, true) << boost::format(tr("Height %d, txid %s, staked %s %s, earned %s %s"))
+         % height
+         % txid
+@@ -9328,7 +9343,9 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
+         % asset_type
+         % print_money(yield)
+         % asset_type;
+-    else 
++    } else {
++      active_staked += burnt;
++      active_accrued += yield;
+       message_writer(asset_type_color, false) << boost::format(tr("Height %d (matures %d), txid %s, staked %s %s, %s %s accrued so far"))
+         % height
+         % (height + stake_lock_period)
+@@ -9337,16 +9354,20 @@ bool simple_wallet::yield_info(const std::vector<std::string> &args) {
+         % asset_type
+         % print_money(yield)
+         % asset_type;
++    }
+   }
+ 
+   // Output the necessary information about yield stats
+-  message_writer(console_color_default, false) << boost::format(tr("\nYIELD INFO:\n\tSupply coins burnt over last %s: %d\n\tTotal coins locked: %d\n\tYield accrued over last %s: %d\n\tYield per coin staked: %d"))
++  message_writer(console_color_default, false) << boost::format(tr("\nYIELD INFO:\n\tSupply coins burnt over last %s: %d\n\tTotal coins locked: %d\n\tYield accrued over last %s: %d\n\tYield per coin staked: %d\n\tTotal accrued from past completions: %d\n\tCurrently staked: %d\n\tAccrued from current stake: %d"))
+     % get_human_readable_timespan((ybi_size-1) * DIFFICULTY_TARGET_V2)
+     % print_money(t_burnt)
+     % print_money(t_locked)
+     % get_human_readable_timespan((ybi_size-1) * DIFFICULTY_TARGET_V2)
+     % print_money(t_yield)
+-    % print_money(yps);
++    % print_money(yps)
++    % print_money(completed_yield)
++    % print_money(active_staked)
++    % print_money(active_accrued);
+   
+   return true;
+ }
+@@ -11288,9 +11309,20 @@ void simple_wallet::print_accounts(bool show_all)
+   if (num_untagged_accounts < m_wallet->get_num_subaddress_accounts()) {
+     std::map<std::string, uint64_t> balances = m_wallet->balance_all(false);
+     for (const auto& balance: balances) {
++      uint64_t unlocked_balance = m_wallet->unlocked_balance_all(false, balance.first);
++      uint64_t non_staked_balance = 0;
++      for (uint32_t account_index = 0; account_index < m_wallet->get_num_subaddress_accounts(); ++account_index) {
++        for (const auto& subaddress_balance : m_wallet->balance_per_subaddress(account_index, balance.first, false))
++          non_staked_balance += subaddress_balance.second;
++      }
++      uint64_t locked_balance = non_staked_balance > unlocked_balance ? non_staked_balance - unlocked_balance : 0;
++      std::string locked_balance_message = locked_balance > 0
++        ? (boost::format(tr(", locked balance: %s")) % print_money(locked_balance)).str()
++        : "";
+       success_msg_writer() << tr("\nGrand total:\n  Asset: ") << balance.first
+                            << tr(", balance: ") << print_money(balance.second)
+-                           << tr(", unlocked balance: ") << print_money(m_wallet->unlocked_balance_all(false, balance.first));
++                           << tr(", unlocked balance: ") << print_money(unlocked_balance)
++                           << locked_balance_message;
+     }
+   }
+ }

@@ -29,6 +29,9 @@
  
 #define IN_UNIT_TESTS
  
+#include <algorithm>
+#include <cstring>
+
 #include "gtest/gtest.h"
  
 #include "cryptonote_core/blockchain.h"
@@ -156,59 +159,54 @@ private:
 };
  
  
-transaction get_audit_tx() {
+crypto::public_key make_return_address(const char *seed, const uint8_t tag)
+{
+  rct::key return_address;
+  memset(return_address.bytes, 0, sizeof(return_address.bytes));
+  const size_t seed_len = std::min(strlen(seed), sizeof(return_address.bytes));
+  memcpy(return_address.bytes, seed, seed_len);
+  return_address.bytes[sizeof(return_address.bytes) - 1] = tag;
+  return rct::rct2pk(return_address);
+}
+
+transaction get_audit_tx(uint64_t amount = AMOUNT_BURNT, uint8_t tag = 0) {
   transaction audit_tx;
   audit_tx.type = transaction_type::AUDIT;
  
-  std::string str = "audit-return-address-32-bytes32";
-  rct::key audit_return_address;
-  memcpy(audit_return_address.bytes, str.data(), sizeof(audit_return_address.bytes));
- 
-  audit_tx.return_address_list.push_back(rct::rct2pk(audit_return_address));
-  audit_tx.amount_burnt = AMOUNT_BURNT;
+  audit_tx.return_address_list.push_back(make_return_address("audit-return-address-32-bytes32", tag));
+  audit_tx.amount_burnt = amount;
   audit_tx.version = 2;
  
   return audit_tx;
 }
  
-transaction get_stake_tx() {
+transaction get_stake_tx(uint64_t amount = AMOUNT_BURNT, uint8_t tag = 0) {
   transaction stake_tx;
   stake_tx.type = transaction_type::STAKE;
  
-  std::string str = "stake-return-address-32-bytes32";
-  rct::key stake_return_address;
-  memcpy(stake_return_address.bytes, str.data(), sizeof(stake_return_address.bytes));
- 
-  stake_tx.return_address_list.push_back(rct::rct2pk(stake_return_address));
-  stake_tx.amount_burnt = AMOUNT_BURNT;
+  stake_tx.return_address_list.push_back(make_return_address("stake-return-address-32-bytes32", tag));
+  stake_tx.amount_burnt = amount;
   stake_tx.version = 2;
  
   return stake_tx;
 }
  
-void add_block(Blockchain *bc, uint8_t num_audit_txs, uint8_t num_stake_txs) {
+void add_block(Blockchain *bc, const std::vector<uint64_t>& audit_amounts, const std::vector<uint64_t>& stake_amounts) {
   block b;
   b.miner_tx.amount_burnt = STAKE_REWARD;
  
-  // add txs
-  std::vector<std::pair<transaction, blobdata>> audit_txs;
-  std::vector<std::pair<transaction, blobdata>> stake_txs;
-  for (int i = 0; i < num_audit_txs; i++) {
-    audit_txs.push_back(std::make_pair(get_audit_tx(), ""));
+  std::vector<std::pair<transaction, blobdata>> txs;
+  for (size_t i = 0; i < audit_amounts.size(); i++) {
+    txs.push_back(std::make_pair(get_audit_tx(audit_amounts[i], i), ""));
   }
-  for (int i = 0; i < num_stake_txs; i++) {
-    stake_txs.push_back(std::make_pair(get_stake_tx(), ""));
+  for (size_t i = 0; i < stake_amounts.size(); i++) {
+    txs.push_back(std::make_pair(get_stake_tx(stake_amounts[i], i), ""));
   }
  
-  // merge & add txs to the block
-  std::vector<std::pair<transaction, blobdata>> txs;
-  txs.insert(txs.end(), audit_txs.begin(), audit_txs.end());
-  txs.insert(txs.end(), stake_txs.begin(), stake_txs.end());
-  for (auto tx : txs) {
+  for (const auto& tx : txs) {
     b.tx_hashes.push_back(tx.first.hash);
   }
  
-  // add the block
   yield_block_info ybi;
   audit_block_info abi;
   bc->get_db().add_block(
@@ -218,12 +216,108 @@ void add_block(Blockchain *bc, uint8_t num_audit_txs, uint8_t num_stake_txs) {
                          network_type::FAKECHAIN, ybi, abi
                          );
 }
+
+void add_block(Blockchain *bc, uint8_t num_audit_txs, uint8_t num_stake_txs) {
+  add_block(bc, std::vector<uint64_t>(num_audit_txs, AMOUNT_BURNT), std::vector<uint64_t>(num_stake_txs, AMOUNT_BURNT));
+}
  
 uint64_t progress_chain(Blockchain *bc, uint64_t num_blocks) {
   for (int i = 0; i < num_blocks; i++) {
     add_block(bc, 0, 0);
   }
   return bc->get_db().height();
+}
+
+TEST(protocol_tx, yield_payouts_round_down_proportionally_for_unequal_stakes)
+{
+  const std::pair<uint8_t, uint64_t> hard_forks[3] = {
+    std::make_pair(1, 1),
+    std::make_pair(5, 1 * STAKE_LOCK_PERIOD),
+    std::make_pair(6, 2 * STAKE_LOCK_PERIOD),
+  };
+  const test_options test_options = {
+    hard_forks,
+    1000,
+  };
+
+  BlockchainAndPool bap;
+  Blockchain *bc = &bap.blockchain;
+  ASSERT_TRUE(bc->init(new TestDB(), network_type::FAKECHAIN, true, &test_options, 0, NULL));
+
+  const uint64_t stake_height = bc->get_db().height();
+  add_block(bc, {}, {1, 2});
+  progress_chain(bc, STAKE_LOCK_PERIOD);
+
+  ASSERT_TRUE(bc->rebuild_ybi_cache());
+
+  std::vector<std::pair<yield_tx_info, uint64_t>> payouts;
+  ASSERT_TRUE(bc->calculate_yield_payouts(stake_height, payouts));
+  ASSERT_EQ(2u, payouts.size());
+
+  const uint64_t first_expected = 1 + STAKE_LOCK_PERIOD * (STAKE_REWARD / 3);
+  const uint64_t second_expected = 2 + STAKE_LOCK_PERIOD * ((STAKE_REWARD * 2) / 3);
+  EXPECT_EQ(1u, payouts[0].first.locked_coins);
+  EXPECT_EQ(2u, payouts[1].first.locked_coins);
+  EXPECT_EQ(first_expected, payouts[0].second);
+  EXPECT_EQ(second_expected, payouts[1].second);
+
+  const uint64_t distributed_yield = (payouts[0].second - payouts[0].first.locked_coins) +
+                                    (payouts[1].second - payouts[1].first.locked_coins);
+  const uint64_t available_yield = STAKE_LOCK_PERIOD * STAKE_REWARD;
+  EXPECT_EQ(STAKE_LOCK_PERIOD, available_yield - distributed_yield);
+}
+
+TEST(protocol_tx, yield_payouts_fail_when_ybi_window_is_incomplete)
+{
+  const std::pair<uint8_t, uint64_t> hard_forks[3] = {
+    std::make_pair(1, 1),
+    std::make_pair(5, 1 * STAKE_LOCK_PERIOD),
+    std::make_pair(6, 2 * STAKE_LOCK_PERIOD),
+  };
+  const test_options test_options = {
+    hard_forks,
+    1000,
+  };
+
+  BlockchainAndPool bap;
+  Blockchain *bc = &bap.blockchain;
+  ASSERT_TRUE(bc->init(new TestDB(), network_type::FAKECHAIN, true, &test_options, 0, NULL));
+
+  const uint64_t stake_height = bc->get_db().height();
+  add_block(bc, {}, {AMOUNT_BURNT});
+  progress_chain(bc, STAKE_LOCK_PERIOD - 1);
+
+  ASSERT_TRUE(bc->rebuild_ybi_cache());
+
+  std::vector<std::pair<yield_tx_info, uint64_t>> payouts;
+  EXPECT_FALSE(bc->calculate_yield_payouts(stake_height, payouts));
+}
+
+TEST(protocol_tx, audit_payouts_return_locked_amount_without_yield)
+{
+  const std::pair<uint8_t, uint64_t> hard_forks[3] = {
+    std::make_pair(1, 1),
+    std::make_pair(5, 1 * STAKE_LOCK_PERIOD),
+    std::make_pair(6, 2 * STAKE_LOCK_PERIOD),
+  };
+  const test_options test_options = {
+    hard_forks,
+    1000,
+  };
+
+  BlockchainAndPool bap;
+  Blockchain *bc = &bap.blockchain;
+  ASSERT_TRUE(bc->init(new TestDB(), network_type::FAKECHAIN, true, &test_options, 0, NULL));
+
+  const uint64_t audit_amount = 123456789;
+  const uint64_t audit_height = bc->get_db().height();
+  add_block(bc, {audit_amount}, {});
+
+  std::vector<std::pair<yield_tx_info, uint64_t>> payouts;
+  ASSERT_TRUE(bc->calculate_audit_payouts(audit_height, payouts));
+  ASSERT_EQ(1u, payouts.size());
+  EXPECT_EQ(audit_amount, payouts[0].first.locked_coins);
+  EXPECT_EQ(audit_amount, payouts[0].second);
 }
  
 TEST(protocol_tx, validate)

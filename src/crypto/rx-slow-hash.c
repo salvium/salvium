@@ -327,13 +327,17 @@ static void rx_init_dataset(size_t max_threads) {
   if (!st) local_abort("Couldn't allocate RandomX mining threadlist");
 
   CTHR_RWLOCK_LOCK_READ(main_cache_lock);
+  size_t started_threads = 0;
   for (size_t i = 0; i < n1; ++i) {
-    if (!CTHR_THREAD_CREATE(st[i], rx_seedthread, &si[i])) {
-      local_abort("Couldn't start RandomX seed thread");
+    if (CTHR_THREAD_CREATE(st[started_threads], rx_seedthread, &si[i])) {
+      ++started_threads;
+    } else {
+      merror(RX_LOGCAT, "Couldn't start RandomX seed thread; initializing its dataset slice synchronously");
+      randomx_init_dataset(main_dataset, si[i].si_cache, si[i].si_start, si[i].si_count);
     }
   }
   randomx_init_dataset(main_dataset, si[n1].si_cache, si[n1].si_start, si[n1].si_count);
-  for (size_t i = 0; i < n1; ++i) CTHR_THREAD_JOIN(st[i]);
+  for (size_t i = 0; i < started_threads; ++i) CTHR_THREAD_JOIN(st[i]);
   CTHR_RWLOCK_UNLOCK_READ(main_cache_lock);
 
   free(st);
@@ -347,9 +351,7 @@ typedef struct thread_info {
   size_t max_threads;
 } thread_info;
 
-static CTHR_THREAD_RTYPE rx_set_main_seedhash_thread(void *arg) {
-  thread_info* info = arg;
-
+static void rx_set_main_seedhash_impl(thread_info* info) {
   CTHR_RWLOCK_LOCK_WRITE(main_dataset_lock);
   CTHR_RWLOCK_LOCK_WRITE(main_cache_lock);
 
@@ -358,7 +360,7 @@ static CTHR_THREAD_RTYPE rx_set_main_seedhash_thread(void *arg) {
     CTHR_RWLOCK_UNLOCK_WRITE(main_cache_lock);
     CTHR_RWLOCK_UNLOCK_WRITE(main_dataset_lock);
     free(info);
-    CTHR_THREAD_RETURN;
+    return;
   }
   memcpy(main_seedhash, info->seedhash, HASH_SIZE);
   main_seedhash_set = 1;
@@ -382,6 +384,10 @@ static CTHR_THREAD_RTYPE rx_set_main_seedhash_thread(void *arg) {
   CTHR_RWLOCK_UNLOCK_WRITE(main_dataset_lock);
 
   free(info);
+}
+
+static CTHR_THREAD_RTYPE rx_set_main_seedhash_thread(void *arg) {
+  rx_set_main_seedhash_impl(arg);
   CTHR_THREAD_RETURN;
 }
 
@@ -400,7 +406,9 @@ void rx_set_main_seedhash(const char *seedhash, size_t max_dataset_init_threads)
 
   CTHR_THREAD_TYPE t;
   if (!CTHR_THREAD_CREATE(t, rx_set_main_seedhash_thread, info)) {
-    local_abort("Couldn't start RandomX seed thread");
+    merror(RX_LOGCAT, "Couldn't start RandomX seed thread; initializing synchronously");
+    rx_set_main_seedhash_impl(info);
+    return;
   }
   CTHR_THREAD_CLOSE(t);
 }
@@ -504,11 +512,11 @@ void rx_set_miner_thread(uint32_t value, size_t max_dataset_init_threads) {
   CTHR_RWLOCK_UNLOCK_WRITE(main_dataset_lock);
 }
 
-uint32_t rx_get_miner_thread() {
+uint32_t rx_get_miner_thread(void) {
   return miner_thread;
 }
 
-void rx_slow_hash_allocate_state() {}
+void rx_slow_hash_allocate_state(void) {}
 
 static void rx_destroy_vm(randomx_vm** vm) {
   if (*vm) {
@@ -517,7 +525,7 @@ static void rx_destroy_vm(randomx_vm** vm) {
   }
 }
 
-void rx_slow_hash_free_state() {
+void rx_slow_hash_free_state(void) {
   rx_destroy_vm(&main_vm_full);
   rx_destroy_vm(&main_vm_light);
   rx_destroy_vm(&secondary_vm_light);

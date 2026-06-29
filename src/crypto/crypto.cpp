@@ -537,8 +537,6 @@ namespace crypto {
     // Load points (A and B and R) into ge_p3
     ge_p3 A_p3;
     ge_p3 B_p3;
-    ge_p3 R_p3;
-
     if (ge_frombytes_vartime(&A_p3, &A) != 0)
       throw std::runtime_error("recipient view pubkey is invalid");
 

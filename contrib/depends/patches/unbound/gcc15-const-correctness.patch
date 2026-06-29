@@ -1,0 +1,166 @@
+diff --git a/services/listen_dnsport.c b/services/listen_dnsport.c
+--- a/services/listen_dnsport.c	2026-05-20 04:28:35.000000000 -0400
++++ b/services/listen_dnsport.c	2026-06-14 19:48:21.501555040 -0400
+@@ -1126,7 +1126,7 @@
+ 	int use_systemd, int dscp, struct unbound_socket* ub_sock,
+ 	const char* additional)
+ {
+-	char* s = strchr(ifname, '@');
++	const char* s = strchr(ifname, '@');
+ 	if(s) {
+ 		/* override port with ifspec@port */
+ 		int port;
+diff --git a/services/outside_network.c b/services/outside_network.c
+--- a/services/outside_network.c	2026-05-20 04:28:35.000000000 -0400
++++ b/services/outside_network.c	2026-06-14 19:51:57.718804896 -0400
+@@ -3741,7 +3741,7 @@
+ 		(void)SSL_set_tlsext_host_name(cp->ssl, host);
+ 	}
+ #endif
+-#ifdef HAVE_SSL_SET1_HOST
++#if defined(HAVE_SSL_SET1_HOST) && (!defined(OPENSSL_VERSION_MAJOR) || OPENSSL_VERSION_MAJOR < 4)
+ 	if((SSL_CTX_get_verify_mode(outnet->sslctx)&SSL_VERIFY_PEER)) {
+ 		/* because we set SSL_VERIFY_PEER, in netevent in
+ 		 * ssl_handshake, it'll check if the certificate
+diff --git a/sldns/str2wire.c b/sldns/str2wire.c
+--- a/sldns/str2wire.c	2026-05-20 04:28:35.000000000 -0400
++++ b/sldns/str2wire.c	2026-06-14 19:48:21.504792865 -0400
+@@ -1201,7 +1201,7 @@
+ {
+ 	size_t count;
+ 	char ip_str[INET_ADDRSTRLEN+1];
+-	char *next_ip_str;
++	const char *next_ip_str;
+ 	size_t i;
+ 
+ 	for (i = 0, count = 1; val[i]; i++) {
+@@ -1256,7 +1256,7 @@
+ {
+ 	size_t count;
+ 	char ip_str[INET6_ADDRSTRLEN+1];
+-	char *next_ip_str;
++	const char *next_ip_str;
+ 	size_t i;
+ 
+ 	for (i = 0, count = 1; val[i]; i++) {
+@@ -1317,7 +1317,7 @@
+ sldns_str2wire_svcbparam_mandatory(const char* val, uint8_t* rd, size_t* rd_len)
+ {
+ 	size_t i, count, val_len;
+-	char* next_key;
++	const char* next_key;
+ 
+ 	val_len = strlen(val);
+ 
+diff --git a/util/config_file.c b/util/config_file.c
+--- a/util/config_file.c	2026-05-20 04:28:35.000000000 -0400
++++ b/util/config_file.c	2026-06-14 19:48:53.502005908 -0400
+@@ -1944,7 +1944,7 @@
+ int
+ cfg_mark_ports(const char* str, int allow, int* avail, int num)
+ {
+-	char* mid = strchr(str, '-');
++	const char* mid = strchr(str, '-');
+ #ifdef DISABLE_EXPLICIT_PORT_RANDOMISATION
+ 	log_warn("Explicit port randomisation disabled, ignoring "
+ 		"outgoing-port-permit and outgoing-port-avoid configuration "
+@@ -2647,10 +2647,10 @@
+ }
+ 
+ /** return next space character in string */
+-static char* next_space_pos(const char* str)
++static const char* next_space_pos(const char* str)
+ {
+-	char* sp = strchr(str, ' ');
+-	char* tab = strchr(str, '\t');
++	const char* sp = strchr(str, ' ');
++	const char* tab = strchr(str, '\t');
+ 	if(!tab && !sp)
+ 		return NULL;
+ 	if(!sp) return tab;
+@@ -2659,10 +2659,10 @@
+ }
+ 
+ /** return last space character in string */
+-static char* last_space_pos(const char* str)
++static const char* last_space_pos(const char* str)
+ {
+-	char* sp = strrchr(str, ' ');
+-	char* tab = strrchr(str, '\t');
++	const char* sp = strrchr(str, ' ');
++	const char* tab = strrchr(str, '\t');
+ 	if(!tab && !sp)
+ 		return NULL;
+ 	if(!sp) return tab;
+@@ -2720,8 +2720,8 @@
+ 
+ char* cfg_ptr_reverse(char* str)
+ {
+-	char* ip, *ip_end;
+-	char* name;
++	char* ip;
++	const char *ip_end, *name;
+ 	char* result;
+ 	char buf[1024];
+ 	struct sockaddr_storage addr;
+@@ -2872,7 +2872,7 @@
+ 	struct config_strlist* additional_ports)
+ {
+ 	struct config_strlist* s;
+-	char* p = strchr(ifname, '@');
++	const char* p = strchr(ifname, '@');
+ 	int if_port;
+ 	if(p) if_port = atoi(p+1);
+ 	else  if_port = default_port;
+diff --git a/util/net_help.c b/util/net_help.c
+--- a/util/net_help.c	2026-05-20 04:28:35.000000000 -0400
++++ b/util/net_help.c	2026-06-14 19:51:57.718572048 -0400
+@@ -242,7 +242,7 @@
+ extstrtoaddr(const char* str, struct sockaddr_storage* addr,
+ 	socklen_t* addrlen, int port)
+ {
+-	char* s;
++	const char* s;
+ 	if((s=strchr(str, '@'))) {
+ 		char buf[MAX_ADDR_STRLEN];
+ 		if(s-str >= MAX_ADDR_STRLEN) {
+@@ -268,7 +268,7 @@
+ 	p = (uint16_t) port;
+ 	if(str_is_ip6(ip)) {
+ 		char buf[MAX_ADDR_STRLEN];
+-		char* s;
++		const char* s;
+ 		struct sockaddr_in6* sa = (struct sockaddr_in6*)addr;
+ 		*addrlen = (socklen_t)sizeof(struct sockaddr_in6);
+ 		memset(sa, 0, *addrlen);
+@@ -305,15 +305,16 @@
+         socklen_t* addrlen, int* net)
+ {
+ 	char buf[64];
+-	char* s;
++	const char* sep;
++	char* s = NULL;
+ 	*net = (str_is_ip6(str)?128:32);
+-	if((s=strchr(str, '/'))) {
+-		if(atoi(s+1) > *net) {
++	if((sep=strchr(str, '/'))) {
++		if(atoi(sep+1) > *net) {
+ 			log_err("netblock too large: %s", str);
+ 			return 0;
+ 		}
+-		*net = atoi(s+1);
+-		if(*net == 0 && strcmp(s+1, "0") != 0) {
++		*net = atoi(sep+1);
++		if(*net == 0 && strcmp(sep+1, "0") != 0) {
+ 			log_err("cannot parse netblock: '%s'", str);
+ 			return 0;
+ 		}
+@@ -1713,7 +1714,7 @@
+ 	(void)ssl;
+ 	(void)use_sni;
+ #endif
+-#ifdef HAVE_SSL_SET1_HOST
++#if defined(HAVE_SSL_SET1_HOST) && (!defined(OPENSSL_VERSION_MAJOR) || OPENSSL_VERSION_MAJOR < 4)
+ 	SSL_set_verify(ssl, SSL_VERIFY_PEER, NULL);
+ 	/* setting the hostname makes openssl verify the
+ 	 * host name in the x509 certificate in the

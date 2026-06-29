@@ -31,8 +31,10 @@
 
 #pragma once
 
+#include <cstring>
 #include <string>
 #include <exception>
+#include <type_traits>
 #include <boost/program_options.hpp>
 #include "common/command_line.h"
 #include "crypto/hash.h"
@@ -132,6 +134,57 @@ struct output_data_t
   rct::key           commitment;   //!< the output's amount commitment (for spend verification)
 };
 #pragma pack(pop)
+
+enum output_record_flags : uint32_t
+{
+  output_record_flag_none                 = 0,
+  output_record_flag_rct                  = 1u << 0,
+  output_record_flag_nonzero_amount       = 1u << 1,
+  output_record_flag_clear_amount_spam    = 1u << 2,
+  output_record_flag_noncanonical_amount  = 1u << 3,
+};
+
+#pragma pack(push, 1)
+struct output_record_t
+{
+  output_data_t od;
+
+  uint64_t clear_amount;
+  uint64_t consensus_amount_bucket;
+  uint32_t flags;
+
+  crypto::hash tx_hash;
+  uint64_t local_vout_index;
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+typedef struct output_amount_ref
+{
+  uint64_t amount_index;
+  uint64_t output_id;
+} output_amount_ref;
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+typedef struct output_type_ref
+{
+  uint64_t asset_type_output_index;
+  uint64_t output_id;
+} output_type_ref;
+#pragma pack(pop)
+
+static_assert(std::is_trivially_copyable<cryptonote::output_data_t>::value,
+              "output_data_t must be trivially copyable for raw LMDB storage");
+
+static_assert(std::is_trivially_copyable<cryptonote::output_record_t>::value,
+              "output_record_t must be trivially copyable for raw LMDB storage");
+
+static_assert(std::is_trivially_copyable<output_amount_ref>::value,
+              "output_amount_ref must be trivially copyable for raw LMDB storage");
+
+static_assert(std::is_trivially_copyable<output_type_ref>::value,
+              "output_type_ref must be trivially copyable for raw LMDB storage");
 
 #pragma pack(push, 1)
 struct tx_data_t
@@ -1528,6 +1581,44 @@ public:
   virtual output_data_t get_output_key(const uint64_t& amount, const uint64_t& index, bool include_commitmemt = true) const = 0;
 
   /**
+   * @brief gets a canonical output record by global output id
+   *
+   * The subclass should return the canonical record for the globally unique
+   * output id. Amount and asset tables are indexes into this record.
+   */
+  virtual output_record_t get_output_record_by_id(const uint64_t output_id) const = 0;
+
+  /**
+   * @brief gets canonical output data by global output id
+   */
+  virtual output_data_t get_output_data_by_id(uint64_t output_id) const = 0;
+
+  /**
+   * @brief gets canonical output data for multiple global output ids
+   */
+  virtual void get_output_data_by_id(const std::vector<uint64_t>& output_ids, std::vector<output_data_t>& outputs) const = 0;
+
+  /**
+   * @brief resolves an asset output index to a canonical global output id via the output_type_refs table
+   */
+  virtual uint64_t get_output_id_by_asset_index(const std::string& asset_type, uint64_t asset_type_output_index) const = 0;
+
+  /**
+   * @brief resolves asset output indices to canonical global output ids via the output_type_refs table
+   */
+  virtual void get_output_ids_by_asset_index(const std::string& asset_type, const std::vector<uint64_t>& asset_type_output_indices, std::vector<uint64_t>& output_ids) const = 0;
+
+  /**
+   * @brief resolves an amount output index to a canonical global output id via the output_amount_refs table
+   */
+  virtual uint64_t get_output_id_by_amount_index(uint64_t amount, uint64_t amount_index) const = 0;
+
+  /**
+   * @brief resolves amount output indices to canonical global output ids via the output_amount_refs table
+   */
+  virtual void get_output_ids_by_amount_index(uint64_t amount, const std::vector<uint64_t>& amount_indices, std::vector<uint64_t>& output_ids) const = 0;
+  
+  /**
    * @brief gets output id's using asset type output indices
    *
    * This function returns a list of global output id's
@@ -1948,6 +2039,12 @@ public:
    * @return true if in read-only mode, otherwise false
    */
   virtual bool is_read_only() const = 0;
+
+  // HF13 rct ring index realign hooks; only the lmdb backend implements them
+  virtual void realign_rct_index() {}
+  virtual void restore_legacy_output_index() {}
+  virtual bool rct_index_realigned() const { return false; }
+  virtual bool is_batch_active() const { return false; }
 
   /**
    * @brief get disk space requirements

@@ -1,80 +1,100 @@
-# Monero hard-fork release check-list
+# Salvium Release Checklist
 
-- [ ] Security audit
-- [ ] Code audit
-- [ ] Ledger integration
-  - [ ] Ledger notified
-  - [ ] Pull request made against Monero codebase (if needed)
-  - [ ] Pull request merged into Monero codebase (if needed)
-  - [ ] Ledger app integration coded
-  - [ ] Ledger Monero app update available
-- [ ] Trezor integration
-  - [ ] Trezor notified
-  - [ ] Pull request made against Monero codebase (if needed)
-  - [ ] Pull request merged into Monero codebase (if needed)
-  - [ ] Trezor firmware update coded
-  - [ ] Trezor firmware update available
-- [ ] Fork height set
-  - [ ] Twitter announcement
-  - [ ] Reddit announcement
-  - [ ] Getmonero.org announcement
-- [ ] Notify wallets
-  - [ ] MyMonero
-  - [ ] Coinomi
-  - [ ] Exa Wallet
-  - [ ] Wookey Wallet
-  - [ ] X Wallet
-  - [ ] Guarda
-  - [ ] ZelCore
-  - [ ] Cake Wallet
-  - [ ] Monerujo
-  - [ ] Edge Wallet
-  - [ ] Exodus
-  - [ ] XMRWallet
-  - [ ] Feather Wallet
-- [ ] Notify exchanges
-  - [ ] https://www.getmonero.org/community/merchants/#exchanges
-- [ ] Notify 3rd party payment processors
-  - [ ] https://www.getmonero.org/community/merchants/#payment-gateways
-  - [ ] BTCPayServer
-- [ ] Notify mining pools
-  - [ ] https://miningpoolstats.stream/monero
-- [ ] Release branch created
-  - [ ] Update src/version.cpp.in with new version AND new name (if necessary)
-  - [ ] Update Gitian YML files in contrib/gitian/ to the new version number
-  - [ ] Update README.md with new fork table entry (or at least update the Recommended Monero version)
-  - [ ] Update contrib/gitian/README.md so that the instructions reflect the current version
-  - [ ] Update src/checkpoints/checkpoints.cpp with a recent hardcoded checkpoint
-  - [ ] Update src/blocks/checkpoints.dat with ./monero-blockchain-export --output-file checkpoints.dat --block-stop <recent block height> --blocksdat
-  - [ ] Update expected_block_hashes_hash in src/cryptonote_core/blockchain.cpp with checkpoints.dat sha256 hash
-- [ ] Testnet forked
-- [ ] Testnet testing/verification
-  - [ ] Ledger
-  - [ ] Trezor
-  - [ ] Release-specific testing
-  - [ ] RPC testing/update RPC documentation
-- [ ] Stagenet forked
-- [ ] Stagenet testing/verification
-  - [ ] Ledger
-  - [ ] Trezor
-  - [ ] Release-specific testing
-- [ ] CLI reproducible builds validated
-- [ ] CLI released
-  - [ ] https://www.getmonero.org/downloads/ updated
-  - [ ] Update hashes.txt on website
-  - [ ] Update downloads.yml on website
-  - [ ] Update auto-update DNS records
-  - [ ] Update redirects on downloads box
-  - [ ] Update seed nodes
-- [ ] GUI released
-  - [ ] https://www.getmonero.org/downloads/ updated
-  - [ ] Update hashes.txt on website
-  - [ ] Update hashes.txt.sig on website
-  - [ ] Update downloads.yml on website
-  - [ ] Update auto-update DNS records
-  - [ ] Update redirects on downloads box
-- [ ] Release Announcements
-  - [ ] Monero-announce mailer notice
-  - [ ] Twitter announcement
-  - [ ] Reddit announcement
-  - [ ] Getmonero.org announcement
+Use this checklist for hard-fork and non-hard-fork releases. Hard-fork releases
+must complete the consensus, testnet, stagenet, and ecosystem notification
+sections before mainnet activation.
+
+## Release Scope
+
+- [ ] Define release type: maintenance, security, hard-fork, wallet/RPC, or
+      packaging-only.
+- [ ] List consensus changes and affected hard-fork versions.
+- [ ] List wallet, RPC, pool, exchange, and explorer behavior changes.
+- [ ] Confirm upgrade requirements for nodes, wallets, miners, pools, and
+      exchanges.
+- [ ] Open or link tracking issues for all release blockers.
+
+## Security And Code Review
+
+- [ ] Security review completed for consensus, wallet, RPC, and serialization
+      changes.
+- [ ] Code review completed by maintainers who did not author the change.
+- [ ] Public RPC and command-line behavior reviewed for backwards
+      compatibility.
+- [ ] Dependencies and submodules reviewed for unexpected changes.
+- [ ] Any private security fixes have a coordinated disclosure and release
+      plan.
+
+## Consensus And Data
+
+- [ ] Fork height and fork timestamp finalized, if applicable.
+- [ ] Mainnet, testnet, and stagenet hard-fork tables updated.
+- [ ] Checkpoints updated in `src/checkpoints/checkpoints.cpp`, if needed.
+- [ ] Fast-sync checkpoint data updated, if needed.
+- [ ] `expected_block_hashes_hash` updated when checkpoint data changes.
+- [ ] Supply, treasury, burn, stake, audit, yield, rollup, and token accounting
+      invariants checked with `utils/protocol_invariants.py` or an equivalent
+      audit.
+- [ ] New RPC fields or transaction formats documented in
+      `docs/SALVIUM_PROTOCOL_RPC.md`.
+
+## Testing
+
+- [ ] Unit tests pass.
+- [ ] Focused protocol tests pass, especially stake, audit, yield, rollup,
+      token, and fee tests.
+- [ ] Functional RPC tests pass.
+- [ ] Reorg/cache behavior tested for consensus accounting changes.
+- [ ] Testnet fork rehearsed for hard-fork releases.
+- [ ] Stagenet fork rehearsed for hard-fork releases.
+- [ ] Release binaries smoke-tested on each supported platform.
+- [ ] Docker image smoke-tested with a fresh data directory and an existing data
+      directory.
+
+## Hardware Wallets And Integrations
+
+- [ ] Ledger impact reviewed and communicated, if applicable.
+- [ ] Trezor impact reviewed and communicated, if applicable.
+- [ ] Wallet maintainers notified of transaction, RPC, or address behavior
+      changes.
+- [ ] Mining pools notified of daemon, block template, or reward split changes.
+- [ ] Exchanges notified of required upgrade height and wallet/RPC changes.
+- [ ] Explorers notified of transaction type, protocol output, or supply
+      accounting changes.
+
+## Release Branch
+
+- [ ] Release branch created from the intended commit.
+- [ ] Version and release name updated.
+- [ ] Gitian or depends build metadata updated.
+- [ ] README build instructions checked for current tag and binary names.
+- [ ] Docker release build checked against the local checkout, not a moving
+      branch.
+- [ ] Changelog or release notes drafted.
+
+## Artifacts
+
+- [ ] Reproducible builds completed for supported targets.
+- [ ] Artifacts generated only from a signed release tag.
+- [ ] SHA256 hashes generated.
+- [ ] Signatures generated by authorized release keys.
+- [ ] Hashes and signatures verified from a clean machine.
+- [ ] Archives contain only expected binaries and supporting files.
+- [ ] S3, website, or download mirrors updated only after final approval.
+
+## Announcement
+
+- [ ] Release notes published with upgrade requirements.
+- [ ] Website downloads updated.
+- [ ] Hashes and signatures published.
+- [ ] Seed nodes and bootstrap instructions reviewed.
+- [ ] Social and community announcements published.
+- [ ] Pools, exchanges, wallets, and explorers receive direct notice.
+
+## Post Release
+
+- [ ] Monitor seed nodes, public nodes, pools, and explorers.
+- [ ] Monitor issue tracker and support channels for upgrade failures.
+- [ ] Confirm network version adoption before hard-fork activation.
+- [ ] Confirm post-fork block production and reward accounting.
+- [ ] Record any follow-up fixes for the next maintenance release.

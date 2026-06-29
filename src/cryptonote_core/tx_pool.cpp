@@ -169,14 +169,15 @@ namespace cryptonote
     cryptonote::txrules::validation_env txrules_env;
     txrules_env.hf = version;
     txrules_env.height = m_blockchain.get_current_blockchain_height();
-    txrules_env.mode = cryptonote::txrules::validation_mode::mempool;
+    txrules_env.mode = kept_by_block ? cryptonote::txrules::validation_mode::block : cryptonote::txrules::validation_mode::mempool;
     txrules_env.nettype = m_blockchain.get_nettype();
     txrules_env.token_state = cryptonote::txrules::make_db_token_state_view(m_blockchain.get_db());
     txrules_env.block_overlay = nullptr;
 
     cryptonote::txrules::consensus_result txrules_result;
+    cryptonote::tx_consensus::blockchain_tx_state_view txrules_state(m_blockchain.get_db());
 
-    if (!cryptonote::txrules::check_tx_consensus(tx, txrules_env, &txrules_result))
+    if (!cryptonote::txrules::check_tx_consensus(tx, txrules_env, &txrules_state, &txrules_result))
     {
       MERROR("TX Rules mempool consensus failure: " << txrules_result.reason);
       tvc.m_verifivation_failed = true;
@@ -784,12 +785,12 @@ namespace cryptonote
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
 
-    m_blockchain.for_all_txpool_txes([this, &hashes, &txes](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata_ref*) {
+    const std::unordered_set<crypto::hash> known_hashes(hashes.begin(), hashes.end());
+    m_blockchain.for_all_txpool_txes([this, &known_hashes, &txes](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata_ref*) {
       const auto tx_relay_method = meta.get_relay_method();
       if (tx_relay_method != relay_method::block && tx_relay_method != relay_method::fluff)
         return true;
-      const auto i = std::find(hashes.begin(), hashes.end(), txid);
-      if (i == hashes.end())
+      if (known_hashes.count(txid) == 0)
       {
         cryptonote::blobdata bd;
         try

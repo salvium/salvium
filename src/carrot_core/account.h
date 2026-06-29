@@ -28,6 +28,8 @@
 
 #pragma once
 
+#include <atomic>
+#include <mutex>
 #include "account_secrets.h"
 #include "address_utils.h"
 #include "destination.h"
@@ -147,7 +149,7 @@ namespace carrot
 
     CarrotDestinationV1 subaddress(const subaddress_index_extended &subaddress_index) const;
 
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> get_subaddress_map_cn() const;
+    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index>& get_subaddress_map_cn() const;
     const std::unordered_map<crypto::public_key, subaddress_index_extended>& get_subaddress_map_ref() const;
     const std::unordered_map<crypto::public_key, return_output_info_t>& get_return_output_map_ref() const;
 
@@ -202,6 +204,10 @@ namespace carrot
 
     private:
         std::unordered_map<crypto::public_key, subaddress_index_extended> subaddress_map;
+        // memoized cn view, mutex guards the build since the scan path threads a shared account
+        mutable std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddress_map_cn_cache;
+        mutable std::atomic<bool> subaddress_map_cn_dirty{true};
+        mutable std::mutex subaddress_map_cn_mutex;
         // Kr -> return_output_info
         std::unordered_map<crypto::public_key, return_output_info_t> return_output_map;
   };

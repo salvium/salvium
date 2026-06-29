@@ -753,6 +753,13 @@ namespace cryptonote::txrules
   {
     hf.hf_version = 12;
   }
+
+  static void apply_hf_13(hf_rules& hf)
+  {
+    hf.hf_version = 13;
+    // HF13 (REJECT_POISONED_REFS) does not change tx type/version rules.
+    // The poisoned reference check is enforced via check_tx_inputs_consensus().
+  }
   
   const hf_rules& rules_for_hf(uint8_t hf_version)
   {
@@ -804,6 +811,10 @@ namespace cryptonote::txrules
       hf_rules hf12 = m[11];
       apply_hf_12(hf12);
       m[12] = hf12;
+
+      hf_rules hf13 = m[12];
+      apply_hf_13(hf13);
+      m[13] = hf13;
 
       return m;
     }();
@@ -894,6 +905,7 @@ namespace cryptonote::txrules
 
   bool check_tx_consensus(const cryptonote::transaction& tx,
                           const validation_env& env,
+                          const tx_consensus::tx_chain_state_view* state,
                           consensus_result* result)
   {
     if (result)
@@ -911,7 +923,7 @@ namespace cryptonote::txrules
     if (!validate_tx_against_rules(tx, txctx, *rules, env, &why))
       return fail_consensus(result, why);
 
-    if (!cryptonote::tx_consensus::check_tx_basic_consensus(tx, &why))
+    if (!cryptonote::tx_consensus::check_tx_basic_consensus(tx, env, state, &why))
       return fail_consensus(result, why);
 
     if (!apply_tx_consensus_effects(tx, txctx, env, &why))

@@ -1,0 +1,69 @@
+diff -ru ./util/mkinstallvars.pl /tmp/openssl-new/util/mkinstallvars.pl
+--- ./util/mkinstallvars.pl	2026-06-09 07:36:41.000000000 -0400
++++ /tmp/openssl-new/util/mkinstallvars.pl	2026-06-14 19:16:18.485588604 -0400
+@@ -35,7 +35,6 @@
+ foreach (@absolutes) { $all{$_} = 1 }
+ foreach (@subdirs) { foreach (@{$_->[1]}) { $all{$_} = 1 } }
+ foreach (@others) { $all{$_} = 1 }
+-print STDERR "DEBUG: all keys: ", join(", ", sort keys %all), "\n";
+ 
+ my %keys = ();
+ my %values = ();
+@@ -45,6 +44,11 @@
+     push @{$values{$k}}, $v;
+ }
+ 
++# COMMENT is informational and can be omitted by generated install-data
++# invocations.
++$values{COMMENT} = [ q{} ] unless exists $values{COMMENT};
++$keys{COMMENT} = 1;
++
+ # special case for LIBDIR vs libdir.
+ # For installations, They both get their value from ./Configure's --libdir or
+ # corresponding config target attribute, but LIBDIR only gets a value if the
+@@ -52,9 +56,7 @@
+ # the former doesn't have a value, we give it the latter's value, and rely
+ # on mechanisms further down to do the rest of the processing.
+ # If they're both empty, it's still fine.
+-print STDERR "DEBUG: LIBDIR = $values{LIBDIR}->[0], libdir = $values{libdir}->[0] => ";
+ $values{LIBDIR}->[0] = $values{libdir}->[0] unless $values{LIBDIR}->[0];
+-print STDERR "LIBDIR = $values{LIBDIR}->[0]\n";
+ 
+ # warn if there are missing values, and also if there are unexpected values
+ foreach my $k (sort keys %all) {
+@@ -69,10 +71,8 @@
+ foreach my $k (@absolutes) {
+     my $v = $values{$k} || [ '.' ];
+     die "Can't have more than one $k\n" if scalar @$v > 1;
+-    print STDERR "DEBUG: $k = $v->[0] => ";
+     $v = [ map { File::Spec->rel2abs($_) } @$v ];
+     $values{$k} = $v;
+-    print STDERR "$k = $v->[0]\n";
+ }
+ 
+ # Absolute paths for the subdir variables are computed.  This provides
+@@ -88,9 +88,6 @@
+         my $kr = "${k}_REL_${var}";
+         my $v2 = $values{$k} || [ '.' ];
+         $values{$k} = [];       # We're rebuilding it
+-        print STDERR "DEBUG: $k = ",
+-            (scalar @$v2 > 1 ? "[ " . join(", ", @$v2) . " ]" : $v2->[0]),
+-            " => ";
+         foreach my $v (@$v2) {
+             if (File::Spec->file_name_is_absolute($v)) {
+                 push @{$values{$k}}, $v;
+@@ -102,14 +99,6 @@
+                     File::Spec->rel2abs($v, $values{$var}->[0]);
+             }
+         }
+-        print STDERR join(", ",
+-                          map {
+-                              my $v = $values{$_};
+-                              "$_ = " . (scalar @$v > 1
+-                                         ? "[ " . join(", ", @$v) . " ]"
+-                                         : $v->[0]);
+-                          } ($k, $kr)),
+-            "\n";
+     }
+ }
+ 

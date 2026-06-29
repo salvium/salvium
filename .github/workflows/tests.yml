@@ -1,0 +1,84 @@
+name: ci/gh-actions/tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+  CMAKE_BUILD_PARALLEL_LEVEL: 2
+
+jobs:
+  unit-and-tools:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: unit-ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: unit-ccache-${{ runner.os }}-
+
+      - name: install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends \
+            build-essential cmake pkg-config libssl-dev libzmq3-dev libunbound-dev \
+            libsodium-dev libunwind-dev liblzma-dev libreadline-dev libexpat1-dev \
+            libpgm-dev libhidapi-dev libusb-1.0-0-dev libprotobuf-dev \
+            protobuf-compiler libudev-dev libboost-all-dev python3 ccache gperf \
+            libtool autotools-dev automake bsdmainutils git ca-certificates
+
+      - name: configure debug tests
+        run: |
+          ccache --max-size=300M
+          cmake -S . -B build/ci-debug \
+            -D BUILD_TESTS=ON \
+            -D CMAKE_BUILD_TYPE=Debug \
+            -D USE_DEVICE_TREZOR=OFF
+
+      - name: build focused tests
+        run: cmake --build build/ci-debug --target unit_tests block_weight hash-target-tests
+
+      - name: run focused tests
+        run: ctest --test-dir build/ci-debug --output-on-failure -R "unit_tests|block_weight|hash"
+
+      - name: check python tools
+        run: python3 -m py_compile utils/protocol_invariants.py
+
+  asan-unit:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends \
+            build-essential cmake pkg-config libssl-dev libzmq3-dev libunbound-dev \
+            libsodium-dev libunwind-dev liblzma-dev libreadline-dev libexpat1-dev \
+            libpgm-dev libhidapi-dev libusb-1.0-0-dev libprotobuf-dev \
+            protobuf-compiler libudev-dev libboost-all-dev python3 gperf \
+            libtool autotools-dev automake bsdmainutils git ca-certificates
+
+      - name: configure asan tests
+        run: |
+          cmake -S . -B build/ci-asan \
+            -D BUILD_TESTS=ON \
+            -D SANITIZE=ON \
+            -D CMAKE_BUILD_TYPE=Debug \
+            -D USE_DEVICE_TREZOR=OFF
+
+      - name: build asan unit tests
+        run: cmake --build build/ci-asan --target unit_tests
+
+      - name: run asan unit tests
+        run: ctest --test-dir build/ci-asan --output-on-failure -R unit_tests

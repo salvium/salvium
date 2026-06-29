@@ -91,8 +91,8 @@ cmake-release:
 	mkdir -p $(builddir)/release
 	cd $(builddir)/release && cmake -D CMAKE_BUILD_TYPE=Release $(topdir)
 
-release: cmake-release
-	cd $(builddir)/release && $(MAKE)
+release:
+	./make_releases.sh --no-zip
 
 release-test:
 	mkdir -p $(builddir)/release

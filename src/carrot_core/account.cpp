@@ -110,14 +110,23 @@ CarrotDestinationV1 carrot_and_legacy_account::subaddress(const subaddress_index
     return addr;
 }
 //----------------------------------------------------------------------------------------------------------------------
-const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> carrot_and_legacy_account::get_subaddress_map_cn() const
+const std::unordered_map<crypto::public_key, cryptonote::subaddress_index>& carrot_and_legacy_account::get_subaddress_map_cn() const
 {
-    std::unordered_map<crypto::public_key, cryptonote::subaddress_index> res;
-    for (const auto &p : subaddress_map)
-        res.emplace(p.first, cryptonote::subaddress_index{p.second.index.major, p.second.index.minor});
-    CHECK_AND_ASSERT_THROW_MES(!res.empty(),
+    if (subaddress_map_cn_dirty.load(std::memory_order_acquire))
+    {
+        std::lock_guard<std::mutex> lock(subaddress_map_cn_mutex);
+        if (subaddress_map_cn_dirty.load(std::memory_order_relaxed))
+        {
+            subaddress_map_cn_cache.clear();
+            subaddress_map_cn_cache.reserve(subaddress_map.size());
+            for (const auto &p : subaddress_map)
+                subaddress_map_cn_cache.emplace(p.first, cryptonote::subaddress_index{p.second.index.major, p.second.index.minor});
+            subaddress_map_cn_dirty.store(false, std::memory_order_release);
+        }
+    }
+    CHECK_AND_ASSERT_THROW_MES(!subaddress_map_cn_cache.empty(),
         "carrot_and_legacy_account::get_subaddress_map: subaddress map does not contain subaddresses");
-    return res;
+    return subaddress_map_cn_cache;
 }
 //----------------------------------------------------------------------------------------------------------------------
 const std::unordered_map<crypto::public_key, subaddress_index_extended>& carrot_and_legacy_account::get_subaddress_map_ref() const {
@@ -347,6 +356,7 @@ void carrot_and_legacy_account::generate_subaddress_map(const std::pair<size_t, 
             }
         }
     }
+    subaddress_map_cn_dirty = true;
 }
 //----------------------------------------------------------------------------------------------------------------------
 crypto::secret_key carrot_and_legacy_account::generate(
@@ -464,6 +474,7 @@ void carrot_and_legacy_account::insert_subaddresses(const std::unordered_map<cry
       subaddress_map.insert({addr.address_spend_pubkey, subaddr_index});
     }
   }
+  subaddress_map_cn_dirty = true;
 }
 //----------------------------------------------------------------------------------------------------------------------
 void carrot_and_legacy_account::insert_return_output_info(const std::unordered_map<crypto::public_key, return_output_info_t>& roi_map)

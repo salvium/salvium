@@ -1,0 +1,10 @@
+--- a/boost/archive/iterators/wchar_from_mb.hpp
++++ b/boost/archive/iterators/wchar_from_mb.hpp
+@@ -100,6 +100,7 @@
+         bool m_done;
+         // default ctor
+         sliding_buffer() :
++            m_buffer(),
+             m_next_available(m_buffer.begin()),
+             m_next(m_buffer.begin()),
+             m_done(false)

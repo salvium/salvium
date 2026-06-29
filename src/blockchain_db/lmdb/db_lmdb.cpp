@@ -35,6 +35,7 @@
 
 #include <memory>  // std::unique_ptr
 #include <cstring>  // memcpy
+#include <map>
 
 #ifdef WIN32
 #include <winioctl.h>
@@ -44,6 +45,7 @@
 #include "common/util.h"
 #include "common/pruning.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "blockchain_db/output_ref_config.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
 #include "crypto/crypto.h"
 #include "profile_tools.h"
@@ -64,7 +66,7 @@ using epee::string_tools::pod_to_hex;
 using namespace crypto;
 
 // Increase when the DB structure changes
-#define VERSION 3
+#define VERSION 4
 
 namespace
 {
@@ -148,6 +150,14 @@ private:
 namespace cryptonote
 {
 
+int BlockchainLMDB::compare_uint32(const MDB_val *a, const MDB_val *b)
+{
+  uint32_t va, vb;
+  memcpy(&va, a->mv_data, sizeof(va));
+  memcpy(&vb, b->mv_data, sizeof(vb));
+  return (va < vb) ? -1 : va > vb;
+}
+
 int BlockchainLMDB::compare_uint64(const MDB_val *a, const MDB_val *b)
 {
   uint64_t va, vb;
@@ -206,7 +216,7 @@ namespace
  * tx_outputs       txn ID       [txn amount output indices]
  *
  * output_txs       output ID    {txn hash, local index}
- * output_amounts   amount       [{amount output index, metadata}...]
+ * output_amounts   amount       [{amount output index, output_id, legacy metadata}...]
  * output_types     asset_type   [{asset type output index, output id}]
  *
  * spent_keys       input hash   -
@@ -227,6 +237,10 @@ namespace
  * rct_count_info   block height {serialised RCT asset counts}
  *
  * rollup_tx_info   rollup_tag   {serialised rollup_tx_data_t struct}
+ *
+ * output_records   output ID    {canonical output metadata}
+ * output_amount_refs amount      [{amount output index, output id}...]
+ * output_type_refs asset_type    [{asset type output index, output id}...]
  *
  * Note: where the data items are of uniform size, DUPFIXED tables have
  * been used to save space. In most of these cases, a dummy "zerokval"
@@ -313,6 +327,12 @@ const char* const LMDB_TOKENS = "tokens";
 const char* const LMDB_RCT_COUNT_INFO = "rct_count_info";
 
 const char* const LMDB_ROLLUP_TX_INFO = "rollup_tx_info";
+
+const char* const LMDB_OUTPUT_RECORDS = "output_records";
+const char* const LMDB_OUTPUT_AMOUNT_REFS = "output_amount_refs";
+const char* const LMDB_OUTPUT_TYPE_REFS = "output_type_refs";
+const char* const LMDB_OUTPUT_TYPES_BACKUP = "output_types_backup";
+const char* const LMDB_OUTPUT_TYPE_REFS_BACKUP = "output_type_refs_backup";
 
 const char zerokey[8] = {0};
 const MDB_val zerokval = { sizeof(zerokey), (void *)zerokey };
@@ -420,7 +440,11 @@ typedef struct circ_supply_tally {
   uint64_t amount_hi;
   uint64_t amount_lo;
 } circ_supply_tally;
-  
+
+
+static_assert(sizeof(output_amount_ref) == 2 * sizeof(uint64_t), "output_amount_ref LMDB layout changed");
+static_assert(sizeof(output_type_ref) == 2 * sizeof(uint64_t), "output_type_ref LMDB layout changed");
+
 std::atomic<uint64_t> mdb_txn_safe::num_active_txns{0};
 std::atomic_flag mdb_txn_safe::creation_gate = ATOMIC_FLAG_INIT;
 
@@ -2176,6 +2200,7 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
+
   mdb_txn_cursors *m_cursors = &m_wcursors;
   uint64_t m_height = height();
   uint64_t m_num_outputs = num_outputs();
@@ -2185,6 +2210,9 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
   CURSOR(output_txs)
   CURSOR(output_amounts)
   CURSOR(output_types)
+  CURSOR(output_records)
+  CURSOR(output_amount_refs)
+  CURSOR(output_type_refs)
 
   std::string output_asset_type;
   if (!get_output_asset_type(tx_output, output_asset_type))
@@ -2193,9 +2221,15 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
   crypto::public_key output_public_key;
   if (!get_output_public_key(tx_output, output_public_key))
     throw0(DB_ERROR("Could not get an output public key from a tx output."));
+
   if (tx_output.amount == 0 && !commitment)
     throw0(DB_ERROR("RCT output without commitment"));
 
+  /*
+   * output_txs:
+   *
+   *   global output_id -> tx_hash/local_vout_index
+   */
   outtx ot = {m_num_outputs, tx_hash, local_index};
   MDB_val_set(vot, ot);
 
@@ -2204,23 +2238,34 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
     throw0(DB_ERROR(lmdb_error("Failed to add output tx hash to db transaction: ", result).c_str()));
 
   uint32_t asset_type = cryptonote::asset_id_from_type(output_asset_type);
-  
+
+  /*
+   * output_amounts:
+   *
+   *   amount + amount_index -> legacy output payload + global output_id
+   */
   outkey ok;
   MDB_val data;
   MDB_val_copy<uint64_t> val_amount(tx_output.amount);
+
   result = mdb_cursor_get(m_cur_output_amounts, &val_amount, &data, MDB_SET);
   if (!result)
-    {
-      mdb_size_t num_elems = 0;
-      result = mdb_cursor_count(m_cur_output_amounts, &num_elems);
-      if (result)
-        throw0(DB_ERROR(std::string("Failed to get number of outputs for amount: ").append(mdb_strerror(result)).c_str()));
-      ok.amount_index = num_elems;
-    }
+  {
+    mdb_size_t num_elems = 0;
+    result = mdb_cursor_count(m_cur_output_amounts, &num_elems);
+    if (result)
+      throw0(DB_ERROR(std::string("Failed to get number of outputs for amount: ").append(mdb_strerror(result)).c_str()));
+    ok.amount_index = num_elems;
+  }
   else if (result != MDB_NOTFOUND)
+  {
     throw0(DB_ERROR(lmdb_error("Failed to get output amount in db transaction: ", result).c_str()));
+  }
   else
+  {
     ok.amount_index = 0;
+  }
+
   ok.output_id = m_num_outputs;
   ok.data.pubkey = output_public_key;
   ok.data.unlock_time = unlock_time;
@@ -2238,33 +2283,326 @@ std::pair<uint64_t, uint64_t> BlockchainLMDB::add_output(const crypto::hash& tx_
   }
   data.mv_data = &ok;
 
-  if ((result = mdb_cursor_put(m_cur_output_amounts, &val_amount, &data, MDB_APPENDDUP)))
-      throw0(DB_ERROR(lmdb_error("Failed to add output pubkey to db transaction: ", result).c_str()));
+  result = mdb_cursor_put(m_cur_output_amounts, &val_amount, &data, MDB_APPENDDUP);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to add output pubkey to db transaction: ", result).c_str()));
 
-  
+  /*
+   * output_amount_refs:
+   *
+   *   amount + amount_index -> global output_id
+   */
+  output_amount_ref oar;
+  oar.amount_index = ok.amount_index;
+  oar.output_id = ok.output_id;
+
+  MDB_val_set(v_output_amount_ref, oar);
+
+  result = mdb_cursor_put(m_cur_output_amount_refs, &val_amount, &v_output_amount_ref, MDB_APPENDDUP);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to add output amount ref to db transaction: ", result).c_str()));
+
+  /*
+   * output_records:
+   *
+   *   global output_id -> full canonical/legacy-compatible output payload
+   */
+  output_record_t ore;
+  ore.od = ok.data;
+  ore.clear_amount = tx_output.amount;
+  ore.consensus_amount_bucket = tx_output.amount;
+  ore.tx_hash = tx_hash;
+  ore.local_vout_index = local_index;
+  ore.flags = output_record_flag_none;
+
+  if (tx_output.amount == 0)
+  {
+    ore.flags |= output_record_flag_rct;
+  }
+  else
+  {
+    ore.flags |= output_record_flag_nonzero_amount;
+
+    /*
+     * Preserve legacy output_amounts/get_output_key semantics:
+     * nonzero amount records do not store an on-chain mask in pre_rct_outkey;
+     * callers synthesize zeroCommit(amount).
+     */
+    ore.od.commitment = rct::zeroCommit(tx_output.amount);
+  }
+
+  MDB_val_copy<uint64_t> k_output_record(ok.output_id);
+  MDB_val_set(v_output_record, ore);
+
+  result = mdb_cursor_put(m_cur_output_records, &k_output_record, &v_output_record, MDB_APPEND);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to add output record to db transaction: ", result).c_str()));
+
+  // After the HF13 realignment, output_types and output_type_refs are the
+  // RCT-only ring index. Transparent outputs remain in the canonical output
+  // tables above, but must not consume a ring rank. remove_output() applies
+  // the same condition and ignores the unused second return value.
+  if (m_rct_index_realigned && tx_output.amount != 0)
+    return std::make_pair(ok.amount_index, 0);
+
+  /*
+   * output_types:
+   *
+   *   asset_type + asset_type_output_index -> original global output_id
+   *
+   * This remains the old/raw table.
+   */
   MDB_val_copy<uint32_t> k(asset_type);
   MDB_val v;
-  
+
   mdb_size_t num_outputs_of_asset_type = 0;
   result = mdb_cursor_get(m_cur_output_types, &k, &v, MDB_SET);
   if (!result)
-    {
-      result = mdb_cursor_count(m_cur_output_types, &num_outputs_of_asset_type);
-      if (result)
-        throw0(DB_ERROR(std::string("Failed to get number of outputs for type: ").append(mdb_strerror(result)).c_str()));
-    }
+  {
+    result = mdb_cursor_count(m_cur_output_types, &num_outputs_of_asset_type);
+    if (result)
+      throw0(DB_ERROR(std::string("Failed to get number of outputs for type: ").append(mdb_strerror(result)).c_str()));
+  }
   else if (result != MDB_NOTFOUND)
+  {
     throw0(DB_ERROR(lmdb_error("Failed to get output types in db transaction: ", result).c_str()));
+  }
 
   outassettype oat;
   oat.asset_type_output_index = num_outputs_of_asset_type;
   oat.output_id = ok.output_id;
+
   MDB_val_set(voat, oat);
 
   MDB_val_copy<uint32_t> koat(asset_type);
-  if ((result = mdb_cursor_put(m_cur_output_types, &koat, &voat, MDB_APPENDDUP)))
+  result = mdb_cursor_put(m_cur_output_types, &koat, &voat, MDB_APPENDDUP);
+  if (result)
     throw0(DB_ERROR(lmdb_error("Failed to add output type to db transaction: ", result).c_str()));
 
+  /*
+   * output_type_refs:
+   *
+   * This is the new consensus-facing ref table.
+   *
+   * It must match migrate_3_4() semantics:
+   *
+   *   old_id = output_types[asset][asset_index].output_id
+   *
+   *   if output_amount_refs[0][old_id] exists:
+   *       output_type_refs[asset][asset_index] = output_amount_refs[0][old_id].output_id
+   *   else:
+   *       output_type_refs[asset][asset_index] = old_id
+   *
+   * This preserves the old effective consensus result without continuing to
+   * call get_output_key() after resolving the asset-index namespace.
+   */
+  uint64_t resolved_type_output_id = oat.output_id;
+
+  // post-realign the rct-only ref is the output's own global id; pre-realign it
+  // preserves the legacy slipped result via the amount-0 ref lookup below
+  if (!m_rct_index_realigned)
+  {
+    const uint64_t amount_zero = 0;
+
+    output_amount_ref lookup_ref;
+    lookup_ref.amount_index = oat.output_id;
+    lookup_ref.output_id = 0;
+
+    MDB_val_copy<uint64_t> k_amount_zero(amount_zero);
+    MDB_val_set(v_lookup_ref, lookup_ref);
+
+    const int lookup_result =
+      mdb_cursor_get(m_cur_output_amount_refs, &k_amount_zero, &v_lookup_ref, MDB_GET_BOTH);
+
+    if (lookup_result == MDB_SUCCESS)
+    {
+      if (v_lookup_ref.mv_size != sizeof(output_amount_ref))
+        throw0(DB_ERROR("Invalid output_amount_ref size while resolving current output_type_ref"));
+
+      const output_amount_ref *found_ref =
+        static_cast<const output_amount_ref *>(v_lookup_ref.mv_data);
+
+      if (found_ref->amount_index != oat.output_id)
+        throw0(DB_ERROR("output_amount_ref amount_index mismatch while resolving current output_type_ref"));
+
+      resolved_type_output_id = found_ref->output_id;
+    }
+    else if (lookup_result != MDB_NOTFOUND)
+    {
+      throw0(DB_ERROR(lmdb_error("Failed to resolve current output_type_ref via amount-0 ref: ", lookup_result).c_str()));
+    }
+  }
+
+  output_type_ref otr;
+  otr.asset_type_output_index = oat.asset_type_output_index;
+  otr.output_id = resolved_type_output_id;
+
+  MDB_val_set(v_output_type_ref, otr);
+
+  MDB_val_copy<uint32_t> k_output_type_ref(asset_type);
+  result = mdb_cursor_put(m_cur_output_type_refs, &k_output_type_ref, &v_output_type_ref, MDB_APPENDDUP);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to add output type ref to db transaction: ", result).c_str()));
+
+  /*
+   * Forward-resolution/backpatch step.
+   *
+   * If this new output is an amount-0 output whose amount_index is different
+   * from its global output_id, then this insert has just created:
+   *
+   *   output_amount_refs[0][ok.amount_index] = ok.output_id
+   *
+   * For every old output_types row whose raw target was ok.amount_index, the
+   * legacy effective lookup is now:
+   *
+   *   output_types[asset][asset_index] -> ok.amount_index
+   *   output_amounts[0][ok.amount_index] -> ok.output_id
+   *
+   * Update the matching output_type_refs rows to encode that exact one-step
+   * legacy result. Do not scan by the current output_type_ref target: that
+   * would recursively chase later amount-0 refs and change historical ring
+   * members away from the stock consensus answer.
+   */
+  if (!m_rct_index_realigned && tx_output.amount == 0 && ok.amount_index != ok.output_id)
+  {
+    const uint64_t legacy_raw_output_id = ok.amount_index;
+    const uint64_t resolved_output_id = ok.output_id;
+
+    struct pending_type_ref_update
+    {
+      uint32_t asset_type;
+      uint64_t asset_type_output_index;
+    };
+
+    std::vector<pending_type_ref_update> pending_updates;
+
+    MDB_val k_scan_type;
+    MDB_val v_scan_type;
+    for (result = mdb_cursor_get(m_cur_output_types, &k_scan_type, &v_scan_type, MDB_FIRST);
+         result == MDB_SUCCESS;
+         result = mdb_cursor_get(m_cur_output_types, &k_scan_type, &v_scan_type, MDB_NEXT))
+    {
+      if (k_scan_type.mv_size != sizeof(uint32_t))
+        throw0(DB_ERROR("Invalid output_types asset key size while resolving pending output_type_ref"));
+
+      if (v_scan_type.mv_size != sizeof(outassettype))
+        throw0(DB_ERROR("Invalid output_types value size while resolving pending output_type_ref"));
+
+      uint32_t pending_asset_type = 0;
+      std::memcpy(&pending_asset_type, k_scan_type.mv_data, sizeof(pending_asset_type));
+
+      const outassettype *scan_oat =
+        static_cast<const outassettype *>(v_scan_type.mv_data);
+
+      if (scan_oat->output_id == legacy_raw_output_id)
+      {
+        pending_type_ref_update update;
+        update.asset_type = pending_asset_type;
+        update.asset_type_output_index = scan_oat->asset_type_output_index;
+        pending_updates.push_back(update);
+      }
+    }
+
+    if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to scan output_types while resolving pending output_type_ref: ", result).c_str()));
+
+    for (const pending_type_ref_update &update : pending_updates)
+    {
+      output_type_ref old_type_ref;
+      old_type_ref.asset_type_output_index = update.asset_type_output_index;
+      old_type_ref.output_id = legacy_raw_output_id;
+
+      MDB_val_copy<uint32_t> k_pending_type_ref(update.asset_type);
+      MDB_val_set(v_old_type_ref, old_type_ref);
+
+      result = mdb_cursor_get(m_cur_output_type_refs, &k_pending_type_ref, &v_old_type_ref, MDB_GET_BOTH);
+      if (result == MDB_SUCCESS)
+      {
+        if (v_old_type_ref.mv_size != sizeof(output_type_ref))
+          throw0(DB_ERROR("Invalid output_type_ref size while updating pending output_type_ref"));
+
+        const output_type_ref *existing_ref =
+          static_cast<const output_type_ref *>(v_old_type_ref.mv_data);
+
+        if (existing_ref->asset_type_output_index != update.asset_type_output_index)
+          throw0(DB_ERROR("output_type_ref asset index mismatch while updating pending output_type_ref"));
+
+        if (existing_ref->output_id == resolved_output_id)
+          continue;
+
+        if (existing_ref->output_id != legacy_raw_output_id)
+        {
+          // Older builds did not undo this backpatch when popping the
+          // amount-0 output. Repair that specific stale state, but retain the
+          // consistency failure when the unexpected target is still live.
+          MDB_val_copy<uint64_t> k_existing_record(existing_ref->output_id);
+          MDB_val v_existing_record;
+          const int existing_record_result =
+            mdb_cursor_get(m_cur_output_records, &k_existing_record, &v_existing_record, MDB_SET);
+
+          if (existing_record_result == MDB_SUCCESS)
+          {
+            throw0(DB_ERROR(
+              (std::string("output_type_ref target mismatch while updating pending output_type_ref: asset_type=") +
+               std::to_string(update.asset_type) +
+               ", asset_type_output_index=" +
+               std::to_string(update.asset_type_output_index) +
+               ", expected_current_output_id=" +
+               std::to_string(legacy_raw_output_id) +
+               ", found_output_id=" +
+               std::to_string(existing_ref->output_id) +
+               ", resolved_output_id=" +
+               std::to_string(resolved_output_id)).c_str()));
+          }
+          else if (existing_record_result != MDB_NOTFOUND)
+          {
+            throw0(DB_ERROR(lmdb_error("Failed to validate stale output_type_ref target: ", existing_record_result).c_str()));
+          }
+
+          MWARNING("Repairing stale output_type_ref left by an earlier block rollback: "
+              << "asset_type=" << update.asset_type
+              << ", asset_type_output_index=" << update.asset_type_output_index
+              << ", stale_output_id=" << existing_ref->output_id
+              << ", resolved_output_id=" << resolved_output_id);
+        }
+
+        result = mdb_cursor_del(m_cur_output_type_refs, 0);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to delete pending canonical output_type_ref: ", result).c_str()));
+
+        output_type_ref new_type_ref;
+        new_type_ref.asset_type_output_index = update.asset_type_output_index;
+        new_type_ref.output_id = resolved_output_id;
+
+        MDB_val_set(v_new_type_ref, new_type_ref);
+
+        result = mdb_cursor_put(m_cur_output_type_refs, &k_pending_type_ref, &v_new_type_ref, 0);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to store resolved pending output_type_ref: ", result).c_str()));
+      }
+      else if (result == MDB_NOTFOUND)
+      {
+        throw0(DB_ERROR(
+          (std::string("Missing output_type_ref while resolving pending output_type_ref: asset_type=") +
+           std::to_string(update.asset_type) +
+           ", asset_type_output_index=" +
+           std::to_string(update.asset_type_output_index) +
+           ", legacy_raw_output_id=" +
+           std::to_string(legacy_raw_output_id) +
+           ", resolved_output_id=" +
+           std::to_string(resolved_output_id)).c_str()));
+      }
+      else
+        throw0(DB_ERROR(lmdb_error("Failed to locate pending output_type_ref: ", result).c_str()));
+    }
+
+    if (pending_updates.empty())
+    {
+      MDEBUG("No old output_types rows require pending output_type_ref resolution: "
+          << "legacy_raw_output_id=" << legacy_raw_output_id
+          << ", resolved_output_id=" << resolved_output_id);
+    }
+  }
   return std::make_pair(ok.amount_index, oat.asset_type_output_index);
 }
 
@@ -2326,6 +2664,10 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
   CURSOR(output_txs);
   CURSOR(output_types);
 
+  CURSOR(output_records);
+  CURSOR(output_amount_refs);
+  CURSOR(output_type_refs);
+
   MDB_val_set(k, amount);
   MDB_val_set(v, out_index);
 
@@ -2336,7 +2678,24 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
     throw0(DB_ERROR(lmdb_error("DB error attempting to get an output", result).c_str()));
 
   const pre_rct_outkey *ok = (const pre_rct_outkey *)v.mv_data;
-  MDB_val_set(otxk, ok->output_id);
+  const uint64_t output_id = ok->output_id;
+
+  MDB_val_set(k_amount_ref, amount);
+  MDB_val_set(v_amount_ref, out_index);
+  result = mdb_cursor_get(m_cur_output_amount_refs, &k_amount_ref, &v_amount_ref, MDB_GET_BOTH);
+  if (result == MDB_NOTFOUND)
+    throw0(DB_ERROR("Unexpected: amount output ref not found"));
+  else if (result)
+    throw1(DB_ERROR(lmdb_error("Error finding amount output ref for removal", result).c_str()));
+
+  const output_amount_ref *amount_ref = (const output_amount_ref *)v_amount_ref.mv_data;
+  if (amount_ref->output_id != output_id)
+    throw0(DB_ERROR(std::string("Unexpected: output_id ")
+                    .append(boost::lexical_cast<std::string>(amount_ref->output_id))
+                    .append(" from m_output_amount_refs does not match expected output id ")
+                    .append(boost::lexical_cast<std::string>(output_id)).c_str()));
+
+  MDB_val_set(otxk, output_id);
   result = mdb_cursor_get(m_cur_output_txs, (MDB_val *)&zerokval, &otxk, MDB_GET_BOTH);
   if (result == MDB_NOTFOUND)
   {
@@ -2347,26 +2706,129 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
     throw1(DB_ERROR(lmdb_error("Error adding removal of output tx to db transaction", result).c_str()));
   }
 
+  // post-realign the rct-only ring index excludes transparent outputs, so a
+  // transparent output is absent from output_types/output_type_refs; skip those
+  const bool in_ring_index = !(m_rct_index_realigned && amount != 0);
+
+  // Pre-realign: if this amount-0 output was a "slipped" output whose
+  // amount_index collided with an existing output's output_id, add_output()
+  // backpatched other outputs' type_refs to point to this output_id. Undo
+  // those backpatches before deleting so the legacy-effective mapping is
+  // restored to the pre-backpatch state.
+  if (!m_rct_index_realigned && amount == 0 && out_index != output_id)
+  {
+    const uint64_t legacy_raw_output_id = out_index;
+
+    struct pending_type_ref_restore
+    {
+      uint32_t asset_type;
+      uint64_t asset_type_output_index;
+    };
+
+    std::vector<pending_type_ref_restore> pending_restores;
+
+    MDB_val k_scan_type;
+    MDB_val v_scan_type;
+    for (result = mdb_cursor_get(m_cur_output_types, &k_scan_type, &v_scan_type, MDB_FIRST);
+         result == MDB_SUCCESS;
+         result = mdb_cursor_get(m_cur_output_types, &k_scan_type, &v_scan_type, MDB_NEXT))
+    {
+      if (k_scan_type.mv_size != sizeof(uint32_t) || v_scan_type.mv_size != sizeof(outassettype))
+        throw0(DB_ERROR("Invalid output_types entry size during backpatch undo"));
+
+      const outassettype *scan_oat = (const outassettype *)v_scan_type.mv_data;
+      if (scan_oat->output_id == legacy_raw_output_id)
+      {
+        pending_type_ref_restore r;
+        std::memcpy(&r.asset_type, k_scan_type.mv_data, sizeof(r.asset_type));
+        r.asset_type_output_index = scan_oat->asset_type_output_index;
+        pending_restores.push_back(r);
+      }
+    }
+    if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to scan output_types during backpatch undo: ", result).c_str()));
+
+    for (const auto &r : pending_restores)
+    {
+      output_type_ref restored_ref;
+      restored_ref.asset_type_output_index = r.asset_type_output_index;
+      restored_ref.output_id = legacy_raw_output_id;
+
+      MDB_val_copy<uint32_t> k_restored_type_ref(r.asset_type);
+      MDB_val_set(v_restored_type_ref, restored_ref);
+
+      result = mdb_cursor_get(m_cur_output_type_refs, &k_restored_type_ref, &v_restored_type_ref, MDB_GET_BOTH);
+      if (result == MDB_SUCCESS)
+      {
+        const output_type_ref *existing_ref = (const output_type_ref *)v_restored_type_ref.mv_data;
+        if (existing_ref->output_id != output_id)
+          continue; // already restored or never backpatched
+
+        result = mdb_cursor_del(m_cur_output_type_refs, 0);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to delete backpatched type ref: ", result).c_str()));
+
+        MDB_val_set(v_restored_type_ref, restored_ref);
+        result = mdb_cursor_put(m_cur_output_type_refs, &k_restored_type_ref, &v_restored_type_ref, 0);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to restore type ref during backpatch undo: ", result).c_str()));
+      }
+      else if (result != MDB_NOTFOUND)
+      {
+        throw0(DB_ERROR(lmdb_error("Failed to locate type ref during backpatch undo: ", result).c_str()));
+      }
+    }
+  }
+
+  if (in_ring_index)
+  {
   uint32_t output_asset_type = cryptonote::asset_id_from_type(output_asset_type_str);
   MDB_val_copy<uint32_t> koat(output_asset_type);
-  MDB_val_set(voat, asset_type_output_id);
-  
+  outassettype expected_oat;
+  expected_oat.asset_type_output_index = asset_type_output_id;
+  expected_oat.output_id = output_id;
+  MDB_val_set(voat, expected_oat);
+
   result = mdb_cursor_get(m_cur_output_types, &koat, &voat, MDB_GET_BOTH);
   if (result == MDB_NOTFOUND)
-  {
     throw0(DB_ERROR("Unexpected: asset type output id not found in m_output_types"));
-  }
   else if (result)
   {
     throw1(DB_ERROR(lmdb_error("Error adding removal of output type to db transaction", result).c_str()));
   }
 
   const outassettype *oat = (const outassettype *)voat.mv_data;
-  if (oat->output_id != out_index)
+  if (oat->output_id != output_id)
     throw0(DB_ERROR(std::string("Unexpected: output_id ")
                     .append(boost::lexical_cast<std::string>(oat->output_id))
                     .append(" from m_output_types does not match expected output index ")
-                    .append(boost::lexical_cast<std::string>(out_index)).c_str()));
+                    .append(boost::lexical_cast<std::string>(output_id)).c_str()));
+
+  MDB_val_copy<uint32_t> k_type_ref(output_asset_type);
+  output_type_ref lookup_type_ref;
+  lookup_type_ref.asset_type_output_index = asset_type_output_id;
+  lookup_type_ref.output_id = 0;
+  MDB_val_set(v_type_ref, lookup_type_ref);
+  result = mdb_cursor_get(m_cur_output_type_refs, &k_type_ref, &v_type_ref, MDB_GET_BOTH_RANGE);
+  if (result == MDB_NOTFOUND)
+    throw0(DB_ERROR("Unexpected: asset type output ref not found"));
+  else if (result)
+    throw1(DB_ERROR(lmdb_error("Error finding asset type output ref for removal", result).c_str()));
+
+  const output_type_ref *type_ref = (const output_type_ref *)v_type_ref.mv_data;
+  if (type_ref->asset_type_output_index != asset_type_output_id)
+    throw0(DB_ERROR("Unexpected: asset type output ref rank mismatch"));
+  // For poisoned outputs, the effective ID (type_refs) intentionally differs
+  // from the raw ID (output_types). Only enforce the match for non-poisoned.
+  if (type_ref->output_id == oat->output_id)
+  {
+    if (type_ref->output_id != output_id)
+      throw0(DB_ERROR(std::string("Unexpected: output_id ")
+                      .append(boost::lexical_cast<std::string>(type_ref->output_id))
+                      .append(" from m_output_type_refs does not match expected output id ")
+                      .append(boost::lexical_cast<std::string>(output_id)).c_str()));
+  }
+  } // in_ring_index
 
 
   result = mdb_cursor_del(m_cur_output_txs, 0);
@@ -2378,9 +2840,37 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
   if (result)
     throw0(DB_ERROR(lmdb_error(std::string("Error deleting amount for output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
 
+  if (in_ring_index)
+  {
   result = mdb_cursor_del(m_cur_output_types, 0);
   if (result)
     throw0(DB_ERROR(lmdb_error(std::string("Error deleting type for output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
+  }
+
+  result = mdb_cursor_del(m_cur_output_amount_refs, 0);
+  if (result)
+    throw0(DB_ERROR(lmdb_error(std::string("Error deleting amount ref for output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
+
+  if (in_ring_index)
+  {
+  result = mdb_cursor_del(m_cur_output_type_refs, 0);
+  if (result)
+    throw0(DB_ERROR(lmdb_error(std::string("Error deleting type ref for output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
+  }
+
+  MDB_val_set(k_record, output_id);
+  MDB_val v_record;
+  result = mdb_cursor_get(m_cur_output_records, &k_record, &v_record, MDB_SET);
+  if (result == MDB_SUCCESS)
+  {
+    result = mdb_cursor_del(m_cur_output_records, 0);
+    if (result)
+      throw0(DB_ERROR(lmdb_error(std::string("Error deleting output record for global output id ").append(boost::lexical_cast<std::string>(output_id).append(": ")).c_str(), result).c_str()));
+  }
+  else if (result != MDB_NOTFOUND)
+  {
+    throw0(DB_ERROR(lmdb_error("Error finding output record to delete: ", result).c_str()));
+  }
 }
 
 void BlockchainLMDB::prune_outputs(uint64_t amount)
@@ -2391,6 +2881,10 @@ void BlockchainLMDB::prune_outputs(uint64_t amount)
   CURSOR(output_amounts);
   CURSOR(output_txs);
 
+  CURSOR(output_amount_refs);
+  CURSOR(output_type_refs);
+  CURSOR(output_records);
+  
   MINFO("Pruning outputs for amount " << amount);
 
   MDB_val v;
@@ -2425,6 +2919,52 @@ void BlockchainLMDB::prune_outputs(uint64_t amount)
   if (result)
     throw0(DB_ERROR(lmdb_error("Error deleting outputs: ", result).c_str()));
 
+  MDB_val_set(k_amount_ref, amount);
+  MDB_val v_amount_ref;
+  result = mdb_cursor_get(m_cur_output_amount_refs, &k_amount_ref, &v_amount_ref, MDB_SET);
+  if (result == MDB_SUCCESS)
+  {
+    result = mdb_cursor_del(m_cur_output_amount_refs, MDB_NODUPDATA);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Error deleting output amount refs: ", result).c_str()));
+  }
+  else if (result != MDB_NOTFOUND)
+    throw0(DB_ERROR(lmdb_error("Error looking up output amount refs: ", result).c_str()));
+
+  MDB_val k_type_ref, v_type_ref;
+  size_t deleted_type_refs = 0;
+  result = mdb_cursor_get(m_cur_output_type_refs, &k_type_ref, &v_type_ref, MDB_FIRST);
+  while (result == MDB_SUCCESS)
+  {
+    if (v_type_ref.mv_size != sizeof(output_type_ref))
+      throw0(DB_ERROR("Invalid output_type_ref size"));
+
+    const output_type_ref *ref = (const output_type_ref *)v_type_ref.mv_data;
+    bool prune_type_ref = false;
+    for (uint64_t output_id: output_ids)
+    {
+      if (output_id == ref->output_id)
+      {
+        prune_type_ref = true;
+        break;
+      }
+    }
+
+    if (prune_type_ref)
+    {
+      result = mdb_cursor_del(m_cur_output_type_refs, 0);
+      if (result)
+        throw0(DB_ERROR(lmdb_error("Error deleting output type ref: ", result).c_str()));
+      ++deleted_type_refs;
+    }
+
+    result = mdb_cursor_get(m_cur_output_type_refs, &k_type_ref, &v_type_ref, MDB_NEXT);
+  }
+  if (result != MDB_NOTFOUND)
+    throw0(DB_ERROR(lmdb_error("Error scanning output type refs: ", result).c_str()));
+  if (deleted_type_refs != output_ids.size())
+    throw0(DB_ERROR((std::string("Deleted ") + boost::lexical_cast<std::string>(deleted_type_refs) + " output type refs while pruning " + boost::lexical_cast<std::string>(output_ids.size()) + " outputs").c_str()));
+
   for (uint64_t output_id: output_ids)
   {
     MDB_val_set(v, output_id);
@@ -2434,6 +2974,18 @@ void BlockchainLMDB::prune_outputs(uint64_t amount)
     result = mdb_cursor_del(m_cur_output_txs, 0);
     if (result)
       throw0(DB_ERROR(lmdb_error("Error deleting output: ", result).c_str()));
+
+    MDB_val_set(k_record, output_id);
+    MDB_val v_record;
+    result = mdb_cursor_get(m_cur_output_records, &k_record, &v_record, MDB_SET);
+    if (result == MDB_SUCCESS)
+    {
+      result = mdb_cursor_del(m_cur_output_records, 0);
+      if (result)
+        throw0(DB_ERROR(lmdb_error("Error deleting output record: ", result).c_str()));
+    }
+    else if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Error looking up output record: ", result).c_str()));
   }
 }
 
@@ -2611,7 +3163,7 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
   // set up lmdb environment
   if ((result = mdb_env_create(&m_env)))
     throw0(DB_ERROR(lmdb_error("Failed to create lmdb environment: ", result).c_str()));
-  if ((result = mdb_env_set_maxdbs(m_env, 32)))
+  if ((result = mdb_env_set_maxdbs(m_env, 40)))
     throw0(DB_ERROR(lmdb_error("Failed to set max number of dbs: ", result).c_str()));
 
   int threads = tools::get_max_concurrency();
@@ -2717,12 +3269,18 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
 
   lmdb_db_open(txn, LMDB_ROLLUP_TX_INFO, MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_rollup_tx_info, "Failed to open db handle for m_rollup_tx_info");
 
+  lmdb_db_open(txn, LMDB_OUTPUT_RECORDS, MDB_INTEGERKEY | MDB_CREATE, m_output_records, "Failed to open db handle for m_output_records");
+  lmdb_db_open(txn, LMDB_OUTPUT_AMOUNT_REFS, MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_output_amount_refs, "Failed to open db handle for m_output_amount_refs");
+  lmdb_db_open(txn, LMDB_OUTPUT_TYPE_REFS, MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_output_type_refs, "Failed to open db handle for m_output_type_refs");
+  lmdb_db_open(txn, LMDB_OUTPUT_TYPES_BACKUP, MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_output_types_backup, "Failed to open db handle for m_output_types_backup");
+  lmdb_db_open(txn, LMDB_OUTPUT_TYPE_REFS_BACKUP, MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_output_type_refs_backup, "Failed to open db handle for m_output_type_refs_backup");
+
   mdb_set_dupsort(txn, m_spent_keys, compare_hash32);
   mdb_set_dupsort(txn, m_block_heights, compare_hash32);
   mdb_set_dupsort(txn, m_tx_indices, compare_hash32);
   mdb_set_dupsort(txn, m_output_amounts, compare_uint64);
   mdb_set_dupsort(txn, m_output_txs, compare_uint64);
-  mdb_set_compare(txn, m_output_types, compare_string);
+  mdb_set_compare(txn, m_output_types, compare_uint32);
   mdb_set_dupsort(txn, m_output_types, compare_uint64);
   mdb_set_dupsort(txn, m_block_info, compare_uint64);
   if (!(mdb_flags & MDB_RDONLY))
@@ -2747,7 +3305,15 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
   mdb_set_compare(txn, m_tokens, compare_uint64);
 
   mdb_set_dupsort(txn, m_rollup_tx_info, compare_uint64);
-  
+
+  mdb_set_dupsort(txn, m_output_amount_refs, compare_uint64);
+  mdb_set_compare(txn, m_output_type_refs, compare_uint32);
+  mdb_set_compare(txn, m_output_types_backup, compare_uint32);
+  mdb_set_dupsort(txn, m_output_types_backup, compare_uint64);
+  mdb_set_compare(txn, m_output_type_refs_backup, compare_uint32);
+  mdb_set_dupsort(txn, m_output_type_refs_backup, compare_uint64);
+  mdb_set_dupsort(txn, m_output_type_refs, compare_uint64);
+
   if (!(mdb_flags & MDB_RDONLY))
   {
     result = mdb_drop(txn, m_hf_starting_heights, 1);
@@ -2814,6 +3380,16 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
     MFATAL("Existing lmdb database is incompatible with this version.");
     MFATAL("Please delete the existing database and resync.");
     return;
+  }
+
+  // read the HF13 realign flag so the rct-only output_types layout is selected.
+  // If the flag is missing but a backup exists (realign crashed mid-rebuild),
+  // the originals may be partially overwritten.  realign_rct_index() detects
+  // this and restores from backup before retrying.
+  {
+    MDB_val_str(rk, "rct_realigned");
+    MDB_val rv;
+    m_rct_index_realigned = (mdb_get(txn, m_properties, &rk, &rv) == MDB_SUCCESS);
   }
 
   if (!(mdb_flags & MDB_RDONLY))
@@ -2940,6 +3516,16 @@ void BlockchainLMDB::reset()
     throw0(DB_ERROR(lmdb_error("Failed to drop m_rct_count_info: ", result).c_str()));
   if (auto result = mdb_drop(txn, m_rollup_tx_info, 0))
     throw0(DB_ERROR(lmdb_error("Failed to drop m_rollup_tx_info: ", result).c_str()));
+  if (auto result = mdb_drop(txn, m_output_records, 0))
+    throw0(DB_ERROR(lmdb_error("Failed to drop m_output_records: ", result).c_str()));
+  if (auto result = mdb_drop(txn, m_output_amount_refs, 0))
+    throw0(DB_ERROR(lmdb_error("Failed to drop m_output_amount_refs: ", result).c_str()));
+  if (auto result = mdb_drop(txn, m_output_type_refs, 0))
+    throw0(DB_ERROR(lmdb_error("Failed to drop m_output_type_refs: ", result).c_str()));
+  if (auto result = mdb_drop(txn, m_output_types_backup, 0))
+    throw0(DB_ERROR(lmdb_error("Failed to drop m_output_types_backup: ", result).c_str()));
+  if (auto result = mdb_drop(txn, m_output_type_refs_backup, 0))
+    throw0(DB_ERROR(lmdb_error("Failed to drop m_output_type_refs_backup: ", result).c_str()));
 
   // init with current version
   MDB_val_str(k, "version");
@@ -2950,6 +3536,7 @@ void BlockchainLMDB::reset()
   txn.commit();
   m_cum_size = 0;
   m_cum_count = 0;
+  m_rct_index_realigned = false;
 }
 
 std::vector<std::string> BlockchainLMDB::get_filenames() const
@@ -3821,7 +4408,6 @@ std::pair<std::vector<uint64_t>, uint64_t> BlockchainLMDB::get_block_cumulative_
 
   MDB_val v;
 
-  uint64_t prev_height = heights[0];
   uint64_t range_begin = 0, range_end = 0;
   for (uint64_t height: heights)
   {
@@ -3864,7 +4450,6 @@ std::pair<std::vector<uint64_t>, uint64_t> BlockchainLMDB::get_block_cumulative_
     //  num_spendable_global_outs = asset_type.empty() ? bi->bi_cum_rct : bi->bi_cum_rct_by_asset_type[asset_type];
     assert(true);
 
-    prev_height = height;
   }
 
   TXN_POSTFIX_RDONLY();
@@ -3901,7 +4486,6 @@ std::pair<std::vector<uint64_t>, uint64_t> BlockchainLMDB::get_block_cumulative_
     if (heights[i] >= db_stats.ms_entries)
       throw0(BLOCK_DNE(std::string("Attempt to get rct distribution from height " + std::to_string(heights[i]) + " failed -- block size not in db").c_str()));
 
-  uint64_t prev_height = heights[0];
   for (uint64_t height: heights)
   {
     MDB_val v;
@@ -3922,7 +4506,6 @@ std::pair<std::vector<uint64_t>, uint64_t> BlockchainLMDB::get_block_cumulative_
     if (height == heights[heights.size() - CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE])
       num_spendable_global_outs = rct_count_info[asset_type_id];
 
-    prev_height = height;
   }
   
   TXN_POSTFIX_RDONLY();
@@ -4380,8 +4963,6 @@ std::map<std::string, cryptonote::token_metadata_t> BlockchainLMDB::get_tokens()
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
   TXN_PREFIX_RDONLY();
-  int result;
-
   // Open the tokens table read-only
   RCURSOR(tokens)
 
@@ -4490,6 +5071,19 @@ uint64_t BlockchainLMDB::num_outputs() const
   TXN_PREFIX_RDONLY();
   int result;
 
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+  RCURSOR(output_records)
+
+  uint64_t num = 0;
+  MDB_val k, v;
+  result = mdb_cursor_get(m_cur_output_records, &k, &v, MDB_LAST);
+  if (result == MDB_NOTFOUND)
+    num = 0;
+  else if (result == 0)
+    num = 1 + *(const uint64_t*)k.mv_data;
+  else
+    throw0(DB_ERROR(lmdb_error("Failed to query m_output_records: ", result).c_str()));
+#else
   RCURSOR(output_txs)
 
   uint64_t num = 0;
@@ -4501,7 +5095,9 @@ uint64_t BlockchainLMDB::num_outputs() const
     num = 1 + ((const outtx*)v.mv_data)->output_id;
   else
     throw0(DB_ERROR(lmdb_error("Failed to query m_output_txs: ", result).c_str()));
+#endif
 
+  TXN_POSTFIX_RDONLY();
   return num;
 }
 
@@ -4934,16 +5530,24 @@ uint64_t BlockchainLMDB::get_num_outputs(const uint64_t& amount) const
   check_open();
 
   TXN_PREFIX_RDONLY();
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+  RCURSOR(output_amount_refs);
+#else
   RCURSOR(output_amounts);
+#endif
 
   MDB_val_copy<uint64_t> k(amount);
   MDB_val v;
   mdb_size_t num_elems = 0;
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+  auto result = mdb_cursor_get(m_cur_output_amount_refs, &k, &v, MDB_SET);
+  if (result == MDB_SUCCESS)
+    mdb_cursor_count(m_cur_output_amount_refs, &num_elems);
+#else
   auto result = mdb_cursor_get(m_cur_output_amounts, &k, &v, MDB_SET);
   if (result == MDB_SUCCESS)
-  {
     mdb_cursor_count(m_cur_output_amounts, &num_elems);
-  }
+#endif
   else if (result != MDB_NOTFOUND)
     throw0(DB_ERROR("DB error attempting to get number of outputs of an amount"));
 
@@ -4958,19 +5562,33 @@ uint64_t BlockchainLMDB::get_num_outputs_of_asset_type(const std::string asset_t
   check_open();
 
   TXN_PREFIX_RDONLY();
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+  RCURSOR(output_type_refs);
+#else
   RCURSOR(output_types);
+#endif
 
   uint32_t asset_type = cryptonote::asset_id_from_type(asset_type_str);
   MDB_val_copy<uint32_t> k(asset_type);
   MDB_val v;
   mdb_size_t num_outputs_of_asset_type = 0;
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+  auto result = mdb_cursor_get(m_cur_output_type_refs, &k, &v, MDB_SET);
+  if (!result)
+  {
+    result = mdb_cursor_count(m_cur_output_type_refs, &num_outputs_of_asset_type);
+    if (result)
+      throw0(DB_ERROR(std::string("Failed to get number of output refs for type: ").append(mdb_strerror(result)).c_str()));
+  }
+#else
   auto result = mdb_cursor_get(m_cur_output_types, &k, &v, MDB_SET);
   if (!result)
-    {
-      result = mdb_cursor_count(m_cur_output_types, &num_outputs_of_asset_type);
-      if (result)
-        throw0(DB_ERROR(std::string("Failed to get number of outputs for type: ").append(mdb_strerror(result)).c_str()));
-    }
+  {
+    result = mdb_cursor_count(m_cur_output_types, &num_outputs_of_asset_type);
+    if (result)
+      throw0(DB_ERROR(std::string("Failed to get number of outputs for type: ").append(mdb_strerror(result)).c_str()));
+  }
+#endif
   else if (result != MDB_NOTFOUND)
     throw0(DB_ERROR(lmdb_error("DB error attempting to get number of outputs of asset type: ", result).c_str()));
 
@@ -4984,6 +5602,13 @@ output_data_t BlockchainLMDB::get_output_key(const uint64_t& amount, const uint6
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
 
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+  const uint64_t output_id = get_output_id_by_amount_index(amount, index);
+  output_data_t ret = get_output_data_by_id(output_id);
+  if (!include_commitmemt && amount != 0)
+    ret.commitment = rct::Z;
+  return ret;
+#else
   TXN_PREFIX_RDONLY();
   RCURSOR(output_amounts);
 
@@ -5011,6 +5636,193 @@ output_data_t BlockchainLMDB::get_output_key(const uint64_t& amount, const uint6
   }
   TXN_POSTFIX_RDONLY();
   return ret;
+#endif
+}
+
+output_record_t BlockchainLMDB::get_output_record_by_id(const uint64_t output_id) const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+
+  MDB_val v;
+  MDB_val_set(k, output_id);
+
+  TXN_PREFIX_RDONLY();
+  RCURSOR(output_records);
+
+  int result = mdb_cursor_get(m_cur_output_records, &k, &v, MDB_SET);
+  if (result == MDB_NOTFOUND)
+    throw1(OUTPUT_DNE("Attempting to get output record by global output id, but output does not exist"));
+  else if (result)
+    throw0(DB_ERROR(lmdb_error("Error attempting to retrieve output record by global output id: ", result).c_str()));
+
+  if (v.mv_size != sizeof(output_record_t))
+  {
+    throw0(DB_ERROR(
+      (std::string("Invalid output_record size for output_id ") +
+       std::to_string(output_id) +
+       ": got " + std::to_string(v.mv_size) +
+       ", expected " + std::to_string(sizeof(output_record_t))).c_str()));
+  }
+
+  output_record_t record;
+  std::memcpy(&record, v.mv_data, sizeof(output_record_t));
+
+  TXN_POSTFIX_RDONLY();
+
+  return record;
+}
+
+output_data_t BlockchainLMDB::get_output_data_by_id(uint64_t output_id) const
+{
+  const output_record_t rec = get_output_record_by_id(output_id);
+  return rec.od;
+}
+
+void BlockchainLMDB::get_output_data_by_id(
+    const std::vector<uint64_t>& output_ids,
+    std::vector<output_data_t>& outputs) const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+
+  outputs.clear();
+  outputs.reserve(output_ids.size());
+
+  MDB_val v;
+
+  TXN_PREFIX_RDONLY();
+  RCURSOR(output_records);
+
+  for (const uint64_t output_id : output_ids)
+  {
+    MDB_val_set(k, output_id);
+
+    int result = mdb_cursor_get(m_cur_output_records, &k, &v, MDB_SET);
+    if (result == MDB_NOTFOUND)
+      throw1(OUTPUT_DNE("Attempting to get output record by global output id, but output does not exist"));
+    else if (result)
+      throw0(DB_ERROR(lmdb_error("Error attempting to retrieve output record by global output id: ", result).c_str()));
+
+    if (v.mv_size != sizeof(output_record_t))
+    {
+      throw0(DB_ERROR(
+        (std::string("Invalid output_record_t size for output_id ") +
+         std::to_string(output_id) +
+         ": got " + std::to_string(v.mv_size) +
+         ", expected " + std::to_string(sizeof(output_record_t))).c_str()));
+    }
+
+    output_record_t record;
+    std::memcpy(&record, v.mv_data, sizeof(output_record_t));
+    outputs.push_back(record.od);
+  }
+
+  TXN_POSTFIX_RDONLY();
+}
+
+void BlockchainLMDB::get_output_ids_by_amount_index(const uint64_t amount, const std::vector<uint64_t> &amount_indices, std::vector<uint64_t> &output_ids) const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  output_ids.clear();
+  output_ids.reserve(amount_indices.size());
+
+  TXN_PREFIX_RDONLY();
+  RCURSOR(output_amount_refs);
+
+  for (const uint64_t amount_index: amount_indices)
+  {
+    MDB_val_set(k_amount, amount);
+    MDB_val_set(v_amount_ref, amount_index);
+
+    auto get_result = mdb_cursor_get(m_cur_output_amount_refs, &k_amount, &v_amount_ref, MDB_GET_BOTH);
+    if (get_result == MDB_NOTFOUND)
+      throw1(OUTPUT_DNE((std::string("Attempting to get output id by amount index (amount ") + boost::lexical_cast<std::string>(amount) + ", index " + boost::lexical_cast<std::string>(amount_index) + "), but ref does not exist").c_str()));
+    else if (get_result)
+      throw0(DB_ERROR(lmdb_error("Error attempting to retrieve output id by amount index from the db", get_result).c_str()));
+
+    if (v_amount_ref.mv_size != sizeof(output_amount_ref))
+      throw0(DB_ERROR("Invalid output_amount_ref size"));
+
+    const output_amount_ref *ref = (const output_amount_ref *)v_amount_ref.mv_data;
+    if (ref->amount_index != amount_index)
+    {
+      throw0(DB_ERROR(
+                      (std::string("output_amount_ref index mismatch: requested amount_index ") +
+                       std::to_string(amount_index) +
+                       ", got " +
+                       std::to_string(ref->amount_index) +
+                       ", amount " +
+                       std::to_string(amount)).c_str()));
+    }
+    output_ids.push_back(ref->output_id);
+  }
+
+  TXN_POSTFIX_RDONLY();
+}
+
+uint64_t BlockchainLMDB::get_output_id_by_amount_index(const uint64_t amount, const uint64_t amount_index) const
+{
+  std::vector<uint64_t> indices(1, amount_index);
+  std::vector<uint64_t> output_ids;
+  get_output_ids_by_amount_index(amount, indices, output_ids);
+  if (output_ids.empty())
+    throw1(OUTPUT_DNE("Attempting to get output id by amount index, but ref does not exist"));
+  return output_ids[0];
+}
+
+void BlockchainLMDB::get_output_ids_by_asset_index(const std::string &asset_type_str, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_ids) const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  output_ids.clear();
+  output_ids.reserve(asset_type_output_indices.size());
+
+  TXN_PREFIX_RDONLY();
+  RCURSOR(output_type_refs);
+
+  uint32_t asset_type = cryptonote::asset_id_from_type(asset_type_str);
+  MDB_val_copy<uint32_t> k_type(asset_type);
+
+  for (const uint64_t asset_type_output_index: asset_type_output_indices)
+  {
+    MDB_val_set(v_type_ref, asset_type_output_index);
+
+    auto get_result = mdb_cursor_get(m_cur_output_type_refs, &k_type, &v_type_ref, MDB_GET_BOTH);
+    if (get_result == MDB_NOTFOUND)
+      throw1(OUTPUT_DNE((std::string("Attempting to get output id by asset index (asset type " + asset_type_str + " asset index " + boost::lexical_cast<std::string>(asset_type_output_index) + "), but ref does not exist").c_str())));
+    else if (get_result)
+      throw0(DB_ERROR(lmdb_error("Error attempting to retrieve output id by asset index from the db", get_result).c_str()));
+
+    if (v_type_ref.mv_size != sizeof(output_type_ref))
+      throw0(DB_ERROR("Invalid output_type_ref size"));
+
+    const output_type_ref *ref = (const output_type_ref *)v_type_ref.mv_data;
+    if (ref->asset_type_output_index != asset_type_output_index)
+    {
+      throw0(DB_ERROR(
+                      (std::string("output_type_ref index mismatch: requested asset_type_output_index ") +
+                       std::to_string(asset_type_output_index) +
+                       ", got " +
+                       std::to_string(ref->asset_type_output_index) +
+                       ", asset_type " +
+                       asset_type_str).c_str()));
+    }
+    output_ids.push_back(ref->output_id);
+  }
+
+  TXN_POSTFIX_RDONLY();
+}
+
+uint64_t BlockchainLMDB::get_output_id_by_asset_index(const std::string &asset_type, const uint64_t asset_type_output_index) const
+{
+  std::vector<uint64_t> asset_indices(1, asset_type_output_index);
+  std::vector<uint64_t> output_ids;
+  get_output_ids_by_asset_index(asset_type, asset_indices, output_ids);
+  if (output_ids.empty())
+    throw1(OUTPUT_DNE("Attempting to get output id by asset index, but ref does not exist"));
+  return output_ids[0];
 }
 
 void BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::string asset_type_str, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const
@@ -5077,6 +5889,10 @@ tx_out_index BlockchainLMDB::get_output_tx_and_index_from_global(const uint64_t&
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
 
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+  const output_record_t record = get_output_record_by_id(output_id);
+  return tx_out_index(record.tx_hash, record.local_vout_index);
+#else
   TXN_PREFIX_RDONLY();
   RCURSOR(output_txs);
 
@@ -5093,6 +5909,7 @@ tx_out_index BlockchainLMDB::get_output_tx_and_index_from_global(const uint64_t&
 
   TXN_POSTFIX_RDONLY();
   return ret;
+#endif
 }
 
 tx_out_index BlockchainLMDB::get_output_tx_and_index(const uint64_t& amount, const uint64_t& index) const
@@ -5320,7 +6137,12 @@ bool BlockchainLMDB::for_all_outputs(std::function<bool(uint64_t amount, const c
   check_open();
 
   TXN_PREFIX_RDONLY();
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+  RCURSOR(output_amount_refs);
+  RCURSOR(output_records);
+#else
   RCURSOR(output_amounts);
+#endif
 
   MDB_val k;
   MDB_val v;
@@ -5329,16 +6151,38 @@ bool BlockchainLMDB::for_all_outputs(std::function<bool(uint64_t amount, const c
   MDB_cursor_op op = MDB_FIRST;
   while (1)
   {
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+    int ret = mdb_cursor_get(m_cur_output_amount_refs, &k, &v, op);
+#else
     int ret = mdb_cursor_get(m_cur_output_amounts, &k, &v, op);
+#endif
     op = MDB_NEXT;
     if (ret == MDB_NOTFOUND)
       break;
     if (ret)
       throw0(DB_ERROR("Failed to enumerate outputs"));
     uint64_t amount = *(const uint64_t*)k.mv_data;
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+    if (v.mv_size != sizeof(output_amount_ref))
+      throw0(DB_ERROR("Invalid output_amount_ref size"));
+    const output_amount_ref *ref = (const output_amount_ref *)v.mv_data;
+    MDB_val_set(k_record, ref->output_id);
+    MDB_val v_record;
+    ret = mdb_cursor_get(m_cur_output_records, &k_record, &v_record, MDB_SET);
+    if (ret == MDB_NOTFOUND)
+      throw1(OUTPUT_DNE("output record with given index not in db"));
+    else if (ret)
+      throw0(DB_ERROR("DB error attempting to fetch output record"));
+    if (v_record.mv_size != sizeof(output_record_t))
+      throw0(DB_ERROR("Invalid output_record size"));
+    output_record_t record;
+    std::memcpy(&record, v_record.mv_data, sizeof(output_record_t));
+    if (!f(amount, record.tx_hash, record.od.height, record.local_vout_index)) {
+#else
     outkey *ok = (outkey *)v.mv_data;
     tx_out_index toi = get_output_tx_and_index_from_global(ok->output_id);
     if (!f(amount, toi.first, ok->data.height, toi.second)) {
+#endif
       fret = false;
       break;
     }
@@ -5355,7 +6199,12 @@ bool BlockchainLMDB::for_all_outputs(uint64_t amount, const std::function<bool(u
   check_open();
 
   TXN_PREFIX_RDONLY();
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+  RCURSOR(output_amount_refs);
+  RCURSOR(output_records);
+#else
   RCURSOR(output_amounts);
+#endif
 
   MDB_val_set(k, amount);
   MDB_val v;
@@ -5364,7 +6213,11 @@ bool BlockchainLMDB::for_all_outputs(uint64_t amount, const std::function<bool(u
   MDB_cursor_op op = MDB_SET;
   while (1)
   {
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+    int ret = mdb_cursor_get(m_cur_output_amount_refs, &k, &v, op);
+#else
     int ret = mdb_cursor_get(m_cur_output_amounts, &k, &v, op);
+#endif
     op = MDB_NEXT_DUP;
     if (ret == MDB_NOTFOUND)
       break;
@@ -5377,8 +6230,26 @@ bool BlockchainLMDB::for_all_outputs(uint64_t amount, const std::function<bool(u
       fret = false;
       break;
     }
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+    if (v.mv_size != sizeof(output_amount_ref))
+      throw0(DB_ERROR("Invalid output_amount_ref size"));
+    const output_amount_ref *ref = (const output_amount_ref *)v.mv_data;
+    MDB_val_set(k_record, ref->output_id);
+    MDB_val v_record;
+    ret = mdb_cursor_get(m_cur_output_records, &k_record, &v_record, MDB_SET);
+    if (ret == MDB_NOTFOUND)
+      throw1(OUTPUT_DNE("output record with given index not in db"));
+    else if (ret)
+      throw0(DB_ERROR("DB error attempting to fetch output record"));
+    if (v_record.mv_size != sizeof(output_record_t))
+      throw0(DB_ERROR("Invalid output_record size"));
+    output_record_t record;
+    std::memcpy(&record, v_record.mv_data, sizeof(output_record_t));
+    if (!f(record.od.height)) {
+#else
     const outkey *ok = (const outkey *)v.mv_data;
     if (!f(ok->data.height)) {
+#endif
       fret = false;
       break;
     }
@@ -5726,6 +6597,29 @@ void BlockchainLMDB::get_output_tx_and_index_from_global(const std::vector<uint6
   tx_out_indices.clear();
   tx_out_indices.reserve(global_indices.size());
 
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+  TXN_PREFIX_RDONLY();
+  RCURSOR(output_records);
+
+  for (const uint64_t &output_id : global_indices)
+  {
+    MDB_val_set(k, output_id);
+    MDB_val v;
+    auto get_result = mdb_cursor_get(m_cur_output_records, &k, &v, MDB_SET);
+    if (get_result == MDB_NOTFOUND)
+      throw1(OUTPUT_DNE("output record with given index not in db"));
+    else if (get_result)
+      throw0(DB_ERROR("DB error attempting to fetch output record"));
+    if (v.mv_size != sizeof(output_record_t))
+      throw0(DB_ERROR("Invalid output_record size"));
+
+    output_record_t record;
+    std::memcpy(&record, v.mv_data, sizeof(output_record_t));
+    tx_out_indices.push_back(tx_out_index(record.tx_hash, record.local_vout_index));
+  }
+
+  TXN_POSTFIX_RDONLY();
+#else
   TXN_PREFIX_RDONLY();
   RCURSOR(output_txs);
 
@@ -5744,6 +6638,7 @@ void BlockchainLMDB::get_output_tx_and_index_from_global(const std::vector<uint6
   }
 
   TXN_POSTFIX_RDONLY();
+#endif
 }
 
 void BlockchainLMDB::get_output_key(const epee::span<const uint64_t> &amounts, const std::vector<uint64_t> &offsets, std::vector<output_data_t> &outputs, bool allow_partial) const
@@ -5757,6 +6652,29 @@ void BlockchainLMDB::get_output_key(const epee::span<const uint64_t> &amounts, c
   outputs.clear();
   outputs.reserve(offsets.size());
 
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+  std::vector<uint64_t> output_ids;
+  output_ids.reserve(offsets.size());
+  for (size_t i = 0; i < offsets.size(); ++i)
+  {
+    const uint64_t amount = amounts.size() == 1 ? amounts[0] : amounts[i];
+    try
+    {
+      output_ids.push_back(get_output_id_by_amount_index(amount, offsets[i]));
+    }
+    catch (const OUTPUT_DNE&)
+    {
+      if (allow_partial)
+      {
+        MDEBUG("Partial result: " << output_ids.size() << "/" << offsets.size());
+        break;
+      }
+      throw;
+    }
+  }
+  if (!output_ids.empty())
+    get_output_data_by_id(output_ids, outputs);
+#else
   TXN_PREFIX_RDONLY();
 
   RCURSOR(output_amounts);
@@ -5796,7 +6714,8 @@ void BlockchainLMDB::get_output_key(const epee::span<const uint64_t> &amounts, c
   }
 
   TXN_POSTFIX_RDONLY();
-
+#endif
+  
   TIME_MEASURE_FINISH(db3);
   LOG_PRINT_L3("db3: " << db3);
 }
@@ -5807,7 +6726,10 @@ void BlockchainLMDB::get_output_tx_and_index(const uint64_t& amount, const std::
   check_open();
   indices.clear();
 
-  std::vector <uint64_t> tx_indices;
+  std::vector<uint64_t> tx_indices;
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+  get_output_ids_by_amount_index(amount, offsets, tx_indices);
+#else
   tx_indices.reserve(offsets.size());
   TXN_PREFIX_RDONLY();
 
@@ -5827,6 +6749,9 @@ void BlockchainLMDB::get_output_tx_and_index(const uint64_t& amount, const std::
     const outkey *okp = (const outkey *)v.mv_data;
     tx_indices.push_back(okp->output_id);
   }
+
+  TXN_POSTFIX_RDONLY();
+#endif
 
   TIME_MEASURE_START(db3);
   if(tx_indices.size() > 0)
@@ -5854,14 +6779,22 @@ std::map<uint64_t, std::tuple<uint64_t, uint64_t, uint64_t>> BlockchainLMDB::get
     MDB_cursor_op op = MDB_FIRST;
     while (1)
     {
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+      int ret = mdb_cursor_get(m_cur_output_amount_refs, &k, &v, op);
+#else
       int ret = mdb_cursor_get(m_cur_output_amounts, &k, &v, op);
+#endif
       op = MDB_NEXT_NODUP;
       if (ret == MDB_NOTFOUND)
         break;
       if (ret)
         throw0(DB_ERROR(lmdb_error("Failed to enumerate outputs: ", ret).c_str()));
       mdb_size_t num_elems = 0;
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+      mdb_cursor_count(m_cur_output_amount_refs, &num_elems);
+#else
       mdb_cursor_count(m_cur_output_amounts, &num_elems);
+#endif
       uint64_t amount = *(const uint64_t*)k.mv_data;
       if (num_elems >= min_count)
         histogram[amount] = std::make_tuple(num_elems, 0, 0);
@@ -5872,7 +6805,11 @@ std::map<uint64_t, std::tuple<uint64_t, uint64_t, uint64_t>> BlockchainLMDB::get
     for (const auto &amount: amounts)
     {
       MDB_val_copy<uint64_t> k(amount);
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+      int ret = mdb_cursor_get(m_cur_output_amount_refs, &k, &v, MDB_SET);
+#else
       int ret = mdb_cursor_get(m_cur_output_amounts, &k, &v, MDB_SET);
+#endif
       if (ret == MDB_NOTFOUND)
       {
         if (0 >= min_count)
@@ -5881,7 +6818,11 @@ std::map<uint64_t, std::tuple<uint64_t, uint64_t, uint64_t>> BlockchainLMDB::get
       else if (ret == MDB_SUCCESS)
       {
         mdb_size_t num_elems = 0;
+#if SALVIUM_USE_CANONICAL_OUTPUT_REFS
+        mdb_cursor_count(m_cur_output_amount_refs, &num_elems);
+#else
         mdb_cursor_count(m_cur_output_amounts, &num_elems);
+#endif
         if (num_elems >= min_count)
           histogram[amount] = std::make_tuple(num_elems, 0, 0);
       }
@@ -5904,7 +6845,6 @@ std::map<uint64_t, std::tuple<uint64_t, uint64_t, uint64_t>> BlockchainLMDB::get
           break;
         --num_elems;
       }
-      // modifying second does not invalidate the iterator
       std::get<1>(i->second) = num_elems;
 
       if (recent_cutoff > 0)
@@ -5919,7 +6859,6 @@ std::map<uint64_t, std::tuple<uint64_t, uint64_t, uint64_t>> BlockchainLMDB::get
           --num_elems;
           ++recent;
         }
-        // modifying second does not invalidate the iterator
         std::get<2>(i->second) = recent;
       }
     }
@@ -6245,7 +7184,6 @@ void BlockchainLMDB::migrate_2_3()
         if (result)
           throw0(DB_ERROR(lmdb_error("Failed to open a cursor for block_info: ", result).c_str()));
         if (!i) {
-          MDB_stat db_stat;
           result = mdb_stat(txn, m_block_info, &db_stats);
           if (result)
             throw0(DB_ERROR(lmdb_error("Failed to query m_block_info: ", result).c_str()));
@@ -6374,10 +7312,687 @@ void BlockchainLMDB::migrate_2_3()
   txn.commit();
 }
 
+void BlockchainLMDB::migrate_3_4()
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  int result;
+  mdb_txn_safe txn(false);
+  MDB_val k, v;
+
+  MGINFO_YELLOW("Migrating blockchain from DB version 3 to 4 - this may take a while:");
+
+  // The migration commits in batches. Always clear its derived tables first
+  // so restarting after interruption cannot collide with partially committed
+  // rows from the previous attempt.
+  {
+    if ((result = mdb_txn_begin(m_env, NULL, 0, txn)))
+      throw0(DB_ERROR(lmdb_error("Failed to create migration reset transaction: ", result).c_str()));
+    if ((result = mdb_drop(txn, m_output_amount_refs, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_amount_refs before migration: ", result).c_str()));
+    if ((result = mdb_drop(txn, m_output_records, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_records before migration: ", result).c_str()));
+    if ((result = mdb_drop(txn, m_output_type_refs, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_type_refs before migration: ", result).c_str()));
+    txn.commit();
+  }
+
+  // Pass 1: rebuild output_amount_refs and output_records from the legacy
+  // output_amounts table, which is keyed by amount_index and untouched by the
+  // transparent-output slip, joined with output_txs by global output id.
+  {
+    MGINFO("pass 1/2: output_amount_refs + output_records");
+    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+
+    MDB_cursor *c_amounts, *c_txs, *c_amount_refs, *c_records;
+    if ((result = mdb_cursor_open(txn, m_output_amounts, &c_amounts)))
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_amounts: ", result).c_str()));
+    if ((result = mdb_cursor_open(txn, m_output_txs, &c_txs)))
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_txs: ", result).c_str()));
+    if ((result = mdb_cursor_open(txn, m_output_amount_refs, &c_amount_refs)))
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_amount_refs: ", result).c_str()));
+    if ((result = mdb_cursor_open(txn, m_output_records, &c_records)))
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_records: ", result).c_str()));
+
+    uint64_t i = 0;
+    uint64_t last_amount = 0, last_amount_index = 0;
+    result = mdb_cursor_get(c_amounts, &k, &v, MDB_FIRST);
+    while (result == 0)
+    {
+      const uint64_t amount = *(const uint64_t *)k.mv_data;
+      const pre_rct_outkey *base = (const pre_rct_outkey *)v.mv_data;
+      const uint64_t amount_index = base->amount_index;
+      const uint64_t output_id = base->output_id;
+
+      output_amount_ref oar;
+      oar.amount_index = amount_index;
+      oar.output_id = output_id;
+      MDB_val_set(v_oar, oar);
+      MDB_val_copy<uint64_t> k_amount(amount);
+      if ((result = mdb_cursor_put(c_amount_refs, &k_amount, &v_oar, MDB_APPENDDUP)))
+        throw0(DB_ERROR(lmdb_error("Failed to put output_amount_ref: ", result).c_str()));
+
+      // reconstruct the output_data_t exactly as get_output_key does
+      output_data_t od;
+      if (amount == 0)
+      {
+        const outkey *okp = (const outkey *)v.mv_data;
+        od = okp->data;
+      }
+      else
+      {
+        const pre_rct_outkey *okp = (const pre_rct_outkey *)v.mv_data;
+        memcpy(&od, &okp->data, sizeof(pre_rct_output_data_t));
+        od.commitment = rct::zeroCommit(amount);
+      }
+
+      MDB_val_set(v_tx, output_id);
+      if ((result = mdb_cursor_get(c_txs, (MDB_val *)&zerokval, &v_tx, MDB_GET_BOTH)))
+        throw0(DB_ERROR(lmdb_error("Failed to find output_tx during migration: ", result).c_str()));
+      const outtx *ot = (const outtx *)v_tx.mv_data;
+
+      output_record_t ore;
+      memset(&ore, 0, sizeof(ore));
+      ore.od = od;
+      ore.clear_amount = amount;
+      ore.consensus_amount_bucket = amount;
+      ore.flags = (amount == 0) ? output_record_flag_rct : output_record_flag_nonzero_amount;
+      ore.tx_hash = ot->tx_hash;
+      ore.local_vout_index = ot->local_index;
+      MDB_val_copy<uint64_t> k_oid(output_id);
+      MDB_val_set(v_ore, ore);
+      if ((result = mdb_cursor_put(c_records, &k_oid, &v_ore, 0)))
+        throw0(DB_ERROR(lmdb_error("Failed to put output_record: ", result).c_str()));
+
+      last_amount = amount;
+      last_amount_index = amount_index;
+      if (!(++i % 50000))
+      {
+        LOGIF(el::Level::Info) { std::cout << i << " outputs\r" << std::flush; }
+        txn.commit();
+        if ((result = mdb_txn_begin(m_env, NULL, 0, txn)))
+          throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+        if ((result = mdb_cursor_open(txn, m_output_amounts, &c_amounts)))
+          throw0(DB_ERROR(lmdb_error("Failed to reopen output_amounts cursor: ", result).c_str()));
+        if ((result = mdb_cursor_open(txn, m_output_txs, &c_txs)))
+          throw0(DB_ERROR(lmdb_error("Failed to reopen output_txs cursor: ", result).c_str()));
+        if ((result = mdb_cursor_open(txn, m_output_amount_refs, &c_amount_refs)))
+          throw0(DB_ERROR(lmdb_error("Failed to reopen output_amount_refs cursor: ", result).c_str()));
+        if ((result = mdb_cursor_open(txn, m_output_records, &c_records)))
+          throw0(DB_ERROR(lmdb_error("Failed to reopen output_records cursor: ", result).c_str()));
+        MDB_val_set(rk, last_amount);
+        MDB_val_set(rv, last_amount_index);
+        if ((result = mdb_cursor_get(c_amounts, &rk, &rv, MDB_GET_BOTH)))
+          throw0(DB_ERROR(lmdb_error("Failed to reposition output_amounts cursor: ", result).c_str()));
+      }
+      result = mdb_cursor_get(c_amounts, &k, &v, MDB_NEXT);
+    }
+    if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to iterate output_amounts during migration: ", result).c_str()));
+    txn.commit();
+    MGINFO("pass 1/2 complete: " << i << " outputs");
+  }
+
+  // Pass 2: build output_type_refs from output_types. For each
+  // {asset, asset_index} -> old_id, resolve to the amount-0 ref whose
+  // amount_index == old_id when present, else old_id. Matches add_output, so a
+  // fresh v4 db is consensus-identical to a from-genesis develop node pre-fork.
+  // The rct-only correction is fork-gated in realign_rct_index(), not here.
+  {
+    MGINFO("pass 2/2: output_type_refs");
+    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+
+    MDB_cursor *c_types, *c_amount_refs, *c_type_refs;
+    if ((result = mdb_cursor_open(txn, m_output_types, &c_types)))
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_types: ", result).c_str()));
+    if ((result = mdb_cursor_open(txn, m_output_amount_refs, &c_amount_refs)))
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_amount_refs: ", result).c_str()));
+    if ((result = mdb_cursor_open(txn, m_output_type_refs, &c_type_refs)))
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_type_refs: ", result).c_str()));
+
+    uint64_t i = 0;
+    result = mdb_cursor_get(c_types, &k, &v, MDB_FIRST);
+    while (result == 0)
+    {
+      const uint32_t asset_type = *(const uint32_t *)k.mv_data;
+      const outassettype oat = *(const outassettype *)v.mv_data;
+      const uint64_t asset_index = oat.asset_type_output_index;
+      const uint64_t old_id = oat.output_id;
+
+      uint64_t resolved = old_id;
+      const uint64_t amount_zero = 0;
+      output_amount_ref lookup;
+      lookup.amount_index = old_id;
+      lookup.output_id = 0;
+      MDB_val_copy<uint64_t> k_zero(amount_zero);
+      MDB_val_set(v_lk, lookup);
+      const int lr = mdb_cursor_get(c_amount_refs, &k_zero, &v_lk, MDB_GET_BOTH);
+      if (lr == 0)
+      {
+        const output_amount_ref *found = (const output_amount_ref *)v_lk.mv_data;
+        resolved = found->output_id;
+      }
+      else if (lr != MDB_NOTFOUND)
+        throw0(DB_ERROR(lmdb_error("Failed amount-0 ref lookup during migration: ", lr).c_str()));
+
+      output_type_ref otr;
+      otr.asset_type_output_index = asset_index;
+      otr.output_id = resolved;
+      MDB_val_copy<uint32_t> k_asset(asset_type);
+      MDB_val_set(v_otr, otr);
+      if ((result = mdb_cursor_put(c_type_refs, &k_asset, &v_otr, MDB_APPENDDUP)))
+        throw0(DB_ERROR(lmdb_error("Failed to put output_type_ref: ", result).c_str()));
+
+      if (!(++i % 50000))
+        LOGIF(el::Level::Info) { std::cout << i << " type refs\r" << std::flush; }
+      result = mdb_cursor_get(c_types, &k, &v, MDB_NEXT);
+    }
+    if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to iterate output_types during migration: ", result).c_str()));
+    txn.commit();
+    MGINFO("pass 2/2 complete: " << i << " type refs");
+  }
+
+  // mark the db as version 4
+  {
+    if ((result = mdb_txn_begin(m_env, NULL, 0, txn)))
+      throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+    uint32_t version = VERSION;
+    MDB_val v_ver;
+    v_ver.mv_data = (void *)&version;
+    v_ver.mv_size = sizeof(version);
+    MDB_val_str(vk, "version");
+    if ((result = mdb_put(txn, m_properties, &vk, &v_ver, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to update version for the db: ", result).c_str()));
+    txn.commit();
+  }
+
+  MGINFO_GREEN("Migration from DB version 3 to 4 complete.");
+}
+
+// Restore the pre-HF13 all-output index after a reorg crosses back below the
+// fork. Restores output_types and output_type_refs from the backup captured
+// by realign_rct_index() before it rewrote them. Also restores tx_outputs
+// ranks for RCT outputs so historic ring signatures verify correctly.
+void BlockchainLMDB::restore_legacy_output_index()
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  if (!m_rct_index_realigned)
+    return;
+
+  int result;
+  mdb_txn_safe txn(false);
+
+  // Lookup map (output_id -> legacy_rank) built during Step 1 copy,
+  // used in Step 2 for O(1) rank lookups instead of O(n) DB scans.
+  std::map<uint64_t, uint64_t> output_id_to_legacy_rank;
+
+  // Step 1: drop current (realigned) tables and restore from backup
+  {
+    if ((result = mdb_txn_begin(m_env, NULL, 0, txn)))
+      throw0(DB_ERROR(lmdb_error("Failed to create legacy restore transaction: ", result).c_str()));
+
+    if ((result = mdb_drop(txn, m_output_types, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_types for legacy restore: ", result).c_str()));
+    if ((result = mdb_drop(txn, m_output_type_refs, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_type_refs for legacy restore: ", result).c_str()));
+
+    MDB_cursor *c_src, *c_dst;
+    MDB_val k, v;
+
+    // Copy output_types_backup -> output_types, and build the lookup map
+    if ((result = mdb_cursor_open(txn, m_output_types_backup, &c_src)) ||
+        (result = mdb_cursor_open(txn, m_output_types, &c_dst)))
+      throw0(DB_ERROR(lmdb_error("Failed to open cursor for legacy types restore: ", result).c_str()));
+    for (result = mdb_cursor_get(c_src, &k, &v, MDB_FIRST);
+         result == MDB_SUCCESS;
+         result = mdb_cursor_get(c_src, &k, &v, MDB_NEXT))
+    {
+      if ((result = mdb_cursor_put(c_dst, &k, &v, MDB_APPENDDUP)))
+        throw0(DB_ERROR(lmdb_error("Failed to restore output_types from backup: ", result).c_str()));
+      if (v.mv_size == sizeof(outassettype))
+      {
+        const outassettype *oat = static_cast<const outassettype *>(v.mv_data);
+        output_id_to_legacy_rank[oat->output_id] = oat->asset_type_output_index;
+      }
+    }
+    if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to iterate output_types_backup: ", result).c_str()));
+
+    // Copy output_type_refs_backup -> output_type_refs
+    if ((result = mdb_cursor_open(txn, m_output_type_refs_backup, &c_src)) ||
+        (result = mdb_cursor_open(txn, m_output_type_refs, &c_dst)))
+      throw0(DB_ERROR(lmdb_error("Failed to open cursor for legacy type_refs restore: ", result).c_str()));
+    for (result = mdb_cursor_get(c_src, &k, &v, MDB_FIRST);
+         result == MDB_SUCCESS;
+         result = mdb_cursor_get(c_src, &k, &v, MDB_NEXT))
+    {
+      if ((result = mdb_cursor_put(c_dst, &k, &v, MDB_APPENDDUP)))
+        throw0(DB_ERROR(lmdb_error("Failed to restore output_type_refs from backup: ", result).c_str()));
+    }
+    if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to iterate output_type_refs_backup: ", result).c_str()));
+
+    txn.commit();
+    MGINFO_YELLOW("restored legacy output index from backup");
+  }
+
+  // Step 2: restore tx_outputs ranks for RCT outputs.
+  // realign_rct_index rewrote tx_outputs.second for RCT outputs to the
+  // compacted RCT rank.  Look up each RCT output's legacy rank from the
+  // restored output_types and rewrite tx_outputs back.
+  {
+    if ((result = mdb_txn_begin(m_env, NULL, 0, txn)))
+      throw0(DB_ERROR(lmdb_error("Failed to create tx_outputs restore transaction: ", result).c_str()));
+
+    MDB_cursor *c_amounts, *c_records, *c_tx_indices, *c_tx_outputs;
+    if ((result = mdb_cursor_open(txn, m_output_amounts, &c_amounts)) ||
+        (result = mdb_cursor_open(txn, m_output_records, &c_records)) ||
+        (result = mdb_cursor_open(txn, m_tx_indices, &c_tx_indices)) ||
+        (result = mdb_cursor_open(txn, m_tx_outputs, &c_tx_outputs)))
+      throw0(DB_ERROR(lmdb_error("Failed to open cursor for tx_outputs restore: ", result).c_str()));
+
+    typedef std::pair<uint64_t, uint64_t> oidx;
+    const uint64_t amount_zero = 0;
+    MDB_val_copy<uint64_t> k_zero(amount_zero);
+    MDB_val v_amount;
+
+    result = mdb_cursor_get(c_amounts, &k_zero, &v_amount, MDB_SET);
+    if (result == MDB_SUCCESS)
+    {
+      result = mdb_cursor_get(c_amounts, &k_zero, &v_amount, MDB_FIRST_DUP);
+      while (result == MDB_SUCCESS)
+      {
+        const outkey *ok = (const outkey *)v_amount.mv_data;
+        const uint64_t output_id = ok->output_id;
+        const uint32_t asset = ok->data.asset_type;
+
+        // Get tx_hash and local_vout_index from output_records
+        MDB_val_copy<uint64_t> k_record(output_id);
+        MDB_val v_record;
+        if ((result = mdb_cursor_get(c_records, &k_record, &v_record, MDB_SET)))
+          throw0(DB_ERROR(lmdb_error("Failed to find RCT output record during legacy restore: ", result).c_str()));
+        if (v_record.mv_size != sizeof(output_record_t))
+          throw0(DB_ERROR("Invalid output_record during legacy tx_outputs restore"));
+        const output_record_t *record = (const output_record_t *)v_record.mv_data;
+
+        // Look up legacy rank from the pre-built map (O(1) instead of O(n) DB scan)
+        const auto rank_it = output_id_to_legacy_rank.find(output_id);
+        if (rank_it == output_id_to_legacy_rank.end())
+          throw0(DB_ERROR(
+            (std::string("RCT output not found in restored output_types: output_id=") +
+             std::to_string(output_id) +
+             ", asset=" +
+             std::to_string(asset)).c_str()));
+        const uint64_t legacy_rank = rank_it->second;
+
+        // Look up tx_id from tx_indices
+        MDB_val_set(v_tx_index, record->tx_hash);
+        if ((result = mdb_cursor_get(c_tx_indices, (MDB_val *)&zerokval, &v_tx_index, MDB_GET_BOTH)))
+          throw0(DB_ERROR(lmdb_error("Failed to find transaction during legacy tx_outputs restore: ", result).c_str()));
+        if (v_tx_index.mv_size != sizeof(txindex))
+          throw0(DB_ERROR("Invalid txindex during legacy tx_outputs restore"));
+        const uint64_t tx_id = ((const txindex *)v_tx_index.mv_data)->data.tx_id;
+
+        // Update tx_outputs
+        MDB_val_copy<uint64_t> k_tx_outputs(tx_id);
+        MDB_val v_tx_outputs;
+        if ((result = mdb_cursor_get(c_tx_outputs, &k_tx_outputs, &v_tx_outputs, MDB_SET)))
+          throw0(DB_ERROR(lmdb_error("Failed to find tx_outputs during legacy restore: ", result).c_str()));
+        if (v_tx_outputs.mv_size % sizeof(oidx) != 0 ||
+            record->local_vout_index >= v_tx_outputs.mv_size / sizeof(oidx))
+          throw0(DB_ERROR("Invalid tx_outputs during legacy rank restore"));
+
+        const oidx *stored = (const oidx *)v_tx_outputs.mv_data;
+        std::vector<oidx> outputs(stored, stored + v_tx_outputs.mv_size / sizeof(oidx));
+        outputs[record->local_vout_index].second = legacy_rank;
+        MDB_val updated = {outputs.size() * sizeof(oidx), outputs.data()};
+        if ((result = mdb_cursor_put(c_tx_outputs, &k_tx_outputs, &updated, MDB_CURRENT)))
+          throw0(DB_ERROR(lmdb_error("Failed to restore tx_outputs rank: ", result).c_str()));
+
+        result = mdb_cursor_get(c_amounts, &k_zero, &v_amount, MDB_NEXT_DUP);
+      }
+    }
+    else if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to scan amount-0 outputs for legacy restore: ", result).c_str()));
+
+    txn.commit();
+  }
+
+  // Step 3: clear the rct_realigned property
+  {
+    if ((result = mdb_txn_begin(m_env, NULL, 0, txn)))
+      throw0(DB_ERROR(lmdb_error("Failed to create property clear transaction: ", result).c_str()));
+    MDB_val_str(k_property, "rct_realigned");
+    result = mdb_del(txn, m_properties, &k_property, NULL);
+    if (result != MDB_SUCCESS && result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to clear rct_realigned property: ", result).c_str()));
+    txn.commit();
+  }
+
+  m_rct_index_realigned = false;
+  MGINFO_GREEN("Restored pre-HF13 legacy output index after reorg.");
+}
+
+// HF13: rebuild output_types and output_type_refs rct-only, rank-compacted per
+// asset and keyed to the real global output id, then rewrite tx_outputs so a
+// rescan rings the corrected index. Runs once at the fork, gated on the
+// rct_realigned property. A SAL1 rank resolves to the right SAL1 rct output,
+// transparent spam stays out of the index, raw equals effective.
+void BlockchainLMDB::realign_rct_index()
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  if (m_rct_index_realigned)
+    return;
+
+  int result;
+  mdb_txn_safe txn(false);
+
+  MGINFO_YELLOW("HF13: realigning the rct ring index, runs once at the fork:");
+
+  // If a previous realign attempt crashed mid-rebuild, the originals may be
+  // partially overwritten while the backup is intact. Detect this by comparing
+  // total entry counts and restore from backup if needed.
+  {
+    result = mdb_txn_begin(m_env, NULL, MDB_RDONLY, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create recovery check transaction: ", result).c_str()));
+
+    // For DUPSORT tables, mdb_cursor_count returns dup count at the current
+    // key. Sum across all unique keys to get the total entry count.
+    auto count_dupsort_table = [&](MDB_dbi dbi) -> mdb_size_t
+    {
+      mdb_size_t total = 0;
+      MDB_cursor *c = NULL;
+      MDB_val k, v;
+      if (mdb_cursor_open(txn, dbi, &c) != 0)
+        return 0;
+      int rc = mdb_cursor_get(c, &k, &v, MDB_FIRST);
+      while (rc == MDB_SUCCESS)
+      {
+        mdb_size_t dup_count = 0;
+        mdb_cursor_count(c, &dup_count);
+        total += dup_count;
+        rc = mdb_cursor_get(c, &k, &v, MDB_NEXT_NODUP);
+      }
+      mdb_cursor_close(c);
+      if (rc != MDB_NOTFOUND)
+        return 0;  // error during iteration
+      return total;
+    };
+
+    const mdb_size_t types_count = count_dupsort_table(m_output_types);
+    const mdb_size_t backup_count = count_dupsort_table(m_output_types_backup);
+
+    if (backup_count > 0 && types_count < backup_count)
+    {
+      MGINFO_YELLOW("realign: incomplete originals detected (types=" << types_count
+          << ", backup=" << backup_count << "), restoring from backup");
+      txn.commit();
+
+      // Restore originals from backup
+      result = mdb_txn_begin(m_env, NULL, 0, txn);
+      if (result)
+        throw0(DB_ERROR(lmdb_error("Failed to create recovery transaction: ", result).c_str()));
+
+      if ((result = mdb_drop(txn, m_output_types, 0)) ||
+          (result = mdb_drop(txn, m_output_type_refs, 0)))
+        throw0(DB_ERROR(lmdb_error("Failed to clear tables for recovery: ", result).c_str()));
+
+      MDB_cursor *c_src = NULL, *c_dst = NULL;
+      MDB_val k, v;
+
+      for (const char* const desc : {"output_types", "output_type_refs"})
+      {
+        MDB_dbi src = (std::string(desc) == "output_types") ? m_output_types_backup : m_output_type_refs_backup;
+        MDB_dbi dst = (std::string(desc) == "output_types") ? m_output_types : m_output_type_refs;
+
+        if ((result = mdb_cursor_open(txn, src, &c_src)) ||
+            (result = mdb_cursor_open(txn, dst, &c_dst)))
+          throw0(DB_ERROR(lmdb_error("Failed to open cursor for recovery: ", result).c_str()));
+
+        for (result = mdb_cursor_get(c_src, &k, &v, MDB_FIRST);
+             result == MDB_SUCCESS;
+             result = mdb_cursor_get(c_src, &k, &v, MDB_NEXT))
+        {
+          if ((result = mdb_cursor_put(c_dst, &k, &v, MDB_APPENDDUP)))
+            throw0(DB_ERROR(lmdb_error(std::string("Failed to restore ") + desc + " from backup: ", result).c_str()));
+        }
+        if (result != MDB_NOTFOUND)
+          throw0(DB_ERROR(lmdb_error(std::string("Failed to iterate ") + desc + " backup: ", result).c_str()));
+      }
+
+      txn.commit();
+      MGINFO_YELLOW("realign: restored legacy index from backup for retry");
+    }
+    else
+    {
+      txn.commit();
+    }
+  }
+  // read every rct (amount==0) output's (amount_index, global, asset) in order
+  std::vector<std::pair<uint64_t, std::pair<uint64_t, uint32_t>>> rct_outs;
+  {
+    result = mdb_txn_begin(m_env, NULL, MDB_RDONLY, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a read transaction: ", result).c_str()));
+    MDB_cursor *c_amounts;
+    if ((result = mdb_cursor_open(txn, m_output_amounts, &c_amounts)))
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_amounts: ", result).c_str()));
+    const uint64_t amount0 = 0;
+    MDB_val_copy<uint64_t> k0(amount0);
+    MDB_val v0;
+    result = mdb_cursor_get(c_amounts, &k0, &v0, MDB_SET);
+    if (result == 0)
+    {
+      result = mdb_cursor_get(c_amounts, &k0, &v0, MDB_FIRST_DUP);
+      while (result == 0)
+      {
+        const outkey *ok = (const outkey *)v0.mv_data;
+        rct_outs.emplace_back(ok->amount_index, std::make_pair(ok->output_id, ok->data.asset_type));
+        result = mdb_cursor_get(c_amounts, &k0, &v0, MDB_NEXT_DUP);
+      }
+    }
+    else if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to scan output_amounts: ", result).c_str()));
+    txn.commit();
+  }
+  MGINFO_YELLOW("realign: read " << rct_outs.size() << " rct outputs");
+
+  // Backup the pre-HF13 legacy index so restore_legacy_output_index can
+  // reconstruct the exact state if a reorg crosses back below the fork.
+  {
+    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create backup transaction: ", result).c_str()));
+    if ((result = mdb_drop(txn, m_output_types_backup, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_types_backup: ", result).c_str()));
+    if ((result = mdb_drop(txn, m_output_type_refs_backup, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_type_refs_backup: ", result).c_str()));
+
+    MDB_cursor *c_src, *c_dst;
+    MDB_val k, v;
+
+    // Copy output_types -> output_types_backup
+    if ((result = mdb_cursor_open(txn, m_output_types, &c_src)) ||
+        (result = mdb_cursor_open(txn, m_output_types_backup, &c_dst)))
+      throw0(DB_ERROR(lmdb_error("Failed to open cursor for legacy backup: ", result).c_str()));
+    for (result = mdb_cursor_get(c_src, &k, &v, MDB_FIRST);
+         result == MDB_SUCCESS;
+         result = mdb_cursor_get(c_src, &k, &v, MDB_NEXT))
+    {
+      if ((result = mdb_cursor_put(c_dst, &k, &v, MDB_APPENDDUP)))
+        throw0(DB_ERROR(lmdb_error("Failed to backup output_types: ", result).c_str()));
+    }
+    if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to iterate output_types for backup: ", result).c_str()));
+
+    // Copy output_type_refs -> output_type_refs_backup
+    if ((result = mdb_cursor_open(txn, m_output_type_refs, &c_src)) ||
+        (result = mdb_cursor_open(txn, m_output_type_refs_backup, &c_dst)))
+      throw0(DB_ERROR(lmdb_error("Failed to open cursor for legacy type_refs backup: ", result).c_str()));
+    for (result = mdb_cursor_get(c_src, &k, &v, MDB_FIRST);
+         result == MDB_SUCCESS;
+         result = mdb_cursor_get(c_src, &k, &v, MDB_NEXT))
+    {
+      if ((result = mdb_cursor_put(c_dst, &k, &v, MDB_APPENDDUP)))
+        throw0(DB_ERROR(lmdb_error("Failed to backup output_type_refs: ", result).c_str()));
+    }
+    if (result != MDB_NOTFOUND)
+      throw0(DB_ERROR(lmdb_error("Failed to iterate output_type_refs for backup: ", result).c_str()));
+
+    txn.commit();
+    MGINFO_YELLOW("realign: backed up legacy output index");
+  }
+
+  // wipe output_types and output_type_refs, rebuild both rct-only and global-keyed
+  std::vector<uint64_t> rank_by_ai;
+  rank_by_ai.reserve(rct_outs.size());
+  {
+    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a write transaction: ", result).c_str()));
+    if ((result = mdb_drop(txn, m_output_types, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_types: ", result).c_str()));
+    if ((result = mdb_drop(txn, m_output_type_refs, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to clear output_type_refs: ", result).c_str()));
+    MDB_cursor *c_types, *c_type_refs;
+    if ((result = mdb_cursor_open(txn, m_output_types, &c_types)))
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_types: ", result).c_str()));
+    if ((result = mdb_cursor_open(txn, m_output_type_refs, &c_type_refs)))
+      throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_type_refs: ", result).c_str()));
+
+    std::map<uint32_t, uint64_t> next_rank;
+    uint64_t n = 0;
+    for (const auto &p : rct_outs)
+    {
+      const uint64_t global = p.second.first;
+      const uint32_t asset = p.second.second;
+      const uint64_t rank = next_rank[asset]++;
+      if (p.first != rank_by_ai.size())
+        throw0(DB_ERROR("Non-contiguous RCT amount index during realignment"));
+      rank_by_ai.push_back(rank);
+
+      outassettype oat;
+      oat.asset_type_output_index = rank;
+      oat.output_id = global;
+      MDB_val_set(voat, oat);
+      MDB_val_copy<uint32_t> koat(asset);
+      if ((result = mdb_cursor_put(c_types, &koat, &voat, 0)))
+        throw0(DB_ERROR(lmdb_error("Failed to rebuild output_types: ", result).c_str()));
+
+      output_type_ref otr;
+      otr.asset_type_output_index = rank;
+      otr.output_id = global;
+      MDB_val_set(votr, otr);
+      MDB_val_copy<uint32_t> kotr(asset);
+      if ((result = mdb_cursor_put(c_type_refs, &kotr, &votr, 0)))
+        throw0(DB_ERROR(lmdb_error("Failed to rebuild output_type_refs: ", result).c_str()));
+
+      if (!(++n % 200000))
+      {
+        LOGIF(el::Level::Info) { std::cout << n << " / " << rct_outs.size() << "  \r" << std::flush; }
+        txn.commit();
+        if ((result = mdb_txn_begin(m_env, NULL, 0, txn)))
+          throw0(DB_ERROR(lmdb_error("Failed to create a write transaction: ", result).c_str()));
+        if ((result = mdb_cursor_open(txn, m_output_types, &c_types)))
+          throw0(DB_ERROR(lmdb_error("Failed to reopen output_types cursor: ", result).c_str()));
+        if ((result = mdb_cursor_open(txn, m_output_type_refs, &c_type_refs)))
+          throw0(DB_ERROR(lmdb_error("Failed to reopen output_type_refs cursor: ", result).c_str()));
+      }
+    }
+    txn.commit();
+    MGINFO_YELLOW("realign: rebuilt " << n << " ring index entries across " << next_rank.size() << " assets");
+  }
+
+  // Rewrite only RCT outputs' reported ranks. A transparent amount index is in
+  // a different amount bucket and may numerically overlap an RCT amount index,
+  // so tx_outputs cannot safely be rewritten by inspecting the number alone.
+  {
+    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to create a write transaction: ", result).c_str()));
+    MDB_cursor *c_records, *c_tx_indices, *c_tx_outputs;
+    if ((result = mdb_cursor_open(txn, m_output_records, &c_records)) ||
+        (result = mdb_cursor_open(txn, m_tx_indices, &c_tx_indices)) ||
+        (result = mdb_cursor_open(txn, m_tx_outputs, &c_tx_outputs)))
+      throw0(DB_ERROR(lmdb_error("Failed to open cursor while rewriting RCT ranks: ", result).c_str()));
+
+    typedef std::pair<uint64_t, uint64_t> oidx;
+    uint64_t tn = 0;
+    for (const auto &p : rct_outs)
+    {
+      const uint64_t amount_index = p.first;
+      const uint64_t output_id = p.second.first;
+
+      MDB_val_copy<uint64_t> k_record(output_id);
+      MDB_val v_record;
+      if ((result = mdb_cursor_get(c_records, &k_record, &v_record, MDB_SET)))
+        throw0(DB_ERROR(lmdb_error("Failed to find RCT output record during realignment: ", result).c_str()));
+      if (v_record.mv_size != sizeof(output_record_t))
+        throw0(DB_ERROR("Invalid output_record during RCT rank rewrite"));
+      output_record_t record;
+      memcpy(&record, v_record.mv_data, sizeof(record));
+      if (!(record.flags & output_record_flag_rct))
+        throw0(DB_ERROR("Non-RCT output found in RCT realignment set"));
+
+      MDB_val_set(v_tx_index, record.tx_hash);
+      if ((result = mdb_cursor_get(c_tx_indices, (MDB_val *)&zerokval, &v_tx_index, MDB_GET_BOTH)))
+        throw0(DB_ERROR(lmdb_error("Failed to find transaction during RCT rank rewrite: ", result).c_str()));
+      if (v_tx_index.mv_size != sizeof(txindex))
+        throw0(DB_ERROR("Invalid txindex during RCT rank rewrite"));
+      const uint64_t tx_id = ((const txindex *)v_tx_index.mv_data)->data.tx_id;
+
+      MDB_val_copy<uint64_t> k_tx_outputs(tx_id);
+      MDB_val v_tx_outputs;
+      if ((result = mdb_cursor_get(c_tx_outputs, &k_tx_outputs, &v_tx_outputs, MDB_SET)))
+        throw0(DB_ERROR(lmdb_error("Failed to find tx_outputs during RCT rank rewrite: ", result).c_str()));
+      if (v_tx_outputs.mv_size % sizeof(oidx) != 0 ||
+          record.local_vout_index >= v_tx_outputs.mv_size / sizeof(oidx))
+        throw0(DB_ERROR("Invalid tx_outputs during RCT rank rewrite"));
+
+      const oidx *stored = (const oidx *)v_tx_outputs.mv_data;
+      std::vector<oidx> outputs(stored, stored + v_tx_outputs.mv_size / sizeof(oidx));
+      if (outputs[record.local_vout_index].first != amount_index)
+        throw0(DB_ERROR("RCT amount index mismatch while rewriting tx_outputs"));
+      outputs[record.local_vout_index].second = rank_by_ai[amount_index];
+      MDB_val updated = {outputs.size() * sizeof(oidx), outputs.data()};
+      if ((result = mdb_cursor_put(c_tx_outputs, &k_tx_outputs, &updated, MDB_CURRENT)))
+        throw0(DB_ERROR(lmdb_error("Failed to rewrite RCT tx_outputs rank: ", result).c_str()));
+      if (!(++tn % 200000))
+        LOGIF(el::Level::Info) { std::cout << tn << " txs  \r" << std::flush; }
+    }
+    txn.commit();
+    MGINFO_YELLOW("realign: rewrote reported ranks for " << tn << " RCT outputs");
+  }
+
+  // set the rct_realigned property so the flag gates the add_output layout
+  {
+    if ((result = mdb_txn_begin(m_env, NULL, 0, txn)))
+      throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+    const uint8_t one = 1;
+    MDB_val vv;
+    vv.mv_data = (void *)&one;
+    vv.mv_size = sizeof(one);
+    MDB_val_str(vk, "rct_realigned");
+    if ((result = mdb_put(txn, m_properties, &vk, &vv, 0)))
+      throw0(DB_ERROR(lmdb_error("Failed to set rct_realigned flag: ", result).c_str()));
+    txn.commit();
+  }
+  m_rct_index_realigned = true;
+  MGINFO_GREEN("HF13: rct ring index realign complete.");
+}
+
 void BlockchainLMDB::migrate(const uint32_t oldversion)
 {
   if (oldversion < 3)
     migrate_2_3();
+
+  if (oldversion < 4)
+    migrate_3_4();
 }
 
 }  // namespace cryptonote

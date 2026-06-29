@@ -1,4 +1,4 @@
-# Salvium One v1.1.2d
+# Salvium One v1.1.3
 
 Copyright (c) 2023-2025, Salvium
 Portions Copyright (c) 2014-2023, The Monero Project
@@ -9,6 +9,7 @@ Portions Copyright (c) 2012-2013 The Cryptonote developers.
   - [Development resources](#development-resources)
   - [Introduction](#introduction)
   - [About this project](#about-this-project)
+  - [Salvium protocol and RPC notes](#salvium-protocol-and-rpc-notes)
   - [Supporting the project](#supporting-the-project)
   - [License](#license)
   - [Contributing](#contributing)
@@ -44,6 +45,12 @@ This is the core implementation of Salvium. It is open source and completely fre
 As with many development projects, the repository on GitHub is considered to be the "staging" area for the latest changes. Before changes are merged into that branch on the main repository, they are tested by individual developers in their own branches, submitted as a pull request, and then subsequently tested by contributors who focus on testing and code reviews. That having been said, the repository should be carefully considered before using it in a production environment, unless there is a patch in the repository for a particular show-stopping issue you are experiencing. It is generally a better idea to use a tagged release for stability.
 
 **Anyone is welcome to contribute to Salvium's codebase!** If you have a fix or code change, feel free to submit it as a pull request directly to the "master" branch. In cases where the change is relatively small or does not affect other parts of the codebase, it may be merged in immediately by any one of the collaborators. On the other hand, if the change is particularly large or complex, it is expected that it will be discussed at length either well in advance of the pull request being submitted, or even directly on the pull request.
+
+## Salvium protocol and RPC notes
+
+Salvium-specific transaction types, `amount_burnt` semantics, protocol payouts,
+and yield RPC behavior are documented in
+[docs/SALVIUM_PROTOCOL_RPC.md](docs/SALVIUM_PROTOCOL_RPC.md).
 
 ## Supporting the project
 
@@ -172,7 +179,7 @@ invokes cmake commands as needed.
 
     ```bash
     cd salvium
-    git checkout v1.1.2d
+    git checkout v1.1.3
     make
     ```
 
@@ -251,7 +258,7 @@ Tested on a Raspberry Pi Zero with a clean install of minimal Raspbian Stretch (
     ```bash
     git clone https://github.com/salvium/salvium
     cd salvium
-    git checkout v1.1.2d
+    git checkout v1.1.3
     ```
 
 * Build:
@@ -370,10 +377,10 @@ application.
     cd salvium
     ```
 
-* If you would like a specific [version/tag](https://github.com/salvium/salvium/tags), do a git checkout for that version. eg. 'v1.1.2d'. If you don't care about the version and just want binaries from master, skip this step:
+* If you would like a specific [version/tag](https://github.com/salvium/salvium/tags), do a git checkout for that version. eg. 'v1.1.3'. If you don't care about the version and just want binaries from master, skip this step:
 
     ```bash
-    git checkout v1.1.2d
+    git checkout v1.1.3
     ```
 
 * If you are on a 64-bit system, run:

@@ -918,15 +918,19 @@ namespace cryptonote
   {
     CHECK_AND_ASSERT_MES(extra_nonce.size() <= TX_EXTRA_NONCE_MAX_COUNT, false, "extra nonce could be 255 bytes max");
     size_t start_pos = tx_extra.size();
-    tx_extra.resize(tx_extra.size() + 2 + extra_nonce.size());
+    const std::size_t len_varint_bytes = tools::get_varint_byte_size(extra_nonce.size());
+    tx_extra.resize(tx_extra.size() + 1 + len_varint_bytes + extra_nonce.size());
     //write tag
     tx_extra[start_pos] = TX_EXTRA_NONCE;
     //write len
     ++start_pos;
-    tx_extra[start_pos] = static_cast<uint8_t>(extra_nonce.size());
+    unsigned char * vp = tx_extra.data() + start_pos;
+    tools::write_varint(vp, extra_nonce.size());
+    assert(vp == tx_extra.data() + tx_extra.size() - extra_nonce.size());
     //write data
-    ++start_pos;
-    memcpy(&tx_extra[start_pos], extra_nonce.data(), extra_nonce.size());
+    start_pos += len_varint_bytes;
+    if (!extra_nonce.empty())
+      memcpy(&tx_extra[start_pos], extra_nonce.data(), extra_nonce.size());
     return true;
   }
   //---------------------------------------------------------------
@@ -1198,8 +1202,8 @@ namespace cryptonote
       std::transform(s_type.begin(), s_type.end(), s_type.begin(),
                      [](unsigned char c){ return std::toupper(c); });
       uint32_t asset_id = 0x00000000;
-      for (int i=0; i<s_type.length(); ++i) {
-        uint8_t idx = alphabet.find(s_type.at(i));
+      for (size_t i=0; i<s_type.length(); ++i) {
+        const size_t idx = alphabet.find(s_type.at(i));
         if (idx == std::string::npos || idx >= 36) {
           LOG_ERROR("Custom asset type contains invalid char.");
           return 0x00000000;
@@ -1241,7 +1245,7 @@ namespace cryptonote
       std::string asset_type_check = asset_type_from_id(asset_id);
       return (asset_type_check == asset_type);
     }
-    catch (std::exception e) {
+    catch (const std::exception&) {
       return false;
     }
   }

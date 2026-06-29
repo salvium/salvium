@@ -1,0 +1,18 @@
+--- a/src/google/protobuf/generated_message_tctable_impl.h
++++ b/src/google/protobuf/generated_message_tctable_impl.h
+@@ -32,6 +32,7 @@
+ #define GOOGLE_PROTOBUF_GENERATED_MESSAGE_TCTABLE_IMPL_H__
+ 
+ #include <cstdint>
++#include <cstdlib>
+ #include <type_traits>
+ 
+ #include <google/protobuf/port.h>
+@@ -253,6 +254,7 @@
+ #endif
+ void AlignFail(uintptr_t address) {
+   GOOGLE_LOG(FATAL) << "Unaligned (" << align << ") access at " << address;
++  std::abort();
+ }
+ 
+ extern template void AlignFail<4>(uintptr_t);

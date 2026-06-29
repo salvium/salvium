@@ -46,6 +46,88 @@ namespace carrot
 {
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static size_t estimate_rct_tx_size_carrot(int n_inputs, int mixin, int n_outputs, size_t extra_size, bool bulletproof, bool clsag, bool bulletproof_plus, bool use_view_tags)
+{
+  size_t size = 0;
+
+  size += 1 + 6;
+  size += n_inputs * (1+1+4+(mixin+1)*2+32);
+  size += n_outputs * (1+1+32+4+3+16);
+  size += extra_size;
+  size += 1;
+  size += 8;
+  size += n_outputs * (32 + 1);
+
+  if (bulletproof || bulletproof_plus)
+  {
+    size_t log_padded_outputs = 0;
+    while ((1<<log_padded_outputs) < n_outputs)
+      ++log_padded_outputs;
+    size += (2 * (6 + log_padded_outputs) + (bulletproof_plus ? 6 : (4 + 5))) * 32 + 3;
+  }
+  else
+    size += (2*64*32+32+64*32) * n_outputs;
+
+  if (clsag)
+    size += n_inputs * (64 * (mixin+1) + 64);
+  else
+    size += n_inputs * (64 * (mixin+1) + 32);
+
+  if (use_view_tags)
+    size += n_outputs * sizeof(crypto::view_tag);
+
+  size += 32 * n_inputs;
+  size += 8 * n_outputs;
+  size += 32 * n_outputs;
+  size += 4;
+  size += 32;
+  size += (2 * 96);
+
+  LOG_PRINT_L2("estimated " << (bulletproof_plus ? "bulletproof plus" : bulletproof ? "bulletproof" : "borromean") << " rct tx size for " << n_inputs << " inputs with ring size " << (mixin+1) << " and " << n_outputs << " outputs: " << size << " (" << ((32 * n_inputs/*+1*/) + 2 * 32 * (mixin+1) * n_inputs + 32 * n_outputs) << " saved)");
+  return size;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static size_t estimate_tx_size_carrot(int n_inputs, int mixin, int n_outputs, size_t extra_size, bool bulletproof, bool clsag, bool bulletproof_plus, bool use_view_tags)
+{
+  return estimate_rct_tx_size_carrot(n_inputs, mixin, n_outputs, extra_size, bulletproof, clsag, bulletproof_plus, use_view_tags);
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static uint64_t estimate_tx_weigh_carrot(int n_inputs, int mixin, int n_outputs, size_t extra_size, bool bulletproof, bool clsag, bool bulletproof_plus, bool use_view_tags)
+{
+  size_t size = estimate_tx_size_carrot(n_inputs, mixin, n_outputs, extra_size, bulletproof, clsag, bulletproof_plus, use_view_tags);
+  if ((bulletproof || bulletproof_plus) && n_outputs > 2)
+  {
+    const uint64_t bp_base = (32 * ((bulletproof_plus ? 6 : 9) + 7 * 2)) / 2; // notional size of a 2 output proof, normalized to 1 proof (ie, divided by 2)
+    size_t log_padded_outputs = 2;
+    while ((1<<log_padded_outputs) < n_outputs)
+      ++log_padded_outputs;
+    uint64_t nlr = 2 * (6 + log_padded_outputs);
+    const uint64_t bp_size = 32 * ((bulletproof_plus ? 6 : 9) + nlr);
+    const uint64_t bp_clawback = (bp_base * (1<<log_padded_outputs) - bp_size) * 4 / 5;
+    MDEBUG("clawback on size " << size << ": " << bp_clawback);
+    size += bp_clawback;
+  }
+  return size;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static uint64_t calculate_fee_from_weight_carrot(uint64_t base_fee, uint64_t weight, uint64_t fee_quantization_mask)
+{
+  uint64_t fee = weight * base_fee;
+  fee = (fee + fee_quantization_mask - 1) / fee_quantization_mask * fee_quantization_mask;
+  return fee;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static uint64_t estimate_fee_carrot(int n_inputs, int mixin, int n_outputs, size_t extra_size, bool bulletproof, bool clsag, bool bulletproof_plus, bool use_view_tags, uint64_t base_fee, uint64_t fee_quantization_mask)
+{
+    const size_t estimated_tx_weight = estimate_tx_weigh_carrot(n_inputs, mixin, n_outputs, extra_size, bulletproof, clsag, bulletproof_plus, use_view_tags);
+    return calculate_fee_from_weight_carrot(base_fee, estimated_tx_weight, fee_quantization_mask);
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static void append_additional_payment_proposal_if_necessary(
     std::vector<CarrotPaymentProposalV1>& normal_payment_proposals_inout,
     std::vector<CarrotPaymentProposalVerifiableSelfSendV1> &selfsend_payment_proposals_inout,
@@ -243,9 +325,6 @@ void make_carrot_transaction_proposal_v1(const std::vector<CarrotPaymentProposal
             "make_carrot_transaction_proposal_v1: post-carved transaction does not balance");
     } else {
         tx_proposal_out.amount_burnt = input_amount_sum.convert_to<uint64_t>();
-        CHECK_AND_ASSERT_THROW_MES(tx_proposal_out.amount_burnt >= 0,
-            "make_carrot_transaction_proposal_v1: post-carved transaction burnt amount is negative: "
-            << tx_proposal_out.amount_burnt);
         input_amount_sum -= tx_proposal_out.amount_burnt;
     }
 

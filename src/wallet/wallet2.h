@@ -1458,7 +1458,20 @@ private:
       a & m_unconfirmed_payments.parent();
       if(ver < 23)
         return;
-      a & (std::pair<std::map<std::string, std::string>, std::vector<std::string>>&)m_account_tags;
+      using account_tags_archive = std::pair<std::map<std::string, std::string>, std::vector<std::string>>;
+      if (typename t_archive::is_saving())
+      {
+        account_tags_archive account_tags{m_account_tags.first, m_account_tags.second};
+        a & account_tags;
+      }
+      else
+      {
+        account_tags_archive account_tags;
+        a & account_tags;
+        m_account_tags.first.clear();
+        m_account_tags.first.insert(account_tags.first.begin(), account_tags.first.end());
+        m_account_tags.second = std::move(account_tags.second);
+      }
       if(ver < 24)
         return;
       a & m_ring_history_saved;
@@ -1898,7 +1911,7 @@ private:
     bool set_rings(const std::vector<std::pair<crypto::key_image, std::vector<uint64_t>>> &rings, bool relative);
     bool unset_ring(const std::vector<crypto::key_image> &key_images);
     bool unset_ring(const crypto::hash &txid);
-    bool find_and_save_rings(bool force = true);
+    [[deprecated]] bool find_and_save_rings(bool force = true);
 
     bool blackball_output(const std::pair<uint64_t, uint64_t> &output);
     bool set_blackballed_outputs(const std::vector<std::pair<uint64_t, uint64_t>> &outputs, bool add = false);

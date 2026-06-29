@@ -28,7 +28,7 @@
 #
 # Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 message(STATUS "CMake version ${CMAKE_VERSION}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -42,6 +42,9 @@ include(CheckLibraryExists)
 include(CheckFunctionExists)
 if (POLICY CMP0148)
     cmake_policy(SET CMP0148 OLD) # https://cmake.org/cmake/help/latest/policy/CMP0148.html
+endif()
+if (POLICY CMP0167)
+    cmake_policy(SET CMP0167 OLD) # Keep FindBoost while the tree uses legacy Boost_* variables.
 endif()
 include(FindPythonInterp)
 
@@ -222,7 +225,7 @@ function(forbid_undefined_symbols)
     file(MAKE_DIRECTORY "${TEST_PROJECT}")
     file(WRITE "${TEST_PROJECT}/CMakeLists.txt"
       [=[
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 project(test)
 option(EXPECT_SUCCESS "" ON)
 file(WRITE "${CMAKE_SOURCE_DIR}/incorrect_source.cpp" "void undefined_symbol(); void symbol() { undefined_symbol(); }")
@@ -1069,21 +1072,28 @@ if (${BOOST_IGNORE_SYSTEM_PATHS} STREQUAL "ON")
 endif()
 
 set(OLD_LIB_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
-set(Boost_NO_BOOST_CMAKE ON)
 if(STATIC)
   if(MINGW)
     set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
   endif()
 
   set(Boost_USE_STATIC_LIBS ON)
-  set(Boost_USE_STATIC_RUNTIME ON)
+  if(MINGW)
+    set(Boost_USE_STATIC_RUNTIME ON)
+  else()
+    set(Boost_USE_STATIC_RUNTIME OFF)
+  endif()
 endif()
 
-set(BOOST_COMPONENTS system filesystem thread date_time chrono regex serialization program_options)
+find_package(Boost 1.58 CONFIG QUIET REQUIRED)
+set(BOOST_COMPONENTS filesystem thread date_time chrono regex serialization program_options)
+if(Boost_VERSION VERSION_LESS 1.69.0)
+  list(PREPEND BOOST_COMPONENTS system)
+endif()
 if (WIN32)
   list(APPEND BOOST_COMPONENTS locale)
 endif()
-find_package(Boost 1.58 QUIET REQUIRED COMPONENTS ${BOOST_COMPONENTS})
+find_package(Boost 1.58 CONFIG QUIET REQUIRED COMPONENTS ${BOOST_COMPONENTS})
 add_definitions(-DBOOST_ASIO_ENABLE_SEQUENTIAL_STRAND_ALLOCATION)
 add_definitions(-DBOOST_NO_AUTO_PTR)
 add_definitions(-DBOOST_UUID_DISABLE_ALIGNMENT) # This restores UUID's std::has_unique_object_representations property

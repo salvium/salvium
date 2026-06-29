@@ -1,0 +1,33 @@
+diff --git a/src/libudev/libudev-device.c b/src/libudev/libudev-device.c
+--- a/src/libudev/libudev-device.c
++++ b/src/libudev/libudev-device.c
+@@ -760,7 +760,7 @@ _public_ struct udev_device *udev_device_new_from_syspath(struct udev *udev, con
+ {
+         const char *subdir;
+         char path[UTIL_PATH_SIZE];
+-        char *pos;
++        const char *pos;
+         struct stat statbuf;
+         struct udev_device *udev_device;
+ 
+@@ -1060,7 +1060,7 @@ static struct udev_device *device_new_from_parent(struct udev_device *udev_devic
+ {
+         struct udev_device *udev_device_parent = NULL;
+         char path[UTIL_PATH_SIZE];
+-        const char *subdir;
++        char *subdir;
+ 
+         strscpy(path, sizeof(path), udev_device->syspath);
+         subdir = path + strlen("/sys/");
+diff --git a/src/libudev/libudev-hwdb.c b/src/libudev/libudev-hwdb.c
+--- a/src/libudev/libudev-hwdb.c
++++ b/src/libudev/libudev-hwdb.c
+@@ -129,7 +129,7 @@ static int trie_children_cmp_f(const void *v1, const void *v2) {
+ }
+ 
+ static const struct trie_node_f *node_lookup_f(struct udev_hwdb *hwdb, const struct trie_node_f *node, uint8_t c) {
+-        struct trie_child_entry_f *child;
++        const struct trie_child_entry_f *child;
+         struct trie_child_entry_f search;
+ 
+         search.c = c;
