@@ -3280,10 +3280,7 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
   mdb_set_dupsort(txn, m_tx_indices, compare_hash32);
   mdb_set_dupsort(txn, m_output_amounts, compare_uint64);
   mdb_set_dupsort(txn, m_output_txs, compare_uint64);
-  // Preserve the legacy comparator: existing v3 output_types trees are
-  // physically ordered with compare_string. Changing the comparator in place
-  // makes keyed lookups fail because LMDB does not rebuild the B-tree.
-  mdb_set_compare(txn, m_output_types, compare_string);
+  mdb_set_compare(txn, m_output_types, compare_uint32);
   mdb_set_dupsort(txn, m_output_types, compare_uint64);
   mdb_set_dupsort(txn, m_block_info, compare_uint64);
   if (!(mdb_flags & MDB_RDONLY))
@@ -3311,7 +3308,7 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
 
   mdb_set_dupsort(txn, m_output_amount_refs, compare_uint64);
   mdb_set_compare(txn, m_output_type_refs, compare_uint32);
-  mdb_set_compare(txn, m_output_types_backup, compare_string);
+  mdb_set_compare(txn, m_output_types_backup, compare_uint32);
   mdb_set_dupsort(txn, m_output_types_backup, compare_uint64);
   mdb_set_compare(txn, m_output_type_refs_backup, compare_uint32);
   mdb_set_dupsort(txn, m_output_type_refs_backup, compare_uint64);
@@ -7696,27 +7693,45 @@ void BlockchainLMDB::realign_rct_index()
 
   MGINFO_YELLOW("HF13: realigning the rct ring index, runs once at the fork:");
 
-  // If a previous realign attempt stopped before setting rct_realigned, the
-  // live tables and tx_outputs may be at different transition stages.  The
-  // backup is written atomically before either is changed, so its presence is
-  // the authoritative recovery marker.  Always restore it before retrying;
-  // entry counts cannot distinguish legacy and realigned layouts when every
-  // legacy output happens to be RCT.
+  // If a previous realign attempt crashed mid-rebuild, the originals may be
+  // partially overwritten while the backup is intact. Detect this by comparing
+  // total entry counts and restore from backup if needed.
   {
     result = mdb_txn_begin(m_env, NULL, MDB_RDONLY, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create recovery check transaction: ", result).c_str()));
 
-    MDB_stat backup_stats;
-    result = mdb_stat(txn, m_output_types_backup, &backup_stats);
-    if (result)
-      throw0(DB_ERROR(lmdb_error("Failed to inspect legacy output_types backup: ", result).c_str()));
-    const bool backup_exists = backup_stats.ms_entries != 0;
-    txn.commit();
-
-    if (backup_exists)
+    // For DUPSORT tables, mdb_cursor_count returns dup count at the current
+    // key. Sum across all unique keys to get the total entry count.
+    auto count_dupsort_table = [&](MDB_dbi dbi) -> mdb_size_t
     {
-      MGINFO_YELLOW("realign: unfinished transition backup found, restoring it before retry");
+      mdb_size_t total = 0;
+      MDB_cursor *c = NULL;
+      MDB_val k, v;
+      if (mdb_cursor_open(txn, dbi, &c) != 0)
+        return 0;
+      int rc = mdb_cursor_get(c, &k, &v, MDB_FIRST);
+      while (rc == MDB_SUCCESS)
+      {
+        mdb_size_t dup_count = 0;
+        mdb_cursor_count(c, &dup_count);
+        total += dup_count;
+        rc = mdb_cursor_get(c, &k, &v, MDB_NEXT_NODUP);
+      }
+      mdb_cursor_close(c);
+      if (rc != MDB_NOTFOUND)
+        return 0;  // error during iteration
+      return total;
+    };
+
+    const mdb_size_t types_count = count_dupsort_table(m_output_types);
+    const mdb_size_t backup_count = count_dupsort_table(m_output_types_backup);
+
+    if (backup_count > 0 && types_count < backup_count)
+    {
+      MGINFO_YELLOW("realign: incomplete originals detected (types=" << types_count
+          << ", backup=" << backup_count << "), restoring from backup");
+      txn.commit();
 
       // Restore originals from backup
       result = mdb_txn_begin(m_env, NULL, 0, txn);
@@ -7748,14 +7763,14 @@ void BlockchainLMDB::realign_rct_index()
         }
         if (result != MDB_NOTFOUND)
           throw0(DB_ERROR(lmdb_error(std::string("Failed to iterate ") + desc + " backup: ", result).c_str()));
-        mdb_cursor_close(c_src);
-        mdb_cursor_close(c_dst);
-        c_src = NULL;
-        c_dst = NULL;
       }
 
       txn.commit();
       MGINFO_YELLOW("realign: restored legacy index from backup for retry");
+    }
+    else
+    {
+      txn.commit();
     }
   }
   // read every rct (amount==0) output's (amount_index, global, asset) in order
