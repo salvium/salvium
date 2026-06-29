@@ -614,6 +614,12 @@ private:
   MDB_dbi m_output_amount_refs;
   MDB_dbi m_output_type_refs;
 
+  // Pre-HF13 snapshots of output_types/output_type_refs, captured before
+  // realign_rct_index() rewrites them.  Used by restore_legacy_output_index()
+  // to reconstruct the exact legacy state if a reorg crosses back below HF13.
+  MDB_dbi m_output_types_backup;
+  MDB_dbi m_output_type_refs_backup;
+
   mutable uint64_t m_cum_size;	// used in batch size estimation
   mutable unsigned int m_cum_count;
   std::string m_folder;
