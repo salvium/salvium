@@ -2784,13 +2784,14 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
   {
   uint32_t output_asset_type = cryptonote::asset_id_from_type(output_asset_type_str);
   MDB_val_copy<uint32_t> koat(output_asset_type);
-  MDB_val_set(voat, asset_type_output_id);
+  outassettype expected_oat;
+  expected_oat.asset_type_output_index = asset_type_output_id;
+  expected_oat.output_id = output_id;
+  MDB_val_set(voat, expected_oat);
 
   result = mdb_cursor_get(m_cur_output_types, &koat, &voat, MDB_GET_BOTH);
   if (result == MDB_NOTFOUND)
-  {
     throw0(DB_ERROR("Unexpected: asset type output id not found in m_output_types"));
-  }
   else if (result)
   {
     throw1(DB_ERROR(lmdb_error("Error adding removal of output type to db transaction", result).c_str()));
@@ -2804,14 +2805,19 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
                     .append(boost::lexical_cast<std::string>(output_id)).c_str()));
 
   MDB_val_copy<uint32_t> k_type_ref(output_asset_type);
-  MDB_val_set(v_type_ref, asset_type_output_id);
-  result = mdb_cursor_get(m_cur_output_type_refs, &k_type_ref, &v_type_ref, MDB_GET_BOTH);
+  output_type_ref lookup_type_ref;
+  lookup_type_ref.asset_type_output_index = asset_type_output_id;
+  lookup_type_ref.output_id = 0;
+  MDB_val_set(v_type_ref, lookup_type_ref);
+  result = mdb_cursor_get(m_cur_output_type_refs, &k_type_ref, &v_type_ref, MDB_GET_BOTH_RANGE);
   if (result == MDB_NOTFOUND)
     throw0(DB_ERROR("Unexpected: asset type output ref not found"));
   else if (result)
     throw1(DB_ERROR(lmdb_error("Error finding asset type output ref for removal", result).c_str()));
 
   const output_type_ref *type_ref = (const output_type_ref *)v_type_ref.mv_data;
+  if (type_ref->asset_type_output_index != asset_type_output_id)
+    throw0(DB_ERROR("Unexpected: asset type output ref rank mismatch"));
   // For poisoned outputs, the effective ID (type_refs) intentionally differs
   // from the raw ID (output_types). Only enforce the match for non-poisoned.
   if (type_ref->output_id == oat->output_id)
@@ -7448,15 +7454,13 @@ void BlockchainLMDB::migrate_3_4()
       throw0(DB_ERROR(lmdb_error("Failed to open a cursor for output_type_refs: ", result).c_str()));
 
     uint64_t i = 0;
-    uint32_t last_asset = 0;
-    uint64_t last_index = 0;
     result = mdb_cursor_get(c_types, &k, &v, MDB_FIRST);
     while (result == 0)
     {
       const uint32_t asset_type = *(const uint32_t *)k.mv_data;
-      const outassettype *oat = (const outassettype *)v.mv_data;
-      const uint64_t asset_index = oat->asset_type_output_index;
-      const uint64_t old_id = oat->output_id;
+      const outassettype oat = *(const outassettype *)v.mv_data;
+      const uint64_t asset_index = oat.asset_type_output_index;
+      const uint64_t old_id = oat.output_id;
 
       uint64_t resolved = old_id;
       const uint64_t amount_zero = 0;
@@ -7482,25 +7486,8 @@ void BlockchainLMDB::migrate_3_4()
       if ((result = mdb_cursor_put(c_type_refs, &k_asset, &v_otr, MDB_APPENDDUP)))
         throw0(DB_ERROR(lmdb_error("Failed to put output_type_ref: ", result).c_str()));
 
-      last_asset = asset_type;
-      last_index = asset_index;
       if (!(++i % 50000))
-      {
         LOGIF(el::Level::Info) { std::cout << i << " type refs\r" << std::flush; }
-        txn.commit();
-        if ((result = mdb_txn_begin(m_env, NULL, 0, txn)))
-          throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
-        if ((result = mdb_cursor_open(txn, m_output_types, &c_types)))
-          throw0(DB_ERROR(lmdb_error("Failed to reopen output_types cursor: ", result).c_str()));
-        if ((result = mdb_cursor_open(txn, m_output_amount_refs, &c_amount_refs)))
-          throw0(DB_ERROR(lmdb_error("Failed to reopen output_amount_refs cursor: ", result).c_str()));
-        if ((result = mdb_cursor_open(txn, m_output_type_refs, &c_type_refs)))
-          throw0(DB_ERROR(lmdb_error("Failed to reopen output_type_refs cursor: ", result).c_str()));
-        MDB_val_copy<uint32_t> rk(last_asset);
-        MDB_val_set(rv, last_index);
-        if ((result = mdb_cursor_get(c_types, &rk, &rv, MDB_GET_BOTH)))
-          throw0(DB_ERROR(lmdb_error("Failed to reposition output_types cursor: ", result).c_str()));
-      }
       result = mdb_cursor_get(c_types, &k, &v, MDB_NEXT);
     }
     if (result != MDB_NOTFOUND)
