@@ -1,7 +1,7 @@
 When --with-termlib gives the terminfo library an explicit name (e.g. "tinfo"),
 the configure-generated rule logic still applies the wide-character ABI infix to
-the *rule* name on hosts where cf_cv_shlib_version_infix=yes (darwin), producing a
-rule for ../lib/libtinfow.a while $(LIBRARIES) / the `all` target still references
+the rule name on hosts where cf_cv_shlib_version_infix=yes (darwin), producing a
+rule for ../lib/libtinfow.a while $(LIBRARIES) and the all target still reference
 ../lib/libtinfo.a. The macOS cross-build then dies with
 "No rule to make target '../lib/libtinfo.a'". Linux hosts have
 cf_cv_shlib_version_infix=no so they never hit this. Skip the infix mangling for
@@ -9,12 +9,12 @@ the explicitly-named termlib so the rule name matches $(LIBRARIES) on darwin too
 
 --- a/configure
 +++ b/configure
-@@ -25288,7 +25288,7 @@
-
+@@ -31789,7 +31789,7 @@
+ 
   			cf_dir_suffix=
   			old_cf_suffix="$cf_suffix"
 - 			if test "$cf_cv_shlib_version_infix" = yes ; then
 + 			if test "$cf_cv_shlib_version_infix" = yes && test "x$cf_libname" != "x$TINFO_LIB_SUFFIX" ; then
- 			if test -n "$USE_LIB_SUFFIX" ; then
- 				case $USE_LIB_SUFFIX in
+ 			if test -n "$ABI_SUFFIX" ; then
+ 				case "$ABI_SUFFIX" in
  				(tw*)

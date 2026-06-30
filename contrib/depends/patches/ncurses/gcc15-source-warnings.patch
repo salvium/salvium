@@ -1,12 +1,12 @@
 --- a/ncurses/base/lib_mouse.c
 +++ b/ncurses/base/lib_mouse.c
-@@ -379,11 +379,11 @@ init_xterm_mouse(SCREEN *sp)
+@@ -389,11 +389,11 @@ init_xterm_mouse(SCREEN *sp)
      sp->_mouse_format = MF_X10;
-     sp->_mouse_xtermcap = tigetstr("XM");
+     sp->_mouse_xtermcap = tigetstr(UserCap(XM));
      if (VALID_STRING(sp->_mouse_xtermcap)) {
 -	char *code = strstr(sp->_mouse_xtermcap, "[?");
 +	const char *code = strstr(sp->_mouse_xtermcap, "[?");
- 	if (code != 0) {
+ 	if (code != NULL) {
  	    code += 2;
  	    while ((*code >= '0') && (*code <= '9')) {
 -		char *next = code;
