@@ -3,7 +3,6 @@ $(package)_version=1.19
 $(package)_download_path=https://ftp.gnu.org/gnu/libiconv
 $(package)_file_name=libiconv-$($(package)_version).tar.gz
 $(package)_sha256_hash=88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6
-$(package)_patches=fix-whitespace.patch
 
 define $(package)_set_vars
   $(package)_config_opts=--disable-nls
@@ -14,8 +13,7 @@ define $(package)_set_vars
 endef
 
 define $(package)_preprocess_cmds
-  cp -f $(BASEDIR)/config.guess $(BASEDIR)/config.sub build-aux/ &&\
-  patch -p1 < $($(package)_patch_dir)/fix-whitespace.patch
+  cp -f $(BASEDIR)/config.guess $(BASEDIR)/config.sub build-aux/
 endef
 
 define $(package)_config_cmds

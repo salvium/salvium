@@ -25,6 +25,8 @@ define $(package)_set_vars
   $(package)_config_opts+=-Dprotobuf_BUILD_SHARED_LIBS=OFF
   $(package)_config_opts+=-Dprotobuf_BUILD_PROTOC_BINARIES=OFF
   $(package)_config_opts+=-Dprotobuf_FORCE_FETCH_DEPENDENCIES=ON
+  $(package)_config_opts_mingw32+=-DCMAKE_CXX_STANDARD_LIBRARIES="-ldbghelp"
+  $(package)_config_opts_mingw32+=-DCMAKE_C_STANDARD_LIBRARIES="-ldbghelp"
 endef
 
 define $(package)_preprocess_cmds
