@@ -473,7 +473,8 @@ static void oaes_get_seed( char buf[RANDSIZ + 1] )
 	char * _test = NULL;
 	
 	gettimeofday(&timer, NULL);
-	gmTimer = gmtime( &timer.tv_sec );
+	time_t tv_sec = timer.tv_sec;
+	gmTimer = gmtime( &tv_sec );
 	const long millitm = timer.tv_usec / 1000;
 	_test = (char *) calloc( millitm, sizeof( char ) );
 	sprintf( buf, "%04d%02d%02d%02d%02d%02d%03d%p%d",
@@ -493,7 +494,8 @@ static uint32_t oaes_get_seed(void)
 	uint32_t _ret = 0;
 	
 	gettimeofday(&timer, NULL);
-	gmTimer = gmtime( &timer.tv_sec );
+	time_t tv_sec = timer.tv_sec;
+	gmTimer = gmtime( &tv_sec );
 	const long millitm = timer.tv_usec / 1000;
 	_test = (char *) calloc( millitm, sizeof( char ) );
 	_ret = gmTimer->tm_year + 1900 + gmTimer->tm_mon + 1 + gmTimer->tm_mday +

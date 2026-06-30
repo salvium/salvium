@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(__i386__)
 #define DEBUG_BREAK() asm volatile("int $3")
 #elif defined(__aarch64__)
 #define DEBUG_BREAK() asm volatile("brk #0xf000")

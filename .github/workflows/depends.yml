@@ -116,14 +116,16 @@ jobs:
           /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salviumd*
     - name: zip daemon & cli
       run: |
-        zip salvium-${GITHUB_REF_NAME}-${{ matrix.toolchain.host }}.zip /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salvium-wallet-rpc* /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salvium-wallet-cli* /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salviumd*
+        ARCHIVE="salvium-${GITHUB_REF_NAME//\//-}-${{ matrix.toolchain.host }}.zip"
+        zip "$ARCHIVE" /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salvium-wallet-rpc* /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salvium-wallet-cli* /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salviumd*
+        echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
         ls -l
 
     - name: upload release archive
       uses: actions/upload-artifact@v4
       with:
         name: release-archive-${{ matrix.toolchain.host }}
-        path: ./salvium-${{ github.ref_name }}-${{ matrix.toolchain.host }}.zip
+        path: ./${{ env.ARCHIVE }}
 
   deploy-release:
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
@@ -147,7 +149,7 @@ jobs:
     - name: publish release archives
       run: |
         set -euo pipefail
-        for archive in salvium-${GITHUB_REF_NAME}-*.zip; do
+        for archive in salvium-${GITHUB_REF_NAME//\//-}-*.zip; do
           sha256sum "$archive" > "$archive.sha256"
           aws s3 cp "$archive" "s3://${{ vars.S3_BUCKET }}/$(basename "$archive")" --acl public-read
           aws s3 cp "$archive.sha256" "s3://${{ vars.S3_BUCKET }}/$(basename "$archive").sha256" --acl public-read
