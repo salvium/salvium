@@ -4,11 +4,6 @@ $(package)_download_path=https://github.com/tpoechtrager/apple-libtapi/archive
 $(package)_download_file=$($(package)_version).tar.gz
 $(package)_file_name=$(package)-$($(package)_version).tar.gz
 $(package)_sha256_hash=dbad2a41f2351b052367db1fe251bebe43ee9ca5815e46b725c4bc71c339186f
-$(package)_patches=no_embed_git_rev.patch
-
-define $(package)_preprocess_cmds
-  patch -p1 -i $($(package)_patch_dir)/no_embed_git_rev.patch
-endef
 
 define $(package)_build_cmds
   CC=$(clang_prog) CXX=$(clangxx_prog) INSTALLPREFIX=$($(package)_staging_prefix_dir) ./build.sh
