@@ -7,7 +7,6 @@ $(package)_sha256_hash=$(native_$(package)_sha256_hash)
 $(package)_dependencies=native_$(package)
 $(package)_patches=gcc15-source-warnings.patch
 $(package)_cxxflags=-std=c++17
-$(package)_ldflags_darwin=-framework CoreFoundation
 
 define $(package)_set_vars
   $(package)_config_opts=-S . -B build
@@ -28,6 +27,8 @@ define $(package)_set_vars
   $(package)_config_opts+=-Dprotobuf_FORCE_FETCH_DEPENDENCIES=ON
   $(package)_config_opts_mingw32+=-DCMAKE_CXX_STANDARD_LIBRARIES="-ldbghelp"
   $(package)_config_opts_mingw32+=-DCMAKE_C_STANDARD_LIBRARIES="-ldbghelp"
+  $(package)_config_opts_darwin+=-DCMAKE_CXX_STANDARD_LIBRARIES="-framework CoreFoundation"
+  $(package)_config_opts_darwin+=-DCMAKE_C_STANDARD_LIBRARIES="-framework CoreFoundation"
 endef
 
 define $(package)_preprocess_cmds
