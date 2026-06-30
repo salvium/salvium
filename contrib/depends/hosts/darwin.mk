@@ -10,7 +10,7 @@ darwin_CXX=clang++ -target $(CC_target) -mmacosx-version-min=$(OSX_MIN_VERSION) 
 
 darwin_CFLAGS=-pipe
 darwin_CXXFLAGS=$(darwin_CFLAGS)
-darwin_ARFLAGS=cr
+darwin_ARFLAGS=crs
 
 darwin_release_CFLAGS=-O1
 darwin_release_CXXFLAGS=$(darwin_release_CFLAGS)
