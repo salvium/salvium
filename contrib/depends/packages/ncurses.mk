@@ -62,7 +62,7 @@ define $(package)_config_cmds
 endef
 
 define $(package)_build_cmds
-  $(MAKE) $($(package)_build_opts) V=1
+  $(MAKE) -j1 MAKEFLAGS= $($(package)_build_opts) V=1
 endef
 
 define $(package)_stage_cmds
