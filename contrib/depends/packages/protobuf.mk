@@ -7,6 +7,7 @@ $(package)_sha256_hash=$(native_$(package)_sha256_hash)
 $(package)_dependencies=native_$(package)
 $(package)_patches=gcc15-source-warnings.patch
 $(package)_cxxflags=-std=c++17
+$(package)_ldflags_darwin=-framework CoreFoundation
 
 define $(package)_set_vars
   $(package)_config_opts=-S . -B build
