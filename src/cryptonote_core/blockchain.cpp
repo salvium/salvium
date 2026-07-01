@@ -3858,6 +3858,45 @@ bool Blockchain::check_for_double_spend(const transaction& tx, key_images_contai
   return true;
 }
 //------------------------------------------------------------------
+namespace {
+// Spam-index read-path repair, exact-match guarded, for every amount==0 (RCT) asset. Resolve the
+// output's own asset_type from its amount-0 dup index, then rewrite asset_type_output_index to the
+// exact preimage for that asset; non-RCT lookups throw and are skipped. Read path only.
+inline void repair_asset_index_impl(BlockchainDB *db, std::pair<uint64_t, uint64_t> &pr)
+{
+  uint32_t asset_id;
+  try
+  {
+    const cryptonote::output_data_t od = db->get_output_key(0, pr.first, false);
+    asset_id = od.asset_type;
+  }
+  catch (const std::exception &) { return; }
+
+  const uint64_t fixed = db->rct_index_for_amount_index(asset_id, pr.first);
+  if (fixed != BlockchainDB::SAL1_RCT_INDEX_NONE)
+    pr.second = fixed;
+}
+
+// Apply the repair ONLY to amount==0 (RCT) outputs. Load the served txs (pruned prefix carries vout)
+// to read each output's real amount; if they can't be loaded/parsed, leave indices unchanged (safe).
+inline void repair_indexs_gated(BlockchainDB *db, const crypto::hash &first_tx_id,
+    std::vector<std::vector<std::pair<uint64_t, uint64_t>>> &indexs)
+{
+  std::vector<cryptonote::blobdata> blobs;
+  if (!db->get_pruned_tx_blobs_from(first_tx_id, indexs.size(), blobs) || blobs.size() != indexs.size())
+    return;
+  for (size_t t = 0; t < indexs.size(); ++t)
+  {
+    cryptonote::transaction tx;
+    if (!cryptonote::parse_and_validate_tx_base_from_blob(blobs[t], tx))
+      continue;
+    for (size_t o = 0; o < indexs[t].size() && o < tx.vout.size(); ++o)
+      if (tx.vout[o].amount == 0)
+        repair_asset_index_impl(db, indexs[t][o]);
+  }
+}
+}
+//------------------------------------------------------------------
 bool Blockchain::get_tx_outputs_gindexs(const crypto::hash& tx_id, size_t n_txes, std::vector<std::vector<std::pair<uint64_t, uint64_t>>>& indexs) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
@@ -3870,6 +3909,10 @@ bool Blockchain::get_tx_outputs_gindexs(const crypto::hash& tx_id, size_t n_txes
   }
   
   indexs = m_db->get_tx_amount_output_indices(tx_index, n_txes);
+  // Repair SAL1 asset_type_output_index to its SAL1 RCT position (read path; no consensus change).
+  // Gated to SAL1 amount==0 (RCT) outputs only; non-SAL1 / token / non-RCT reads are untouched.
+  // The helper returns SAL1_RCT_INDEX_NONE when there is no exact preimage - then leave .second as-is.
+  repair_indexs_gated(m_db, tx_id, indexs);
   CHECK_AND_ASSERT_MES(n_txes == indexs.size(), false, "Wrong indexs size");
 
 #if SALVIUM_VALIDATE_CANONICAL_OUTPUT_REFS
@@ -3923,6 +3966,7 @@ bool Blockchain::get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<s
   if (!get_tx_outputs_gindexs(tx_id, 1, indices))
     return false;
   CHECK_AND_ASSERT_MES(indices.size() == 1, false, "Wrong indices size");
+  repair_indexs_gated(m_db, tx_id, indices);
   indexs = indices.front();
   return true;
 }

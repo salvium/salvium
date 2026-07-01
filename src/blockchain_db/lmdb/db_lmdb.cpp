@@ -3460,6 +3460,7 @@ void BlockchainLMDB::reset()
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
+  invalidate_asset_caches();
 
   mdb_txn_safe txn;
   if (auto result = lmdb_txn_begin(m_env, NULL, 0, txn))
@@ -5925,6 +5926,121 @@ tx_out_index BlockchainLMDB::get_output_tx_and_index(const uint64_t& amount, con
   return indices[0];
 }
 
+
+// Wallet-facing repair: returns the count of SAL1 outputs whose global output_id is < the given
+// amount_index (the cross-asset amount==0 index, i.e. the pair .first). For a SAL1 amount==0
+// output, passing its amount_index returns the asset_type_output_index that the stock resolver
+// maps back to that exact output (its SAL1 RCT position). Verified on mainnet: amount_index
+// 2895650 -> 2071100, which get_outs/check_tx_input resolve to the real key. Read path only,
+// no consensus change.
+// Drop the SAL1 read-path caches; next reader rebuilds them. Called on every block add/pop.
+void BlockchainLMDB::invalidate_asset_caches() const
+{
+  boost::lock_guard<boost::mutex> lock(m_asset_caches_mutex);
+  m_asset_oids_built.clear();
+  m_asset_poison_built.clear();
+  m_asset_output_ids.clear();
+  m_asset_poisoned_decoys.clear();
+}
+
+// Builds m_asset_output_ids[asset_id]: sorted output_id of every output_types[asset_id] row. Cheap
+// (one cursor walk); used by the hot read path. Caller must hold m_asset_caches_mutex.
+void BlockchainLMDB::build_asset_oids(uint32_t asset_id) const
+{
+  std::vector<uint64_t> &oids = m_asset_output_ids[asset_id];
+  oids.clear();
+  TXN_PREFIX_RDONLY();
+  RCURSOR(output_types);
+  MDB_val_copy<uint32_t> kt(asset_id);
+  MDB_val v;
+  int r = mdb_cursor_get(m_cur_output_types, &kt, &v, MDB_SET);
+  while (r == MDB_SUCCESS)
+  {
+    const outassettype *oat = (const outassettype *)v.mv_data;
+    oids.push_back(oat->output_id);
+    r = mdb_cursor_get(m_cur_output_types, &kt, &v, MDB_NEXT_DUP);
+  }
+  if (r != MDB_NOTFOUND)
+    throw0(DB_ERROR(lmdb_error("Error scanning output_types for oid cache", r).c_str()));
+  TXN_POSTFIX_RDONLY();
+  std::sort(oids.begin(), oids.end());
+  m_asset_oids_built.insert(asset_id);
+}
+
+// Build the per-asset oid cache if missing. Caller MUST hold m_asset_caches_mutex.
+void BlockchainLMDB::ensure_asset_caches(uint32_t asset_id) const
+{
+  if (m_asset_oids_built.count(asset_id))
+    return;
+  build_asset_oids(asset_id);
+  MGINFO("asset " << asset_id << " oid cache built: " << m_asset_output_ids[asset_id].size() << " outputs");
+}
+
+// Build the per-asset poison-decoy set if missing. Caller MUST hold m_asset_caches_mutex.
+void BlockchainLMDB::ensure_asset_poison(uint32_t asset_id) const
+{
+  if (m_asset_poison_built.count(asset_id))
+    return;
+  if (!m_asset_oids_built.count(asset_id))
+    build_asset_oids(asset_id);
+  std::set<uint64_t> &poison = m_asset_poisoned_decoys[asset_id];
+  poison.clear();
+  const std::vector<uint64_t> &oids = m_asset_output_ids[asset_id];
+  TXN_PREFIX_RDONLY();
+  RCURSOR(output_amounts);
+  const uint64_t zero = 0;
+  for (uint64_t V = 0; V < oids.size(); ++V)
+  {
+    const uint64_t oid = oids[V];
+    MDB_val_set(k, zero);
+    MDB_val_set(vo, oid);
+    int rr = mdb_cursor_get(m_cur_output_amounts, &k, &vo, MDB_GET_BOTH);
+    bool poisoned = false;
+    if (rr == MDB_SUCCESS && vo.mv_size >= sizeof(outkey))
+    {
+      const outkey *ok = (const outkey *)vo.mv_data;
+      poisoned = (ok->data.asset_type != asset_id);
+    }
+    if (poisoned)
+      poison.insert(V);
+  }
+  TXN_POSTFIX_RDONLY();
+  MGINFO("asset " << asset_id << " poison-decoy set built: " << poison.size() << " of " << oids.size() << " indices");
+  m_asset_poison_built.insert(asset_id);
+}
+
+// Wallet-facing repair: exact preimage V where output_types[asset_id][V].output_id == amount_index.
+// Returns SAL1_RCT_INDEX_NONE when no exact preimage. Read path only, no consensus change.
+uint64_t BlockchainLMDB::rct_index_for_amount_index(uint32_t asset_id, const uint64_t amount_index) const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  boost::lock_guard<boost::mutex> lock(m_asset_caches_mutex);
+  ensure_asset_caches(asset_id);
+  const auto mit = m_asset_output_ids.find(asset_id);
+  if (mit == m_asset_output_ids.end())
+    return SAL1_RCT_INDEX_NONE;
+  const std::vector<uint64_t> &oids = mit->second;
+  const auto it = std::lower_bound(oids.begin(), oids.end(), amount_index);
+  if (it == oids.end() || *it != amount_index)
+    return SAL1_RCT_INDEX_NONE;
+  return (uint64_t)(it - oids.begin());
+}
+
+// Per-asset poison set, exposed to the wallet via get_output_distribution. asset_id_from_type returns
+// 0 for unknown assets (no throw) -> empty set, so arbitrary asset strings are cheap.
+std::vector<uint64_t> BlockchainLMDB::poisoned_decoy_indices(const std::string &asset_type) const
+{
+  check_open();
+  const uint32_t asset_id = cryptonote::asset_id_from_type(asset_type);
+  boost::lock_guard<boost::mutex> lock(m_asset_caches_mutex);
+  ensure_asset_poison(asset_id);
+  const auto it = m_asset_poisoned_decoys.find(asset_id);
+  if (it == m_asset_poisoned_decoys.end())
+    return {};
+  return std::vector<uint64_t>(it->second.begin(), it->second.end());
+}
+
 std::vector<std::vector<std::pair<uint64_t, uint64_t>>> BlockchainLMDB::get_tx_amount_output_indices(uint64_t tx_id, size_t n_txes) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
@@ -6567,6 +6683,8 @@ uint64_t BlockchainLMDB::add_block(const std::pair<block, blobdata>& blk, size_t
     throw;
   }
 
+  // A new SAL1 amount-0 output shifts the index space; drop the read-path caches.
+  invalidate_asset_caches();
   return ++m_height;
 }
 
@@ -6587,6 +6705,8 @@ void BlockchainLMDB::pop_block(block& blk, std::vector<transaction>& txs)
     block_wtxn_abort();
     throw;
   }
+  // Pop/reorg renumbers SAL1 indices; drop the read-path caches.
+  invalidate_asset_caches();
 }
 
 void BlockchainLMDB::get_output_tx_and_index_from_global(const std::vector<uint64_t> &global_indices,

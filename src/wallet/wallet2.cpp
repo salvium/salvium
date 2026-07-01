@@ -4584,6 +4584,9 @@ bool wallet2::get_rct_distribution(const bool use_global_outs, const std::string
     return false;
   }
   num_spendable_global_outs = res.distributions[0].data.num_spendable_global_outs;
+  // Spam-index repair: refresh the per-asset poison-decoy skip set from the daemon (scoped to the
+  // requested rct_asset_type daemon-side, so no asset gate needed here).
+  m_poisoned_decoys = std::unordered_set<uint64_t>(res.poisoned_decoys.begin(), res.poisoned_decoys.end());
   for (size_t i = 1; i < res.distributions[0].data.distribution.size(); ++i)
     res.distributions[0].data.distribution[i] += res.distributions[0].data.distribution[i-1];
   start_height = res.distributions[0].data.start_height;
@@ -10025,6 +10028,11 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
           }
 
           if (seen_indices.count(i))
+            continue;
+          // Skip decoy indices poisoned by post-spam index drift: stock resolution maps them to a
+          // different-asset output, so get_outs would reject the whole ring. The set is fetched
+          // per-asset from the daemon in get_rct_distribution (no hardcoded indices).
+          if (amount == 0 && m_poisoned_decoys.count(i))
             continue;
           if (!allow_blackballed && is_output_blackballed(std::make_pair(amount, i))) // don't add blackballed outputs
           {
