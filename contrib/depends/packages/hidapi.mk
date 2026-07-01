@@ -19,6 +19,8 @@ define $(package)_set_vars
   $(package)_config_opts+=-DBUILD_SHARED_LIBS=OFF
   $(package)_config_opts+=-DHIDAPI_BUILD_HIDTEST=OFF
   $(package)_config_opts_mingw32+=-DCMAKE_SYSTEM_NAME=Windows
+  $(package)_config_opts_darwin+=-DCMAKE_SYSTEM_NAME=Darwin
+
 endef
 
 define $(package)_preprocess_cmds
