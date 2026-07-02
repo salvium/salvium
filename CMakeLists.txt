@@ -809,12 +809,10 @@ else()
     set(STATIC_ASSERT_FLAG "-Dstatic_assert=_Static_assert")
   endif()
 
-  try_compile(STATIC_ASSERT_CPP_RES "${CMAKE_CURRENT_BINARY_DIR}/static-assert" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/test-static-assert.cpp" CMAKE_FLAGS -DCMAKE_CXX_STANDARD=11)
-  if(STATIC_ASSERT_CPP_RES)
-    set(STATIC_ASSERT_CPP_FLAG "")
-  else()
-    set(STATIC_ASSERT_CPP_FLAG "-Dstatic_assert=_Static_assert")
-  endif()
+  # Cross try_compile can incorrectly fail for C++ toolchains even when the
+  # compiler supports C++11 static_assert. Remapping static_assert breaks modern
+  # libstdc++/Boost headers, so keep the C fallback only.
+  set(STATIC_ASSERT_CPP_FLAG "")
 
   monero_enable_coverage()
   # With GCC 6.1.1 the compiled binary malfunctions due to aliasing. Until that
@@ -954,25 +952,27 @@ else()
     endif(ARM6)
 
     if(ARM7)
-      if(CXX_ACCEPTS_VFP3_D16 AND NOT CXX_ACCEPTS_VFP4)
+      if(DEPENDS AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        message(STATUS "Using Debian armhf baseline flags for ARMv7 cross-build")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfpu=vfpv3-d16 -mfloat-abi=hard")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=vfpv3-d16 -mfloat-abi=hard")
+      elseif(CXX_ACCEPTS_VFP3_D16 AND NOT CXX_ACCEPTS_VFP4)
         message(STATUS "Selecting VFP3 for ARMv7")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfpu=vfp3-d16")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=vfp3-d16")
-      endif()
-
-      if(CXX_ACCEPTS_VFP4)
+      elseif(CXX_ACCEPTS_VFP4)
         message(STATUS "Selecting VFP4 for ARMv7")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfpu=vfp4")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=vfp4")
       endif()
 
-      if(CXX_ACCEPTS_MFLOAT_HARD)
+      if(NOT (DEPENDS AND CMAKE_SYSTEM_NAME STREQUAL "Linux") AND CXX_ACCEPTS_MFLOAT_HARD)
         message(STATUS "Setting Hardware ABI for Floating Point")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfloat-abi=hard")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfloat-abi=hard")
       endif()
 
-      if(CXX_ACCEPTS_MFLOAT_SOFTFP AND NOT CXX_ACCEPTS_MFLOAT_HARD)
+      if(NOT (DEPENDS AND CMAKE_SYSTEM_NAME STREQUAL "Linux") AND CXX_ACCEPTS_MFLOAT_SOFTFP AND NOT CXX_ACCEPTS_MFLOAT_HARD)
         message(STATUS "Setting Software ABI for Floating Point")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfloat-abi=softfp")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfloat-abi=softfp")
