@@ -505,35 +505,41 @@ bool try_scan_carrot_enote_internal_receiver(const CarrotEnoteV1 &enote,
             enote_type_out,
             internal_message_out))
         {
-          // we received a change output
-          // save the Kr = K_change + K_return to out subaddress map
-          for (const auto &output_key : enote.tx_output_keys) {
-            // make k_return
-            crypto::secret_key k_return;
-            const carrot::input_context_t input_context = carrot::make_carrot_input_context(enote.tx_first_key_image);
-            account.s_view_balance_dev.make_internal_return_privkey(input_context, output_key, k_return);
+          // Verify the recovered address belongs to this wallet.
+          // The view tag is a probabilistic filter — a match doesn't guarantee
+          // the output is ours (e.g., return payments from other wallets can
+          // collide). If not ours, fall through to the known return-output check.
+          const auto &subaddress_map = account.get_subaddress_map_ref();
+          if (subaddress_map.find(address_spend_pubkey_out) != subaddress_map.cend())
+          {
+            // Valid wallet change output — populate return_output_map so that
+            // return payment outputs in the same transaction can be recognized.
+            for (const auto &output_key : enote.tx_output_keys) {
+              crypto::secret_key k_return;
+              account.s_view_balance_dev.make_internal_return_privkey(input_context, output_key, k_return);
 
-            // compute K_return = k_return * G
-            crypto::public_key K_return;
-            crypto::secret_key_to_public_key(k_return, K_return);
+              crypto::public_key K_return;
+              crypto::secret_key_to_public_key(k_return, K_return);
 
-            // compute K_r = K_return + K_o
-            crypto::public_key K_r = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(enote.onetime_address)));
+              crypto::public_key K_r = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(enote.onetime_address)));
 
-            // calculate the key image for the return output
-            crypto::secret_key sum_g;
-            sc_add(to_bytes(sum_g), to_bytes(sender_extension_g_out), to_bytes(k_return));
-            crypto::key_image key_image = account.derive_key_image_view_only(address_spend_pubkey_out,
-                                                                             sum_g,
-                                                                             sender_extension_t_out,
-                                                                             K_r
-                                                                             );
+              crypto::secret_key sum_g;
+              sc_add(to_bytes(sum_g), to_bytes(sender_extension_g_out), to_bytes(k_return));
+              crypto::key_image key_image = account.derive_key_image_view_only(address_spend_pubkey_out,
+                                                                               sum_g,
+                                                                               sender_extension_t_out,
+                                                                               K_r);
 
-            account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, address_spend_pubkey_out, key_image, sum_g, sender_extension_t_out}}});
+              account.insert_return_output_info({{K_r, {input_context, output_key, enote.onetime_address, address_spend_pubkey_out, key_image, sum_g, sender_extension_t_out}}});
+            }
+
+            // Janus protection checks are not needed for internal scans.
+            return true;
           }
-          
-          // janus protection checks are not needed for internal scans
-          return true;
+
+          // Decoded as an internal candidate, but the recovered address is not
+          // in our subaddress map — false positive from probabilistic view tag.
+          // Fall through to the known return-output check below.
         }
     }
 
