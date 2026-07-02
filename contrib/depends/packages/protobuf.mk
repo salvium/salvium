@@ -27,6 +27,8 @@ define $(package)_set_vars
   $(package)_config_opts+=-Dprotobuf_FORCE_FETCH_DEPENDENCIES=ON
   $(package)_config_opts_mingw32+=-DCMAKE_CXX_STANDARD_LIBRARIES="-ldbghelp"
   $(package)_config_opts_mingw32+=-DCMAKE_C_STANDARD_LIBRARIES="-ldbghelp"
+  $(package)_config_opts_darwin+=-DCMAKE_CXX_STANDARD_LIBRARIES="-framework CoreFoundation"
+  $(package)_config_opts_darwin+=-DCMAKE_C_STANDARD_LIBRARIES="-framework CoreFoundation"
 endef
 
 define $(package)_preprocess_cmds

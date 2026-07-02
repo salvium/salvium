@@ -36,12 +36,28 @@
 #include <cassert>
 #include <iostream>
 #include <iterator>
+#include <type_traits>
 #include <boost/endian/conversion.hpp>
 #include <boost/type_traits/make_unsigned.hpp>
 
 #include "common/varint.h"
 #include "span.h"
 #include "warnings.h"
+
+namespace serialization_detail
+{
+  //! Integer "carrier" type for varint serialization: enums resolve to their
+  //! underlying type, other types pass through unchanged. Done with a
+  //! specialization (not std::conditional) so std::underlying_type is only
+  //! instantiated for enums -- it has no ::type for non-enum T.
+  template <class T, bool = std::is_enum<T>::value>
+  struct varint_carrier { using type = T; };
+  template <class T>
+  struct varint_carrier<T, true> { using type = typename std::underlying_type<T>::type; };
+
+  template <class T>
+  using varint_unsigned_t = typename std::make_unsigned<typename varint_carrier<T>::type>::type;
+}
 
 /* I have no clue what these lines means */
 PUSH_WARNINGS
@@ -137,7 +153,7 @@ struct binary_archive<false> : public binary_archive_base<false>
   template <class T>
   void serialize_varint(T &v)
   {
-    serialize_uvarint(*(typename boost::make_unsigned<T>::type *)(&v));
+    serialize_uvarint(*(serialization_detail::varint_unsigned_t<T> *)(&v));
   }
 
   template <class T>
@@ -213,7 +229,7 @@ struct binary_archive<true> : public binary_archive_base<true>
   template <class T>
   void serialize_varint(T &v)
   {
-    serialize_uvarint(*(typename boost::make_unsigned<T>::type *)(&v));
+    serialize_uvarint(*(serialization_detail::varint_unsigned_t<T> *)(&v));
   }
 
   template <class T>
