@@ -258,7 +258,8 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
         .asset_type = enote.asset_type,
         .main_tx_pubkey_index = main_deriv_idx,
         .is_carrot = false,
-        .is_return = false
+        .is_return = false,
+        .enote_type = carrot::CarrotEnoteType::PAYMENT
     };
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -392,7 +393,6 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
 
     crypto::secret_key amount_blinding_factor_sk;
     carrot::payment_id_t payment_id;
-    carrot::CarrotEnoteType dummy_enote_type;
     carrot::janus_anchor_t internal_message;
     if (!carrot::try_scan_carrot_enote_external_receiver(enote,
         encrypted_payment_id,
@@ -405,7 +405,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         res.amount,
         amount_blinding_factor_sk,
         payment_id,
-        dummy_enote_type))
+        res.enote_type))
     {
         if (!carrot::try_scan_carrot_enote_internal_receiver(enote,
             account,
@@ -414,7 +414,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
             res.address_spend_pubkey,
             res.amount,
             amount_blinding_factor_sk,
-            dummy_enote_type,
+            res.enote_type,
             internal_message,
             res.return_address,
             res.is_return))

@@ -84,6 +84,9 @@ struct enote_view_incoming_scan_info_t
 
     // Kr = K_return + K_o
     crypto::public_key return_address;
+
+    // whether this enote is a payment or change output
+    carrot::CarrotEnoteType enote_type = carrot::CarrotEnoteType::PAYMENT;
 };
 
 struct PreCarrotEnote

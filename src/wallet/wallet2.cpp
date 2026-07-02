@@ -2770,6 +2770,8 @@ void wallet2::process_new_scanned_transaction(
       m_salvium_txs.at(enote_scan_info->address_spend_pubkey) : std::numeric_limits<uint64_t>::max();
 
     // Check SA proof to flag potentially hacked outputs
+    // Skip for our own change outputs and return payments — SA proofs only apply
+    // to payment outputs received from other parties.
     crypto::public_key P_change = crypto::null_pkey;
     uint8_t change_index = 0;
     std::string reason;
@@ -2777,20 +2779,28 @@ void wallet2::process_new_scanned_transaction(
     td.m_sa_proof_ok = false;
     td.m_return_payment_change_index = 0xff;
     td.m_return_payment_change_key = crypto::null_pkey;
-    
-    const bool sa_ok = verify_spend_authority_proof(tx,
-                                                    local_output_index,
-                                                    &reason,
-                                                    &P_change,
-                                                    &change_index);
 
-    if (sa_ok) {
+    if (enote_scan_info->is_return ||
+        enote_scan_info->enote_type == carrot::CarrotEnoteType::CHANGE)
+    {
       td.m_sa_proof_ok = true;
-      td.m_return_payment_change_index = change_index;
-      td.m_return_payment_change_key = P_change;
-    } else {
-      // Log an error message
-      MERROR("Received output in tx " << txid << " which has an invalid spend authority proof. Error = " << reason);
+    }
+    else
+    {
+      const bool sa_ok = verify_spend_authority_proof(tx,
+                                                      local_output_index,
+                                                      &reason,
+                                                      &P_change,
+                                                      &change_index);
+
+      if (sa_ok) {
+        td.m_sa_proof_ok = true;
+        td.m_return_payment_change_index = change_index;
+        td.m_return_payment_change_key = P_change;
+      } else {
+        // Log an error message
+        MERROR("Received output in tx " << txid << " which has an invalid spend authority proof. Error = " << reason);
+      }
     }
     
     // update m_transfers key image values
@@ -9868,7 +9878,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
         // contain global output IDs which can't be reliably converted to asset-type
         // indices for other parties' outputs. Reusing them would send wrong indices
         // to the daemon and cause asset type mismatch errors.
-        const bool has_ring = it != existing_rings.end() && req.asset_type.empty();
+        const bool has_ring = it != existing_rings.end() && use_global_outs;
         if (has_ring)
         {
           const std::vector<uint64_t> &ring = it->second;
@@ -10140,21 +10150,35 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       for (size_t n = 0; n < requested_outputs_count; ++n)
       {
         size_t i = base + n;
-        // For key-provided outputs, skip the output_id check because the
-        // stored index may be stale after a database rebuild. The key itself
-        // was provided by the wallet and used directly by the daemon.
-        if (daemon_resp.outs[i].key_provided ||
-            (use_global_outs ? req.outputs[i].index : daemon_resp.outs[i].output_id) == td.m_global_output_index)
+        const uint64_t real_index = use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index;
+
+        // The wallet supplied this real output key. Some daemons still return
+        // mask/unlock data looked up through a stale asset index, while the tx
+        // source below uses the wallet's own key and mask for the real input.
+        if (req.outputs[i].key_set())
+        {
+          if (req.outputs[i].index == real_index && req.outputs[i].key == td.get_public_key())
+            real_out_found = true;
+          continue;
+        }
+
+        if (req.outputs[i].index == real_index)
+        {
           if (daemon_resp.outs[i].key == td.get_public_key())
+          {
             if (daemon_resp.outs[i].mask == mask)
+            {
               if (daemon_resp.outs[i].unlocked)
                 real_out_found = true;
               else
                 LOG_ERROR("output id " << td.m_global_output_index << " (" << rct_asset_type << ") is still locked");
+            }
             else
               LOG_ERROR("output id " << td.m_global_output_index << " (" << rct_asset_type << ") has incorrect mask : expected " << mask << " but found " << daemon_resp.outs[i].mask);
+          }
           else
             LOG_ERROR("output id " << td.m_global_output_index << " (" << rct_asset_type << ") has incorrect key : expected " << td.get_public_key() << " but found " << daemon_resp.outs[i].key);
+        }
       }
       THROW_WALLET_EXCEPTION_IF(!real_out_found, error::wallet_internal_error,
           "Daemon response did not include the requested real output");
@@ -10167,7 +10191,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       // LAND AHOY!!!
 
       // then pick outs from an existing ring, if any
-      if (td.m_key_image_known && !td.m_key_image_partial)
+      if (use_global_outs && td.m_key_image_known && !td.m_key_image_partial)
       {
         const auto it = existing_rings.find(td.m_key_image);
         if (it != existing_rings.end())
@@ -10217,7 +10241,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
 
         // Try adding this output's information to result ring if output isn't invalid
         LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << req.outputs[i].index << " (real " << td.m_global_output_index << "), unlocked " << daemon_resp.outs[i].unlocked << ", key " << daemon_resp.outs[i].key);
-        tx_add_fake_output(outs, req.outputs[i].index, daemon_resp.outs[i].key, daemon_resp.outs[i].mask, td.m_global_output_index, daemon_resp.outs[i].unlocked, valid_public_keys_cache);
+        tx_add_fake_output(outs, req.outputs[i].index, daemon_resp.outs[i].key, daemon_resp.outs[i].mask, use_global_outs ? td.m_global_output_index : td.m_asset_type_output_index, daemon_resp.outs[i].unlocked, valid_public_keys_cache);
       }
       if (outs.back().size() < fake_outputs_count + 1)
       {
