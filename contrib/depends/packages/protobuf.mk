@@ -7,6 +7,9 @@ $(package)_sha256_hash=$(native_$(package)_sha256_hash)
 $(package)_dependencies=native_$(package)
 $(package)_patches=gcc15-source-warnings.patch
 $(package)_cxxflags=-std=c++17
+ifeq ($(host_os),freebsd)
+  $(package)_cppflags+=-D__XSI_VISIBLE=700
+endif
 
 define $(package)_set_vars
   $(package)_config_opts=-S . -B build
@@ -25,8 +28,6 @@ define $(package)_set_vars
   $(package)_config_opts+=-Dprotobuf_BUILD_SHARED_LIBS=OFF
   $(package)_config_opts+=-Dprotobuf_BUILD_PROTOC_BINARIES=OFF
   $(package)_config_opts+=-Dprotobuf_FORCE_FETCH_DEPENDENCIES=ON
-  $(package)_config_opts_freebsd+=-DCMAKE_CXX_FLAGS="$(filter-out $(firstword $($(package)_cxx)),$($(package)_cxx)) $($(package)_cxxflags) $($(package)_cppflags) -D__XSI_VISIBLE=700"
-  $(package)_config_opts_freebsd+=-DCMAKE_C_FLAGS="$(filter-out $(firstword $($(package)_cc)),$($(package)_cc)) $($(package)_cflags) $($(package)_cppflags) -D__XSI_VISIBLE=700"
   $(package)_config_opts_riscv64_linux+=-DCMAKE_CXX_STANDARD_LIBRARIES="-latomic"
   $(package)_config_opts_riscv64_linux+=-DCMAKE_C_STANDARD_LIBRARIES="-latomic"
   $(package)_config_opts_mingw32+=-DCMAKE_CXX_STANDARD_LIBRARIES="-ldbghelp"
