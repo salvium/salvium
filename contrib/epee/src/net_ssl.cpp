@@ -156,7 +156,7 @@ bool create_rsa_ssl_certificate(EVP_PKEY *&pkey, X509 *&cert)
     X509_free(cert);
     return false;
   }
-  const X509_NAME *name = X509_get_subject_name(cert);
+  X509_NAME *name = X509_get_subject_name(cert);
   X509_set_issuer_name(cert, name);
 
   if (X509_sign(cert, pkey, EVP_sha256()) == 0)
@@ -216,7 +216,7 @@ bool create_ec_ssl_certificate(EVP_PKEY *&pkey, X509 *&cert, int type)
     X509_free(cert);
     return false;
   }
-  const X509_NAME *name = X509_get_subject_name(cert);
+  X509_NAME *name = X509_get_subject_name(cert);
   X509_set_issuer_name(cert, name);
 
   if (X509_sign(cert, pkey, EVP_sha256()) == 0)
