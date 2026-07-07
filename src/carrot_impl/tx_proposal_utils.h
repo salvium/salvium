@@ -73,6 +73,7 @@ using carve_fees_and_balance_func_t = std::function<void(
     )>;
 
 std::uint64_t get_carrot_default_tx_extra_size(const std::size_t n_outputs);
+uint64_t estimate_fee_carrot(int n_inputs, int mixin, int n_outputs, size_t extra_size, bool bulletproof, bool clsag, bool bulletproof_plus, bool use_view_tags, uint64_t base_fee, uint64_t fee_quantization_mask);
 
 static inline std::size_t get_fcmppp_tx_weight(const std::size_t num_inputs,
     const std::size_t num_outputs,
