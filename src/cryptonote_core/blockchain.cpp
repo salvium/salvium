@@ -1755,50 +1755,51 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
 
   // Can we have matured STAKE transactions yet?
   uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
-  if (height <= stake_lock_period) {
-    if (b.protocol_tx.vout.size() != 0) { MERROR("protocol transaction in the block has outputs"); return false; }
-    return true;
-  }
 
-  // Get the staking data for the block that matured this time
-  cryptonote::yield_block_info ybi_matured;
+  // Collect matured yield payouts only once the stake lock period has elapsed.
+  // Prior to that, protocol outputs may still be present for other protocol events (e.g. CREATE_TOKEN).
   std::vector<std::pair<yield_tx_info, uint64_t>> yield_payouts;
   std::vector<std::pair<yield_tx_info_carrot, uint64_t>> carrot_yield_payouts;
-  uint64_t matured_height = height - stake_lock_period - 1;
-  bool ok = get_ybi_entry(matured_height, ybi_matured);
-  if (!ok) {
-    LOG_ERROR("Block at height: " << height << " - Failed to obtain yield block information - aborting");
-    return false;
-  } else if (ybi_matured.locked_coins_this_block == 0) {
-    LOG_PRINT_L1("Block at height: " << height << " - no yield payouts due - skipping");
-  } else {
-    // Iterate over the cached data for block yield, calculating the yield payouts due
-    if (get_ideal_hard_fork_version(matured_height) >= HF_VERSION_CARROT) {
-      if (!calculate_yield_payouts(matured_height, carrot_yield_payouts)) {
-        LOG_ERROR("Block at height: " << height << " - Failed to obtain carrot yield payout information - aborting");
-        return false;
-      }
-
-      // Get the YIELD TX information for matured pre-carrot staked coins - should not be any
-      std::vector<cryptonote::yield_tx_info> yield_entries;
-      m_db->get_yield_tx_info(matured_height, yield_entries);
-      if (yield_entries.size() != 0) {
-        LOG_ERROR("Block at height: " << height << " - Both carrot and pre-carrot yield payout information found - aborting");
-        return false;
-      }
-
+  if (height > stake_lock_period)
+  {
+    // Get the staking data for the block that matured this time
+    cryptonote::yield_block_info ybi_matured;
+    uint64_t matured_height = height - stake_lock_period - 1;
+    bool ok = get_ybi_entry(matured_height, ybi_matured);
+    if (!ok) {
+      LOG_ERROR("Block at height: " << height << " - Failed to obtain yield block information - aborting");
+      return false;
+    } else if (ybi_matured.locked_coins_this_block == 0) {
+      LOG_PRINT_L1("Block at height: " << height << " - no yield payouts due - skipping");
     } else {
-      if (!calculate_yield_payouts(matured_height, yield_payouts)) {
-        LOG_ERROR("Block at height: " << height << " - Failed to obtain yield payout information - aborting");
-        return false;
-      }
+      // Iterate over the cached data for block yield, calculating the yield payouts due
+      if (get_ideal_hard_fork_version(matured_height) >= HF_VERSION_CARROT) {
+        if (!calculate_yield_payouts(matured_height, carrot_yield_payouts)) {
+          LOG_ERROR("Block at height: " << height << " - Failed to obtain carrot yield payout information - aborting");
+          return false;
+        }
 
-      // Get the YIELD TX information for matured carrot staked coins - should not be any
-      std::vector<cryptonote::yield_tx_info_carrot> yield_entries;
-      m_db->get_carrot_yield_tx_info(matured_height, yield_entries);
-      if (yield_entries.size() != 0) {
-        LOG_ERROR("Block at height: " << height << " - Both carrot and pre-carrot yield payout information found - aborting");
-        return false;
+        // Get the YIELD TX information for matured pre-carrot staked coins - should not be any
+        std::vector<cryptonote::yield_tx_info> yield_entries;
+        m_db->get_yield_tx_info(matured_height, yield_entries);
+        if (yield_entries.size() != 0) {
+          LOG_ERROR("Block at height: " << height << " - Both carrot and pre-carrot yield payout information found - aborting");
+          return false;
+        }
+
+      } else {
+        if (!calculate_yield_payouts(matured_height, yield_payouts)) {
+          LOG_ERROR("Block at height: " << height << " - Failed to obtain yield payout information - aborting");
+          return false;
+        }
+
+        // Get the YIELD TX information for matured carrot staked coins - should not be any
+        std::vector<cryptonote::yield_tx_info_carrot> yield_entries;
+        m_db->get_carrot_yield_tx_info(matured_height, yield_entries);
+        if (yield_entries.size() != 0) {
+          LOG_ERROR("Block at height: " << height << " - Both carrot and pre-carrot yield payout information found - aborting");
+          return false;
+        }
       }
     }
   }
@@ -1817,7 +1818,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
       // Found a matching audit
       // Maturing height was during an audit - process accordingly
       cryptonote::audit_block_info abi_matured;
-      ok = get_abi_entry(matured_audit_height, abi_matured);
+      bool ok = get_abi_entry(matured_audit_height, abi_matured);
       if (!ok) {
         LOG_PRINT_L1("Block at height: " << height << " - failed to obtain audit block information - aborting");
         return false;
@@ -4702,6 +4703,12 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
         if (last_key_image && memcmp(&in_to_key.k_image, last_key_image, sizeof(*last_key_image)) >= 0)
         {
           MERROR_VER("transaction has unsorted inputs");
+          MWARNING("check_tx_inputs unsorted_inputs tx=" << get_transaction_hash(tx)
+            << " type=" << static_cast<int>(tx.type)
+            << " source_asset='" << tx.source_asset_type
+            << "' dest_asset='" << tx.destination_asset_type
+            << "' vin_index=" << n
+            << " ki=" << epee::string_tools::pod_to_hex(in_to_key.k_image));
           tvc.m_verifivation_failed = true;
           assert(false);
           return false;
@@ -4726,20 +4733,58 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
   {
     // make sure output being spent is of type txin_to_key, rather than
     // e.g. txin_gen, which is only used for miner transactions
-    if (txin.type() != typeid(txin_to_key)) { MERROR("wrong type id in tx input at Blockchain::check_tx_inputs"); return false; }
+    if (txin.type() != typeid(txin_to_key)) {
+      MWARNING("check_tx_inputs reject reason=wrong_input_type tx=" << get_transaction_hash(tx)
+        << " type=" << static_cast<int>(tx.type)
+        << " source_asset='" << tx.source_asset_type
+        << "' dest_asset='" << tx.destination_asset_type
+        << " vin_type='" << txin.type().name() << "'");
+      MERROR("wrong type id in tx input at Blockchain::check_tx_inputs");
+      return false;
+    }
     const txin_to_key& in_to_key = boost::get<txin_to_key>(txin);
 
     // Make sure the user isn't trying to spend BURNt coins
-    if (in_to_key.asset_type == "BURN") { MERROR("trying to spend BURNt coins"); return false; }
+    if (in_to_key.asset_type == "BURN") {
+      MWARNING("check_tx_inputs reject reason=burn_input tx=" << get_transaction_hash(tx)
+        << " type=" << static_cast<int>(tx.type)
+        << " source_asset='" << tx.source_asset_type
+        << "' dest_asset='" << tx.destination_asset_type
+        << " ki=" << epee::string_tools::pod_to_hex(in_to_key.k_image));
+      MERROR("trying to spend BURNt coins");
+      return false;
+    }
 
     // Make sure only a single asset_type is being spent, and that is the one set on the TX
-    if (in_to_key.asset_type != tx.source_asset_type) { MERROR("trying to spend " << in_to_key.asset_type << " coins in a TX with " << tx.source_asset_type << " source asset type"); return false; }
+    if (in_to_key.asset_type != tx.source_asset_type) {
+      MWARNING("check_tx_inputs reject reason=asset_mismatch tx=" << get_transaction_hash(tx)
+        << " type=" << static_cast<int>(tx.type)
+        << " source_asset='" << tx.source_asset_type
+        << "' in_asset='" << in_to_key.asset_type
+        << "' dest_asset='" << tx.destination_asset_type
+        << " ki=" << epee::string_tools::pod_to_hex(in_to_key.k_image));
+      MERROR("trying to spend " << in_to_key.asset_type << " coins in a TX with " << tx.source_asset_type << " source asset type");
+      return false;
+    }
 
     // make sure tx output has key offset(s) (is signed to be used)
-    if (!in_to_key.key_offsets.size()) { MERROR("empty in_to_key.key_offsets in transaction with id " << get_transaction_hash(tx)); return false; }
+    if (!in_to_key.key_offsets.size()) {
+      MWARNING("check_tx_inputs reject reason=empty_key_offsets tx=" << get_transaction_hash(tx)
+        << " type=" << static_cast<int>(tx.type)
+        << " source_asset='" << tx.source_asset_type
+        << "' dest_asset='" << tx.destination_asset_type
+        << " ki=" << epee::string_tools::pod_to_hex(in_to_key.k_image));
+      MERROR("empty in_to_key.key_offsets in transaction with id " << get_transaction_hash(tx));
+      return false;
+    }
 
     if(have_tx_keyimg_as_spent(in_to_key.k_image))
     {
+      MWARNING("check_tx_inputs reject reason=key_image_spent tx=" << get_transaction_hash(tx)
+        << " type=" << static_cast<int>(tx.type)
+        << " source_asset='" << tx.source_asset_type
+        << "' dest_asset='" << tx.destination_asset_type
+        << " ki=" << epee::string_tools::pod_to_hex(in_to_key.k_image));
       MERROR_VER("Key image already spent in blockchain: " << epee::string_tools::pod_to_hex(in_to_key.k_image));
       tvc.m_double_spend = true;
       return false;
@@ -4748,7 +4793,16 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     if (tx.version == 1)
     {
       // basically, make sure number of inputs == number of signatures
-      if (sig_index >= tx.signatures.size()) { MERROR("wrong transaction: not signature entry for input with index= " << sig_index); return false; }
+      if (sig_index >= tx.signatures.size()) {
+        MWARNING("check_tx_inputs reject reason=missing_signature_entry tx=" << get_transaction_hash(tx)
+          << " type=" << static_cast<int>(tx.type)
+          << " source_asset='" << tx.source_asset_type
+          << "' dest_asset='" << tx.destination_asset_type
+          << " sig_index=" << sig_index
+          << " signatures_size=" << tx.signatures.size());
+        MERROR("wrong transaction: not signature entry for input with index= " << sig_index);
+        return false;
+      }
     }
 
     // make sure that output being spent matches up correctly with the
@@ -4756,6 +4810,16 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     if (!check_tx_input(tx.version, in_to_key, tx_prefix_hash, tx.version == 1 ? tx.signatures[sig_index] : std::vector<crypto::signature>(), tx.rct_signatures, pubkeys[sig_index], pmax_used_block_height, hf_version))
     {
       MERROR_VER("Failed to check ring signature for tx " << get_transaction_hash(tx) << "  vin key with k_image: " << in_to_key.k_image << "  sig_index: " << sig_index);
+      MWARNING("check_tx_input_failed tx=" << get_transaction_hash(tx)
+        << " type=" << static_cast<int>(tx.type)
+        << " source_asset='" << tx.source_asset_type
+        << "' dest_asset='" << tx.destination_asset_type
+        << "' vin_index=" << sig_index
+        << " in_asset='" << in_to_key.asset_type
+        << "' key_offsets=" << in_to_key.key_offsets.size()
+        << " first_offset=" << (in_to_key.key_offsets.empty() ? 0 : in_to_key.key_offsets.front())
+        << " last_offset=" << (in_to_key.key_offsets.empty() ? 0 : in_to_key.key_offsets.back())
+        << " ki=" << epee::string_tools::pod_to_hex(in_to_key.k_image));
       if (pmax_used_block_height) // a default value of NULL is used when called from Blockchain::handle_block_to_main_chain()
       {
         MERROR_VER("  *pmax_used_block_height: " << *pmax_used_block_height);
@@ -5198,12 +5262,23 @@ bool Blockchain::check_tx_input(size_t tx_version, const txin_to_key& txin, cons
   if (!scan_outputkeys_for_indexes(tx_version, txin, vi, tx_prefix_hash, pmax_related_block_height))
   {
     MERROR_VER("Failed to get output keys for tx with amount = " << print_money(txin.amount) << " and count indexes " << txin.key_offsets.size());
+    MWARNING("scan_outputkeys_for_indexes_failed"
+      << " txin_asset='" << txin.asset_type
+      << "' key_offsets=" << txin.key_offsets.size()
+      << " first_offset=" << (txin.key_offsets.empty() ? 0 : txin.key_offsets.front())
+      << " last_offset=" << (txin.key_offsets.empty() ? 0 : txin.key_offsets.back())
+      << " ki=" << epee::string_tools::pod_to_hex(txin.k_image));
     return false;
   }
 
   if(txin.key_offsets.size() != output_keys.size())
   {
     MERROR_VER("Output keys for tx with amount = " << txin.amount << " and count indexes " << txin.key_offsets.size() << " returned wrong keys count " << output_keys.size());
+    MWARNING("output_keys_size_mismatch"
+      << " txin_asset='" << txin.asset_type
+      << "' key_offsets=" << txin.key_offsets.size()
+      << " output_keys=" << output_keys.size()
+      << " ki=" << epee::string_tools::pod_to_hex(txin.k_image));
     return false;
   }
   if (tx_version == 1) {

@@ -284,7 +284,7 @@ TEST(protocol_tx, yield_payouts_fail_when_ybi_window_is_incomplete)
   ASSERT_TRUE(bc->init(new TestDB(), network_type::FAKECHAIN, true, &test_options, 0, NULL));
 
   const uint64_t stake_height = bc->get_db().height();
-  add_block(bc, {}, {AMOUNT_BURNT});
+  add_block(bc, std::vector<uint64_t>{}, std::vector<uint64_t>{AMOUNT_BURNT});
   progress_chain(bc, STAKE_LOCK_PERIOD - 1);
 
   ASSERT_TRUE(bc->rebuild_ybi_cache());
@@ -311,7 +311,7 @@ TEST(protocol_tx, audit_payouts_return_locked_amount_without_yield)
 
   const uint64_t audit_amount = 123456789;
   const uint64_t audit_height = bc->get_db().height();
-  add_block(bc, {audit_amount}, {});
+  add_block(bc, std::vector<uint64_t>{audit_amount}, std::vector<uint64_t>{});
 
   std::vector<std::pair<yield_tx_info, uint64_t>> payouts;
   ASSERT_TRUE(bc->calculate_audit_payouts(audit_height, payouts));

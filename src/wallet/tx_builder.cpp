@@ -87,13 +87,19 @@ static bool is_transfer_usable_for_input_selection(const wallet2::transfer_detai
     */
     // Reject locked outputs
     size_t blocks_locked_for = CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE;
-    if (td.m_tx.type == cryptonote::transaction_type::MINER || td.m_tx.type == cryptonote::transaction_type::PROTOCOL)
+    const bool is_miner_or_protocol =
+        td.m_tx.type == cryptonote::transaction_type::MINER ||
+        td.m_tx.type == cryptonote::transaction_type::PROTOCOL;
+    if (is_miner_or_protocol)
       blocks_locked_for = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
 
     return !td.m_spent
         && td.m_key_image_known
         && !td.m_key_image_partial
         && !td.m_frozen
+        // Inputs without a resolved asset-type output index can produce
+        // invalid ring references in carrot-era input verification.
+        && td.m_asset_type_output_index != std::numeric_limits<uint64_t>::max()
         && (top_block_index +1 >= td.m_block_height + blocks_locked_for)
         // && last_locked_block_index <= top_block_index
         && td.m_subaddr_index.major == from_account
@@ -248,6 +254,20 @@ carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
     const std::string &asset_type,
     std::set<size_t> &selected_transfer_indices_out)
 {
+    struct input_filter_stats_t
+    {
+        size_t total = 0;
+        size_t spent = 0;
+        size_t key_image = 0;
+        size_t frozen = 0;
+        size_t locked = 0;
+        size_t account = 0;
+        size_t subaddress = 0;
+        size_t amount = 0;
+        size_t asset = 0;
+        size_t accepted = 0;
+    } stats;
+
     // Collect transfer_container into a `std::vector<carrot::InputCandidate>` for usable inputs
     std::vector<carrot::InputCandidate> input_candidates;
     std::vector<size_t> input_candidates_transfer_indices;
@@ -256,6 +276,56 @@ carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
     for (size_t i = 0; i < transfers.size(); ++i)
     {
         const wallet2::transfer_details &td = transfers.at(i);
+        ++stats.total;
+
+        size_t blocks_locked_for = CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE;
+        const bool is_miner_or_protocol =
+            td.m_tx.type == cryptonote::transaction_type::MINER ||
+            td.m_tx.type == cryptonote::transaction_type::PROTOCOL;
+        if (is_miner_or_protocol)
+            blocks_locked_for = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
+
+        if (td.m_spent)
+        {
+            ++stats.spent;
+            continue;
+        }
+        if (!td.m_key_image_known || td.m_key_image_partial)
+        {
+            ++stats.key_image;
+            continue;
+        }
+        if (td.m_frozen)
+        {
+            ++stats.frozen;
+            continue;
+        }
+        if (!(top_block_index + 1 >= td.m_block_height + blocks_locked_for))
+        {
+            ++stats.locked;
+            continue;
+        }
+        if (td.m_subaddr_index.major != from_account)
+        {
+            ++stats.account;
+            continue;
+        }
+        if (!(from_subaddresses.empty() || from_subaddresses.count(td.m_subaddr_index.minor) == 1))
+        {
+            ++stats.subaddress;
+            continue;
+        }
+        if (!(td.amount() >= ignore_below && td.amount() <= ignore_above))
+        {
+            ++stats.amount;
+            continue;
+        }
+        if (td.asset_type != asset_type)
+        {
+            ++stats.asset;
+            continue;
+        }
+
         if (is_transfer_usable_for_input_selection(td,
                                                    from_account,
                                                    from_subaddresses,
@@ -264,6 +334,7 @@ carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
                                                    top_block_index,
                                                    asset_type))
         {
+            ++stats.accepted;
             input_candidates.push_back(carrot::InputCandidate{
                 .core = carrot::CarrotSelectedInput{
                     .amount = td.amount(),
@@ -275,6 +346,25 @@ carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
             });
             input_candidates_transfer_indices.push_back(i);
         }
+    }
+
+    if (input_candidates.empty())
+    {
+        MERROR("No usable input candidates. total=" << stats.total
+            << ", spent=" << stats.spent
+            << ", key_image=" << stats.key_image
+            << ", frozen=" << stats.frozen
+            << ", locked=" << stats.locked
+            << ", account=" << stats.account
+            << ", subaddress=" << stats.subaddress
+            << ", amount=" << stats.amount
+            << ", asset=" << stats.asset
+            << ", accepted=" << stats.accepted
+            << ", from_account=" << from_account
+            << ", top_block_index=" << top_block_index
+            << ", ignore_range=[" << cryptonote::print_money(ignore_below)
+            << "," << cryptonote::print_money(ignore_above) << "]"
+            << ", requested_asset='" << asset_type << "'");
     }
 
     // Create wrapper around `make_single_transfer_input_selector`
@@ -363,6 +453,7 @@ std::vector<cryptonote::tx_source_entry> get_sources(
 
         // Sanity check the asset_type for this TD is correct
         THROW_WALLET_EXCEPTION_IF(td.asset_type != source_asset, error::wallet_internal_error, "Input has wrong asset_type - expected " + source_asset + " but found " + td.asset_type);
+        THROW_WALLET_EXCEPTION_IF(td.m_tx.vin.empty(), error::wallet_internal_error, "Input TX has no inputs");
 
         src.amount = td.amount();
         src.rct = td.is_rct();
@@ -398,21 +489,13 @@ std::vector<cryptonote::tx_source_entry> get_sources(
         //paste real transaction to the random index
         auto it_to_replace = std::find_if(src.outputs.begin(), src.outputs.end(), [&](const tx_output_entry& a)
         {
-            // HERE BE DRAGONS!!!
-            // SRCG: ring tweak to indexed per asset_type - DO NOT COMMIT UNTIL IT IS ALL WORKING
-            //return a.first == td.m_global_output_index;
-            return a.first == td.m_asset_type_output_index;
-            // LAND AHOY!!!
+            return a.second.dest == rct::pk2rct(td.get_public_key());
         });
         THROW_WALLET_EXCEPTION_IF(it_to_replace == src.outputs.end(), error::wallet_internal_error,
             "real output not found");
 
         tx_output_entry real_oe;
-        // HERE BE DRAGONS!!!
-        // SRCG: ring tweak to indexed per asset_type - DO NOT COMMIT UNTIL IT IS ALL WORKING
-        //real_oe.first = td.m_global_output_index;
-        real_oe.first = td.m_asset_type_output_index;
-        // LAND AHOY!!!
+        real_oe.first = it_to_replace->first;
         real_oe.second.dest = rct::pk2rct(td.get_public_key());
         real_oe.second.mask = rct::commit(td.amount(), td.m_mask);
         *it_to_replace = real_oe;

@@ -314,7 +314,12 @@ namespace cryptonote
     // HERE BE DRAGONS!!!
     // Check that CREATE_TOKEN txs are unique in the pool
     if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
-      // TODO: ...scan the existing entries - requires either a registry of CREATE_TOKEN TXs, or to interatively process the pool
+      if (have_pending_create_token(tx.token_metadata.asset_type, id))
+      {
+        MERROR("CREATE_TOKEN for ticker '" << tx.token_metadata.asset_type << "' already exists in txpool");
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
     }
     // LAND AHOY!!!
     
@@ -369,7 +374,29 @@ namespace cryptonote
         tvc.m_added_to_pool = true;
       }else
       {
-        LOG_PRINT_L1("tx used wrong inputs, rejected");
+        std::ostringstream in_diag;
+        in_diag << "tx used wrong inputs, rejected"
+          << " type=" << static_cast<uint64_t>(tx.type)
+          << " vin_count=" << tx.vin.size()
+          << " source_asset='" << tx.source_asset_type
+          << "' dest_asset='" << tx.destination_asset_type << "'";
+        for (size_t vin_idx = 0; vin_idx < tx.vin.size(); ++vin_idx)
+        {
+          if (tx.vin[vin_idx].type() == typeid(cryptonote::txin_to_key))
+          {
+            const auto &in = boost::get<cryptonote::txin_to_key>(tx.vin[vin_idx]);
+            in_diag << " vin[" << vin_idx << "]:asset='" << in.asset_type
+              << "' ki=" << epee::string_tools::pod_to_hex(in.k_image)
+              << " key_offsets=" << in.key_offsets.size();
+            if (!in.key_offsets.empty())
+              in_diag << " first=" << in.key_offsets.front() << " last=" << in.key_offsets.back();
+          }
+          else
+          {
+            in_diag << " vin[" << vin_idx << "]:non-txin_to_key";
+          }
+        }
+        MWARNING(in_diag.str());
         tvc.m_verifivation_failed = true;
         tvc.m_invalid_input = true;
         return false;
@@ -1587,6 +1614,25 @@ namespace cryptonote
   bool tx_memory_pool::is_transaction_ready_to_go(txpool_tx_meta_t& txd, const crypto::hash &txid, const cryptonote::blobdata& txblob, transaction &tx) const
   {
     return is_transaction_ready_to_go(txd, txid, cryptonote::blobdata_ref{txblob.data(), txblob.size()}, tx);
+  }
+  //---------------------------------------------------------------------------------
+  bool tx_memory_pool::have_pending_create_token(const std::string &ticker, const crypto::hash &ignore_txid) const
+  {
+    bool found = false;
+    m_blockchain.for_all_txpool_txes([&found, &ticker, &ignore_txid](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata_ref *bd) {
+      if (found || txid == ignore_txid || meta.pruned || bd == nullptr)
+        return !found;
+
+      cryptonote::transaction tx;
+      if (!cryptonote::parse_and_validate_tx_from_blob(*bd, tx))
+        return true;
+
+      if (tx.type == cryptonote::transaction_type::CREATE_TOKEN && tx.token_metadata.asset_type == ticker)
+        found = true;
+
+      return !found;
+    }, true, relay_category::all);
+    return found;
   }
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::have_key_images(const std::unordered_set<crypto::key_image>& k_images, const transaction_prefix& tx)
