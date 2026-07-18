@@ -249,6 +249,10 @@ namespace epee
       //CATCH_ENTRY("portable_storage::get_next_value", false);
     } 
     //---------------------------------------------------------------------------------------------------------------
+    #if defined(__GNUC__) && !defined(__clang__)
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wstring-compare"
+    #endif
     template<class t_value>
     harray portable_storage::insert_first_value(const std::string& value_name, t_value&& target, hsection hparent_section)
     {
@@ -263,11 +267,11 @@ namespace epee
         if(!pentry)
           return nullptr;
       }
-      if(pentry->type() != typeid(array_entry))
+      if(!boost::get<array_entry>(pentry))
         *pentry = storage_entry(array_entry(array_entry_t<t_real_value>()));
 
       array_entry& arr = boost::get<array_entry>(*pentry);
-      if(arr.type() != typeid(array_entry_t<t_real_value>))
+      if(!boost::get<array_entry_t<t_real_value> >(&arr))
         arr = array_entry(array_entry_t<t_real_value>());
 
       array_entry_t<t_real_value>& arr_typed = boost::get<array_entry_t<t_real_value> >(arr);
@@ -275,6 +279,9 @@ namespace epee
       return &arr;
       CATCH_ENTRY("portable_storage::insert_first_value", nullptr);
     }
+    #if defined(__GNUC__) && !defined(__clang__)
+    #pragma GCC diagnostic pop
+    #endif
     //---------------------------------------------------------------------------------------------------------------
     template<class t_value>
     bool portable_storage::insert_next_value(harray hval_array, t_value&& target)
@@ -284,11 +291,11 @@ namespace epee
       TRY_ENTRY();
       CHECK_AND_ASSERT(hval_array, false);
 
-      CHECK_AND_ASSERT_MES(hval_array->type() == typeid(array_entry_t<t_real_value>),
-        false, "unexpected type in insert_next_value: " << typeid(array_entry_t<t_real_value>).name());
+      array_entry_t<t_real_value>* arr_typed = boost::get<array_entry_t<t_real_value> >(hval_array);
+      CHECK_AND_ASSERT_MES(arr_typed,
+        false, "unexpected type in insert_next_value");
 
-      array_entry_t<t_real_value>& arr_typed = boost::get<array_entry_t<t_real_value> >(*hval_array);
-      arr_typed.insert_next_value(std::forward<t_value>(target));
+      arr_typed->insert_next_value(std::forward<t_value>(target));
       return true;
       CATCH_ENTRY("portable_storage::insert_next_value", false);
     }

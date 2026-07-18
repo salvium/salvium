@@ -32,7 +32,10 @@
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
+#include <atomic>
+#include <mutex>
 #include <string>
+#include <thread>
 #include "common/util.h"
 #include "net/http_server_impl_base.h"
 #include "math_helper.h"
@@ -291,11 +294,15 @@ namespace tools
       bool validate_transfer(const std::list<wallet_rpc::transfer_destination>& destinations, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type& type, const std::string& payment_id, std::vector<cryptonote::tx_destination_entry>& dsts, std::vector<uint8_t>& extra, bool at_least_one_destination, epee::json_rpc::error& er);
 
       void check_background_mining();
+      void wait_for_set_daemon_worker();
 
       wallet2 *m_wallet;
       std::string m_wallet_dir;
       tools::private_file rpc_login_file;
       std::atomic<bool> m_stop;
+      std::atomic_flag m_set_daemon_active = ATOMIC_FLAG_INIT;
+      std::mutex m_set_daemon_thread_mutex;
+      std::thread m_set_daemon_thread;
       bool m_restricted;
       const boost::program_options::variables_map *m_vm;
       uint32_t m_auto_refresh_period;

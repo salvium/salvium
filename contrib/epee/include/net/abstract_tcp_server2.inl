@@ -1538,6 +1538,11 @@ namespace net_utils
       accept_function_pointer = &boosted_tcp_server<t_protocol_handler>::handle_accept_ipv6;
     }
 
+    bool accept_rescheduled = false;
+    epee::net_utils::ssl_support_t next_ssl_support = epee::net_utils::ssl_support_t::e_ssl_support_disabled;
+    if (*current_new_connection)
+      next_ssl_support = (*current_new_connection)->get_ssl_support();
+
     try
     {
     if (!e)
@@ -1554,10 +1559,12 @@ namespace net_utils
         (*current_new_connection)->setRpcStation(); // hopefully this is not needed actually
       }
       connection_ptr conn(std::move((*current_new_connection)));
-      (*current_new_connection).reset(new connection<t_protocol_handler>(io_context_, m_state, m_connection_type, conn->get_ssl_support()));
+      next_ssl_support = conn->get_ssl_support();
+      (*current_new_connection).reset(new connection<t_protocol_handler>(io_context_, m_state, m_connection_type, next_ssl_support));
       current_acceptor->async_accept((*current_new_connection)->socket(),
           boost::bind(accept_function_pointer, this,
-            boost::asio::placeholders::error));
+        boost::asio::placeholders::error));
+      accept_rescheduled = true;
 
       boost::asio::socket_base::keep_alive opt(true);
       conn->socket().set_option(opt);
@@ -1589,10 +1596,17 @@ namespace net_utils
     assert(m_state != nullptr); // always set in constructor
     _erro("Some problems at accept: " << e.message() << ", connections_count = " << m_state->sock_count);
     misc_utils::sleep_no_w(100);
-    (*current_new_connection).reset(new connection<t_protocol_handler>(io_context_, m_state, m_connection_type, (*current_new_connection)->get_ssl_support()));
-    current_acceptor->async_accept((*current_new_connection)->socket(),
-        boost::bind(accept_function_pointer, this,
-          boost::asio::placeholders::error));
+
+    if (m_stop_signal_sent || io_context_.stopped() || !current_acceptor->is_open())
+      return;
+
+    if (!accept_rescheduled)
+    {
+      (*current_new_connection).reset(new connection<t_protocol_handler>(io_context_, m_state, m_connection_type, next_ssl_support));
+      current_acceptor->async_accept((*current_new_connection)->socket(),
+          boost::bind(accept_function_pointer, this,
+            boost::asio::placeholders::error));
+    }
   }
   //---------------------------------------------------------------------------------
   template<class t_protocol_handler>

@@ -37,6 +37,7 @@
 
 #include <time.h>
 #include <atomic>
+#include <mutex>
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
 #include "string_tools.h"
@@ -51,6 +52,11 @@
 #define MLOG_LOG(x) CINFO(el::base::Writer,el::base::DispatchAction::FileOnlyLog,MONERO_DEFAULT_LOG_CATEGORY) << x
 
 using namespace epee;
+
+namespace
+{
+  std::recursive_mutex mlog_categories_mutex;
+}
 
 static std::string generate_log_filename(const char *base)
 {
@@ -238,6 +244,7 @@ void mlog_configure(const std::string &filename_base, bool console, const std::s
 
 void mlog_set_categories(const char *categories)
 {
+  const std::lock_guard<std::recursive_mutex> lock{mlog_categories_mutex};
   std::string new_categories;
   if (*categories)
   {
@@ -276,6 +283,7 @@ void mlog_set_categories(const char *categories)
 
 std::string mlog_get_categories()
 {
+  const std::lock_guard<std::recursive_mutex> lock{mlog_categories_mutex};
   return el::Loggers::getCategories();
 }
 

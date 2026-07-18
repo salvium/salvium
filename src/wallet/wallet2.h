@@ -1703,6 +1703,7 @@ private:
     * \brief GUI Address book get/store
     */
     std::vector<address_book_row> get_address_book() const { return m_address_book; }
+    size_t get_address_book_size() const { return m_address_book.size(); }
     bool add_address_book_row(const cryptonote::account_public_address &address, const crypto::hash8 *payment_id, const std::string &description, bool is_subaddress, bool is_carrot);
     bool set_address_book_row(size_t row_id, const cryptonote::account_public_address &address, const crypto::hash8 *payment_id, const std::string &description, bool is_subaddress, bool is_carrot);
     bool delete_address_book_row(std::size_t row_id);
@@ -2116,6 +2117,7 @@ private:
     void set_spent(size_t idx, uint64_t height);
     void set_spent(const crypto::key_image &ki, const uint64_t height);
     void set_unspent(size_t idx);
+    bool is_locked_yield_marker(const transfer_details &td) const;
     bool is_spent(const transfer_details &td, bool strict = true) const;
     bool is_spent(size_t idx, bool strict = true) const;
   public:
@@ -2283,6 +2285,7 @@ private:
     bool m_is_initialized;
     NodeRPCProxy m_node_rpc_proxy;
     std::unordered_set<crypto::hash> m_scanned_pool_txs[2];
+    std::deque<crypto::hash> m_scanned_pool_txs_order;
     size_t m_subaddress_lookahead_major, m_subaddress_lookahead_minor;
     std::string m_device_name;
     std::string m_device_derivation_path;

@@ -267,20 +267,33 @@ namespace cryptonote
     constexpr const uint32_t credits_per_hash_threshold = 0;
     constexpr const bool rpc_payment_enabled = credits_per_hash_threshold != 0;
 
-    if (address.empty())
+    try
     {
-      m_bootstrap_daemon.reset(nullptr);
+      if (address.empty())
+      {
+        m_bootstrap_daemon.reset(nullptr);
+      }
+      else if (address == "auto")
+      {
+        auto get_nodes = [this]() {
+          return get_public_nodes(credits_per_hash_threshold);
+        };
+        m_bootstrap_daemon.reset(new bootstrap_daemon(std::move(get_nodes), rpc_payment_enabled, m_bootstrap_daemon_proxy.empty() ? proxy : m_bootstrap_daemon_proxy));
+      }
+      else
+      {
+        m_bootstrap_daemon.reset(new bootstrap_daemon(address, credentials, rpc_payment_enabled, m_bootstrap_daemon_proxy.empty() ? proxy : m_bootstrap_daemon_proxy));
+      }
     }
-    else if (address == "auto")
+    catch (const std::exception &e)
     {
-      auto get_nodes = [this]() {
-        return get_public_nodes(credits_per_hash_threshold);
-      };
-      m_bootstrap_daemon.reset(new bootstrap_daemon(std::move(get_nodes), rpc_payment_enabled, m_bootstrap_daemon_proxy.empty() ? proxy : m_bootstrap_daemon_proxy));
+      MERROR("Failed to configure bootstrap daemon: " << e.what());
+      return false;
     }
-    else
+    catch (...)
     {
-      m_bootstrap_daemon.reset(new bootstrap_daemon(address, credentials, rpc_payment_enabled, m_bootstrap_daemon_proxy.empty() ? proxy : m_bootstrap_daemon_proxy));
+      MERROR("Failed to configure bootstrap daemon: unknown exception");
+      return false;
     }
 
     m_should_use_bootstrap_daemon = m_bootstrap_daemon.get() != nullptr;
@@ -1737,9 +1750,27 @@ namespace cryptonote
   bool core_rpc_server::on_set_log_categories(const COMMAND_RPC_SET_LOG_CATEGORIES::request& req, COMMAND_RPC_SET_LOG_CATEGORIES::response& res, const connection_context *ctx)
   {
     RPC_TRACKER(set_log_categories);
-    mlog_set_log(req.categories.c_str());
-    res.categories = mlog_get_categories();
-    res.status = CORE_RPC_STATUS_OK;
+    constexpr size_t kMaxCategoriesSize = 4096;
+    if (req.categories.size() > kMaxCategoriesSize)
+    {
+      res.status = "Error: log categories string too long";
+      return true;
+    }
+
+    try
+    {
+      mlog_set_log(req.categories.c_str());
+      res.categories = mlog_get_categories();
+      res.status = CORE_RPC_STATUS_OK;
+    }
+    catch (const std::exception &e)
+    {
+      res.status = std::string("Failed to set log categories: ") + e.what();
+    }
+    catch (...)
+    {
+      res.status = "Failed to set log categories: unknown exception";
+    }
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -1841,20 +1872,48 @@ namespace cryptonote
   bool core_rpc_server::on_set_bootstrap_daemon(const COMMAND_RPC_SET_BOOTSTRAP_DAEMON::request& req, COMMAND_RPC_SET_BOOTSTRAP_DAEMON::response& res, const connection_context *ctx)
   {
     PERF_TIMER(on_set_bootstrap_daemon);
+    try
+    {
+      constexpr size_t kMaxAddressSize = 1024;
+      constexpr size_t kMaxProxySize = 1024;
+      constexpr size_t kMaxCredentialSize = 1024;
+      if (req.address.size() > kMaxAddressSize || req.proxy.size() > kMaxProxySize || req.username.size() > kMaxCredentialSize || req.password.size() > kMaxCredentialSize)
+      {
+        res.status = "Failed to set bootstrap daemon: input too long";
+        return true;
+      }
+      if (!req.address.empty() && req.address != "auto")
+      {
+        auto na_parsed = net::get_network_address(req.address, 0);
+        if (!na_parsed)
+        {
+          res.status = "Failed to set bootstrap daemon: invalid address format";
+          return true;
+        }
+      }
 
-    boost::optional<epee::net_utils::http::login> credentials;
-    if (!req.username.empty() || !req.password.empty())
-    {
-      credentials = epee::net_utils::http::login(req.username, req.password);
-    }
+      boost::optional<epee::net_utils::http::login> credentials;
+      if (!req.username.empty() || !req.password.empty())
+      {
+        credentials = epee::net_utils::http::login(req.username, req.password);
+      }
 
-    if (set_bootstrap_daemon(req.address, credentials, req.proxy))
-    {
-      res.status = CORE_RPC_STATUS_OK;
+      if (set_bootstrap_daemon(req.address, credentials, req.proxy))
+      {
+        res.status = CORE_RPC_STATUS_OK;
+      }
+      else
+      {
+        res.status = "Failed to set bootstrap daemon";
+      }
     }
-    else
+    catch (const std::exception &e)
     {
-      res.status = "Failed to set bootstrap daemon";
+      res.status = std::string("Failed to set bootstrap daemon: ") + e.what();
+    }
+    catch (...)
+    {
+      res.status = "Failed to set bootstrap daemon: unknown exception";
     }
 
     return true;
