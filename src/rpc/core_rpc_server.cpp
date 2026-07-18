@@ -29,6 +29,7 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <regex>
+#include <unordered_set>
 #include <boost/preprocessor/stringize.hpp>
 #include <boost/uuid/nil_generator.hpp>
 #include <boost/filesystem.hpp>
@@ -78,6 +79,11 @@ static constexpr size_t BLOCK_SIZE_SANITY_LEEWAY_RPC = 100;
 #define RESTRICTED_TRANSACTIONS_COUNT 100
 #define RESTRICTED_SPENT_KEY_IMAGES_COUNT 5000
 #define RESTRICTED_BLOCK_COUNT 1000
+static constexpr size_t MAX_BLOCK_HEADERS_REQUEST = 1000;
+static constexpr uint64_t MAX_FEE_ESTIMATE_GRACE_BLOCKS = 100;
+static constexpr size_t MAX_OUTPUT_DISTRIBUTION_AMOUNTS = 64;
+static constexpr uint64_t MAX_RAW_YIELD_INFO_BLOCKS = 1000;
+static constexpr uint64_t MAX_GENERATE_BLOCKS = 500;
 static constexpr size_t MAX_GET_TRANSACTIONS_COUNT = 1000;
 static constexpr size_t MAX_GET_OUTPUTS_COUNT = 50000;
 static constexpr size_t MAX_SPENT_KEY_IMAGES_COUNT = 50000;
@@ -109,6 +115,33 @@ namespace
 
     offset = std::distance(tx_extra.begin(), match) + 2;
     return true;
+  }
+
+  static bool normalize_distribution_amounts(const std::vector<uint64_t> &amounts, std::vector<uint64_t> &normalized)
+  {
+    if (amounts.size() > MAX_OUTPUT_DISTRIBUTION_AMOUNTS)
+      return false;
+
+    normalized.clear();
+    normalized.reserve(amounts.size());
+    std::unordered_set<uint64_t> seen;
+    seen.reserve(amounts.size());
+    for (uint64_t amount: amounts)
+    {
+      if (seen.insert(amount).second)
+        normalized.push_back(amount);
+    }
+    return true;
+  }
+
+  static bool is_local_management_address(const epee::net_utils::network_address &address)
+  {
+    return address.is_loopback() || address.is_local();
+  }
+
+  static bool is_local_management_subnet(const epee::net_utils::ipv4_network_subnet &subnet)
+  {
+    return subnet.is_loopback() || subnet.is_local();
   }
 
   class RPCTracker
@@ -267,20 +300,33 @@ namespace cryptonote
     constexpr const uint32_t credits_per_hash_threshold = 0;
     constexpr const bool rpc_payment_enabled = credits_per_hash_threshold != 0;
 
-    if (address.empty())
+    try
     {
-      m_bootstrap_daemon.reset(nullptr);
+      if (address.empty())
+      {
+        m_bootstrap_daemon.reset(nullptr);
+      }
+      else if (address == "auto")
+      {
+        auto get_nodes = [this]() {
+          return get_public_nodes(credits_per_hash_threshold);
+        };
+        m_bootstrap_daemon.reset(new bootstrap_daemon(std::move(get_nodes), rpc_payment_enabled, m_bootstrap_daemon_proxy.empty() ? proxy : m_bootstrap_daemon_proxy));
+      }
+      else
+      {
+        m_bootstrap_daemon.reset(new bootstrap_daemon(address, credentials, rpc_payment_enabled, m_bootstrap_daemon_proxy.empty() ? proxy : m_bootstrap_daemon_proxy));
+      }
     }
-    else if (address == "auto")
+    catch (const std::exception &e)
     {
-      auto get_nodes = [this]() {
-        return get_public_nodes(credits_per_hash_threshold);
-      };
-      m_bootstrap_daemon.reset(new bootstrap_daemon(std::move(get_nodes), rpc_payment_enabled, m_bootstrap_daemon_proxy.empty() ? proxy : m_bootstrap_daemon_proxy));
+      MERROR("Failed to configure bootstrap daemon: " << e.what());
+      return false;
     }
-    else
+    catch (...)
     {
-      m_bootstrap_daemon.reset(new bootstrap_daemon(address, credentials, rpc_payment_enabled, m_bootstrap_daemon_proxy.empty() ? proxy : m_bootstrap_daemon_proxy));
+      MERROR("Failed to configure bootstrap daemon: unknown exception");
+      return false;
     }
 
     m_should_use_bootstrap_daemon = m_bootstrap_daemon.get() != nullptr;
@@ -1423,10 +1469,11 @@ namespace cryptonote
       return true;
     }
 
-    uint64_t output_count = m_core.get_blockchain_storage().get_num_mature_outputs(req.source_asset_type);
-    bool ok = cryptonote::tx_sanity_check(tx_blob, output_count);
-    if (!ok) {
-      if (req.do_sanity_checks && !cryptonote::tx_sanity_check(tx_blob, output_count)) {
+    if (req.do_sanity_checks)
+    {
+      uint64_t output_count = m_core.get_blockchain_storage().get_num_mature_outputs(req.source_asset_type);
+      if (!cryptonote::tx_sanity_check(tx_blob, output_count))
+      {
         res.status = "Failed";
         res.reason = "Sanity check failed";
         res.sanity_check_failed = true;
@@ -1737,9 +1784,27 @@ namespace cryptonote
   bool core_rpc_server::on_set_log_categories(const COMMAND_RPC_SET_LOG_CATEGORIES::request& req, COMMAND_RPC_SET_LOG_CATEGORIES::response& res, const connection_context *ctx)
   {
     RPC_TRACKER(set_log_categories);
-    mlog_set_log(req.categories.c_str());
-    res.categories = mlog_get_categories();
-    res.status = CORE_RPC_STATUS_OK;
+    constexpr size_t kMaxCategoriesSize = 4096;
+    if (req.categories.size() > kMaxCategoriesSize)
+    {
+      res.status = "Error: log categories string too long";
+      return true;
+    }
+
+    try
+    {
+      mlog_set_log(req.categories.c_str());
+      res.categories = mlog_get_categories();
+      res.status = CORE_RPC_STATUS_OK;
+    }
+    catch (const std::exception &e)
+    {
+      res.status = std::string("Failed to set log categories: ") + e.what();
+    }
+    catch (...)
+    {
+      res.status = "Failed to set log categories: unknown exception";
+    }
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -1841,20 +1906,48 @@ namespace cryptonote
   bool core_rpc_server::on_set_bootstrap_daemon(const COMMAND_RPC_SET_BOOTSTRAP_DAEMON::request& req, COMMAND_RPC_SET_BOOTSTRAP_DAEMON::response& res, const connection_context *ctx)
   {
     PERF_TIMER(on_set_bootstrap_daemon);
+    try
+    {
+      constexpr size_t kMaxAddressSize = 1024;
+      constexpr size_t kMaxProxySize = 1024;
+      constexpr size_t kMaxCredentialSize = 1024;
+      if (req.address.size() > kMaxAddressSize || req.proxy.size() > kMaxProxySize || req.username.size() > kMaxCredentialSize || req.password.size() > kMaxCredentialSize)
+      {
+        res.status = "Failed to set bootstrap daemon: input too long";
+        return true;
+      }
+      if (!req.address.empty() && req.address != "auto")
+      {
+        auto na_parsed = net::get_network_address(req.address, 0);
+        if (!na_parsed)
+        {
+          res.status = "Failed to set bootstrap daemon: invalid address format";
+          return true;
+        }
+      }
 
-    boost::optional<epee::net_utils::http::login> credentials;
-    if (!req.username.empty() || !req.password.empty())
-    {
-      credentials = epee::net_utils::http::login(req.username, req.password);
-    }
+      boost::optional<epee::net_utils::http::login> credentials;
+      if (!req.username.empty() || !req.password.empty())
+      {
+        credentials = epee::net_utils::http::login(req.username, req.password);
+      }
 
-    if (set_bootstrap_daemon(req.address, credentials, req.proxy))
-    {
-      res.status = CORE_RPC_STATUS_OK;
+      if (set_bootstrap_daemon(req.address, credentials, req.proxy))
+      {
+        res.status = CORE_RPC_STATUS_OK;
+      }
+      else
+      {
+        res.status = "Failed to set bootstrap daemon";
+      }
     }
-    else
+    catch (const std::exception &e)
     {
-      res.status = "Failed to set bootstrap daemon";
+      res.status = std::string("Failed to set bootstrap daemon: ") + e.what();
+    }
+    catch (...)
+    {
+      res.status = "Failed to set bootstrap daemon: unknown exception";
     }
 
     return true;
@@ -2392,6 +2485,13 @@ namespace cryptonote
       return false;
     }
 
+    if (req.amount_of_blocks > MAX_GENERATE_BLOCKS)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Too many blocks requested";
+      return false;
+    }
+
     COMMAND_RPC_GETBLOCKTEMPLATE::request template_req;
     COMMAND_RPC_GETBLOCKTEMPLATE::response template_res;
     COMMAND_RPC_SUBMITBLOCK::request submit_req;
@@ -2627,6 +2727,14 @@ namespace cryptonote
       return false;
     }
 
+    const size_t requested_headers = req.hashes.size() + (req.hash.empty() ? 0 : 1);
+    if (requested_headers > MAX_BLOCK_HEADERS_REQUEST)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Too many block headers requested";
+      return false;
+    }
+
     auto get = [this](const std::string &hash, bool fill_pow_hash, block_header_response &block_header, bool restricted, epee::json_rpc::error& error_resp) -> bool {
       crypto::hash block_hash;
       bool hash_parsed = parse_hash256(hash, block_hash);
@@ -2697,6 +2805,12 @@ namespace cryptonote
     if (restricted && req.end_height - req.start_height > RESTRICTED_BLOCK_HEADER_RANGE)
     {
       error_resp.code = CORE_RPC_ERROR_CODE_RESTRICTED;
+      error_resp.message = "Too many block headers requested.";
+      return false;
+    }
+    if (req.end_height - req.start_height + 1 > MAX_BLOCK_HEADERS_REQUEST)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
       error_resp.message = "Too many block headers requested.";
       return false;
     }
@@ -2957,6 +3071,12 @@ namespace cryptonote
         auto ns_parsed = net::get_ipv4_subnet_address(i->host);
         if (ns_parsed)
         {
+          if (i->ban && !req.allow_local && is_local_management_subnet(*ns_parsed))
+          {
+            error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+            error_resp.message = "Refusing to ban loopback/local subnet without allow_local";
+            return false;
+          }
           if (i->ban)
             m_p2p.block_subnet(*ns_parsed, i->seconds);
           else
@@ -2987,6 +3107,12 @@ namespace cryptonote
         }
         na = epee::net_utils::ipv4_network_address{i->ip, 0};
       }
+      if (i->ban && !req.allow_local && is_local_management_address(na))
+      {
+        error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+        error_resp.message = "Refusing to ban loopback/local address without allow_local";
+        return false;
+      }
       if (i->ban)
         m_p2p.block_host(na, i->seconds);
       else
@@ -3005,6 +3131,12 @@ namespace cryptonote
     std::vector<crypto::hash> txids;
     if (req.txids.empty())
     {
+      if (!req.confirm_all)
+      {
+        error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+        error_resp.message = "Full txpool flush requires confirm_all";
+        return false;
+      }
       std::vector<transaction> pool_txs;
       bool r = m_core.get_pool_transactions(pool_txs, true);
       if (!r)
@@ -3059,14 +3191,21 @@ namespace cryptonote
       return r;
 
     const bool restricted = m_restricted && ctx;
-    size_t amounts = req.amounts.size();
-    if (restricted && amounts == 0)
+    std::vector<uint64_t> amounts;
+    if (!normalize_distribution_amounts(req.amounts, amounts))
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Too many amounts requested";
+      return false;
+    }
+
+    if (restricted && amounts.empty())
     {
       res.status = "Restricted RPC will not serve histograms on the whole blockchain. Use your own node.";
       return true;
     }
 
-    uint64_t cost = req.amounts.empty() ? COST_PER_FULL_OUTPUT_HISTOGRAM : (COST_PER_OUTPUT_HISTOGRAM * amounts);
+    uint64_t cost = amounts.empty() ? COST_PER_FULL_OUTPUT_HISTOGRAM : (COST_PER_OUTPUT_HISTOGRAM * amounts.size());
     CHECK_PAYMENT_MIN1(req, res, cost, false);
 
     if (restricted && req.recent_cutoff > 0 && req.recent_cutoff < (uint64_t)time(NULL) - OUTPUT_HISTOGRAM_RECENT_CUTOFF_RESTRICTION)
@@ -3078,7 +3217,7 @@ namespace cryptonote
     std::map<uint64_t, std::tuple<uint64_t, uint64_t, uint64_t>> histogram;
     try
     {
-      histogram = m_core.get_blockchain_storage().get_output_histogram(req.amounts, req.unlocked, req.recent_cutoff, req.min_count);
+      histogram = m_core.get_blockchain_storage().get_output_histogram(amounts, req.unlocked, req.recent_cutoff, req.min_count);
     }
     catch (const std::exception &e)
     {
@@ -3119,7 +3258,7 @@ namespace cryptonote
   {
     RPC_TRACKER(get_coinbase_tx_sum);
     const uint64_t bc_height = m_core.get_current_blockchain_height();
-    if (req.height >= bc_height || req.count > bc_height)
+    if (req.height >= bc_height || req.count > bc_height || req.count > bc_height - req.height)
     {
       res.status = "height or count is too large";
       return true;
@@ -3197,6 +3336,24 @@ namespace cryptonote
     CHECK_CORE_READY();
     PERF_TIMER(on_get_yield_info);
     uint64_t height = m_core.get_current_blockchain_height();
+    if (req.to_height > 0 && req.from_height > req.to_height)
+    {
+      res.status = "Invalid start/end heights";
+      return true;
+    }
+    if (req.include_raw_data)
+    {
+      if (req.from_height == 0 || req.to_height == 0)
+      {
+        res.status = "Raw yield data requests must specify from_height and to_height";
+        return true;
+      }
+      if (req.to_height - req.from_height + 1 > MAX_RAW_YIELD_INFO_BLOCKS)
+      {
+        res.status = "Too many yield data blocks requested";
+        return true;
+      }
+    }
     std::map<uint64_t, yield_block_info> ybi_cache;
     if (!m_core.get_blockchain_storage().get_ybi_cache(ybi_cache)) {
       res.status = "failed to get YBI data from blockchain";
@@ -3254,6 +3411,13 @@ namespace cryptonote
       return r;
 
     CHECK_PAYMENT(req, res, COST_PER_FEE_ESTIMATE);
+
+    if (req.grace_blocks > MAX_FEE_ESTIMATE_GRACE_BLOCKS)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Invalid grace blocks";
+      return false;
+    }
 
     m_core.get_blockchain_storage().get_dynamic_base_fee_estimate_2021_scaling(req.grace_blocks, res.fees);
     res.fee = res.fees[0];
@@ -3351,6 +3515,11 @@ namespace cryptonote
   bool core_rpc_server::on_out_peers(const COMMAND_RPC_OUT_PEERS::request& req, COMMAND_RPC_OUT_PEERS::response& res, const connection_context *ctx)
   {
     RPC_TRACKER(out_peers);
+    if (req.set && req.out_peers == 0 && !req.force)
+    {
+      res.status = "Failed";
+      return true;
+    }
     if (req.set)
       m_p2p.change_max_out_public_peers(req.out_peers);
     res.out_peers = m_p2p.get_max_out_public_peers();
@@ -3361,6 +3530,11 @@ namespace cryptonote
   bool core_rpc_server::on_in_peers(const COMMAND_RPC_IN_PEERS::request& req, COMMAND_RPC_IN_PEERS::response& res, const connection_context *ctx)
   {
     RPC_TRACKER(in_peers);
+    if (req.set && req.in_peers == 0 && !req.force)
+    {
+      res.status = "Failed";
+      return true;
+    }
     if (req.set)
       m_p2p.change_max_in_public_peers(req.in_peers);
     res.in_peers = m_p2p.get_max_in_public_peers();
@@ -3596,8 +3770,16 @@ namespace cryptonote
       return false;
     }
 
+    std::vector<uint64_t> amounts;
+    if (!normalize_distribution_amounts(req.amounts, amounts))
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Too many amounts requested";
+      return false;
+    }
+
     size_t n_0 = 0, n_non0 = 0;
-    for (uint64_t amount: req.amounts)
+    for (uint64_t amount: amounts)
       if (amount) ++n_non0; else ++n_0;
     CHECK_PAYMENT_MIN1(req, res, n_0 * COST_PER_OUTPUT_DISTRIBUTION_0 + n_non0 * COST_PER_OUTPUT_DISTRIBUTION, false);
 
@@ -3605,7 +3787,7 @@ namespace cryptonote
     {
       // 0 is placeholder for the whole chain
       const uint64_t req_to_height = req.to_height ? req.to_height : (m_core.get_current_blockchain_height() - 1);
-      for (uint64_t amount: req.amounts)
+      for (uint64_t amount: amounts)
       {
         auto data = rpc::RpcHandler::get_output_distribution([this](uint64_t amount, std::string asset_type, uint64_t from, uint64_t to, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &base, uint64_t &num_spendable_global_outs) { 
           return m_core.get_output_distribution(amount, asset_type, from, to, start_height, distribution, base, num_spendable_global_outs); }, amount, req.rct_asset_type, req.from_height, req_to_height, [this](uint64_t height) { return m_core.get_blockchain_storage().get_db().get_block_hash_from_height(height); }, req.cumulative, m_core.get_current_blockchain_height());
@@ -3645,8 +3827,15 @@ namespace cryptonote
       return false;
     }
 
+    std::vector<uint64_t> amounts;
+    if (!normalize_distribution_amounts(req.amounts, amounts))
+    {
+      res.status = "Too many amounts requested";
+      return false;
+    }
+
     size_t n_0 = 0, n_non0 = 0;
-    for (uint64_t amount: req.amounts)
+    for (uint64_t amount: amounts)
       if (amount) ++n_non0; else ++n_0;
     CHECK_PAYMENT_MIN1(req, res, n_0 * COST_PER_OUTPUT_DISTRIBUTION_0 + n_non0 * COST_PER_OUTPUT_DISTRIBUTION, false);
 
@@ -3661,7 +3850,7 @@ namespace cryptonote
     {
       // 0 is placeholder for the whole chain
       const uint64_t req_to_height = req.to_height ? req.to_height : (m_core.get_current_blockchain_height() - 1);
-      for (uint64_t amount: req.amounts)
+      for (uint64_t amount: amounts)
       {
         auto data = rpc::RpcHandler::get_output_distribution([this](uint64_t amount, std::string asset_type, uint64_t from, uint64_t to, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &base, uint64_t &num_spendable_global_outs) { 
           return m_core.get_output_distribution(amount, asset_type, from, to, start_height, distribution, base, num_spendable_global_outs); }, amount, req.rct_asset_type, req.from_height, req_to_height, [this](uint64_t height) { return m_core.get_blockchain_storage().get_db().get_block_hash_from_height(height); }, req.cumulative, m_core.get_current_blockchain_height());

@@ -346,7 +346,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         enote_view_incoming_scan_info_t res;
 
         crypto::secret_key amount_blinding_factor_sk;
-        carrot::payment_id_t payment_id;
+        carrot::payment_id_t payment_id{};
         carrot::CarrotEnoteType dummy_enote_type;
         if (!carrot::try_scan_carrot_enote_external_sender(enote,
                 encrypted_payment_id,

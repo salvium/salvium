@@ -1591,6 +1591,7 @@ bool t_rpc_command_executor::out_peers(bool set, uint32_t limit)
 
 	req.set = set;
 	req.out_peers = limit;
+	req.force = true;
 	
 	std::string fail_message = "Unsuccessful";
 
@@ -1625,6 +1626,7 @@ bool t_rpc_command_executor::in_peers(bool set, uint32_t limit)
 
 	req.set = set;
 	req.in_peers = limit;
+	req.force = true;
 
 	std::string fail_message = "Unsuccessful";
 
@@ -1855,6 +1857,8 @@ bool t_rpc_command_executor::flush_txpool(const std::string &txid)
 
     if (!txid.empty())
       req.txids.push_back(txid);
+    else
+      req.confirm_all = true;
 
     if (m_is_rpc)
     {

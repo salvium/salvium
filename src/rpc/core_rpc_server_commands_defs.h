@@ -2140,11 +2140,13 @@ namespace cryptonote
     {
       bool set;
       uint32_t out_peers;
+      bool force;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE_PARENT(rpc_request_base)
         KV_SERIALIZE_OPT(set, true)
         KV_SERIALIZE(out_peers)
+        KV_SERIALIZE_OPT(force, false)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<request_t> request;
@@ -2167,10 +2169,12 @@ namespace cryptonote
     {
       bool set;
       uint32_t in_peers;
+      bool force;
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE_PARENT(rpc_request_base)
         KV_SERIALIZE_OPT(set, true)
         KV_SERIALIZE(in_peers)
+        KV_SERIALIZE_OPT(force, false)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<request_t> request;
@@ -2281,10 +2285,12 @@ namespace cryptonote
     struct request_t: public rpc_request_base
     {
       std::vector<ban> bans;
+      bool allow_local;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE_PARENT(rpc_request_base)
         KV_SERIALIZE(bans)
+        KV_SERIALIZE_OPT(allow_local, false)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<request_t> request;
@@ -2330,10 +2336,12 @@ namespace cryptonote
     struct request_t: public rpc_request_base
     {
       std::vector<std::string> txids;
+      bool confirm_all;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE_PARENT(rpc_request_base)
         KV_SERIALIZE(txids)
+        KV_SERIALIZE_OPT(confirm_all, false)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<request_t> request;
