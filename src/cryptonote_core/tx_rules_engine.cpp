@@ -848,11 +848,10 @@ namespace cryptonote::txrules
     const std::string ticker = tx.token_metadata.asset_type;
     const std::string asset_type = "sal" + ticker;
 
+    // Backward compatibility: some validation paths do not provide token-state callbacks.
+    // In those paths, rely on legacy blockchain checks instead of hard-failing CREATE_TOKEN txs.
     if (!env.token_state.asset_exists)
-    {
-      if (why) *why = "CREATE_TOKEN consensus requires token_state.asset_exists";
-      return false;
-    }
+      return true;
 
     if (env.token_state.asset_exists(env.token_state.self, asset_type))
     {

@@ -369,7 +369,29 @@ namespace cryptonote
         tvc.m_added_to_pool = true;
       }else
       {
-        LOG_PRINT_L1("tx used wrong inputs, rejected");
+        std::ostringstream in_diag;
+        in_diag << "tx used wrong inputs, rejected"
+          << " type=" << static_cast<uint64_t>(tx.type)
+          << " vin_count=" << tx.vin.size()
+          << " source_asset='" << tx.source_asset_type
+          << "' dest_asset='" << tx.destination_asset_type << "'";
+        for (size_t vin_idx = 0; vin_idx < tx.vin.size(); ++vin_idx)
+        {
+          if (tx.vin[vin_idx].type() == typeid(cryptonote::txin_to_key))
+          {
+            const auto &in = boost::get<cryptonote::txin_to_key>(tx.vin[vin_idx]);
+            in_diag << " vin[" << vin_idx << "]:asset='" << in.asset_type
+              << "' ki=" << epee::string_tools::pod_to_hex(in.k_image)
+              << " key_offsets=" << in.key_offsets.size();
+            if (!in.key_offsets.empty())
+              in_diag << " first=" << in.key_offsets.front() << " last=" << in.key_offsets.back();
+          }
+          else
+          {
+            in_diag << " vin[" << vin_idx << "]:non-txin_to_key";
+          }
+        }
+        MWARNING(in_diag.str());
         tvc.m_verifivation_failed = true;
         tvc.m_invalid_input = true;
         return false;

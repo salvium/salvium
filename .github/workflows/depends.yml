@@ -25,7 +25,7 @@ env:
 
 jobs:
   build-cross:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     env:
       CCACHE_TEMPDIR: /tmp/.ccache-temp
     strategy:
@@ -34,7 +34,7 @@ jobs:
         toolchain:
           - name: "RISCV 64bit"
             host: "riscv64-linux-gnu"
-            packages: "python3 gperf g++-riscv64-linux-gnu"
+            packages: "python3 gperf g++-14-riscv64-linux-gnu"
           - name: "ARM v7"
             host: "arm-linux-gnueabihf"
             packages: "python3 gperf g++-arm-linux-gnueabihf"
@@ -103,6 +103,11 @@ jobs:
       run: |
         sudo update-alternatives --set ${{ matrix.toolchain.host }}-g++ $(which ${{ matrix.toolchain.host }}-g++-posix)
         sudo update-alternatives --set ${{ matrix.toolchain.host }}-gcc $(which ${{ matrix.toolchain.host }}-gcc-posix)
+    - name: prepare riscv64-linux-gnu
+      if: ${{ matrix.toolchain.host == 'riscv64-linux-gnu' }}
+      run: |
+        sudo update-alternatives --install /usr/bin/riscv64-linux-gnu-gcc riscv64-linux-gnu-gcc /usr/bin/riscv64-linux-gnu-gcc-14 100
+        sudo update-alternatives --install /usr/bin/riscv64-linux-gnu-g++ riscv64-linux-gnu-g++ /usr/bin/riscv64-linux-gnu-g++-14 100
     - name: build
       run: |
         ${{env.CCACHE_SETTINGS}}
@@ -130,7 +135,7 @@ jobs:
   deploy-release:
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     needs: build-cross
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     environment: release
     steps:
     - name: download release archives
