@@ -8932,12 +8932,6 @@ bool simple_wallet::audit(const std::vector<std::string> &args_)
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::create_token(const std::vector<std::string> &args_)
 { 
-  // Disable until appropriate hard fork
-  if (m_wallet->get_current_hard_fork() < HF_VERSION_ENABLE_TOKENS) {
-    fail_msg_writer() << tr("create_token is not yet available");
-    return true;
-  }
-
   CHECK_IF_BACKGROUND_SYNCING("cannot create tokens while background syncing");
   if (!try_connect_to_daemon())
     return true;
@@ -9151,8 +9145,40 @@ bool simple_wallet::token_info(const std::vector<std::string> &args_) {
     return true;
   }
 
-  std::string asset_type = args_[0];
-  std::transform(asset_type.begin()+3, asset_type.end(), asset_type.begin()+3, ::toupper);
+  auto normalize_asset_type = [](std::string asset_type)
+  {
+    boost::algorithm::trim(asset_type);
+    if (asset_type.empty())
+      return asset_type;
+
+    if (asset_type.size() <= 4)
+    {
+      boost::algorithm::to_upper(asset_type);
+      return asset_type;
+    }
+
+    const std::string prefix = boost::algorithm::to_lower_copy(asset_type.substr(0, 3));
+    const std::string suffix = boost::algorithm::to_upper_copy(asset_type.substr(3));
+    if (prefix == "sal" || prefix == "erc")
+      return prefix + suffix;
+
+    boost::algorithm::to_upper(asset_type);
+    return asset_type;
+  };
+
+  auto canonicalize_asset_type = [&normalize_asset_type](const std::string &asset_type)
+  {
+    std::string normalized = normalize_asset_type(asset_type);
+    if (normalized.size() != 4)
+      return normalized;
+
+    if (normalized == "SAL1" || normalized == "SAL2" || normalized == "BURN" || normalized.substr(0, 3) == "SAL")
+      return normalized;
+
+    return std::string("sal") + normalized;
+  };
+
+  const std::string asset_type = canonicalize_asset_type(args_[0]);
   
   try {
     cryptonote::token_metadata_t token = m_wallet->get_token_info(asset_type);

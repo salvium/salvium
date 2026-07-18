@@ -121,7 +121,7 @@ static uint64_t calculate_fee_from_weight_carrot(uint64_t base_fee, uint64_t wei
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static uint64_t estimate_fee_carrot(int n_inputs, int mixin, int n_outputs, size_t extra_size, bool bulletproof, bool clsag, bool bulletproof_plus, bool use_view_tags, uint64_t base_fee, uint64_t fee_quantization_mask)
+uint64_t estimate_fee_carrot(int n_inputs, int mixin, int n_outputs, size_t extra_size, bool bulletproof, bool clsag, bool bulletproof_plus, bool use_view_tags, uint64_t base_fee, uint64_t fee_quantization_mask)
 {
     const size_t estimated_tx_weight = estimate_tx_weigh_carrot(n_inputs, mixin, n_outputs, extra_size, bulletproof, clsag, bulletproof_plus, use_view_tags);
     return calculate_fee_from_weight_carrot(base_fee, estimated_tx_weight, fee_quantization_mask);

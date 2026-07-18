@@ -35,6 +35,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <limits.h>
+#if defined(__linux__)
+#include <sys/mman.h>
+#include <errno.h>
+#endif
 
 #include "randomx.h"
 #include "c_threads.h"
@@ -133,6 +137,44 @@ static inline int enabled_flags(void) {
   return flags;
 }
 
+static bool randomx_try_large_pages(void)
+{
+  static int state = -1;
+  if (state != -1)
+    return state;
+
+  state = 1;
+
+#if defined(__linux__) && defined(MAP_HUGETLB)
+  const size_t probe_bytes = 2 * 1024 * 1024;
+  const int huge_flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB;
+
+#ifdef MAP_POPULATE
+  void *mem = mmap(NULL, probe_bytes, PROT_READ | PROT_WRITE, huge_flags | MAP_POPULATE, -1, 0);
+  if (mem == MAP_FAILED)
+  {
+    const int populate_errno = errno;
+    mwarning(RX_LOGCAT, "RandomX large-page probe with MAP_POPULATE failed (%s); retrying probe without MAP_POPULATE", strerror(populate_errno));
+    mem = mmap(NULL, probe_bytes, PROT_READ | PROT_WRITE, huge_flags, -1, 0);
+    if (mem == MAP_FAILED)
+    {
+      mwarning(RX_LOGCAT, "RandomX large-page probe fallback without MAP_POPULATE failed (%s); falling back to regular pages", strerror(errno));
+    }
+    else
+    {
+      munmap(mem, probe_bytes);
+      mwarning(RX_LOGCAT, "RandomX large pages disabled: MAP_POPULATE probe failed while non-populated hugepage probe succeeded; using regular pages for safety");
+    }
+    state = 0;
+    return false;
+  }
+  munmap(mem, probe_bytes);
+#endif
+#endif
+
+  return true;
+}
+
 #define SEEDHASH_EPOCH_BLOCKS	2048	/* Must be same as BLOCKS_SYNCHRONIZING_MAX_COUNT in cryptonote_config.h */
 #define SEEDHASH_EPOCH_LAG		64
 
@@ -213,10 +255,17 @@ static void rx_alloc_dataset(randomx_flags flags, randomx_dataset** dataset, int
     return;
   }
 
-  *dataset = randomx_alloc_dataset((flags | RANDOMX_FLAG_LARGE_PAGES) & ~disabled_flags());
+  const randomx_flags safe_flags = flags & ~disabled_flags();
+
+  if (randomx_try_large_pages()) {
+    *dataset = randomx_alloc_dataset(safe_flags | RANDOMX_FLAG_LARGE_PAGES);
+    if (!*dataset) {
+      alloc_err_msg("Couldn't allocate RandomX dataset using large pages");
+    }
+  }
+
   if (!*dataset) {
-    alloc_err_msg("Couldn't allocate RandomX dataset using large pages");
-    *dataset = randomx_alloc_dataset(flags & ~disabled_flags());
+    *dataset = randomx_alloc_dataset(safe_flags);
     if (!*dataset) {
       merror(RX_LOGCAT, "Couldn't allocate RandomX dataset");
     }
@@ -229,10 +278,17 @@ static void rx_alloc_cache(randomx_flags flags, randomx_cache** cache)
     return;
   }
 
-  *cache = randomx_alloc_cache((flags | RANDOMX_FLAG_LARGE_PAGES) & ~disabled_flags());
+  const randomx_flags safe_flags = flags & ~disabled_flags();
+
+  if (randomx_try_large_pages()) {
+    *cache = randomx_alloc_cache(safe_flags | RANDOMX_FLAG_LARGE_PAGES);
+    if (!*cache) {
+      alloc_err_msg("Couldn't allocate RandomX cache using large pages");
+    }
+  }
+
   if (!*cache) {
-    alloc_err_msg("Couldn't allocate RandomX cache using large pages");
-    *cache = randomx_alloc_cache(flags & ~disabled_flags());
+    *cache = randomx_alloc_cache(safe_flags);
     if (!*cache) local_abort("Couldn't allocate RandomX cache");
   }
 }
@@ -247,14 +303,21 @@ static void rx_init_full_vm(randomx_flags flags, randomx_vm** vm)
     flags |= RANDOMX_FLAG_SECURE;
   }
 
-  *vm = randomx_create_vm((flags | RANDOMX_FLAG_LARGE_PAGES | RANDOMX_FLAG_FULL_MEM) & ~disabled_flags(), NULL, main_dataset);
-  if (!*vm) {
-    static int shown = 0;
-    if (!shown) {
-        shown = 1;
-        alloc_err_msg("Couldn't allocate RandomX full VM using large pages (will print only once)");
+  const randomx_flags safe_flags = flags & ~disabled_flags();
+
+  if (randomx_try_large_pages()) {
+    *vm = randomx_create_vm(safe_flags | RANDOMX_FLAG_LARGE_PAGES | RANDOMX_FLAG_FULL_MEM, NULL, main_dataset);
+    if (!*vm) {
+      static int shown = 0;
+      if (!shown) {
+          shown = 1;
+          alloc_err_msg("Couldn't allocate RandomX full VM using large pages (will print only once)");
+      }
     }
-    *vm = randomx_create_vm((flags | RANDOMX_FLAG_FULL_MEM) & ~disabled_flags(), NULL, main_dataset);
+  }
+
+  if (!*vm) {
+    *vm = randomx_create_vm(safe_flags | RANDOMX_FLAG_FULL_MEM, NULL, main_dataset);
     if (!*vm) {
       merror(RX_LOGCAT, "Couldn't allocate RandomX full VM");
     }
@@ -273,15 +336,21 @@ static void rx_init_light_vm(randomx_flags flags, randomx_vm** vm, randomx_cache
   }
 
   flags &= ~RANDOMX_FLAG_FULL_MEM;
+  const randomx_flags safe_flags = flags & ~disabled_flags();
 
-  *vm = randomx_create_vm((flags | RANDOMX_FLAG_LARGE_PAGES) & ~disabled_flags(), cache, NULL);
-  if (!*vm) {
-    static int shown = 0;
-    if (!shown) {
-        shown = 1;
-        alloc_err_msg("Couldn't allocate RandomX light VM using large pages (will print only once)");
+  if (randomx_try_large_pages()) {
+    *vm = randomx_create_vm(safe_flags | RANDOMX_FLAG_LARGE_PAGES, cache, NULL);
+    if (!*vm) {
+      static int shown = 0;
+      if (!shown) {
+          shown = 1;
+          alloc_err_msg("Couldn't allocate RandomX light VM using large pages (will print only once)");
+      }
     }
-    *vm = randomx_create_vm(flags & ~disabled_flags(), cache, NULL);
+  }
+
+  if (!*vm) {
+    *vm = randomx_create_vm(safe_flags, cache, NULL);
     if (!*vm) local_abort("Couldn't allocate RandomX light VM");
   }
 }

@@ -13,7 +13,7 @@ env:
 
 jobs:
   unit-and-tools:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,13 +47,13 @@ jobs:
         run: cmake --build build/ci-debug --target unit_tests block_weight hash-target-tests
 
       - name: run focused tests
-        run: ctest --test-dir build/ci-debug --output-on-failure -R "unit_tests|block_weight|hash"
+        run: ctest --test-dir build/ci-debug --output-on-failure -R "unit_tests|block_weight|hash-target"
 
       - name: check python tools
         run: python3 -m py_compile utils/protocol_invariants.py
 
   asan-unit:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:

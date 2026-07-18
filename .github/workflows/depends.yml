@@ -25,7 +25,7 @@ env:
 
 jobs:
   build-cross:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     env:
       CCACHE_TEMPDIR: /tmp/.ccache-temp
     strategy:
@@ -34,7 +34,7 @@ jobs:
         toolchain:
           - name: "RISCV 64bit"
             host: "riscv64-linux-gnu"
-            packages: "python3 gperf g++-riscv64-linux-gnu"
+            packages: "python3 gperf g++-14-riscv64-linux-gnu"
           - name: "ARM v7"
             host: "arm-linux-gnueabihf"
             packages: "python3 gperf g++-arm-linux-gnueabihf"
@@ -55,10 +55,10 @@ jobs:
             packages: "gperf cmake python3-zmq libdbus-1-dev libharfbuzz-dev"
           - name: "Cross-Mac x86_64"
             host: "x86_64-apple-darwin"
-            packages: "cmake imagemagick libcap-dev librsvg2-bin libz-dev libbz2-dev libtiff-tools python3-dev python3-setuptools-git"
+            packages: "cmake imagemagick libcap-dev librsvg2-bin zlib1g-dev libbz2-dev libtiff-tools python3-dev python3-setuptools-git"
           - name: "Cross-Mac aarch64"
             host: "aarch64-apple-darwin"
-            packages: "cmake imagemagick libcap-dev librsvg2-bin libz-dev libbz2-dev libtiff-tools python3-dev python3-setuptools-git"
+            packages: "cmake imagemagick libcap-dev librsvg2-bin zlib1g-dev libbz2-dev libtiff-tools python3-dev python3-setuptools-git"
           - name: "x86_64 Freebsd"
             host: "x86_64-unknown-freebsd"
             packages: "gperf cmake python3-zmq libdbus-1-dev libharfbuzz-dev"
@@ -103,6 +103,11 @@ jobs:
       run: |
         sudo update-alternatives --set ${{ matrix.toolchain.host }}-g++ $(which ${{ matrix.toolchain.host }}-g++-posix)
         sudo update-alternatives --set ${{ matrix.toolchain.host }}-gcc $(which ${{ matrix.toolchain.host }}-gcc-posix)
+    - name: prepare riscv64-linux-gnu
+      if: ${{ matrix.toolchain.host == 'riscv64-linux-gnu' }}
+      run: |
+        sudo update-alternatives --install /usr/bin/riscv64-linux-gnu-gcc riscv64-linux-gnu-gcc /usr/bin/riscv64-linux-gnu-gcc-14 100
+        sudo update-alternatives --install /usr/bin/riscv64-linux-gnu-g++ riscv64-linux-gnu-g++ /usr/bin/riscv64-linux-gnu-g++-14 100
     - name: build
       run: |
         ${{env.CCACHE_SETTINGS}}
@@ -115,6 +120,7 @@ jobs:
           /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salvium-wallet-*
           /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salviumd*
     - name: zip daemon & cli
+      if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
       run: |
         ARCHIVE="salvium-${GITHUB_REF_NAME//\//-}-${{ matrix.toolchain.host }}.zip"
         zip "$ARCHIVE" /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salvium-wallet-rpc* /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salvium-wallet-cli* /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/build/${{ matrix.toolchain.host }}/release/bin/salviumd*
@@ -122,6 +128,7 @@ jobs:
         ls -l
 
     - name: upload release archive
+      if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
       uses: actions/upload-artifact@v4
       with:
         name: release-archive-${{ matrix.toolchain.host }}
@@ -130,7 +137,7 @@ jobs:
   deploy-release:
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     needs: build-cross
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     environment: release
     steps:
     - name: download release archives
