@@ -2305,6 +2305,10 @@ private:
     serializable_unordered_map<crypto::public_key, serializable_map<uint64_t, crypto::key_image> > m_key_image_cache;
 
     std::string m_ring_database;
+    // SAL1 decoy indices whose stock-resolver preimage lands on a non-SAL1 (token) output;
+    // skipped during ring selection so get_outs does not reject the ring. Populated dynamically
+    // from the daemon (get_output_distribution response) per build; empty by default.
+    std::unordered_set<uint64_t> m_poisoned_decoys;
     bool m_ring_history_saved;
     std::unique_ptr<ringdb> m_ringdb;
     boost::optional<crypto::chacha_key> m_ringdb_key;

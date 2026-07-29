@@ -3626,6 +3626,11 @@ namespace cryptonote
       return false;
     }
 
+    // SAL1 spam-index repair: hand the wallet the decoy indices it must skip (dynamic, from the DB).
+    res.poisoned_decoys = m_core.get_blockchain_storage().get_db().poisoned_decoy_indices(req.rct_asset_type);
+      if (req.rct_asset_type == "SAL1")
+        res.sal1_poisoned_decoys = res.poisoned_decoys;
+
     res.status = CORE_RPC_STATUS_OK;
     return true;
   }
@@ -3679,6 +3684,11 @@ namespace cryptonote
       res.status = "Failed to get output distribution";
       return true;
     }
+
+    // SAL1 spam-index repair: hand the wallet the decoy indices it must skip (dynamic, from the DB).
+    res.poisoned_decoys = m_core.get_blockchain_storage().get_db().poisoned_decoy_indices(req.rct_asset_type);
+      if (req.rct_asset_type == "SAL1")
+        res.sal1_poisoned_decoys = res.poisoned_decoys;
 
     res.status = CORE_RPC_STATUS_OK;
     return true;

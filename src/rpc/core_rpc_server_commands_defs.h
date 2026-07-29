@@ -2746,10 +2746,15 @@ namespace cryptonote
     struct response_t: public rpc_access_response_base
     {
       std::vector<distribution> distributions;
+      // SAL1 spam-index repair: decoy indices the wallet must skip (only set for rct_asset_type=SAL1).
+      std::vector<uint64_t> poisoned_decoys;
+      std::vector<uint64_t> sal1_poisoned_decoys; // transitional alias for wallets built against the SAL1-only fix
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE_PARENT(rpc_access_response_base)
         KV_SERIALIZE(distributions)
+        KV_SERIALIZE(poisoned_decoys)
+        KV_SERIALIZE(sal1_poisoned_decoys)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<response_t> response;
