@@ -53,7 +53,6 @@ target_link_libraries(carrot_core
   PUBLIC
     cncrypto
     epee
-    mx25519_static
     ringct_basic
     seraphis_crypto
   PRIVATE

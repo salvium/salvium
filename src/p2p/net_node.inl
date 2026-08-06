@@ -60,9 +60,9 @@
 #include "cryptonote_core/cryptonote_core.h"
 #include "net/parse.h"
 
-#include <miniupnp/miniupnpc/miniupnpc.h>
-#include <miniupnp/miniupnpc/upnpcommands.h>
-#include <miniupnp/miniupnpc/upnperrors.h>
+#include <miniupnpc.h>
+#include <upnpcommands.h>
+#include <upnperrors.h>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "net.p2p"
@@ -949,6 +949,9 @@ namespace nodetool
 
     res = init_config();
     CHECK_AND_ASSERT_MES(res, false, "Failed to init config.");
+    const auto salchat = vm.find("salchat-enable");
+    const bool salchat_enabled = salchat != vm.end() && salchat->second.as<bool>();
+    public_zone.m_config.m_support_flags = get_p2p_support_flags(salchat_enabled);
 
     for (auto& zone : m_network_zones)
     {
@@ -1098,7 +1101,11 @@ namespace nodetool
         zone.second.m_net_server.deinit_server();
       // remove UPnP port mapping
       if(m_igd == igd)
-        delete_upnp_port_mapping(m_listening_port);
+      {
+        delete_upnp_port_mapping_v4(m_listening_port);
+        if (m_use_ipv6)
+          delete_upnp_port_mapping_v6(m_listening_port_ipv6);
+      }
     }
     return store_config();
   }
@@ -2983,7 +2990,12 @@ namespace nodetool
     UPNPUrls urls;
     IGDdatas igdData;
     char lanAddress[64];
+#if MINIUPNPC_API_VERSION >= 21
+    char wanAddress[64];
+    result = UPNP_GetValidIGD(deviceList, &urls, &igdData, lanAddress, sizeof lanAddress, wanAddress, sizeof wanAddress);
+#else
     result = UPNP_GetValidIGD(deviceList, &urls, &igdData, lanAddress, sizeof lanAddress);
+#endif
     freeUPNPDevlist(deviceList);
     if (result > 0) {
       if (result == 1) {
@@ -3051,7 +3063,12 @@ namespace nodetool
     UPNPUrls urls;
     IGDdatas igdData;
     char lanAddress[64];
+#if MINIUPNPC_API_VERSION >= 21
+    char wanAddress[64];
+    result = UPNP_GetValidIGD(deviceList, &urls, &igdData, lanAddress, sizeof lanAddress, wanAddress, sizeof wanAddress);
+#else
     result = UPNP_GetValidIGD(deviceList, &urls, &igdData, lanAddress, sizeof lanAddress);
+#endif
     freeUPNPDevlist(deviceList);
     if (result > 0) {
       if (result == 1) {

@@ -39,6 +39,7 @@
 #include "subaddress_account.h"
 #include "common_defines.h"
 #include "common/util.h"
+#include "wallet/salchat_service.h"
 
 #include "mnemonics/electrum-words.h"
 #include "mnemonics/english.h"
@@ -101,6 +102,28 @@ namespace {
     static const int    DEFAULT_REMOTE_NODE_REFRESH_INTERVAL_MILLIS = 1000 * 10;
     // Connection timeout 20 sec
     static const int    DEFAULT_CONNECTION_TIMEOUT_MILLIS = 1000 * 20;
+
+    SalchatIdentity salchat_identity(const salchat::public_identity &in)
+    {
+      return {in.initialized, in.spend_public_key, in.signing_public_key, in.encryption_public_key,
+        in.salvium_address, in.created_at};
+    }
+
+    SalchatContact salchat_contact(const salchat::contact &in)
+    {
+      return {salchat::service::id_hex(in.id), in.label,
+        salchat::service::key_hex(in.spend_public_key),
+        salchat::service::key_hex(in.signing_public_key), salchat::service::key_hex(in.encryption_public_key),
+        in.salvium_address, in.blocked, in.created_at};
+    }
+
+    SalchatMessage salchat_message(const salchat::message &in, const uint64_t currentHeight)
+    {
+      return {salchat::service::id_hex(in.id), salchat::service::id_hex(in.contact_id), in.content,
+        in.sender_salvium_address, salchat::service::key_hex(in.sender_signing_public_key), static_cast<uint8_t>(in.type),
+        static_cast<uint8_t>(in.direction), static_cast<uint8_t>(in.state), in.created_at, in.received_at,
+        in.expires_height, in.expires_height > currentHeight ? in.expires_height-currentHeight : 0};
+    }
 
     std::string get_default_ringdb_path(cryptonote::network_type nettype)
     {
@@ -2158,6 +2181,116 @@ std::string WalletImpl::getCacheAttribute(const std::string &key) const
     return value;
 }
 
+bool WalletImpl::salchatGetIdentity(SalchatIdentity &identity) const
+{
+    try { clearStatus(); boost::lock_guard<boost::mutex> guard(m_refreshMutex2); identity = salchat_identity(salchat::service(*m_wallet).get_identity()); return true; }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatGetAddress(std::string &address) const
+{
+    try { clearStatus(); boost::lock_guard<boost::mutex> guard(m_refreshMutex2); address = salchat::service(*m_wallet).get_address(); return true; }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatAddContact(const std::string &label, const std::string &address,
+                                  SalchatContact &contact, uint64_t &promotedMessages)
+{
+    try { clearStatus(); LOCK_REFRESH(); std::size_t promoted=0; contact = salchat_contact(salchat::service(*m_wallet).add_contact(label, address, {}, &promoted)); promotedMessages=promoted; return true; }
+    catch (const std::exception &e) { promotedMessages=0; setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatAcceptContact(const std::string &label, const std::string &messageId,
+                                     SalchatContact &contact, uint64_t &promotedMessages)
+{
+    try { clearStatus(); LOCK_REFRESH(); std::size_t promoted=0; contact = salchat_contact(salchat::service(*m_wallet).accept_contact(label, messageId, &promoted)); promotedMessages=promoted; return true; }
+    catch (const std::exception &e) { promotedMessages=0; setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatRemoveContact(const std::string &contactId)
+{
+    try { clearStatus(); LOCK_REFRESH(); return salchat::service(*m_wallet).remove_contact(contactId); }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatBlockContact(const std::string &contactId, bool blocked)
+{
+    try { clearStatus(); LOCK_REFRESH(); return salchat::service(*m_wallet).block_contact(contactId, blocked); }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+std::vector<SalchatContact> WalletImpl::salchatContacts() const
+{
+    std::vector<SalchatContact> out;
+    try { clearStatus(); boost::lock_guard<boost::mutex> guard(m_refreshMutex2); for (const auto &item: salchat::service(*m_wallet).contacts()) out.push_back(salchat_contact(item)); }
+    catch (const std::exception &e) { setStatusError(e.what()); }
+    return out;
+}
+
+SalchatSendResult WalletImpl::salchatSendMessage(const std::string &contactId, const std::string &message, uint64_t ttl)
+{
+    try
+    {
+      clearStatus(); LOCK_REFRESH(); const auto result = salchat::service(*m_wallet).send_text(contactId, message, ttl);
+      return {result.message_id, result.reason, result.submitted};
+    }
+    catch (const std::exception &e) { setStatusError(e.what()); return {{}, e.what(), false}; }
+}
+
+SalchatReceiveResult WalletImpl::salchatReceiveMessages(uint64_t limit)
+{
+    try
+    {
+      clearStatus(); LOCK_REFRESH(); const auto result = salchat::service(*m_wallet).receive(limit);
+      SalchatReceiveResult out{result.received, result.quarantined, result.rejected};
+      out.newMessages.reserve(result.new_messages.size());
+      const auto height=m_wallet->get_blockchain_current_height();
+      for (const auto &item: result.new_messages) out.newMessages.push_back(salchat_message(item,height));
+      return out;
+    }
+    catch (const std::exception &e) { setStatusError(e.what()); return {}; }
+}
+
+std::vector<SalchatMessage> WalletImpl::salchatMessages(const std::string &contactId, uint64_t limit) const
+{
+    std::vector<SalchatMessage> out;
+    try { clearStatus(); boost::lock_guard<boost::mutex> guard(m_refreshMutex2); const auto height=m_wallet->get_blockchain_current_height(); for (const auto &item: salchat::service(*m_wallet).messages(contactId, limit)) out.push_back(salchat_message(item,height)); }
+    catch (const std::exception &e) { setStatusError(e.what()); }
+    return out;
+}
+
+bool WalletImpl::salchatGetMessage(const std::string &messageId, SalchatMessage &message) const
+{
+    try
+    {
+      clearStatus(); boost::lock_guard<boost::mutex> guard(m_refreshMutex2);
+      salchat::message found; if (!salchat::service(*m_wallet).get_message(messageId, found)) return false;
+      message = salchat_message(found,m_wallet->get_blockchain_current_height()); return true;
+    }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatDeleteMessage(const std::string &messageId)
+{
+    try { clearStatus(); LOCK_REFRESH(); return salchat::service(*m_wallet).delete_message(messageId); }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+SalchatStatus WalletImpl::salchatStatus() const
+{
+    SalchatStatus out;
+    try
+    {
+      clearStatus(); boost::lock_guard<boost::mutex> guard(m_refreshMutex2);
+      salchat::service service(*m_wallet); bool enabled = false; std::string error;
+      out.daemonAvailable = service.daemon_status(enabled, out.cachedMessages, error);
+      out.daemonEnabled = enabled; out.error = error; out.identityInitialized = service.get_identity().initialized;
+      out.contacts = service.contacts().size(); out.messages = service.message_count();
+    }
+    catch (const std::exception &e) { out.error = e.what(); setStatusError(e.what()); }
+    return out;
+}
+
 bool WalletImpl::setUserNote(const std::string &txid, const std::string &note)
 {
     if (checkBackgroundSync("cannot set user note"))
@@ -3028,7 +3161,13 @@ uint64_t WalletImpl::getBytesSent()
 YieldInfo * WalletImpl::getYieldInfo()
 {
   auto yi = new YieldInfoImpl(*this);
-  bool ok = m_wallet->get_yield_summary_info(yi->m_burnt, yi->m_supply, yi->m_locked, yi->m_yield, yi->m_yield_per_stake, yi->m_num_entries, yi->m_payouts);
+  if (!m_wallet->get_yield_summary_info(yi->m_burnt, yi->m_supply, yi->m_locked,
+      yi->m_yield, yi->m_yield_per_stake, yi->m_num_entries, yi->m_payouts))
+  {
+    yi->m_status = YieldInfo::Status_Error;
+    yi->m_errorString = tr("Failed to retrieve valid yield information from daemon");
+    setStatusError(yi->m_errorString);
+  }
   return yi;
 }
 

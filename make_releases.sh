@@ -11,8 +11,11 @@ if [ -z "${TAG}" ]; then
 fi
 
 RELEASE_DIR="${RELEASE_DIR:-$HOME/releases}"
+RELEASE_CC="${RELEASE_CC:-gcc-16}"
+RELEASE_CXX="${RELEASE_CXX:-g++-16}"
 REQUESTED_OS="auto"
 CREATE_ZIP=1
+PRINT_DETECTED_TARGET=0
 
 BINARIES=(salviumd salvium-wallet-cli salvium-wallet-rpc)
 
@@ -121,8 +124,8 @@ find_target() {
 
 detect_current_target() {
   local system machine guess
-  system="$(uname -s)"
-  machine="$(uname -m)"
+  system="${SALVIUM_HOST_SYSTEM:-$(uname -s)}"
+  machine="${SALVIUM_HOST_MACHINE:-$(uname -m)}"
 
   case "${system}:${machine}" in
     Linux:x86_64|Linux:amd64) printf '%s\n' linux-x86_64 ;;
@@ -138,6 +141,22 @@ detect_current_target() {
     FreeBSD:x86_64|FreeBSD:amd64) printf '%s\n' freebsd-x86_64 ;;
     FreeBSD:i386|FreeBSD:i686) printf '%s\n' freebsd-i686 ;;
     FreeBSD:aarch64|FreeBSD:arm64) printf '%s\n' freebsd-aarch64 ;;
+    MINGW*:*|MSYS*:*|CYGWIN*:*)
+      # MSYS2's uname machine can describe the MSYS runtime instead of the
+      # active MinGW toolchain, so prefer its explicit shell/triplet markers.
+      case "${MSYSTEM:-}:${MINGW_CHOST:-}:${machine}" in
+        MINGW32:*|CLANG32:*|*:i686-w64-mingw32:*|*:*:i386|*:*:i686)
+          printf '%s\n' windows-i686 ;;
+        CLANGARM64:*|*:aarch64-w64-mingw32:*|*:*:aarch64|*:*:arm64)
+          printf '%s\n' windows-aarch64 ;;
+        MINGW64:*|UCRT64:*|CLANG64:*|*:x86_64-w64-mingw32:*|*:*:x86_64|*:*:amd64)
+          printf '%s\n' windows-x86_64 ;;
+        *)
+          echo "error: could not determine the active Windows toolchain for ${system}/${machine}." >&2
+          echo "Run from an MSYS2 MinGW/UCRT shell or use --OS=windows-x86_64." >&2
+          return 1 ;;
+      esac
+      ;;
     *)
       if [ -x "${CONFIG_GUESS}" ]; then
         guess="$("${CONFIG_GUESS}")"
@@ -208,6 +227,8 @@ Options:
                       MacOS-arm64, FreeBSD-x64, Android-arm64
   --OS=all           Build every target listed by --list-targets.
   --list-targets     Show supported target keys, triplets, and aliases.
+  --print-detected-target
+                     Print the native target selected for this host and exit.
   -j<N>, --jobs=<N>  Parallel make jobs. Default: ${JOBS}
   --release-dir=<d>  Output directory. Default: ${RELEASE_DIR}
   --zip              Create a release zip archive. This is the default.
@@ -237,23 +258,47 @@ build_release() {
   local archive="${RELEASE_DIR}/salvium-${TAG}-${package}.zip"
   local files=()
   local binary
+  local depends_compiler_args=()
 
   echo "==> Building ${key} (${triplet})"
   echo "==> Using ${JOBS} parallel build job(s)"
   require_target_tools "${key}"
 
+  if [ "${key}" = "linux-x86_64" ]; then
+    require_command "${RELEASE_CC}"
+    require_command "${RELEASE_CXX}"
+    if ! "${RELEASE_CC}" -dumpfullversion | grep -Eq '^16([.]|$)' ||
+       ! "${RELEASE_CXX}" -dumpfullversion | grep -Eq '^16([.]|$)'; then
+      echo "error: Linux x86_64 releases require GCC/G++ 16." >&2
+      exit 1
+    fi
+    depends_compiler_args=(
+      "x86_64_linux_CC=${RELEASE_CC} -m64"
+      "x86_64_linux_CXX=${RELEASE_CXX} -m64"
+    )
+    echo "==> Using C compiler ${RELEASE_CC} and C++ compiler ${RELEASE_CXX}"
+  fi
+
   export CMAKE_BUILD_PARALLEL_LEVEL="${JOBS}"
 
   (
+    if [ "${key}" = "linux-x86_64" ]; then
+      export CC="${RELEASE_CC}"
+      export CXX="${RELEASE_CXX}"
+    fi
     cd "${ROOT_DIR}/contrib/depends"
-    make HOST="${triplet}" -j"${JOBS}"
+    make HOST="${triplet}" "${depends_compiler_args[@]}" -j"${JOBS}"
   )
 
   mkdir -p "${ROOT_DIR}/build/${triplet}/release"
   (
+    if [ "${key}" = "linux-x86_64" ]; then
+      export CC="${RELEASE_CC}"
+      export CXX="${RELEASE_CXX}"
+    fi
     cd "${ROOT_DIR}/build/${triplet}/release"
     USE_DEVICE_TREZOR=OFF USE_DEVICE_TREZOR_MANDATORY=1 \
-      cmake -DCMAKE_TOOLCHAIN_FILE="${ROOT_DIR}/contrib/depends/${triplet}/share/toolchain.cmake" ../../..
+      cmake -DBUILD_TESTS=OFF -DCMAKE_TOOLCHAIN_FILE="${ROOT_DIR}/contrib/depends/${triplet}/share/toolchain.cmake" ../../..
     make -j"${JOBS}"
   )
 
@@ -308,6 +353,9 @@ while [ "$#" -gt 0 ]; do
       print_targets
       exit 0
       ;;
+    --print-detected-target)
+      PRINT_DETECTED_TARGET=1
+      ;;
     -h|--help)
       print_help
       exit 0
@@ -320,6 +368,11 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+
+if [ "${PRINT_DETECTED_TARGET}" -eq 1 ]; then
+  detect_current_target
+  exit 0
+fi
 
 require_command make
 require_command cmake

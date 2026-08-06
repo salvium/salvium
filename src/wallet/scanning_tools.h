@@ -56,34 +56,34 @@ namespace wallet
 struct enote_view_incoming_scan_info_t
 {
     // k^g_o
-    crypto::secret_key sender_extension_g;
+    crypto::secret_key sender_extension_g{};
     // k^t_o
-    crypto::secret_key sender_extension_t;
+    crypto::secret_key sender_extension_t{};
     // K^j_s
-    crypto::public_key address_spend_pubkey;
+    crypto::public_key address_spend_pubkey{};
     // pid
-    crypto::hash payment_id;
+    crypto::hash payment_id{};
     // j
     std::optional<carrot::subaddress_index_extended> subaddr_index;
 
     // a
-    rct::xmr_amount amount;
+    rct::xmr_amount amount = 0;
     // z
-    rct::key amount_blinding_factor;
+    rct::key amount_blinding_factor{};
     // asset type
     std::string asset_type;
 
     // the cold signing code used to have a bug which added multiple main tx pubkeys to extra
-    std::size_t main_tx_pubkey_index;
+    std::size_t main_tx_pubkey_index = 0;
 
     // whether this output is to a carrot address or not
-    bool is_carrot;
+    bool is_carrot = false;
 
     // whether this output is a return output
-    bool is_return;
+    bool is_return = false;
 
     // Kr = K_return + K_o
-    crypto::public_key return_address;
+    crypto::public_key return_address{};
 
     // whether this enote is a payment or change output
     carrot::CarrotEnoteType enote_type = carrot::CarrotEnoteType::PAYMENT;

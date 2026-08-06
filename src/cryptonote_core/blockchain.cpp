@@ -1632,8 +1632,6 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
       // Validate staker share: amount_burnt == block_reward * 15 / 100
       uint64_t expected_staker_block_reward = (money_in_use - expected_treasury_block_reward) * BLOCK_REWARD_STAKER_PCT / 100;
       if (expected_staker_block_reward != b.miner_tx.amount_burnt) { MERROR("miner_transaction has incorrect amount_burnt for HF11 (expected " << expected_staker_block_reward << ", got " << b.miner_tx.amount_burnt << ")"); return false; }
-      uint64_t expected_miner_block_reward = money_in_use - b.miner_tx.amount_burnt - expected_treasury_block_reward;
-
       // treasury_destination
       address_parse_info treasury_addr_info;
       bool addr_ok = cryptonote::get_account_address_from_str(treasury_addr_info, m_nettype, get_config(m_nettype).TREASURY_ADDRESS_CARROT);

@@ -114,9 +114,134 @@ namespace cryptonote
 
     m_block_download_max_size = command_line::get_arg(vm, cryptonote::arg_block_download_max_size);
     m_sync_pruned_blocks = command_line::get_arg(vm, cryptonote::arg_sync_pruned_blocks);
+    salchat_config salchat;
+    salchat.enabled = command_line::get_arg(vm, arg_salchat_enable);
+    salchat.max_packet_bytes = command_line::get_arg(vm, arg_salchat_max_packet_bytes);
+    salchat.max_cache_bytes = command_line::get_arg(vm, arg_salchat_max_cache_bytes);
+    salchat.max_cache_messages = command_line::get_arg(vm, arg_salchat_max_cache_messages);
+    salchat.max_ttl = command_line::get_arg(vm, arg_salchat_max_ttl);
+    salchat.relay_fanout = command_line::get_arg(vm, arg_salchat_relay_fanout);
+    salchat.max_peer_kbps = command_line::get_arg(vm, arg_salchat_max_peer_kbps);
+    salchat.max_global_kbps = command_line::get_arg(vm, arg_salchat_max_global_kbps);
+    if (salchat.max_packet_bytes == 0 || salchat.max_packet_bytes > SALCHAT_MAX_PACKET_BYTES ||
+        salchat.max_cache_bytes < SALCHAT_MAX_PACKET_BYTES || salchat.max_cache_bytes > 1024ull * 1024 * 1024 ||
+        salchat.max_cache_messages == 0 || salchat.max_cache_messages > 100000 ||
+        salchat.max_ttl == 0 || salchat.max_ttl > SALCHAT_MAX_TTL_SECONDS ||
+        salchat.relay_fanout == 0 || salchat.relay_fanout > 16 ||
+        salchat.max_peer_kbps == 0 || salchat.max_peer_kbps > 1024 * 1024 ||
+        salchat.max_global_kbps < salchat.max_peer_kbps || salchat.max_global_kbps > 1024 * 1024)
+    {
+      MERROR("Invalid Salchat resource limit configuration");
+      return false;
+    }
+    m_salchat.reset(new salchat_relay{salchat});
 
     return true;
   }
+  //------------------------------------------------------------------------------------------------------------------------
+  template<class t_core>
+  int t_cryptonote_protocol_handler<t_core>::handle_notify_salchat_envelope(int, NOTIFY_SALCHAT_ENVELOPE::request& arg, cryptonote_connection_context& context)
+  {
+    if (!salchat_enabled())
+      return 1;
+    bool negotiated = false;
+    m_p2p->for_connection(context.m_connection_id, [&](connection_context&, nodetool::peerid_type, uint32_t flags) {
+      negotiated = (flags & P2P_SUPPORT_FLAG_SALCHAT_V3) != 0; return true;
+    });
+    if (!negotiated)
+      return 1;
+    epee::byte_slice wire;
+    if (!epee::serialization::store_t_to_binary(arg, wire) || wire.size() > m_salchat->config().max_packet_bytes)
+    {
+      hit_score(context, 1);
+      return 1;
+    }
+    // Key the bucket to the source host, not the short-lived connection UUID,
+    // so reconnecting cannot reset packet/byte limits before signature checks.
+    const std::string peer_key = "p2p:" + context.m_remote_address.host_str();
+    if (!m_salchat->allow_peer_packet(peer_key, wire.size()))
+      return 1;
+    std::string error;
+    const auto result = m_salchat->insert(arg, static_cast<std::uint64_t>(std::time(nullptr)),
+      m_core.get_current_blockchain_height(), error);
+    if (result == salchat_result::accepted)
+    {
+      MCDEBUG("net.salchat", "Accepted P2P envelope " <<
+        epee::string_tools::pod_to_hex(arg.message_id) << " (" << wire.size() <<
+        " bytes, hop " << unsigned(arg.hop_count) << "/" << unsigned(arg.hop_limit) << ")");
+      relay_salchat_envelope(arg, context.m_connection_id);
+    }
+    else if (result == salchat_result::malformed)
+    {
+      MCDEBUG("net.salchat", "Rejected malformed P2P envelope: " << error);
+      hit_score(context, 1);
+    }
+    return 1;
+  }
+
+  template<class t_core>
+  bool t_cryptonote_protocol_handler<t_core>::relay_salchat_envelope(const salchat_p2p_envelope& envelope, const boost::uuids::uuid& source)
+  {
+    if (envelope.hop_count >= envelope.hop_limit) return true;
+    salchat_p2p_envelope relayed = envelope; ++relayed.hop_count;
+    epee::levin::message_writer out{SALCHAT_MAX_PACKET_BYTES};
+    if (!epee::serialization::store_t_to_binary(relayed, out.buffer)) return false;
+    std::vector<std::pair<epee::net_utils::zone, boost::uuids::uuid>> peers;
+    m_p2p->for_each_connection([&](connection_context& ctx, nodetool::peerid_type peer_id, uint32_t flags) {
+      if (ctx.m_connection_id != source && peer_id &&
+          ctx.m_remote_address.get_zone() == epee::net_utils::zone::public_ &&
+          ctx.m_state == connection_context::state_normal && (flags & P2P_SUPPORT_FLAG_SALCHAT_V3))
+        peers.emplace_back(ctx.m_remote_address.get_zone(), ctx.m_connection_id);
+      return true;
+    });
+    std::shuffle(peers.begin(), peers.end(), crypto::random_device{});
+    if (peers.size() > m_salchat->config().relay_fanout)
+      peers.resize(m_salchat->config().relay_fanout);
+    if (!peers.empty() && !m_salchat->allow_global_bytes(out.buffer.size() * peers.size()))
+      return false;
+    return peers.empty() || m_p2p->relay_notify_to_list(NOTIFY_SALCHAT_ENVELOPE::ID, std::move(out), std::move(peers));
+  }
+
+  template<class t_core>
+  salchat_result t_cryptonote_protocol_handler<t_core>::submit_salchat_envelope(const salchat_p2p_envelope& e, std::string& error)
+  {
+    if (!m_salchat) return salchat_result::disabled;
+    const auto result = m_salchat->insert(e, static_cast<std::uint64_t>(std::time(nullptr)),
+      m_core.get_current_blockchain_height(), error);
+    if (result == salchat_result::accepted)
+    {
+      MCDEBUG("net.salchat", "Accepted wallet envelope " <<
+        epee::string_tools::pod_to_hex(e.message_id));
+      relay_salchat_envelope(e, boost::uuids::nil_uuid());
+    }
+    return result;
+  }
+
+  template<class t_core>
+  std::vector<salchat_p2p_envelope> t_cryptonote_protocol_handler<t_core>::poll_salchat_envelopes(const std::vector<crypto::hash>& tags, std::size_t limit)
+  {
+    auto result = m_salchat ? m_salchat->poll(tags, std::min<std::size_t>(limit, 100),
+      static_cast<std::uint64_t>(std::time(nullptr)), m_core.get_current_blockchain_height()) :
+      std::vector<salchat_p2p_envelope>{};
+    if (!result.empty())
+      MCDEBUG("net.salchat", "Wallet poll returned " << result.size() <<
+        (result.size() == 1 ? " envelope" : " envelopes"));
+    return result;
+  }
+
+  template<class t_core>
+  bool t_cryptonote_protocol_handler<t_core>::ack_salchat_envelope(
+      const crypto::hash& id, const crypto::hash& ack_token)
+  {
+    const bool removed = m_salchat && m_salchat->ack(id, ack_token);
+    MCDEBUG("net.salchat", (removed ? "Acknowledged and removed envelope " :
+      "Rejected acknowledgement for envelope ") << epee::string_tools::pod_to_hex(id));
+    return removed;
+  }
+
+  template<class t_core>
+  salchat_statistics t_cryptonote_protocol_handler<t_core>::get_salchat_statistics() const
+  { return m_salchat ? m_salchat->statistics() : salchat_statistics{}; }
   //------------------------------------------------------------------------------------------------------------------------
   template<class t_core>
   bool t_cryptonote_protocol_handler<t_core>::deinit()

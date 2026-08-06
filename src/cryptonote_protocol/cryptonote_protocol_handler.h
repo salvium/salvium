@@ -45,8 +45,10 @@
 #include "cryptonote_protocol_defs.h"
 #include "cryptonote_protocol_handler_common.h"
 #include "block_queue.h"
+#include "salchat_relay.h"
 #include "common/perf_timer.h"
 #include "cryptonote_basic/connection_context.h"
+#include "crypto/random.h"
 #include "net/levin_base.h"
 #include "p2p/net_node_common.h"
 #include <boost/circular_buffer.hpp>
@@ -96,6 +98,7 @@ namespace cryptonote
       HANDLE_NOTIFY_T2(NOTIFY_NEW_FLUFFY_BLOCK, &cryptonote_protocol_handler::handle_notify_new_fluffy_block)			
       HANDLE_NOTIFY_T2(NOTIFY_REQUEST_FLUFFY_MISSING_TX, &cryptonote_protocol_handler::handle_request_fluffy_missing_tx)						
       HANDLE_NOTIFY_T2(NOTIFY_GET_TXPOOL_COMPLEMENT, &cryptonote_protocol_handler::handle_notify_get_txpool_complement)
+      HANDLE_NOTIFY_T2(NOTIFY_SALCHAT_ENVELOPE, &cryptonote_protocol_handler::handle_notify_salchat_envelope)
     END_INVOKE_MAP2()
 
     bool on_idle();
@@ -132,6 +135,15 @@ namespace cryptonote
     std::pair<uint32_t, uint32_t> get_next_needed_pruning_stripe() const;
     bool needs_new_sync_connections(epee::net_utils::zone zone) const;
     bool is_busy_syncing();
+    salchat_result submit_salchat_envelope(const salchat_p2p_envelope& envelope, std::string& error);
+    std::vector<salchat_p2p_envelope> poll_salchat_envelopes(const std::vector<crypto::hash>& tags, std::size_t limit);
+    bool ack_salchat_envelope(const crypto::hash& id, const crypto::hash& ack_token);
+    bool allow_salchat_rpc_request(const std::string& source, std::size_t bytes)
+    { return m_salchat && m_salchat->allow_peer_packet("rpc:" + source, bytes); }
+    bool allow_salchat_rpc_response(const std::string& source, std::size_t bytes)
+    { return m_salchat && m_salchat->allow_peer_bytes("rpc:" + source, bytes); }
+    salchat_statistics get_salchat_statistics() const;
+    bool salchat_enabled() const { return m_salchat && m_salchat->config().enabled; }
 
   private:
     //----------------- commands handlers ----------------------------------------------
@@ -144,6 +156,8 @@ namespace cryptonote
     int handle_notify_new_fluffy_block(int command, NOTIFY_NEW_FLUFFY_BLOCK::request& arg, cryptonote_connection_context& context);
     int handle_request_fluffy_missing_tx(int command, NOTIFY_REQUEST_FLUFFY_MISSING_TX::request& arg, cryptonote_connection_context& context);
     int handle_notify_get_txpool_complement(int command, NOTIFY_GET_TXPOOL_COMPLEMENT::request& arg, cryptonote_connection_context& context);
+    int handle_notify_salchat_envelope(int command, NOTIFY_SALCHAT_ENVELOPE::request& arg, cryptonote_connection_context& context);
+    bool relay_salchat_envelope(const salchat_p2p_envelope& envelope, const boost::uuids::uuid& source);
 		
     //----------------- i_bc_protocol_layout ---------------------------------------
     virtual bool relay_block(NOTIFY_NEW_BLOCK::request& arg, cryptonote_connection_context& exclude_context);
@@ -206,6 +220,7 @@ namespace cryptonote
     boost::circular_buffer<size_t> m_avg_buffer = boost::circular_buffer<size_t>(10);
 
     boost::mutex m_bad_peer_check_lock;
+    std::unique_ptr<salchat_relay> m_salchat;
 
     template<class t_parameter>
       bool post_notify(typename t_parameter::request& arg, cryptonote_connection_context& context)

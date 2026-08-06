@@ -102,7 +102,7 @@ namespace cryptonote
   // outputs <= HF_VERSION_VIEW_TAGS
   struct txout_to_key
   {
-    txout_to_key() { }
+    txout_to_key() : key{}, asset_type{}, unlock_time{} { }
     txout_to_key(const crypto::public_key &_key) : key(_key) { }
     txout_to_key(const crypto::public_key &_key, const std::string &_asset_type, const uint64_t _unlock_time) : key(_key), asset_type(_asset_type), unlock_time(_unlock_time) { }
     crypto::public_key key;
@@ -119,7 +119,7 @@ namespace cryptonote
   // outputs >= HF_VERSION_VIEW_TAGS
   struct txout_to_tagged_key
   {
-    txout_to_tagged_key() { }
+    txout_to_tagged_key() : key{}, asset_type{}, unlock_time{}, view_tag{} { }
     txout_to_tagged_key(const crypto::public_key &_key, const std::string &_asset_type, const uint64_t _unlock_time, const crypto::view_tag &_view_tag) : key(_key), asset_type(_asset_type), unlock_time(_unlock_time), view_tag(_view_tag) { }
     crypto::public_key key;
     std::string asset_type;

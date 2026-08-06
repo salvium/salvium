@@ -35,7 +35,9 @@ define $(package)_preprocess_cmds
 endef
 
 define $(package)_config_cmds
-  ./bootstrap.sh --without-icu --with-libraries=$(boost_config_libraries_$(host_os))
+  ./tools/build/src/engine/build.sh --cxx="$($(package)_cxx)" &&\
+  cp tools/build/src/engine/b2 ./b2 &&\
+  ./bootstrap.sh --with-bjam=./b2 --without-icu --with-libraries=$(boost_config_libraries_$(host_os))
 endef
 
 define $(package)_build_cmds

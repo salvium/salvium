@@ -547,10 +547,10 @@ namespace crypto {
     {
       // Debug check D == a*R
       mx25519_pubkey D_x25519;
-      mx25519_scmul_key(get_mx25519_impl(),
+      mx25519_scmul_key_unclamped(get_mx25519_impl(),
                         &D_x25519,
                         reinterpret_cast<const mx25519_privkey*>(&a),
-                        reinterpret_cast<const mx25519_pubkey*>(&R));
+                        reinterpret_cast<const mx25519_pubkey*>(&R), MX25519_UNCLAMP_ALL);
       public_key dbg_D;
       memcpy(&dbg_D, &D_x25519, sizeof(mx25519_pubkey));
       assert(D == dbg_D);
@@ -597,10 +597,10 @@ namespace crypto {
     // 3. Compute Y = k*R
     //
     mx25519_pubkey Y;
-    mx25519_scmul_key(get_mx25519_impl(),
+    mx25519_scmul_key_unclamped(get_mx25519_impl(),
                       &Y,
                       reinterpret_cast<const mx25519_privkey*>(&k),
-                      reinterpret_cast<const mx25519_pubkey*>(&R));
+                      reinterpret_cast<const mx25519_pubkey*>(&R), MX25519_UNCLAMP_ALL);
     memcpy(&buf.Y, &Y, sizeof(mx25519_pubkey));
 
     // ---------- Extract and lift R ----------
