@@ -290,6 +290,7 @@ else()
   set(ARCH_ID "${ARCH}")
 endif()
 endif()
+string(TOLOWER "${ARCH_ID}" ARCH_ID)
 string(TOLOWER "${ARCH_ID}" ARM_ID)
 string(SUBSTRING "${ARM_ID}" 0 3 ARM_TEST)
 if (ARM_TEST STREQUAL "arm")
@@ -491,14 +492,19 @@ endif()
 set(PIC_FLAG "-fPIC")
 
 if(MINGW)
-  string(REGEX MATCH "^[^/]:/[^/]*" msys2_install_path "${CMAKE_C_COMPILER}")
-  message(STATUS "MSYS location: ${msys2_install_path}")
-  set(CMAKE_INCLUDE_PATH "${msys2_install_path}/mingw${ARCH_WIDTH}/include")
+  # Derive the active MSYS2 environment from the compiler. UCRT64 and
+  # MINGW64 both define MINGW and report the same architecture, but their
+  # headers and libraries are ABI-incompatible.
+  get_filename_component(mingw_bin_path "${CMAKE_C_COMPILER}" DIRECTORY)
+  get_filename_component(mingw_prefix "${mingw_bin_path}" DIRECTORY)
+  get_filename_component(msys2_install_path "${mingw_prefix}" DIRECTORY)
+  message(STATUS "MSYS location: ${msys2_install_path} (prefix: ${mingw_prefix})")
+  set(CMAKE_INCLUDE_PATH "${mingw_prefix}/include")
   # This is necessary because otherwise CMake will make Boost libraries -lfoo
   # rather than a full path. Unfortunately, this makes the shared libraries get
   # linked due to a bug in CMake which misses putting -static flags around the
   # -lfoo arguments.
-  set(DEFLIB ${msys2_install_path}/mingw${ARCH_WIDTH}/lib)
+  set(DEFLIB ${mingw_prefix}/lib)
   list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_DIRECTORIES ${DEFLIB})
   list(REMOVE_ITEM CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES ${DEFLIB})
 endif()
@@ -1085,6 +1091,20 @@ if(STATIC)
   endif()
 endif()
 
+if(MINGW AND STATIC AND NOT DEPENDS)
+  # MSYS2's static Boost.Locale library is built against the ICU DLL ABI.
+  # Select ICU import libraries before Boost discovers its dependencies.
+  foreach(ICU_COMPONENT icuio icuin icuuc icudt icutu)
+    find_file(ICU_${ICU_COMPONENT}_IMPORT_LIBRARY
+      NAMES lib${ICU_COMPONENT}.dll.a
+      PATH_SUFFIXES lib
+      REQUIRED)
+  endforeach()
+  set(ICU_DATA_LIBRARY_RELEASE ${ICU_icudt_IMPORT_LIBRARY} CACHE FILEPATH "" FORCE)
+  set(ICU_I18N_LIBRARY_RELEASE ${ICU_icuin_IMPORT_LIBRARY} CACHE FILEPATH "" FORCE)
+  set(ICU_UC_LIBRARY_RELEASE ${ICU_icuuc_IMPORT_LIBRARY} CACHE FILEPATH "" FORCE)
+endif()
+
 find_package(Boost 1.58 CONFIG QUIET REQUIRED)
 set(BOOST_COMPONENTS filesystem thread date_time chrono regex serialization program_options)
 if(Boost_VERSION VERSION_LESS 1.69.0)
@@ -1125,6 +1145,11 @@ if(MINGW)
   set(EXTRA_LIBRARIES mswsock;ws2_32;iphlpapi;crypt32;bcrypt)
   if(DEPENDS)
     set(ICU_LIBRARIES icuio icui18n icuuc icudata icutu iconv)
+  elseif(STATIC)
+    foreach(ICU_COMPONENT icuio icuin icuuc icudt icutu)
+      list(APPEND ICU_LIBRARIES ${ICU_${ICU_COMPONENT}_IMPORT_LIBRARY})
+    endforeach()
+    list(APPEND ICU_LIBRARIES iconv)
   else()
     set(ICU_LIBRARIES icuio icuin icuuc icudt icutu iconv)
   endif()

@@ -802,6 +802,9 @@ namespace cryptonote
       */
      size_t get_block_sync_size(uint64_t height) const;
 
+     /** Maximum plausible serialized response for a requested block span. */
+     size_t get_block_sync_response_size(size_t count) const;
+
      /**
       * @brief get the sum of coinbase tx amounts between blocks
       *

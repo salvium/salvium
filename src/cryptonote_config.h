@@ -121,6 +121,8 @@
 #define BLOCKS_SYNCHRONIZING_DEFAULT_COUNT_PRE_V4       100    //by default, blocks count in blocks downloading
 #define BLOCKS_SYNCHRONIZING_DEFAULT_COUNT              20     //by default, blocks count in blocks downloading
 #define BLOCKS_SYNCHRONIZING_MAX_COUNT                  2048   //must be a power of 2, greater than 128, equal to SEEDHASH_EPOCH_BLOCKS
+#define CRYPTONOTE_BLOCK_SYNC_WIRE_WEIGHT_MULTIPLIER    2 // block response repeats transaction hashes and adds framing
+#define CRYPTONOTE_BLOCK_SYNC_RESPONSE_OVERHEAD         (64 * 1024) // portable-storage and block-vector framing allowance
 
 #define CRYPTONOTE_MEMPOOL_TX_LIVETIME                    (86400*3) //seconds, three days
 #define CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME     604800 //seconds, one week

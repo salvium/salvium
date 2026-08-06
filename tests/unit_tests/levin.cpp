@@ -384,6 +384,20 @@ TEST(make_header, no_expect_return)
     EXPECT_EQ(SWAP32LE(5601), header1.m_flags);
 }
 
+TEST(connection_context, rejects_unsolicited_and_bounds_expected_block_responses)
+{
+    cryptonote::cryptonote_connection_context context{};
+    EXPECT_EQ(0u, context.get_max_bytes(cryptonote::NOTIFY_RESPONSE_GET_OBJECTS::ID));
+
+    context.m_expect_response = cryptonote::NOTIFY_RESPONSE_GET_OBJECTS::ID;
+    context.m_expected_response_max_bytes = 3 * 1024 * 1024;
+    EXPECT_EQ(3u * 1024u * 1024u,
+        context.get_max_bytes(cryptonote::NOTIFY_RESPONSE_GET_OBJECTS::ID));
+
+    context.set_state_normal();
+    EXPECT_EQ(0u, context.get_max_bytes(cryptonote::NOTIFY_RESPONSE_GET_OBJECTS::ID));
+}
+
 TEST(make_header, expect_return)
 {
     const epee::levin::bucket_head2 header1 = epee::levin::make_header(65535, 0, 0, true);

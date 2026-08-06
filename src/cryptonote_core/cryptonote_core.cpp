@@ -1327,6 +1327,23 @@ namespace cryptonote
     return res;
   }
   //-----------------------------------------------------------------------------------------------
+  size_t core::get_block_sync_response_size(const size_t count) const
+  {
+    const size_t block_weight_limit = std::max<size_t>(
+        m_blockchain_storage.get_current_cumulative_block_weight_limit(),
+        2 * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5);
+    if (count == 0 || block_weight_limit == 0)
+      return 0;
+
+    const size_t maximum = std::numeric_limits<size_t>::max();
+    if (block_weight_limit > maximum / CRYPTONOTE_BLOCK_SYNC_WIRE_WEIGHT_MULTIPLIER)
+      return maximum;
+    const size_t wire_block_limit = block_weight_limit * CRYPTONOTE_BLOCK_SYNC_WIRE_WEIGHT_MULTIPLIER;
+    if (count > (maximum - CRYPTONOTE_BLOCK_SYNC_RESPONSE_OVERHEAD) / wire_block_limit)
+      return maximum;
+    return count * wire_block_limit + CRYPTONOTE_BLOCK_SYNC_RESPONSE_OVERHEAD;
+  }
+  //-----------------------------------------------------------------------------------------------
   bool core::are_key_images_spent_in_pool(const std::vector<crypto::key_image>& key_im, std::vector<bool> &spent) const
   {
     spent.clear();

@@ -87,3 +87,19 @@ TEST(block_queue, flush_uuid)
   bq.add_blocks(0, 200, uuid1(), na);
   ASSERT_EQ(bq.get_max_block_height(), 399);
 }
+
+TEST(block_queue, future_filled_span_is_not_next)
+{
+  cryptonote::block_queue bq;
+  epee::net_utils::network_address na;
+  std::vector<cryptonote::block_complete_entry> blocks(1);
+  bq.add_blocks(33, std::move(blocks), uuid1(), na, 0.0f, 0);
+
+  bool filled = false;
+  boost::posix_time::ptime request_time;
+  boost::uuids::uuid connection_id;
+  ASSERT_FALSE(bq.has_next_span(0, filled, request_time, connection_id));
+  ASSERT_TRUE(bq.has_next_span(33, filled, request_time, connection_id));
+  ASSERT_TRUE(filled);
+  ASSERT_EQ(connection_id, uuid1());
+}

@@ -157,6 +157,7 @@ namespace cryptonote
             context.m_expect_response = 0;
             context.m_expect_height = 0;
             context.m_requested_objects.clear();
+            context.m_expected_response_max_bytes = 0;
             context.m_state = cryptonote_connection_context::state_standby; // we'll go back to adding, then (if we can't), download
           }
           else
@@ -1167,6 +1168,7 @@ namespace cryptonote
       return 1;
     }
     context.m_expect_response = 0;
+    context.m_expected_response_max_bytes = 0;
 
     // calculate size of request
     size_t size = 0;
@@ -1984,16 +1986,9 @@ skip:
       if (!filled)
       {
         const long dt = (now - request_time).total_microseconds();
-        if (dt >= REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD)
-        {
-          MDEBUG(context << " we should download it as it's not been received yet after " << dt/1e6);
-          return true;
-        }
-
-        // in standby, be ready to double download early since we're idling anyway
-        // let the fastest peer trigger first
-        const double dl_speed = context.m_max_speed_down;
-        if (standby && dt >= REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY && dl_speed > 0)
+        // Duplicate a scheduled span only when its assigned peer has stopped
+        // delivering bytes. Racing active responses amplifies congestion.
+        if (standby && dt >= REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY)
         {
           bool download = false;
           if (m_p2p->for_connection(connection_id, [&](cryptonote_connection_context& ctx, nodetool::peerid_type peer_id, uint32_t f)->bool{
@@ -2008,26 +2003,6 @@ skip:
               return true;
             }
 
-            // estimate the standby peer can give us 80% of its max speed
-            // and let it download if that speed is > N times as fast as the current one
-            // N starts at 10 after REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY,
-            // decreases to 1.25 at REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD,
-            // so that at times goes without the download being done, a retry becomes easier
-            const float max_multiplier = 10.f;
-            const float min_multiplier = 1.25f;
-            float multiplier = max_multiplier;
-            if (dt >= REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY)
-            {
-              multiplier = max_multiplier - (dt-REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY) * (max_multiplier - min_multiplier) / (REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD - REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY);
-              multiplier = std::min(max_multiplier, std::max(min_multiplier, multiplier));
-            }
-            if (dl_speed * .8f > ctx.m_current_speed_down * multiplier)
-            {
-              MDEBUG(context << " we should download it as we are substantially faster (" << dl_speed << " vs "
-                  << ctx.m_current_speed_down << ", multiplier " << multiplier << " after " << dt/1e6 << " seconds)");
-              download = true;
-              return true;
-            }
             return true;
           }))
           {
@@ -2430,6 +2405,7 @@ skip:
         context.m_last_request_time = boost::posix_time::microsec_clock::universal_time();
         context.m_expect_height = span.first;
         context.m_expect_response = NOTIFY_RESPONSE_GET_OBJECTS::ID;
+        context.m_expected_response_max_bytes = m_core.get_block_sync_response_size(req.blocks.size());
         MLOG_P2P_MESSAGE("-->>NOTIFY_REQUEST_GET_OBJECTS: blocks.size()=" << req.blocks.size()
             << "requested blocks count=" << count << " / " << count_limit << " from " << span.first << ", first hash " << req.blocks.front());
         //epee::net_utils::network_throttle_manager::get_global_throttle_inreq().logger_handle_net("log/dr-monero/net/req-all.data", sec, get_avg_block_size());
@@ -2468,13 +2444,13 @@ skip:
       const boost::unique_lock<boost::mutex> sync{m_sync_lock, boost::try_to_lock};
       if (sync.owns_lock())
       {
-        uint64_t start_height;
-        std::vector<cryptonote::block_complete_entry> blocks;
+        bool filled = false;
+        boost::posix_time::ptime request_time;
         boost::uuids::uuid span_connection_id;
-        epee::net_utils::network_address span_origin;
-        if (m_block_queue.get_next_span(start_height, blocks, span_connection_id, span_origin, true))
+        const uint64_t blockchain_height = m_core.get_current_blockchain_height();
+        if (m_block_queue.has_next_span(blockchain_height, filled, request_time, span_connection_id) && filled)
         {
-          LOG_DEBUG_CC(context, "No other thread is adding blocks, resuming");
+          LOG_DEBUG_CC(context, "No other thread is adding blocks, and the next required span is ready, resuming");
           MLOG_PEER_STATE("will try to add blocks next");
           context.m_state = cryptonote_connection_context::state_standby;
           ++context.m_callback_request_count;
@@ -2635,6 +2611,7 @@ skip:
       return 1;
     }
     context.m_expect_response = 0;
+    context.m_expected_response_max_bytes = 0;
     if (arg.start_height + 1 > context.m_expect_height) // we expect an overlapping block
     {
       LOG_ERROR_CCONTEXT("Got NOTIFY_RESPONSE_CHAIN_ENTRY past expected height, dropping connection");

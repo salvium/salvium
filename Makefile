@@ -28,12 +28,18 @@
 
 ANDROID_STANDALONE_TOOLCHAIN_PATH ?= /usr/local/toolchain
 
+ifneq ($(filter MINGW% MSYS%,$(shell uname -s)),)
+  NATIVE_CMAKE_GENERATOR := -G "MSYS Makefiles"
+endif
+
 dotgit=$(shell ls -d .git/config)
 ifneq ($(dotgit), .git/config)
   USE_SINGLE_BUILDDIR=1
 endif
 
-subbuilddir:=$(shell echo  `uname | sed -e 's|[:/\\ \(\)]|_|g'`/`git branch | grep '\* ' | cut -f2- -d' '| sed -e 's|[:/\\ \(\)]|_|g'`)
+# uname reports MINGW64_NT for both the MINGW64 and UCRT64 shells. Include
+# MSYSTEM so their incompatible CMake caches and dependency paths never mix.
+subbuilddir:=$(shell echo  `uname | sed -e 's|[:/\\ \(\)]|_|g'`$${MSYSTEM:+_$${MSYSTEM}}/`git branch | grep '\* ' | cut -f2- -d' '| sed -e 's|[:/\\ \(\)]|_|g'`)
 ifeq ($(USE_SINGLE_BUILDDIR),)
   builddir := build/"$(subbuilddir)"
   topdir   := ../../../..
@@ -89,10 +95,10 @@ debug-static-win32:
  
 cmake-release:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D CMAKE_BUILD_TYPE=Release $(topdir)
+	cd $(builddir)/release && cmake $(NATIVE_CMAKE_GENERATOR) -D CMAKE_BUILD_TYPE=Release $(topdir)
 
-release:
-	./make_releases.sh --no-zip
+release: cmake-release
+	cd $(builddir)/release && $(MAKE)
 
 release-test:
 	mkdir -p $(builddir)/release
@@ -104,7 +110,7 @@ release-all:
 
 release-static:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D STATIC=ON -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release $(topdir) && $(MAKE)
+	cd $(builddir)/release && cmake $(NATIVE_CMAKE_GENERATOR) -D STATIC=ON -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release $(topdir) && $(MAKE)
 
 coverage:
 	mkdir -p $(builddir)/debug
