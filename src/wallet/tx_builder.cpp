@@ -579,6 +579,8 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     wallet2::unique_index_container subtract_fee_from_outputs,
     const std::uint64_t top_block_index)
 {
+    THROW_WALLET_EXCEPTION_IF(dsts.empty(), error::zero_destination);
+
     // Make sure all destinations have the SAME asset_type
     std::string asset_type = dsts[0].asset_type;
     if (dsts.size() > 1) {
