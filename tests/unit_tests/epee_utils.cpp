@@ -1822,6 +1822,10 @@ TEST(parsing, unicode)
   si = s.begin();
   EXPECT_THROW(epee::misc_utils::parse::match_string2(si, s.end(), bs), std::runtime_error);
 
+  s = "\"\\u123";
+  si = s.begin();
+  EXPECT_THROW(epee::misc_utils::parse::match_string2(si, s.end(), bs), std::runtime_error);
+
   s = "\"\\u1234\"";
   si = s.begin();
   epee::misc_utils::parse::match_string2(si, s.end(), bs);
