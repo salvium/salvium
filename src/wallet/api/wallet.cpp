@@ -1631,6 +1631,14 @@ PendingTransaction* WalletImpl::restoreMultisigTransaction(const string& signDat
 
 PendingTransaction *WalletImpl::createStakeTransaction(uint64_t amount, uint32_t mixin_count, PendingTransaction::Priority priority, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
 {
+  if (amount == 0) {
+    clearStatus();
+    auto *transaction = new PendingTransactionImpl(*this);
+    setStatusError(tr("Stake amount must be greater than zero"));
+    statusWithErrorString(transaction->m_status, transaction->m_errorString);
+    return transaction;
+  }
+
   // Need to populate {dst_entr, payment_id, asset_type, is_return}
   const bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
   const string dst_addr = m_wallet->get_subaddress_as_str({{subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});//MY LOCAL (SUB)ADDRESS
