@@ -1640,7 +1640,7 @@ PendingTransaction *WalletImpl::createStakeTransaction(uint64_t amount, uint32_t
 
   LOG_ERROR("createStakeTransaction: called");
   
-  return createTransactionMultDest(Monero::transaction_type::STAKE, std::vector<string> {dst_addr}, payment_id, amount ? (std::vector<uint64_t> {amount}) : (optional<std::vector<uint64_t>>()), mixin_count, asset_type, is_return, priority, subaddr_account, subaddr_indices);
+  return createTransactionMultDest(Monero::transaction_type::STAKE, std::vector<string> {dst_addr}, payment_id, std::vector<uint64_t> {amount}, mixin_count, asset_type, is_return, priority, subaddr_account, subaddr_indices);
 }
 
 PendingTransaction *WalletImpl::createCreateTokenTransaction(const std::string &asset_type, uint64_t supply, const std::string &metadata, const std::string &name, uint32_t size, std::string hash, std::string url, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices){
