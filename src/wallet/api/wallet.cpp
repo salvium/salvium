@@ -1005,6 +1005,7 @@ string WalletImpl::keysFilename() const
 
 bool WalletImpl::init(const std::string &daemon_address, uint64_t upper_transaction_size_limit, const std::string &daemon_username, const std::string &daemon_password, bool use_ssl, bool lightWallet, const std::string &proxy_address)
 {
+    (void)lightWallet;
     clearStatus();
     if(daemon_username != "")
         m_daemon_login.emplace(daemon_username, daemon_password);

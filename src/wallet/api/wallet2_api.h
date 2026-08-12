@@ -634,7 +634,7 @@ struct Wallet
      * \param upper_transaction_size_limit
      * \param daemon_username
      * \param daemon_password
-     * \param lightWallet - start wallet in light mode, connect to a openmonero compatible server.
+     * \param lightWallet - deprecated and ignored; Salvium always uses full-wallet synchronization.
      * \param proxy_address - set proxy address, empty string to disable
      * \return  - true on success
      */
