@@ -1872,41 +1872,18 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const Monero::transact
                                                                           adjusted_priority,
                                                                           extra, subaddr_account, subaddr_indices);
             } else {
-              std::vector<tools::wallet2::pending_tx> m_pending_txs;
-              for (const auto subaddr_index : subaddr_indices) {
-
-                // Skip this wallet if there is no balance unlocked to audit
-                std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddr = m_wallet->unlocked_balance_per_subaddress(subaddr_account, asset_type, true);
-                if (unlocked_balance_per_subaddr.count(subaddr_index) == 0) continue;
-
-                try {
-          
-                  const auto result = m_wallet->create_transactions_all(0,
-                                                                        converted_tx_type,
-                                                                        asset_type,
-                                                                        info.address,
-                                                                        info.is_subaddress,
-                                                                        1,
-                                                                        fake_outs_count,
-                                                                        0 /* unlock_time */,
-                                                                        adjusted_priority,
-                                                                        extra,
-                                                                        subaddr_account,
-                                                                        std::set<uint32_t> {subaddr_index}
-                                                                        );
-                  m_pending_txs.insert(m_pending_txs.end(), result.begin(), result.end());
-
-                } catch (const std::exception &e) {
-                  
-                  // Let's skip this wallet - we have already reported the error
-                  if (unlocked_balance_per_subaddr[subaddr_index].first < 250000000) {
-                    std::ostringstream writer;
-                    writer << boost::format(tr("Subaddress index %u has insufficient funds (%s) to pay for audit")) % subaddr_index % print_money(unlocked_balance_per_subaddr[subaddr_index].first);
-                    setStatusError(writer.str());
-                  }
-                }
-              }
-              transaction->m_pending_tx = m_pending_txs;
+              transaction->m_pending_tx = m_wallet->create_transactions_all(0,
+                                                                            converted_tx_type,
+                                                                            asset_type,
+                                                                            info.address,
+                                                                            info.is_subaddress,
+                                                                            1,
+                                                                            fake_outs_count,
+                                                                            0 /* unlock_time */,
+                                                                            adjusted_priority,
+                                                                            extra,
+                                                                            subaddr_account,
+                                                                            subaddr_indices);
             }
             pendingTxPostProcess(transaction);
 
