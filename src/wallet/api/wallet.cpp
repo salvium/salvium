@@ -1631,6 +1631,14 @@ PendingTransaction* WalletImpl::restoreMultisigTransaction(const string& signDat
 
 PendingTransaction *WalletImpl::createStakeTransaction(uint64_t amount, uint32_t mixin_count, PendingTransaction::Priority priority, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
 {
+  if (amount == 0) {
+    clearStatus();
+    auto *transaction = new PendingTransactionImpl(*this);
+    setStatusError(tr("Stake amount must be greater than zero"));
+    statusWithErrorString(transaction->m_status, transaction->m_errorString);
+    return transaction;
+  }
+
   // Need to populate {dst_entr, payment_id, asset_type, is_return}
   const bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
   const string dst_addr = m_wallet->get_subaddress_as_str({{subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});//MY LOCAL (SUB)ADDRESS
@@ -1640,7 +1648,7 @@ PendingTransaction *WalletImpl::createStakeTransaction(uint64_t amount, uint32_t
 
   LOG_ERROR("createStakeTransaction: called");
   
-  return createTransactionMultDest(Monero::transaction_type::STAKE, std::vector<string> {dst_addr}, payment_id, amount ? (std::vector<uint64_t> {amount}) : (optional<std::vector<uint64_t>>()), mixin_count, asset_type, is_return, priority, subaddr_account, subaddr_indices);
+  return createTransactionMultDest(Monero::transaction_type::STAKE, std::vector<string> {dst_addr}, payment_id, std::vector<uint64_t> {amount}, mixin_count, asset_type, is_return, priority, subaddr_account, subaddr_indices);
 }
 
 PendingTransaction *WalletImpl::createCreateTokenTransaction(const std::string &asset_type, uint64_t supply, const std::string &metadata, const std::string &name, uint32_t size, std::string hash, std::string url, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices){
