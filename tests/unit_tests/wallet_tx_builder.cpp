@@ -142,6 +142,25 @@ TEST(wallet_tx_builder, input_selection_basic)
     ASSERT_EQ(selected_transfer_indices.size(), matched_transfer_indices.size());
 }
 //----------------------------------------------------------------------------------------------------------------------
+TEST(wallet_tx_builder, rejects_empty_destination_list)
+{
+    tools::wallet2 w;
+
+    EXPECT_THROW(
+        tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(
+            w,
+            /*dsts=*/{},
+            /*fee_per_weight=*/1,
+            /*fee_quantization_mask=*/5,
+            /*extra=*/{},
+            /*tx_type=*/cryptonote::transaction_type::TRANSFER,
+            /*subaddr_account=*/0,
+            /*subaddr_indices=*/{},
+            /*subtract_fee_from_outputs=*/{},
+            /*top_block_index=*/0),
+        tools::error::zero_destination);
+}
+//----------------------------------------------------------------------------------------------------------------------
 TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_transfer_1)
 {
     cryptonote::account_base alice;
