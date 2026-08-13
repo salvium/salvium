@@ -2358,8 +2358,11 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
           //payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
           payouts_active[epee::string_tools::pod_to_hex(td.m_txid)] = std::make_tuple(td.m_block_height, td.asset_type, td.m_tx.amount_burnt, 0);
         }
-      } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
-        // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
+      } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL && td.m_td_origin_idx < m_transfers.size()) {
+        // Store list of reverse-lookup indices to tell YIELD TXs how much they earned.
+        // An unresolved origin is stored as uint64::max (see process_new_transaction),
+        // so the index must be bounds-checked before use or a single such entry
+        // access-violates every get_yield_summary_info call.
         if (m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE || m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::AUDIT)
           map_payouts[td.m_td_origin_idx] = idx;
       }
