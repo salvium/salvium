@@ -181,6 +181,14 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------
   void core_rpc_server::init_options(boost::program_options::options_description& desc)
   {
+    command_line::add_arg(desc, arg_salchat_enabled);
+    command_line::add_arg(desc, arg_salchat_max_packet_bytes);
+    command_line::add_arg(desc, arg_salchat_max_cache_bytes);
+    command_line::add_arg(desc, arg_salchat_max_cache_messages);
+    command_line::add_arg(desc, arg_salchat_max_ttl);
+    command_line::add_arg(desc, arg_salchat_relay_fanout);
+    command_line::add_arg(desc, arg_salchat_max_peer_kbps);
+    command_line::add_arg(desc, arg_salchat_max_global_kbps);
     command_line::add_arg(desc, arg_rpc_bind_port);
     command_line::add_arg(desc, arg_rpc_restricted_bind_port);
     command_line::add_arg(desc, arg_restricted_rpc);
@@ -509,7 +517,7 @@ namespace cryptonote
   bool core_rpc_server::on_get_height(const COMMAND_RPC_GET_HEIGHT::request& req, COMMAND_RPC_GET_HEIGHT::response& res, const connection_context *ctx)
   {
     RPC_TRACKER(get_height);
-    bool r;
+    bool r = false;
     if (use_bootstrap_daemon_if_necessary<COMMAND_RPC_GET_HEIGHT>(invoke_http_mode::JON, "/getheight", req, res, r))
       return r;
 
@@ -524,7 +532,7 @@ namespace cryptonote
   bool core_rpc_server::on_get_info(const COMMAND_RPC_GET_INFO::request& req, COMMAND_RPC_GET_INFO::response& res, const connection_context *ctx)
   {
     RPC_TRACKER(get_info);
-    bool r;
+    bool r = false;
     if (use_bootstrap_daemon_if_necessary<COMMAND_RPC_GET_INFO>(invoke_http_mode::JON, "/getinfo", req, res, r))
     {
       {
@@ -858,7 +866,7 @@ namespace cryptonote
   bool core_rpc_server::on_get_blocks_by_height(const COMMAND_RPC_GET_BLOCKS_BY_HEIGHT::request& req, COMMAND_RPC_GET_BLOCKS_BY_HEIGHT::response& res, const connection_context *ctx)
   {
     RPC_TRACKER(get_blocks_by_height);
-    bool r;
+    bool r = false;
     if (use_bootstrap_daemon_if_necessary<COMMAND_RPC_GET_BLOCKS_BY_HEIGHT>(invoke_http_mode::BIN, "/getblocks_by_height.bin", req, res, r))
       return r;
 
@@ -900,7 +908,7 @@ namespace cryptonote
   bool core_rpc_server::on_get_hashes(const COMMAND_RPC_GET_HASHES_FAST::request& req, COMMAND_RPC_GET_HASHES_FAST::response& res, const connection_context *ctx)
   {
     RPC_TRACKER(get_hashes);
-    bool r;
+    bool r = false;
     if (use_bootstrap_daemon_if_necessary<COMMAND_RPC_GET_HASHES_FAST>(invoke_http_mode::BIN, "/gethashes.bin", req, res, r))
       return r;
 
@@ -3101,7 +3109,7 @@ namespace cryptonote
   bool core_rpc_server::on_get_version(const COMMAND_RPC_GET_VERSION::request& req, COMMAND_RPC_GET_VERSION::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
   {
     RPC_TRACKER(get_version);
-    bool r;
+    bool r = false;
     if (use_bootstrap_daemon_if_necessary<COMMAND_RPC_GET_VERSION>(invoke_http_mode::JON_RPC, "get_version", req, res, r))
       return r;
 
@@ -3298,7 +3306,7 @@ namespace cryptonote
   bool core_rpc_server::on_get_limit(const COMMAND_RPC_GET_LIMIT::request& req, COMMAND_RPC_GET_LIMIT::response& res, const connection_context *ctx)
   {
     RPC_TRACKER(get_limit);
-    bool r;
+    bool r = false;
     if (use_bootstrap_daemon_if_necessary<COMMAND_RPC_GET_LIMIT>(invoke_http_mode::JON, "/get_limit", req, res, r))
       return r;
 
@@ -3902,7 +3910,7 @@ namespace cryptonote
   {
     RPC_TRACKER(rpc_access_data);
 
-    bool r;
+    bool r = false;
     if (use_bootstrap_daemon_if_necessary<COMMAND_RPC_ACCESS_DATA>(invoke_http_mode::JON_RPC, "rpc_access_data", req, res, r))
       return r;
 
@@ -3954,6 +3962,91 @@ namespace cryptonote
 
     res.status = CORE_RPC_STATUS_OK;
     return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  namespace
+  {
+    template<typename T> bool salchat_hex_pod(const std::string& text, T& out)
+    { return text.size() == 2 * sizeof(T) && epee::string_tools::hex_to_pod(text, out); }
+    bool salchat_from_rpc(const salchat_rpc_envelope& in, salchat_p2p_envelope& out)
+    {
+      if (in.ciphertext.empty() || in.ciphertext.size() > 2 * SALCHAT_MAX_CIPHERTEXT_BYTES || (in.ciphertext.size() & 1))
+        return false;
+      out.protocol_version=in.protocol_version; out.created_at=in.created_at; out.expires_at=in.expires_at;
+      out.created_height=in.created_height; out.expires_height=in.expires_height;
+      out.hop_count=in.hop_count; out.hop_limit=in.hop_limit;
+      return salchat_hex_pod(in.message_id,out.message_id) && salchat_hex_pod(in.recipient_tag,out.recipient_tag) &&
+        salchat_hex_pod(in.ciphertext_hash,out.ciphertext_hash) && salchat_hex_pod(in.ack_token_hash,out.ack_token_hash) &&
+        salchat_hex_pod(in.ephemeral_public_key,out.ephemeral_public_key) &&
+        salchat_hex_pod(in.nonce,out.nonce) && epee::string_tools::parse_hexstr_to_binbuff(in.ciphertext,out.ciphertext) &&
+        salchat_hex_pod(in.sender_signing_public_key,out.sender_signing_public_key) && salchat_hex_pod(in.sender_signature,out.sender_signature);
+    }
+    salchat_rpc_envelope salchat_to_rpc(const salchat_p2p_envelope& in)
+    {
+      salchat_rpc_envelope out{};
+      out.protocol_version=in.protocol_version; out.created_at=in.created_at; out.expires_at=in.expires_at; out.hop_count=in.hop_count; out.hop_limit=in.hop_limit;
+      out.created_height=in.created_height; out.expires_height=in.expires_height;
+      out.message_id=epee::string_tools::pod_to_hex(in.message_id); out.recipient_tag=epee::string_tools::pod_to_hex(in.recipient_tag);
+      out.ciphertext_hash=epee::string_tools::pod_to_hex(in.ciphertext_hash); out.ack_token_hash=epee::string_tools::pod_to_hex(in.ack_token_hash);
+      out.ephemeral_public_key=epee::string_tools::pod_to_hex(in.ephemeral_public_key);
+      out.nonce=epee::string_tools::pod_to_hex(in.nonce); out.ciphertext=epee::string_tools::buff_to_hex_nodelimer(in.ciphertext);
+      out.sender_signing_public_key=epee::string_tools::pod_to_hex(in.sender_signing_public_key);
+      out.sender_signature=epee::string_tools::pod_to_hex(in.sender_signature); return out;
+    }
+  }
+  bool core_rpc_server::on_salchat_submit(const COMMAND_RPC_SALCHAT_SUBMIT::request& req, COMMAND_RPC_SALCHAT_SUBMIT::response& res, epee::json_rpc::error& error, const connection_context* ctx)
+  {
+    salchat_p2p_envelope envelope;
+    if (!salchat_from_rpc(req.envelope, envelope)) { error.code=CORE_RPC_ERROR_CODE_WRONG_PARAM; error.message="Malformed Salchat hex field"; return false; }
+    epee::byte_slice wire;
+    if (!epee::serialization::store_t_to_binary(envelope,wire)) { error.code=CORE_RPC_ERROR_CODE_WRONG_PARAM; error.message="Malformed Salchat envelope"; return false; }
+    const std::string source=ctx ? ctx->m_remote_address.host_str() : "internal";
+    if (!m_p2p.get_payload_object().allow_salchat_rpc_request(source,wire.size()))
+    { res.accepted=false; res.reason="Salchat RPC rate limit exceeded"; res.status=CORE_RPC_STATUS_BUSY; return true; }
+    std::string reason; const auto result=m_p2p.get_payload_object().submit_salchat_envelope(envelope, reason);
+    res.accepted=result==salchat_result::accepted; res.reason=reason; res.status=res.accepted?CORE_RPC_STATUS_OK:"REJECTED"; return true;
+  }
+  bool core_rpc_server::on_salchat_poll(const COMMAND_RPC_SALCHAT_POLL::request& req, COMMAND_RPC_SALCHAT_POLL::response& res, epee::json_rpc::error& error, const connection_context* ctx)
+  {
+    std::vector<crypto::hash> tags;
+    if (req.recipient_tags.empty() || req.recipient_tags.size()>SALCHAT_MAX_POLL_TAGS || req.limit==0 || req.limit>100)
+    { error.code=CORE_RPC_ERROR_CODE_WRONG_PARAM; error.message="Salchat poll requires 1-" + std::to_string(SALCHAT_MAX_POLL_TAGS) + " recipient tags and a limit of 1-100"; return false; }
+    for (const auto& text:req.recipient_tags) { crypto::hash tag; if (!salchat_hex_pod(text,tag)) { error.code=CORE_RPC_ERROR_CODE_WRONG_PARAM; error.message="Malformed recipient tag"; return false; } tags.push_back(tag); }
+    const std::string source=ctx ? ctx->m_remote_address.host_str() : "internal";
+    if (!m_p2p.get_payload_object().allow_salchat_rpc_request(source,1+tags.size()*sizeof(crypto::hash)))
+    { res.status=CORE_RPC_STATUS_BUSY; return true; }
+    for (const auto& e:m_p2p.get_payload_object().poll_salchat_envelopes(tags,req.limit))
+    {
+      // Hex encoding approximately doubles ciphertext bytes. Include a fixed
+      // allowance for the other hex fields and JSON names so tiny poll
+      // requests cannot amplify into unmetered multi-megabyte responses.
+      const std::size_t response_bytes=2*e.ciphertext.size()+1024;
+      if (!m_p2p.get_payload_object().allow_salchat_rpc_response(source,response_bytes))
+      {
+        // Preserve an already-metered partial batch.  Returning an empty
+        // status here would make the wallet discard those safe envelopes.
+        res.status=res.envelopes.empty()?CORE_RPC_STATUS_BUSY:CORE_RPC_STATUS_OK;
+        return true;
+      }
+      res.envelopes.push_back(salchat_to_rpc(e));
+    }
+    res.status=CORE_RPC_STATUS_OK; return true;
+  }
+  bool core_rpc_server::on_salchat_ack(const COMMAND_RPC_SALCHAT_ACK::request& req, COMMAND_RPC_SALCHAT_ACK::response& res, epee::json_rpc::error& error, const connection_context* ctx)
+  {
+    crypto::hash id, ack_token;
+    if (!salchat_hex_pod(req.message_id,id) || !salchat_hex_pod(req.ack_token,ack_token))
+    { error.code=CORE_RPC_ERROR_CODE_WRONG_PARAM; error.message="Malformed message id or acknowledgement token"; return false; }
+    const std::string source=ctx ? ctx->m_remote_address.host_str() : "internal";
+    if (!m_p2p.get_payload_object().allow_salchat_rpc_request(source,sizeof(id)+sizeof(ack_token)))
+    { res.removed=false; res.status=CORE_RPC_STATUS_BUSY; return true; }
+    res.removed=m_p2p.get_payload_object().ack_salchat_envelope(id,ack_token); res.status=CORE_RPC_STATUS_OK; return true;
+  }
+  bool core_rpc_server::on_salchat_status(const COMMAND_RPC_SALCHAT_STATUS::request&, COMMAND_RPC_SALCHAT_STATUS::response& res, epee::json_rpc::error&, const connection_context*)
+  {
+    const auto& protocol=m_p2p.get_payload_object(); const auto s=protocol.get_salchat_statistics();
+    res.enabled=protocol.salchat_enabled(); res.accepted=s.accepted; res.duplicates=s.duplicates; res.rejected=s.rejected;
+    res.evicted=s.evicted; res.cached_messages=s.cached_messages; res.cached_bytes=s.cached_bytes; res.status=CORE_RPC_STATUS_OK; return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
   const command_line::arg_descriptor<std::string, false, true, 2> core_rpc_server::arg_rpc_bind_port = {

@@ -101,7 +101,7 @@ static mx25519_pubkey get_enote_ephemeral_pubkey(const janus_anchor_t randomness
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void get_normal_proposal_ecdh_parts(const CarrotPaymentProposalV1 &proposal,
+void get_normal_proposal_ecdh_parts(const CarrotPaymentProposalV1 &proposal,
     const input_context_t &input_context,
     mx25519_pubkey &enote_ephemeral_pubkey_out,
     mx25519_pubkey &s_sender_receiver_unctx_out)

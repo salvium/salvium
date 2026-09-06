@@ -2321,26 +2321,64 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
                                      std::vector<yield_payout_t> &payouts
                                      )
 {
+  // The daemon response and cached transfer metadata are not trusted enough
+  // to leave caller-visible output partially initialized on an error.
+  total_burnt = 0;
+  total_supply = 0;
+  total_locked = 0;
+  total_yield = 0;
+  yield_per_stake = 0;
+  ybi_data_size = 0;
+  payouts.clear();
+  const auto invalid_result = [&]() noexcept {
+    total_burnt = 0;
+    total_supply = 0;
+    total_locked = 0;
+    total_yield = 0;
+    yield_per_stake = 0;
+    ybi_data_size = 0;
+    payouts.clear();
+    return false;
+  };
+
   // Get the total circulating supply of SALs
   std::vector<std::pair<std::string, std::string>> supply_amounts;
   if(!get_circulating_supply(supply_amounts)) {
-    return false;
+    return invalid_result();
   }
   boost::multiprecision::uint128_t total_supply_128 = 0;
-  for (auto supply_asset: supply_amounts) {
+  bool found_sal1_supply = false;
+  for (const auto& supply_asset: supply_amounts) {
     if (supply_asset.first == "SAL1") {
-      boost::multiprecision::uint128_t supply_128(supply_asset.second);
-      total_supply_128 = supply_128;
+      try
+      {
+        total_supply_128 = boost::multiprecision::uint128_t{supply_asset.second};
+      }
+      catch (const std::exception&)
+      {
+        MERROR("Daemon returned malformed SAL1 supply data");
+        return invalid_result();
+      }
+      found_sal1_supply = true;
       break;
     }
+  }
+  if (!found_sal1_supply || total_supply_128 > std::numeric_limits<uint64_t>::max())
+  {
+    MERROR("Daemon returned missing or out-of-range SAL1 supply data");
+    return invalid_result();
   }
   total_supply = total_supply_128.convert_to<uint64_t>();
 
   // Get the yield data from the blockchain
   std::vector<cryptonote::yield_block_info> ybi_data;
   bool r = get_yield_info(ybi_data);
-  if (!r)
-    return false;
+  if (!r || ybi_data.empty())
+  {
+    if (r)
+      MERROR("Daemon returned empty yield data");
+    return invalid_result();
+  }
 
   ybi_data_size = ybi_data.size();
 
@@ -2353,13 +2391,26 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
       //if (td.m_block_height < ybi_data[0].block_height) break;
       if (td.m_tx.type == cryptonote::transaction_type::STAKE) {
         if (map_payouts.count(idx)) {
-          payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.asset_type, td.m_tx.amount_burnt, m_transfers[map_payouts[idx]].m_amount - td.m_tx.amount_burnt));
+          const auto& payout = m_transfers[map_payouts[idx]];
+          if (payout.m_amount < td.m_tx.amount_burnt)
+          {
+            MWARNING("Ignoring yield payout smaller than its recorded stake burn");
+            continue;
+          }
+          payouts.push_back(std::make_tuple(td.m_block_height,
+            epee::string_tools::pod_to_hex(td.m_txid), td.asset_type,
+            td.m_tx.amount_burnt, payout.m_amount - td.m_tx.amount_burnt));
         } else {
           //payouts.push_back(std::make_tuple(td.m_block_height, epee::string_tools::pod_to_hex(td.m_txid), td.m_tx.amount_burnt, 0));
           payouts_active[epee::string_tools::pod_to_hex(td.m_txid)] = std::make_tuple(td.m_block_height, td.asset_type, td.m_tx.amount_burnt, 0);
         }
       } else if (td.m_tx.type == cryptonote::transaction_type::PROTOCOL) {
         // Store list of reverse-lookup indices to tell YIELD TXs how much they earned
+        if (td.m_td_origin_idx >= m_transfers.size())
+        {
+          MWARNING("Ignoring yield protocol transfer with invalid origin index");
+          continue;
+        }
         if (m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::STAKE || m_transfers[td.m_td_origin_idx].m_tx.type == cryptonote::transaction_type::AUDIT)
           map_payouts[td.m_td_origin_idx] = idx;
       }
@@ -2367,14 +2418,25 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
   }
   
   // Scan the entries we have received to gather the state (total yield over period captured)
-  total_burnt = 0;
-  total_yield = 0;
-  yield_per_stake = 0;
+  const auto checked_add = [](uint64_t& total, const uint64_t amount) {
+    if (amount > std::numeric_limits<uint64_t>::max() - total)
+      return false;
+    total += amount;
+    return true;
+  };
   for (size_t idx=1; idx<ybi_data.size(); ++idx) {
     if (ybi_data[idx].locked_coins_tally == 0) {
-      total_burnt += ybi_data[idx].slippage_total_this_block;
+      if (!checked_add(total_burnt, ybi_data[idx].slippage_total_this_block))
+      {
+        MERROR("Daemon yield burn total exceeds supported range");
+        return invalid_result();
+      }
     } else {
-      total_yield += ybi_data[idx].slippage_total_this_block;
+      if (!checked_add(total_yield, ybi_data[idx].slippage_total_this_block))
+      {
+        MERROR("Daemon yield total exceeds supported range");
+        return invalid_result();
+      }
 
       // EXPERIMENTAL - add up yield earned for active STAKE TXs
       for (auto &payout: payouts_active) {
@@ -2384,7 +2446,12 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
         boost::multiprecision::uint128_t amount_128 = ybi_data[idx].slippage_total_this_block;
         amount_128 *= total_burnt;
         amount_128 /= ybi_data[idx].locked_coins_tally;
-        total_accrued += amount_128.convert_to<uint64_t>();
+        if (amount_128 > std::numeric_limits<uint64_t>::max() ||
+            !checked_add(total_accrued, amount_128.convert_to<uint64_t>()))
+        {
+          MERROR("Daemon yield payout exceeds supported range");
+          return invalid_result();
+        }
       }
     }
   }
@@ -2403,6 +2470,11 @@ bool wallet2::get_yield_summary_info(uint64_t &total_burnt,
     boost::multiprecision::uint128_t yield_per_stake_128 = ybi_data.back().slippage_total_this_block;
     yield_per_stake_128 *= COIN;
     yield_per_stake_128 /= ybi_data.back().locked_coins_tally;
+    if (yield_per_stake_128 > std::numeric_limits<uint64_t>::max())
+    {
+      MERROR("Daemon yield-per-stake value exceeds supported range");
+      return invalid_result();
+    }
     yield_per_stake = yield_per_stake_128.convert_to<uint64_t>();
   }
   

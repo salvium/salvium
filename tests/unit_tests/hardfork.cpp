@@ -35,6 +35,7 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_basic/hardfork.h"
 #include "blockchain_db/testdb.h"
+#include "hardforks/hardforks.h"
 
 using namespace cryptonote;
 
@@ -99,6 +100,56 @@ static cryptonote::block mkblock(const HardFork &hf, uint64_t height, uint8_t vo
   b.major_version = hf.get(height);
   b.minor_version = vote;
   return b;
+}
+
+TEST(production_schedules, mainnet_testnet_stagenet_and_regtest)
+{
+  const uint64_t expected_mainnet_heights[] = {
+    1, 89800, 121100, 121800, 136100, 154750, 161900,
+    172000, 179200, 334750, 465000, 513100, 521425
+  };
+  const uint64_t expected_testnet_heights[] = {
+    1, 250, 500, 600, 800, 815, 900, 950, 1000, 1100, 1200, 1300, 1400
+  };
+
+  ASSERT_EQ(num_mainnet_hard_forks, std::size(expected_mainnet_heights));
+  ASSERT_EQ(num_testnet_hard_forks, std::size(expected_testnet_heights));
+  for (size_t i = 0; i < num_mainnet_hard_forks; ++i)
+  {
+    EXPECT_EQ(mainnet_hard_forks[i].version, i + 1);
+    EXPECT_EQ(mainnet_hard_forks[i].height, expected_mainnet_heights[i]);
+    EXPECT_EQ(mainnet_hard_forks[i].threshold, 0);
+    if (i > 0)
+    {
+      EXPECT_GT(mainnet_hard_forks[i].time, mainnet_hard_forks[i - 1].time);
+    }
+  }
+  for (size_t i = 0; i < num_testnet_hard_forks; ++i)
+  {
+    EXPECT_EQ(testnet_hard_forks[i].version, i + 1);
+    EXPECT_EQ(testnet_hard_forks[i].height, expected_testnet_heights[i]);
+    EXPECT_EQ(testnet_hard_forks[i].threshold, 0);
+    if (i > 0)
+    {
+      EXPECT_GT(testnet_hard_forks[i].height, testnet_hard_forks[i - 1].height);
+    }
+  }
+
+  ASSERT_EQ(num_stagenet_hard_forks, 1);
+  EXPECT_EQ(stagenet_hard_forks[0].version, 1);
+  EXPECT_EQ(stagenet_hard_forks[0].height, 1);
+  EXPECT_EQ(stagenet_hard_forks[0].threshold, 0);
+
+  // cryptonote_core builds this two-entry schedule for --regtest: HF1 at
+  // genesis, then the current mainnet production rules at height 1.
+  const std::pair<uint8_t, uint64_t> expected_regtest_hard_forks[] = {
+    {1, 0},
+    {mainnet_hard_forks[num_mainnet_hard_forks - 1].version, 1},
+  };
+  EXPECT_EQ(expected_regtest_hard_forks[0].first, 1);
+  EXPECT_EQ(expected_regtest_hard_forks[0].second, 0);
+  EXPECT_EQ(expected_regtest_hard_forks[1].first, 13);
+  EXPECT_EQ(expected_regtest_hard_forks[1].second, 1);
 }
 
 TEST(major, Only)
@@ -648,4 +699,3 @@ TEST(get, earliest_ideal_height)
     ASSERT_EQ(hf.get_earliest_ideal_height_for_version(9), 15);
     ASSERT_EQ(hf.get_earliest_ideal_height_for_version(10), std::numeric_limits<uint64_t>::max());
 }
-

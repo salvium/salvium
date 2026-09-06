@@ -149,7 +149,7 @@ struct gen_tx_txout_to_key_has_invalid_key : public get_tx_validation_base
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_tx_output_with_zero_amount : public get_tx_validation_base
+struct gen_tx_output_with_nonzero_clear_amount : public get_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };

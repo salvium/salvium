@@ -56,6 +56,7 @@ using namespace epee;
 #include "rpc/rpc_args.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "daemonizer/daemonizer.h"
+#include "salchat_service.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "wallet.rpc"
@@ -149,6 +150,44 @@ namespace
 
   constexpr const char default_rpc_username[] = "monero";
   constexpr size_t MAX_RPC_HEX_BLOB_SIZE = 128 * 1024 * 1024; // 64 MiB decoded
+  constexpr size_t MAX_WALLET_RPC_CONTENT_LENGTH = MAX_RPC_HEX_BLOB_SIZE + 1024 * 1024;
+
+  bool salchat_rpc_allowed(tools::wallet2* wallet, bool restricted, epee::json_rpc::error& er)
+  {
+    if (!wallet) { er.code = WALLET_RPC_ERROR_CODE_NOT_OPEN; er.message = "No wallet file"; return false; }
+    if (restricted) { er.code = WALLET_RPC_ERROR_CODE_DENIED; er.message = "Salchat is unavailable in restricted mode."; return false; }
+    if (wallet->is_background_wallet() || wallet->is_background_syncing())
+    { er.code = WALLET_RPC_ERROR_CODE_IS_BACKGROUND_WALLET; er.message = "Salchat is unavailable for background wallet operation."; return false; }
+    return true;
+  }
+
+  tools::wallet_rpc::salchat_identity_info salchat_rpc_identity(const salchat::public_identity& in)
+  {
+    tools::wallet_rpc::salchat_identity_info out{}; out.initialized=in.initialized;
+    out.spend_public_key=in.spend_public_key; out.signing_public_key=in.signing_public_key; out.encryption_public_key=in.encryption_public_key;
+    out.salvium_address=in.salvium_address; out.created_at=in.created_at; return out;
+  }
+
+  tools::wallet_rpc::salchat_contact_info salchat_rpc_contact(const salchat::contact& in)
+  {
+    tools::wallet_rpc::salchat_contact_info out{}; out.contact_id=salchat::service::id_hex(in.id); out.label=in.label;
+    out.spend_public_key=salchat::service::key_hex(in.spend_public_key); out.signing_public_key=salchat::service::key_hex(in.signing_public_key); out.encryption_public_key=salchat::service::key_hex(in.encryption_public_key);
+    out.salvium_address=in.salvium_address; out.blocked=in.blocked; out.created_at=in.created_at; return out;
+  }
+
+  tools::wallet_rpc::salchat_message_info salchat_rpc_message(const salchat::message& in,
+    const std::uint64_t current_height)
+  {
+    tools::wallet_rpc::salchat_message_info out{}; out.message_id=salchat::service::id_hex(in.id); out.contact_id=salchat::service::id_hex(in.contact_id);
+    out.content=in.content; out.sender_salvium_address=in.sender_salvium_address;
+    out.sender_signing_public_key=salchat::service::key_hex(in.sender_signing_public_key);
+    out.type=static_cast<uint8_t>(in.type); out.direction=static_cast<uint8_t>(in.direction); out.state=static_cast<uint8_t>(in.state);
+    out.created_at=in.created_at; out.received_at=in.received_at; out.expires_height=in.expires_height;
+    out.blocks_left=in.expires_height > current_height ? in.expires_height-current_height : 0; return out;
+  }
+
+  bool salchat_rpc_error(const std::exception& e, epee::json_rpc::error& er)
+  { er.code=WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR; er.message=e.what(); return false; }
 
   bool check_hex_blob_size(const std::string &hex, const char *field, epee::json_rpc::error &er)
   {
@@ -217,6 +256,11 @@ namespace tools
   void wallet_rpc_server::set_wallet(wallet2 *cr)
   {
     m_wallet = cr;
+    if (m_wallet)
+    {
+      try { salchat::service(*m_wallet).get_identity(); }
+      catch (const std::exception& ex) { MDEBUG("Salchat key initialization deferred: " << ex.what()); }
+    }
   }
   //------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::run()
@@ -238,6 +282,38 @@ namespace tools
       // continue asap, and only set the last refresh time once the refresh is actually finished
       if (blocks_fetched < REFRESH_INFICATIVE_BLOCK_CHUNK_SIZE)
         m_last_auto_refresh_time = boost::posix_time::microsec_clock::universal_time();
+      return true;
+    }, 1000);
+    m_net_server.add_idle_handler([this](){
+      const auto now = boost::posix_time::microsec_clock::universal_time();
+      if (!m_wallet || now < m_last_salchat_check_time + boost::posix_time::seconds(10))
+        return true;
+      m_last_salchat_check_time = now;
+      try
+      {
+        const auto waiting = salchat::service(*m_wallet).check_waiting(100);
+        std::size_t newly_notified = 0;
+        for (const auto& item: waiting.new_messages)
+        {
+          const std::string id = salchat::service::id_hex(item.id);
+          if (!m_salchat_notified_messages.insert(id).second)
+            continue;
+          ++newly_notified;
+          m_salchat_notification_order.push_back(id);
+          if (m_salchat_notification_order.size() > salchat::MAX_MESSAGES)
+          {
+            m_salchat_notified_messages.erase(m_salchat_notification_order.front());
+            m_salchat_notification_order.pop_front();
+          }
+        }
+        if (newly_notified != 0)
+          MGINFO(newly_notified << (newly_notified == 1 ? " Salchat message is waiting" :
+            " Salchat messages are waiting") << "; call salchat_receive_messages to receive it");
+      }
+      catch (const std::exception& ex)
+      {
+        MDEBUG("Salchat background check failed: " << ex.what());
+      }
       return true;
     }, 1000);
     m_net_server.add_idle_handler([this](){
@@ -350,6 +426,7 @@ namespace tools
 
     m_auto_refresh_period = DEFAULT_AUTO_REFRESH_PERIOD;
     m_last_auto_refresh_time = boost::posix_time::min_date_time;
+    m_last_salchat_check_time = boost::posix_time::min_date_time;
 
     check_background_mining();
 
@@ -370,7 +447,7 @@ namespace tools
 
     m_net_server.set_threads_prefix("RPC");
     auto rng = [](size_t len, uint8_t *ptr) { return crypto::rand(len, ptr); };
-    return epee::http_server_impl_base<wallet_rpc_server, connection_context>::init(
+    const bool inited = epee::http_server_impl_base<wallet_rpc_server, connection_context>::init(
       rng, std::move(bind_port), std::move(rpc_config->bind_ip),
       std::move(rpc_config->bind_ipv6_address), std::move(rpc_config->use_ipv6), std::move(rpc_config->require_ipv4),
       std::move(rpc_config->access_control_origins), std::move(http_login),
@@ -378,6 +455,12 @@ namespace tools
       max_connections_public, max_connections_private, max_connections,
       command_line::get_arg(vm, arg_rpc_response_soft_limit)
     );
+    // The HTTP layer otherwise defaults to an unlimited request body. Keep
+    // enough room for the wallet RPC's audited 64 MiB decoded-blob limit plus
+    // JSON hex encoding/overhead, while rejecting unbounded uploads before
+    // JSON parsing and endpoint dispatch.
+    m_net_server.get_config_object().m_max_content_length = MAX_WALLET_RPC_CONTENT_LENGTH;
+    return inited;
   }
   //------------------------------------------------------------------------------------------------------------------------------
   void wallet_rpc_server::check_background_mining()
@@ -2815,6 +2898,48 @@ namespace tools
     }
     return true;
   }
+
+  bool wallet_rpc_server::on_salchat_get_identity(const wallet_rpc::COMMAND_RPC_SALCHAT_GET_IDENTITY::request&, wallet_rpc::COMMAND_RPC_SALCHAT_GET_IDENTITY::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { res.identity=salchat_rpc_identity(salchat::service(*m_wallet).get_identity()); return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_rotate_identity(const wallet_rpc::COMMAND_RPC_SALCHAT_ROTATE_IDENTITY::request&, wallet_rpc::COMMAND_RPC_SALCHAT_ROTATE_IDENTITY::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { res.identity=salchat_rpc_identity(salchat::service(*m_wallet).rotate_identity()); return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_get_address(const wallet_rpc::COMMAND_RPC_SALCHAT_GET_ADDRESS::request&, wallet_rpc::COMMAND_RPC_SALCHAT_GET_ADDRESS::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { res.address=salchat::service(*m_wallet).get_address(); return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_add_contact(const wallet_rpc::COMMAND_RPC_SALCHAT_ADD_CONTACT::request& req, wallet_rpc::COMMAND_RPC_SALCHAT_ADD_CONTACT::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { std::size_t promoted=0; res.contact=salchat_rpc_contact(salchat::service(*m_wallet).add_contact(req.label,req.address,req.encryption_public_key,&promoted)); res.promoted_messages=promoted; return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_accept_contact(const wallet_rpc::COMMAND_RPC_SALCHAT_ACCEPT_CONTACT::request& req, wallet_rpc::COMMAND_RPC_SALCHAT_ACCEPT_CONTACT::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { std::size_t promoted=0; res.contact=salchat_rpc_contact(salchat::service(*m_wallet).accept_contact(req.label,req.message_id,&promoted)); res.promoted_messages=promoted; return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_remove_contact(const wallet_rpc::COMMAND_RPC_SALCHAT_REMOVE_CONTACT::request& req, wallet_rpc::COMMAND_RPC_SALCHAT_REMOVE_CONTACT::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { res.removed=salchat::service(*m_wallet).remove_contact(req.contact_id); return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_block_contact(const wallet_rpc::COMMAND_RPC_SALCHAT_BLOCK_CONTACT::request& req, wallet_rpc::COMMAND_RPC_SALCHAT_BLOCK_CONTACT::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { res.updated=salchat::service(*m_wallet).block_contact(req.contact_id,req.blocked); return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_list_contacts(const wallet_rpc::COMMAND_RPC_SALCHAT_LIST_CONTACTS::request&, wallet_rpc::COMMAND_RPC_SALCHAT_LIST_CONTACTS::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { for(const auto& c:salchat::service(*m_wallet).contacts()) res.contacts.push_back(salchat_rpc_contact(c)); return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_send_message(const wallet_rpc::COMMAND_RPC_SALCHAT_SEND_MESSAGE::request& req, wallet_rpc::COMMAND_RPC_SALCHAT_SEND_MESSAGE::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { const auto r=salchat::service(*m_wallet).send_text(req.contact_id,req.message,req.ttl); res.message_id=r.message_id; res.submitted=r.submitted; res.reason=r.reason; return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_receive_messages(const wallet_rpc::COMMAND_RPC_SALCHAT_RECEIVE_MESSAGES::request& req, wallet_rpc::COMMAND_RPC_SALCHAT_RECEIVE_MESSAGES::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { const auto r=salchat::service(*m_wallet).receive(req.limit); res.received=r.received; res.quarantined=r.quarantined; res.rejected=r.rejected; const auto height=m_wallet->get_blockchain_current_height(); for(const auto& item:r.new_messages) res.new_messages.push_back(salchat_rpc_message(item,height)); return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_list_messages(const wallet_rpc::COMMAND_RPC_SALCHAT_LIST_MESSAGES::request& req, wallet_rpc::COMMAND_RPC_SALCHAT_LIST_MESSAGES::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { const auto height=m_wallet->get_blockchain_current_height(); for(const auto& m:salchat::service(*m_wallet).messages(req.contact_id,req.limit)) res.messages.push_back(salchat_rpc_message(m,height)); return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_get_message(const wallet_rpc::COMMAND_RPC_SALCHAT_GET_MESSAGE::request& req, wallet_rpc::COMMAND_RPC_SALCHAT_GET_MESSAGE::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { salchat::message m; res.found=salchat::service(*m_wallet).get_message(req.message_id,m); if(res.found) res.message=salchat_rpc_message(m,m_wallet->get_blockchain_current_height()); return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_delete_message(const wallet_rpc::COMMAND_RPC_SALCHAT_DELETE_MESSAGE::request& req, wallet_rpc::COMMAND_RPC_SALCHAT_DELETE_MESSAGE::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { res.removed=salchat::service(*m_wallet).delete_message(req.message_id); return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
+
+  bool wallet_rpc_server::on_salchat_get_status(const wallet_rpc::COMMAND_RPC_SALCHAT_GET_STATUS::request&, wallet_rpc::COMMAND_RPC_SALCHAT_GET_STATUS::response& res, epee::json_rpc::error& er, const connection_context*)
+  { if(!salchat_rpc_allowed(m_wallet,m_restricted,er)) return false; try { salchat::service service(*m_wallet); res.identity_initialized=service.get_identity().initialized; res.contacts=service.contacts().size(); res.messages=service.message_count(); res.daemon_available=service.daemon_status(res.daemon_enabled,res.cached_messages,res.error); res.waiting_messages=service.check_waiting(100).new_messages.size(); return true; } catch(const std::exception& e){ return salchat_rpc_error(e,er); } }
   //------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::on_sign(const wallet_rpc::COMMAND_RPC_SIGN::request& req, wallet_rpc::COMMAND_RPC_SIGN::response& res, epee::json_rpc::error& er, const connection_context *ctx)
   {
@@ -2971,6 +3096,12 @@ namespace tools
   bool wallet_rpc_server::on_set_attribute(const wallet_rpc::COMMAND_RPC_SET_ATTRIBUTE::request& req, wallet_rpc::COMMAND_RPC_SET_ATTRIBUTE::response& res, epee::json_rpc::error& er, const connection_context *ctx)
   {
     CHECK_IF_RESTRICTED_BACKGROUND_SYNCING();
+    if (req.key.compare(0, 8, "salchat.") == 0)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Reserved private Salchat state cannot be accessed through generic attributes.";
+      return false;
+    }
 
     m_wallet->set_attribute(req.key, req.value);
 
@@ -2984,6 +3115,12 @@ namespace tools
     {
       er.code = WALLET_RPC_ERROR_CODE_DENIED;
       er.message = "Command unavailable in restricted mode.";
+      return false;
+    }
+    if (req.key.compare(0, 8, "salchat.") == 0)
+    {
+      er.code = WALLET_RPC_ERROR_CODE_DENIED;
+      er.message = "Reserved private Salchat state cannot be accessed through generic attributes.";
       return false;
     }
 
@@ -5358,7 +5495,14 @@ public:
       LOG_PRINT_L0(tools::wallet_rpc_server::tr("Loading wallet..."));
       if(!wallet_file.empty())
       {
-        wal = tools::wallet2::make_from_file(vm, true, wallet_file, password_prompt).first;
+        auto loaded = tools::wallet2::make_from_file(vm, true, wallet_file, password_prompt);
+        wal = std::move(loaded.first);
+        if (wal)
+        {
+          tools::wallet_keys_unlocker unlocker(*wal, &loaded.second.password());
+          salchat::service(*wal).get_identity();
+          wal->store();
+        }
       }
       else
       {
@@ -5366,6 +5510,12 @@ public:
         {
           auto rc = tools::wallet2::make_from_json(vm, true, from_json, password_prompt);
           wal = std::move(rc.first);
+          if (wal)
+          {
+            tools::wallet_keys_unlocker unlocker(*wal, &rc.second.password());
+            salchat::service(*wal).get_identity();
+            wal->store();
+          }
         }
         catch (const std::exception &e)
         {

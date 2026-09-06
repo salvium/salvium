@@ -43,19 +43,19 @@ static const struct
 } test_addresses[] =
 {
   {
-    "9uvjbU54ZJb8j7Dcq1h3F1DnBRkxXdYUX4pbJ7mE3ghM8uF3fKzqRKRNAKYZXcNLqMg7MxjVVD2wKC2PALUwEveGSC3YSWD",
+    "SaLvTyLDDowD4BXKKqFx9ndxSLhs9QrAZSZyvhYTd9AfUi7GAzYRfAjew1Ph5783e5V6r9WLeaReYKDsEd5gc2vPcPwng13DUhc3n",
     "2dd6e34a234c3e8b5d29a371789e4601e96dee4ea6f7ef79224d1a2d91164c01"
   },
   {
-    "9ywDBAyDbb6QKFiZxDJ4hHZqZEQXXCR5EaYNcndUpqPDeE7rEgs6neQdZnhcDrWbURYK8xUjhuG2mVjJdmknrZbcG7NnbaB",
+    "SaLvTyLpkNSTduXjAweUftf6wUmcLsGU74m8fHGjMNLEiDzcyMRQixWdqkqUsXMwb4DTyoim5zPtV3CKvQwA8jfwRd6mGJAK1go43",
     "fac47aecc948ce9d3531aa042abb18235b1df632087c55a361b632ffdd6ede0c"
   },
   {
-    "9t6Hn946u3eah5cuncH1hB5hGzsTUoevtf4SY7MHN5NgJZh2SFWsyVt3vUhuHyRKyrCQvr71Lfc1AevG3BXE11PQFoXDtD8",
+    "SaLvTyKvxKxSWsEN1oEMTAEs1ihQdTJgW28kcw1WELGNRx2t1hKQncLUpKtawY85AWYT861zwessmRbgGTmSvyxkKWnKXhKgaFd1m",
     "bbd3175ef9fd9f5eefdc43035f882f74ad14c4cf1799d8b6f9001bc197175d02"
   },
   {
-    "9zmAWoNyNPbgnYSm3nJNpAKHm6fCcs3MR94gBWxp9MCDUiMUhyYFfyQETUDLPF7DP6ZsmNo6LRxwPP9VmhHNxKrER9oGigT",
+    "SaLvTyLx5QzbMmk916CRkJaXDhp4VLKGbQoDtcqvEjo8ZboiAkeuRjNij7Uf3EjnKqhyHFdizDVE92gAgam6xCWucNvz9peCZMY3X",
     "f2efae45bef1917a7430cda8fcffc4ee010e3178761aa41d4628e23b1fe2d501"
   },
   {
@@ -78,7 +78,7 @@ static void make_wallet(unsigned int idx, tools::wallet2 &wallet)
     wallet.init("", boost::none, "", 0, true, epee::net_utils::ssl_support_t::e_ssl_support_disabled);
     wallet.set_subaddress_lookahead(1, 1);
     wallet.generate("", "", spendkey, true, false);
-    ASSERT_TRUE(test_addresses[idx].address == wallet.get_account().get_public_address_str(cryptonote::TESTNET));
+    ASSERT_EQ(test_addresses[idx].address, wallet.get_account().get_public_address_str(cryptonote::TESTNET));
     wallet.decrypt_keys("");
     ASSERT_TRUE(test_addresses[idx].spendkey == epee::string_tools::pod_to_hex(unwrap(unwrap(wallet.get_account().get_keys().m_spend_secret_key))));
     wallet.encrypt_keys("");

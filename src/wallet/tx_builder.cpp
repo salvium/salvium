@@ -36,7 +36,7 @@
 #include "carrot_core/exceptions.h"
 #include "carrot_core/output_set_finalization.h"
 #include "carrot_core/scan.h"
-#include "carrot_core/scan_unsafe.cpp"
+#include "carrot_core/scan_unsafe.h"
 #include "carrot_core/address_utils.h"
 #include "carrot_core/core_types.h"
 #include "carrot_impl/address_device_ram_borrowed.h"
@@ -45,9 +45,10 @@
 #include "carrot_impl/input_selection.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "ringct/bulletproofs_plus.h"
-#include "wallet/scanning_tools.cpp"
+#include "ringct/rctSigs.h"
+#include "wallet/scanning_tools.h"
 #include "common/container_helpers.h"
-#include "carrot_core/payment_proposal.cpp"
+#include "carrot_core/payment_proposal.h"
 
 //third party headers
 
@@ -1055,8 +1056,8 @@ bool get_address_openings_x_y(
         crypto::public_key address_spend_pubkey_out;
         carrot::payment_id_t nominal_payment_id_out;
         carrot::janus_anchor_t nominal_janus_anchor_out;
-        carrot::encrypted_janus_anchor_t encrypted_janus_anchor;
-        carrot::encrypted_payment_id_t encrypted_payment_id;
+        carrot::encrypted_janus_anchor_t encrypted_janus_anchor{};
+        carrot::encrypted_payment_id_t encrypted_payment_id{};
         carrot::scan_carrot_dest_info(
             rct::rct2pk(src.outputs[src.real_output].second.dest),
             src.outputs[src.real_output].second.mask,

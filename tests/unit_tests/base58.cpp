@@ -474,8 +474,44 @@ TEST(get_account_address_as_str, works_correctly)
 {
   cryptonote::account_public_address addr;
   ASSERT_TRUE(serialization::parse_binary(test_serialized_keys, addr));
+  addr.m_is_carrot = false;
   std::string addr_str = cryptonote::get_account_address_as_str(cryptonote::MAINNET, false, addr);
   ASSERT_EQ(addr_str, test_keys_addr_str);
+}
+
+TEST(get_account_address_as_str, roundtrips_all_network_configurations)
+{
+  cryptonote::account_public_address address;
+  ASSERT_TRUE(serialization::parse_binary(test_serialized_keys, address));
+
+  const cryptonote::network_type networks[] = {
+    cryptonote::MAINNET,
+    cryptonote::TESTNET,
+    cryptonote::STAGENET,
+    cryptonote::FAKECHAIN,
+  };
+
+  for (const bool carrot : {false, true})
+  {
+    address.m_is_carrot = carrot;
+    std::string mainnet_string;
+    for (const cryptonote::network_type network : networks)
+    {
+      const std::string encoded = cryptonote::get_account_address_as_str(network, false, address);
+      cryptonote::address_parse_info parsed;
+      ASSERT_TRUE(cryptonote::get_account_address_from_str(parsed, network, encoded));
+      EXPECT_EQ(address.m_spend_public_key, parsed.address.m_spend_public_key);
+      EXPECT_EQ(address.m_view_public_key, parsed.address.m_view_public_key);
+      EXPECT_EQ(carrot, parsed.address.m_is_carrot);
+
+      if (network == cryptonote::MAINNET)
+        mainnet_string = encoded;
+      else if (network == cryptonote::FAKECHAIN)
+        EXPECT_EQ(mainnet_string, encoded);
+      else
+        EXPECT_NE(mainnet_string, encoded);
+    }
+  }
 }
 
 TEST(get_account_address_from_str, handles_valid_address)
@@ -533,8 +569,8 @@ TEST(get_account_address_from_str, fails_on_invalid_address_view_key)
   ASSERT_FALSE(cryptonote::get_account_address_from_str(info, cryptonote::MAINNET, addr_str));
 }
 
-TEST(get_account_address_from_str, parses_old_address_format)
+TEST(get_account_address_from_str, rejects_obsolete_raw_hex_address_format)
 {
   cryptonote::address_parse_info info;
-  ASSERT_TRUE(cryptonote::get_account_address_from_str(info, cryptonote::MAINNET, "002391bbbb24dea6fd95232e97594a27769d0153d053d2102b789c498f57a2b00b69cd6f2f5c529c1660f2f4a2b50178d6640c20ce71fe26373041af97c5b10236fc"));
+  ASSERT_FALSE(cryptonote::get_account_address_from_str(info, cryptonote::MAINNET, "002391bbbb24dea6fd95232e97594a27769d0153d053d2102b789c498f57a2b00b69cd6f2f5c529c1660f2f4a2b50178d6640c20ce71fe26373041af97c5b10236fc"));
 }

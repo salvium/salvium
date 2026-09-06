@@ -39,6 +39,21 @@ class Daemon(object):
         self.port = port
         self.rpc = JSONRPC('{protocol}://{host}:{port}'.format(protocol=protocol, host=host, port=port if port else base+idx))
 
+    def _json_rpc(self, method, **params):
+        request = {'method': method, 'jsonrpc': '2.0', 'id': '0'}
+        if params:
+            request['params'] = params
+        return self.rpc.send_json_rpc_request(request)
+
+    def get_supply_info(self, **params): return self._json_rpc('get_supply_info', **params)
+    def get_yield_info(self, **params): return self._json_rpc('get_yield_info', **params)
+    def get_tokens(self, **params): return self._json_rpc('get_tokens', **params)
+    def get_token_info(self, **params): return self._json_rpc('get_token_info', **params)
+    def salchat_submit_envelope(self, **params): return self._json_rpc('salchat_submit_envelope', **params)
+    def salchat_poll_envelopes(self, **params): return self._json_rpc('salchat_poll_envelopes', **params)
+    def salchat_ack_envelope(self, **params): return self._json_rpc('salchat_ack_envelope', **params)
+    def salchat_get_status(self, **params): return self._json_rpc('salchat_get_status', **params)
+
     def getblocktemplate(self, address, prev_block = "", client = ""):
         getblocktemplate = {
             'method': 'getblocktemplate',
@@ -354,11 +369,12 @@ class Daemon(object):
         return self.rpc.send_request('/get_transactions', get_transactions)
     gettransactions = get_transactions
 
-    def get_outs(self, outputs = [], get_txid = False, client = ""):
+    def get_outs(self, outputs = [], get_txid = False, asset_type = 'SAL1', client = ""):
         get_outs = {
             'client': client,
             'outputs': outputs,
             'get_txid': get_txid,
+            'asset_type': asset_type,
         }
         return self.rpc.send_request('/get_outs', get_outs)
 
@@ -375,7 +391,7 @@ class Daemon(object):
         }
         return self.rpc.send_json_rpc_request(get_coinbase_tx_sum)
 
-    def get_output_distribution(self, amounts = [], from_height = 0, to_height = 0, cumulative = False, binary = False, compress = False, client = ""):
+    def get_output_distribution(self, amounts = [], from_height = 0, to_height = 0, cumulative = False, binary = False, compress = False, rct_asset_type = 'SAL1', client = ""):
         get_output_distribution = {
             'method': 'get_output_distribution',
             'params': {
@@ -386,6 +402,7 @@ class Daemon(object):
                 'cumulative': cumulative,
                 'binary': binary,
                 'compress': compress,
+                'rct_asset_type': rct_asset_type,
             },
             'jsonrpc': '2.0',
             'id': '0'

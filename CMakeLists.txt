@@ -290,6 +290,7 @@ else()
   set(ARCH_ID "${ARCH}")
 endif()
 endif()
+string(TOLOWER "${ARCH_ID}" ARCH_ID)
 string(TOLOWER "${ARCH_ID}" ARM_ID)
 string(SUBSTRING "${ARM_ID}" 0 3 ARM_TEST)
 if (ARM_TEST STREQUAL "arm")
@@ -462,7 +463,7 @@ elseif(CMAKE_SYSTEM_NAME MATCHES ".*BSDI.*")
   set(BSDI TRUE)
 endif()
 
-include_directories(external/rapidjson/include external/easylogging++ src contrib/epee/include external external/supercop/include external/mx25519/include)
+include_directories(external/rapidjson/include external/easylogging++ src contrib/epee/include external external/miniupnp/miniupnpc/include external/supercop/include external/mx25519/include)
 
 if(APPLE)
   cmake_policy(SET CMP0042 NEW)
@@ -491,14 +492,19 @@ endif()
 set(PIC_FLAG "-fPIC")
 
 if(MINGW)
-  string(REGEX MATCH "^[^/]:/[^/]*" msys2_install_path "${CMAKE_C_COMPILER}")
-  message(STATUS "MSYS location: ${msys2_install_path}")
-  set(CMAKE_INCLUDE_PATH "${msys2_install_path}/mingw${ARCH_WIDTH}/include")
+  # Derive the active MSYS2 environment from the compiler. UCRT64 and
+  # MINGW64 both define MINGW and report the same architecture, but their
+  # headers and libraries are ABI-incompatible.
+  get_filename_component(mingw_bin_path "${CMAKE_C_COMPILER}" DIRECTORY)
+  get_filename_component(mingw_prefix "${mingw_bin_path}" DIRECTORY)
+  get_filename_component(msys2_install_path "${mingw_prefix}" DIRECTORY)
+  message(STATUS "MSYS location: ${msys2_install_path} (prefix: ${mingw_prefix})")
+  set(CMAKE_INCLUDE_PATH "${mingw_prefix}/include")
   # This is necessary because otherwise CMake will make Boost libraries -lfoo
   # rather than a full path. Unfortunately, this makes the shared libraries get
   # linked due to a bug in CMake which misses putting -static flags around the
   # -lfoo arguments.
-  set(DEFLIB ${msys2_install_path}/mingw${ARCH_WIDTH}/lib)
+  set(DEFLIB ${mingw_prefix}/lib)
   list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_DIRECTORIES ${DEFLIB})
   list(REMOVE_ITEM CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES ${DEFLIB})
 endif()
@@ -594,9 +600,27 @@ endif()
 find_package(OpenSSL REQUIRED)
 message(STATUS "Using OpenSSL include dir at ${OPENSSL_INCLUDE_DIR}")
 include_directories(${OPENSSL_INCLUDE_DIR})
-if(STATIC AND NOT IOS)
-  if(UNIX)
+if(NOT IOS)
+  if(UNIX AND (STATIC OR OPENSSL_CRYPTO_LIBRARY MATCHES "\\.a$"))
     set(OPENSSL_LIBRARIES "${OPENSSL_LIBRARIES};${CMAKE_DL_LIBS};${CMAKE_THREAD_LIBS_INIT}")
+  endif()
+  if(UNIX)
+    # OpenSSL 3 static archives on current Linux distributions may use private
+    # dependencies that CMake's FindOpenSSL target does not propagate. Add the
+    # installed archives only when a static libcrypto was selected.
+    if(OPENSSL_CRYPTO_LIBRARY MATCHES "\\.a$")
+      find_library(OPENSSL_JITTERENTROPY_LIBRARY NAMES jitterentropy)
+      find_library(OPENSSL_ZSTD_LIBRARY NAMES zstd)
+      set(OPENSSL_CRYPTO_PRIVATE_LIBRARIES ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+      if(OPENSSL_JITTERENTROPY_LIBRARY)
+        list(APPEND OPENSSL_CRYPTO_PRIVATE_LIBRARIES "${OPENSSL_JITTERENTROPY_LIBRARY}")
+      endif()
+      if(OPENSSL_ZSTD_LIBRARY)
+        list(APPEND OPENSSL_CRYPTO_PRIVATE_LIBRARIES "${OPENSSL_ZSTD_LIBRARY}")
+      endif()
+      list(APPEND OPENSSL_LIBRARIES ${OPENSSL_CRYPTO_PRIVATE_LIBRARIES})
+      list(APPEND OPENSSL_CRYPTO_LIBRARIES ${OPENSSL_CRYPTO_PRIVATE_LIBRARIES})
+    endif()
   endif()
 endif()
 
@@ -672,11 +696,17 @@ endfunction ()
 # Generate header for embedded translations, use target toolchain if depends, otherwise use the
 # lrelease and lupdate binaries from the host
 include(ExternalProject)
+set(TRANSLATIONS_HOST_TOOLCHAIN_ARGS)
+if(NOT CMAKE_CROSSCOMPILING)
+  list(APPEND TRANSLATIONS_HOST_TOOLCHAIN_ARGS
+    -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+    -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER})
+endif()
 ExternalProject_Add(generate_translations_header
   SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/translations"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/translations"
   STAMP_DIR ${LRELEASE_PATH}
-  CMAKE_ARGS -DLRELEASE_PATH=${LRELEASE_PATH}
+  CMAKE_ARGS -DLRELEASE_PATH=${LRELEASE_PATH} ${TRANSLATIONS_HOST_TOOLCHAIN_ARGS}
   INSTALL_COMMAND ${CMAKE_COMMAND} -E echo "")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/translations")
 add_subdirectory(external)
@@ -1085,6 +1115,20 @@ if(STATIC)
   endif()
 endif()
 
+if(MINGW AND STATIC AND NOT DEPENDS)
+  # MSYS2's static Boost.Locale library is built against the ICU DLL ABI.
+  # Select ICU import libraries before Boost discovers its dependencies.
+  foreach(ICU_COMPONENT icuio icuin icuuc icudt icutu)
+    find_file(ICU_${ICU_COMPONENT}_IMPORT_LIBRARY
+      NAMES lib${ICU_COMPONENT}.dll.a
+      PATH_SUFFIXES lib
+      REQUIRED)
+  endforeach()
+  set(ICU_DATA_LIBRARY_RELEASE ${ICU_icudt_IMPORT_LIBRARY} CACHE FILEPATH "" FORCE)
+  set(ICU_I18N_LIBRARY_RELEASE ${ICU_icuin_IMPORT_LIBRARY} CACHE FILEPATH "" FORCE)
+  set(ICU_UC_LIBRARY_RELEASE ${ICU_icuuc_IMPORT_LIBRARY} CACHE FILEPATH "" FORCE)
+endif()
+
 find_package(Boost 1.58 CONFIG QUIET REQUIRED)
 set(BOOST_COMPONENTS filesystem thread date_time chrono regex serialization program_options)
 if(Boost_VERSION VERSION_LESS 1.69.0)
@@ -1125,6 +1169,11 @@ if(MINGW)
   set(EXTRA_LIBRARIES mswsock;ws2_32;iphlpapi;crypt32;bcrypt)
   if(DEPENDS)
     set(ICU_LIBRARIES icuio icui18n icuuc icudata icutu iconv)
+  elseif(STATIC)
+    foreach(ICU_COMPONENT icuio icuin icuuc icudt icutu)
+      list(APPEND ICU_LIBRARIES ${ICU_${ICU_COMPONENT}_IMPORT_LIBRARY})
+    endforeach()
+    list(APPEND ICU_LIBRARIES iconv)
   else()
     set(ICU_LIBRARIES icuio icuin icuuc icudt icutu iconv)
   endif()

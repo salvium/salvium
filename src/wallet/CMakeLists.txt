@@ -37,6 +37,9 @@ set(wallet_sources
   node_rpc_proxy.cpp
   message_store.cpp
   message_transporter.cpp
+  scanning_tools.cpp
+  salchat_protocol.cpp
+  salchat_service.cpp
   wallet_rpc_payments.cpp
   tx_builder.cpp
 )
@@ -55,6 +58,7 @@ target_link_libraries(wallet
     carrot_impl
     common
     cryptonote_core
+    cryptonote_protocol
     mnemonics
     device_trezor
     net

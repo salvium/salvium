@@ -75,6 +75,7 @@ struct Params final
   bool verbose;
   bool stats;
   unsigned loop_multiplier;
+  bool passed = true;
 };
 
 struct ParamsShuttle
@@ -276,11 +277,13 @@ bool run_test(const std::string &filter, ParamsT &params_shuttle, const char* te
   else if (run_result == -1)
   {
     std::cout << test_name << " - FAILED ON INIT" << std::endl;
+    params.passed = false;
     return false;
   }
   else
   {
     std::cout << test_name << " - FAILED ON TEST LOOP " << run_result << std::endl;
+    params.passed = false;
     return false;
   }
 

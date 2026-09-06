@@ -117,71 +117,27 @@ int main(int argc, char** argv)
   performance_timer timer;
   timer.start();
 
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 1, 1, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 1, 2, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 1, 10, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 1, 100, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 1, 1000, false);
-
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 2, 1, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 2, 2, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 2, 10, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 2, 100, false);
-
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 10, 1, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 10, 2, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 10, 10, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 10, 100, false);
-
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 100, 1, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 100, 2, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 100, 10, false);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 100, 100, false);
-
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 2, 1, true);
+  // Production HF1: SAL, padded Bulletproof+, exactly two outputs.
   TEST_PERFORMANCE3(filter, p, test_construct_tx, 2, 2, true);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 2, 10, true);
-
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 10, 1, true);
   TEST_PERFORMANCE3(filter, p, test_construct_tx, 10, 2, true);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 10, 10, true);
-
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 100, 1, true);
   TEST_PERFORMANCE3(filter, p, test_construct_tx, 100, 2, true);
-  TEST_PERFORMANCE3(filter, p, test_construct_tx, 100, 10, true);
 
-  TEST_PERFORMANCE5(filter, p, test_construct_tx, 2, 1, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_construct_tx, 2, 2, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_construct_tx, 2, 10, true, rct::RangeProofPaddedBulletproof, 2);
+  // Production HF2: SAL, padded Bulletproof+, 2..16 outputs and a 16-member ring.
+  TEST_PERFORMANCE3(filter, p, test_construct_tx, 16, 3, true);
+  TEST_PERFORMANCE3(filter, p, test_construct_tx, 16, 10, true);
+  TEST_PERFORMANCE3(filter, p, test_construct_tx, 16, 16, true);
 
-  TEST_PERFORMANCE5(filter, p, test_construct_tx, 10, 1, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_construct_tx, 10, 2, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_construct_tx, 10, 10, true, rct::RangeProofPaddedBulletproof, 2);
-
-  TEST_PERFORMANCE5(filter, p, test_construct_tx, 100, 1, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_construct_tx, 100, 2, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_construct_tx, 100, 10, true, rct::RangeProofPaddedBulletproof, 2);
-
-  TEST_PERFORMANCE3(filter, p, test_check_tx_signature, 1, 2, false);
-  TEST_PERFORMANCE3(filter, p, test_check_tx_signature, 2, 2, false);
-  TEST_PERFORMANCE3(filter, p, test_check_tx_signature, 10, 2, false);
-  TEST_PERFORMANCE3(filter, p, test_check_tx_signature, 100, 2, false);
-  TEST_PERFORMANCE3(filter, p, test_check_tx_signature, 2, 10, false);
-
-  TEST_PERFORMANCE4(filter, p, test_check_tx_signature, 2, 2, true, rct::RangeProofBorromean);
-  TEST_PERFORMANCE4(filter, p, test_check_tx_signature, 10, 2, true, rct::RangeProofBorromean);
-  TEST_PERFORMANCE4(filter, p, test_check_tx_signature, 100, 2, true, rct::RangeProofBorromean);
-  TEST_PERFORMANCE4(filter, p, test_check_tx_signature, 2, 10, true, rct::RangeProofBorromean);
-
-  TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 2, 2, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 10, 2, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 100, 2, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 2, 10, true, rct::RangeProofPaddedBulletproof, 2);
+  TEST_PERFORMANCE3(filter, p, test_check_tx_signature, 2, 2, true);
+  TEST_PERFORMANCE3(filter, p, test_check_tx_signature, 10, 2, true);
+  TEST_PERFORMANCE3(filter, p, test_check_tx_signature, 100, 2, true);
+  TEST_PERFORMANCE3(filter, p, test_check_tx_signature, 16, 3, true);
+  TEST_PERFORMANCE3(filter, p, test_check_tx_signature, 16, 10, true);
+  TEST_PERFORMANCE3(filter, p, test_check_tx_signature, 16, 16, true);
 
   TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 2, 2, 64);
   TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 10, 2, 64);
   TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 100, 2, 64);
-  TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 2, 10, 64);
+  TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 16, 10, 64);
 
   TEST_PERFORMANCE4(filter, p, test_check_hash, 0, 1, 0, 1);
   TEST_PERFORMANCE4(filter, p, test_check_hash, 0, 0xffffffffffffffff, 0, 0xffffffffffffffff);
@@ -618,6 +574,6 @@ int main(int argc, char** argv)
 
   std::cout << "Tests finished. Elapsed time: " << timer.elapsed_ms() / 1000 << " sec" << std::endl;
 
-  return 0;
+  return p.core_params.passed && p_view_scan.core_params.passed ? 0 : 1;
   CATCH_ENTRY_L0("main", 1);
 }

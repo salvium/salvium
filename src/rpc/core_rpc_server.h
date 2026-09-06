@@ -191,6 +191,10 @@ namespace cryptonote
         MAP_JON_RPC_WE_IF("rpc_access_tracking", on_rpc_access_tracking,        COMMAND_RPC_ACCESS_TRACKING, !m_restricted)
         MAP_JON_RPC_WE_IF("rpc_access_data",     on_rpc_access_data,            COMMAND_RPC_ACCESS_DATA, !m_restricted)
         MAP_JON_RPC_WE_IF("rpc_access_account",  on_rpc_access_account,         COMMAND_RPC_ACCESS_ACCOUNT, !m_restricted)
+        MAP_JON_RPC_WE_IF("salchat_submit_envelope", on_salchat_submit, COMMAND_RPC_SALCHAT_SUBMIT, !m_restricted)
+        MAP_JON_RPC_WE_IF("salchat_poll_envelopes", on_salchat_poll, COMMAND_RPC_SALCHAT_POLL, !m_restricted)
+        MAP_JON_RPC_WE_IF("salchat_ack_envelope", on_salchat_ack, COMMAND_RPC_SALCHAT_ACK, !m_restricted)
+        MAP_JON_RPC_WE_IF("salchat_get_status", on_salchat_status, COMMAND_RPC_SALCHAT_STATUS, !m_restricted)
       END_JSON_RPC_MAP()
     END_URI_MAP2()
 
@@ -272,6 +276,10 @@ namespace cryptonote
     bool on_rpc_access_tracking(const COMMAND_RPC_ACCESS_TRACKING::request& req, COMMAND_RPC_ACCESS_TRACKING::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx = NULL);
     bool on_rpc_access_data(const COMMAND_RPC_ACCESS_DATA::request& req, COMMAND_RPC_ACCESS_DATA::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx = NULL);
     bool on_rpc_access_account(const COMMAND_RPC_ACCESS_ACCOUNT::request& req, COMMAND_RPC_ACCESS_ACCOUNT::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx = NULL);
+    bool on_salchat_submit(const COMMAND_RPC_SALCHAT_SUBMIT::request&, COMMAND_RPC_SALCHAT_SUBMIT::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+    bool on_salchat_poll(const COMMAND_RPC_SALCHAT_POLL::request&, COMMAND_RPC_SALCHAT_POLL::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+    bool on_salchat_ack(const COMMAND_RPC_SALCHAT_ACK::request&, COMMAND_RPC_SALCHAT_ACK::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+    bool on_salchat_status(const COMMAND_RPC_SALCHAT_STATUS::request&, COMMAND_RPC_SALCHAT_STATUS::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
     //-----------------------
 
 private:

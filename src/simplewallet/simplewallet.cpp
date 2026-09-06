@@ -77,6 +77,7 @@
 #include "version.h"
 #include <stdexcept>
 #include "wallet/message_store.h"
+#include "wallet/salchat_service.h"
 #include "QrCode.hpp"
 
 #include "carrot_impl/subaddress_index.h"
@@ -285,6 +286,7 @@ namespace
   const char* USAGE_SUBMIT_MULTISIG("submit_multisig <filename>");
   const char* USAGE_EXPORT_RAW_MULTISIG_TX("export_raw_multisig_tx <filename>");
   const char* USAGE_MMS("mms [<subcommand> [<subcommand_parameters>]]");
+  const char* USAGE_SALCHAT("salchat <identity|address|contact|send|receive|messages|chat|show|delete|status> [arguments]");
   const char* USAGE_MMS_INIT("mms init <required_signers>/<authorized_signers> <own_label> <own_transport_address>");
   const char* USAGE_MMS_INFO("mms info");
   const char* USAGE_MMS_SIGNER("mms signer [<number> <label> [<transport_address> [<salvium_address>]]]");
@@ -3413,6 +3415,7 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
     message_writer() << tr("\"seed\" - Show secret 25 words that can be used to recover this wallet.");
     message_writer() << tr("\"refresh\" - Synchronize wallet with the Salvium network.");
     message_writer() << tr("\"status\" - Check current status of wallet.");
+    message_writer() << tr("\"salchat help\" - Show encrypted messaging identity, contact, and conversation commands.");
     message_writer() << tr("\"version\" - Check software version.");
     message_writer() << tr("\"exit\" - Exit wallet.");
     message_writer() << "";
@@ -3942,6 +3945,17 @@ simple_wallet::simple_wallet()
                               "  init, info, signer, list, next, sync, transfer, delete, send, receive, export, note, show, set, help\n"
                               "  send_signer_config, start_auto_config, stop_auto_config, auto_config, config_checksum\n"
                               "Get help about a subcommand with: help mms <subcommand>, or help mms <subcommand>"));
+  m_cmd_binder.set_handler("salchat",
+                           boost::bind(&simple_wallet::on_command, this, &simple_wallet::salchat, _1),
+                           tr(USAGE_SALCHAT),
+                           tr("Use native encrypted Salchat messaging. Run 'salchat help' for subcommands."));
+#ifdef HAVE_READLINE
+  for (const char *command : {
+      "salchat identity", "salchat address", "salchat contact", "salchat send",
+      "salchat receive", "salchat messages", "salchat chat", "salchat show",
+      "salchat delete", "salchat status", "salchat help"})
+    rdln::readline_buffer::add_completion(command);
+#endif
   m_cmd_binder.set_handler("mms init",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::mms, _1),
                            tr(USAGE_MMS_INIT),
@@ -10957,6 +10971,7 @@ void simple_wallet::wallet_idle_thread()
 #endif
       m_refresh_checker.do_call(boost::bind(&simple_wallet::check_refresh, this));
       m_mms_checker.do_call(boost::bind(&simple_wallet::check_mms, this));
+      m_salchat_checker.do_call(boost::bind(&simple_wallet::check_salchat, this, true));
       m_rpc_payment_checker.do_call(boost::bind(&simple_wallet::check_rpc_payment, this));
 
       if (!m_idle_run.load(std::memory_order_relaxed))
@@ -11015,6 +11030,54 @@ bool simple_wallet::check_mms()
       check_for_messages();
     }
     return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::check_salchat(bool redraw_prompt)
+{
+  if (!m_auto_refresh_enabled || m_in_command.load(std::memory_order_acquire)) return true;
+  try
+  {
+    salchat::service service(*m_wallet);
+    const auto result = service.check_waiting(100);
+    const auto contacts = service.contacts();
+    // A foreground command may have started while the daemon poll was in
+    // progress. Defer the notification instead of redrawing readline's prompt
+    // in the middle of that command; the next idle check will report it.
+    if (m_in_command.load(std::memory_order_acquire)) return true;
+    std::vector<std::pair<std::string, std::size_t>> senders;
+    for (const auto& item: result.new_messages)
+    {
+      const std::string message_id = salchat::service::id_hex(item.id);
+      if (!m_salchat_notified_messages.insert(message_id).second) continue;
+      m_salchat_notification_order.push_back(message_id);
+      if (m_salchat_notification_order.size() > salchat::MAX_MESSAGES)
+      {
+        m_salchat_notified_messages.erase(m_salchat_notification_order.front());
+        m_salchat_notification_order.pop_front();
+      }
+      const std::string contact_id = salchat::service::id_hex(item.contact_id);
+      auto sender = std::find_if(senders.begin(), senders.end(), [&](const auto& entry) {
+        return entry.first == contact_id;
+      });
+      if (sender == senders.end()) senders.emplace_back(contact_id, 1);
+      else ++sender->second;
+    }
+    for (const auto& sender: senders)
+    {
+      const auto known = std::find_if(contacts.begin(), contacts.end(), [&](const salchat::contact& item) {
+        return salchat::service::id_hex(item.id) == sender.first;
+      });
+      const std::string label = known == contacts.end() ? "Unknown" :
+        mms::message_store::get_sanitized_text(known->label, salchat::MAX_LABEL_BYTES);
+      message_writer(console_color_red, true)
+        << (sender.second == 1 ? "Salchat message received from " :
+          std::to_string(sender.second) + " Salchat messages received from ")
+        << label << (known == contacts.end() ? " (contact ID: " + sender.first + ")" : "") << ".";
+    }
+    if (!senders.empty() && redraw_prompt) m_cmd_binder.print_prompt();
+  }
+  catch (...) {}
+  return true;
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::check_rpc_payment()
@@ -11111,6 +11174,7 @@ bool simple_wallet::run()
   refresh_main(0, ResetNone, true);
 
   m_auto_refresh_enabled = !m_wallet->is_offline() && m_wallet->auto_refresh();
+  check_salchat(false);
   m_idle_thread = boost::thread([&]{wallet_idle_thread();});
 
   message_writer(console_color_green, false) << "Background refresh thread started";
@@ -13425,6 +13489,323 @@ void simple_wallet::mms_auto_config(const std::vector<std::string> &args)
   LOCK_IDLE_SCOPE();
   ms.add_auto_config_data_message(get_multisig_wallet_state(), adjusted_token);
   ask_send_all_ready_messages();
+}
+
+bool simple_wallet::salchat(const std::vector<std::string>& args)
+{
+  // Sending and receiving can sign messages or delivery receipts and therefore
+  // require the same explicit in-memory key unlock used by other spend-authority
+  // commands. Public identity/contact/history operations remain password-free.
+  std::string stored_message_key;
+  const auto wipe_stored_message_key = epee::misc_utils::create_scope_leave_handler([&]() {
+    if (!stored_message_key.empty()) memwipe(&stored_message_key[0], stored_message_key.size());
+  });
+  const bool needs_key_initialization = !args.empty() &&
+    (args[0] == "identity" || args[0] == "address" || args[0] == "status") &&
+    !m_wallet->get_attribute("salchat.message-key.v4", stored_message_key);
+  const bool needs_spend_authority = needs_key_initialization || (!args.empty() &&
+    ((args[0] == "identity" && args.size() == 2 &&
+        (args[1] == "generate" || args[1] == "rotate")) ||
+      (args[0] == "send" && args.size() >= 3) ||
+      (args[0] == "receive" && args.size() <= 2) ||
+      (args[0] == "chat" && args.size() == 2)));
+  if (needs_spend_authority)
+  {
+    SCOPED_WALLET_UNLOCK();
+    return salchat_unlocked(args);
+  }
+  LOCK_IDLE_SCOPE();
+  return salchat_unlocked(args);
+}
+
+bool simple_wallet::salchat_unlocked(const std::vector<std::string>& args)
+{
+  const auto usage = [&]()
+  {
+    message_writer() << "Salchat commands:\n"
+      "  salchat identity show\n"
+      "  salchat identity generate\n"
+      "  salchat address\n"
+      "  salchat contact add <label> <SC_address:encryption_key>\n"
+      "  salchat contact accept <label> <message_number|message_id>\n"
+      "  salchat contact list|show\n"
+      "  salchat contact remove <contact_number|contact_id|label>\n"
+      "  salchat contact block|unblock <contact_number|contact_id|label>\n"
+      "  salchat send <contact_number|contact_id|label> \"<message>\"\n"
+      "  salchat receive [limit]\n"
+      "  salchat messages [contact_number|contact_id|label]\n"
+      "  salchat chat <contact_number|contact_id|label>\n"
+      "  salchat show <message_number|message_id>\n"
+      "  salchat delete <message_number|message_id>\n"
+      "  salchat status\n"
+      "Contact numbers come from 'salchat contact list'. Message numbers are current rows from 'salchat messages'; "
+      "use the permanent message ID across wallet instances or after the inbox changes.";
+  };
+  if (args.empty() || args[0] == "help") { usage(); return true; }
+  try
+  {
+    salchat::service service(*m_wallet);
+    const auto state_name = [](salchat::message_state state) {
+      switch (state) {
+        case salchat::message_state::submitted: return "submitted";
+        case salchat::message_state::received: return "received";
+        case salchat::message_state::quarantined: return "quarantined";
+        case salchat::message_state::failed: return "failed";
+        case salchat::message_state::delivered: return "delivered";
+      }
+      return "unknown";
+    };
+    const auto parse_limit = [](const std::string& text) {
+      std::size_t consumed = 0;
+      const auto value = std::stoull(text, &consumed);
+      if (consumed != text.size() || value == 0 || value > 1000)
+        throw std::runtime_error("Salchat limit must be between 1 and 1000");
+      return static_cast<std::size_t>(value);
+    };
+    const auto parse_reference_number = [](const std::string& text, std::size_t& value) {
+      if (text.empty() || !std::all_of(text.begin(), text.end(),
+          [](unsigned char c) { return c >= '0' && c <= '9'; }))
+        return false;
+      std::size_t consumed = 0;
+      unsigned long long parsed = 0;
+      try { parsed = std::stoull(text, &consumed); }
+      catch (...) { throw std::runtime_error("Salchat list number is out of range"); }
+      if (parsed > std::numeric_limits<std::size_t>::max())
+        throw std::runtime_error("Salchat list number is out of range");
+      value = static_cast<std::size_t>(parsed);
+      if (consumed != text.size() || value == 0)
+        throw std::runtime_error("Salchat list numbers start at 1");
+      return true;
+    };
+    const auto is_hash_reference = [](const std::string& text) {
+      std::string bytes;
+      return text.size() == sizeof(crypto::hash) * 2 &&
+        epee::string_tools::parse_hexstr_to_binbuff(text, bytes) &&
+        bytes.size() == sizeof(crypto::hash);
+    };
+    const auto resolve_contact = [&](const std::string& text) {
+      const auto contacts = service.contacts();
+      const auto exact_id = std::find_if(contacts.begin(), contacts.end(), [&](const salchat::contact& c) {
+        return salchat::service::id_hex(c.id) == text;
+      });
+      if (exact_id != contacts.end()) return salchat::service::id_hex(exact_id->id);
+      if (is_hash_reference(text)) return text;
+      std::size_t number = 0;
+      if (parse_reference_number(text, number))
+      {
+        if (number > contacts.size())
+          throw std::runtime_error("Salchat contact number does not exist; run 'salchat contact list'");
+        return salchat::service::id_hex(contacts[number - 1].id);
+      }
+      const auto label = std::find_if(contacts.begin(), contacts.end(), [&](const salchat::contact& c) { return c.label == text; });
+      if (label == contacts.end())
+        throw std::runtime_error("unknown Salchat contact number, ID, or label; run 'salchat contact list'");
+      if (std::count_if(contacts.begin(), contacts.end(), [&](const salchat::contact& c) { return c.label == text; }) != 1)
+        throw std::runtime_error("Salchat contact label is ambiguous; use the contact ID");
+      return salchat::service::id_hex(label->id);
+    };
+    const auto resolve_message = [&](const std::string& text) {
+      const auto inbox = service.messages("", 1000);
+      const auto exact_id = std::find_if(inbox.begin(), inbox.end(), [&](const salchat::message& item) {
+        return salchat::service::id_hex(item.id) == text;
+      });
+      if (exact_id != inbox.end()) return salchat::service::id_hex(exact_id->id);
+      if (is_hash_reference(text)) return text;
+      std::size_t number = 0;
+      if (parse_reference_number(text, number))
+      {
+        if (number > inbox.size())
+          throw std::runtime_error("Salchat message number does not exist; run 'salchat messages'");
+        return salchat::service::id_hex(inbox[number - 1].id);
+      }
+      throw std::runtime_error("unknown Salchat message number or ID; run 'salchat messages'");
+    };
+    const auto print_messages = [&](const std::string& contact) {
+      const auto inbox = service.messages("",1000);
+      const auto selected = service.messages(contact,100);
+      if (selected.empty()) { message_writer() << "No Salchat messages."; return; }
+      for(const auto& m:selected)
+      {
+        const auto global = std::find_if(inbox.begin(), inbox.end(),
+          [&](const salchat::message& item) { return item.id == m.id; });
+        const std::string number = global == inbox.end() ? "-" :
+          std::to_string(static_cast<std::size_t>(std::distance(inbox.begin(), global)) + 1);
+        message_writer() << "[" << number << "]  " << salchat::service::id_hex(m.id) << "  "
+          << (m.direction==salchat::message_direction::incoming?"IN ":"OUT") << "  state=" << state_name(m.state)
+          << "  contact=" << salchat::service::id_hex(m.contact_id) << "  "
+          << "blocks_left=" << (m.expires_height > m_wallet->get_blockchain_current_height()
+            ? m.expires_height - m_wallet->get_blockchain_current_height() : 0) << "  "
+          << (m.state==salchat::message_state::quarantined && !m.sender_salvium_address.empty()
+            ? "sender="+m.sender_salvium_address+"  " : "")
+          << mms::message_store::get_sanitized_text(m.content, salchat::MAX_TEXT_BYTES);
+      }
+    };
+    const auto print_waiting_notices = [&](const salchat::receive_result& result) {
+      const auto contacts = service.contacts();
+      std::vector<std::string> announced;
+      for (const auto& item: result.new_messages)
+      {
+        const std::string contact_id = salchat::service::id_hex(item.contact_id);
+        if (std::find(announced.begin(), announced.end(), contact_id) != announced.end()) continue;
+        announced.push_back(contact_id);
+        const auto count = std::count_if(result.new_messages.begin(), result.new_messages.end(),
+          [&](const salchat::message& candidate) { return candidate.contact_id == item.contact_id; });
+        const auto known = std::find_if(contacts.begin(), contacts.end(),
+          [&](const salchat::contact& candidate) { return candidate.id == item.contact_id; });
+        const std::string sender = known == contacts.end() ? "Unknown" :
+          mms::message_store::get_sanitized_text(known->label, salchat::MAX_LABEL_BYTES);
+        message_writer() << (count == 1 ? "Message" : std::to_string(count) + " messages")
+          << " waiting from " << sender
+          << (known == contacts.end() ? " (contact ID: " + contact_id + ")" : "") << ".";
+      }
+    };
+    if (args[0] == "identity")
+    {
+      if (args.size() != 2 || (args[1] != "show" && args[1] != "generate" && args[1] != "rotate"))
+      { usage(); return true; }
+      if (args[1] == "generate" || args[1] == "rotate")
+      {
+        if (!user_confirms(
+              "Generate a new Salchat encryption key? Your contact code will change. "
+              "Share the new code with every contact and back up this wallet file after rotation. "
+              "Up to 16 still-valid prior keys are retained for already-waiting messages; "
+              "more rapid rotations can evict the oldest key."))
+        {
+          message_writer() << "Salchat key rotation cancelled.";
+          return true;
+        }
+        const auto identity = service.rotate_identity();
+        success_msg_writer() << "New Salchat encryption key generated.\nContact code: "
+          << identity.salvium_address << ":" << identity.encryption_public_key
+          << "\nBack up the wallet file now and share this new contact code with every contact.";
+        return true;
+      }
+      const auto identity = service.get_identity();
+      if (!identity.initialized) { message_writer() << "Salchat Carrot identity is unavailable."; return true; }
+      message_writer() << "Spend public key: " << identity.spend_public_key
+        << "\nSigning key: " << identity.signing_public_key << "\nEncryption key: "
+        << identity.encryption_public_key << "\nSalvium address: " << identity.salvium_address
+        << "\nCreated: " << identity.created_at;
+    }
+    else if (args[0] == "address")
+    {
+      if (args.size() != 1) { usage(); return true; }
+      const auto identity = service.get_identity();
+      if (!identity.initialized) { message_writer() << "Salchat Carrot identity is unavailable."; return true; }
+      message_writer() << identity.salvium_address << ":" << identity.encryption_public_key;
+    }
+    else if (args[0] == "contact")
+    {
+      if (args.size() < 2) { usage(); return true; }
+      if (args[1] == "add" && args.size() == 4)
+      {
+        std::size_t promoted=0;
+        const auto c=service.add_contact(args[2],args[3],{},&promoted);
+        success_msg_writer() << "Added Salchat contact "
+          << mms::message_store::get_sanitized_text(c.label, salchat::MAX_LABEL_BYTES)
+          << ": " << salchat::service::id_hex(c.id)
+          << "\nPromoted from quarantine: " << promoted;
+      }
+      else if (args[1] == "accept" && args.size() == 4)
+      {
+        std::size_t promoted=0;
+        const auto c=service.accept_contact(args[2],resolve_message(args[3]),&promoted);
+        success_msg_writer() << "Accepted Salchat contact "
+          << mms::message_store::get_sanitized_text(c.label, salchat::MAX_LABEL_BYTES)
+          << ": " << salchat::service::id_hex(c.id)
+          << "\nPromoted from quarantine: " << promoted;
+      }
+      else if ((args[1] == "list" || args[1] == "show") && args.size() == 2)
+      {
+        const auto contacts=service.contacts();
+        if (contacts.empty()) message_writer() << "No Salchat contacts.";
+        for (std::size_t i=0;i<contacts.size();++i)
+          message_writer() << "[" << (i+1) << "]  " << salchat::service::id_hex(contacts[i].id) << "  "
+            << mms::message_store::get_sanitized_text(contacts[i].label, salchat::MAX_LABEL_BYTES)
+            << "  " << contacts[i].salvium_address << "  blocked=" << (contacts[i].blocked?"yes":"no");
+      }
+      else if (args[1] == "remove" && args.size() == 3)
+        message_writer() << (service.remove_contact(resolve_contact(args[2])) ?
+          "Contact and local message history deleted." : "Contact not found.");
+      else if ((args[1] == "block" || args[1] == "unblock") && args.size() == 3)
+        message_writer() << (service.block_contact(resolve_contact(args[2]),args[1]=="block") ? "Contact updated." : "Contact not found.");
+      else { usage(); return true; }
+    }
+    else if (args[0] == "send" && args.size() >= 3)
+    {
+      std::string text = args[2];
+      for (std::size_t i = 3; i < args.size(); ++i) text += " " + args[i];
+      if (text.size() >= 2 && ((text.front() == '"' && text.back() == '"') ||
+          (text.front() == '\'' && text.back() == '\'')))
+        text = text.substr(1, text.size() - 2);
+      const auto result=service.send_text(resolve_contact(args[1]),text);
+      message_writer() << "Message ID: " << result.message_id << "\nSubmitted: " << (result.submitted?"yes":"no")
+        << (result.reason.empty()?"":"\nReason: "+mms::message_store::get_sanitized_text(result.reason, 1024));
+    }
+    else if (args[0] == "send")
+      fail_msg_writer() << "Quote the complete message, for example: salchat send Alice \"hello there\"";
+    else if (args[0] == "receive" && args.size() <= 2)
+    {
+      const std::size_t limit=args.size()==2 ? parse_limit(args[1]) : 100;
+      const auto result=service.receive(limit);
+      message_writer() << "Received: " << result.received << ", quarantined: " << result.quarantined << ", rejected: " << result.rejected;
+      print_waiting_notices(result);
+      const std::size_t local_messages=service.message_count();
+      if (local_messages != 0)
+        message_writer() << "Local messages: " << local_messages << ". Run 'salchat messages' to list them.";
+    }
+    else if (args[0] == "messages" && args.size() <= 2)
+    {
+      print_messages(args.size()==2 ? resolve_contact(args[1]) : "");
+    }
+    else if (args[0] == "chat" && args.size() == 2)
+    {
+      const auto result=service.receive(100);
+      message_writer() << "Received: " << result.received << ", quarantined: " << result.quarantined
+        << ", rejected: " << result.rejected;
+      print_waiting_notices(result);
+      print_messages(resolve_contact(args[1]));
+    }
+    else if (args[0] == "show" && args.size() == 2)
+    {
+      salchat::message m; if(!service.get_message(resolve_message(args[1]),m)) message_writer()<<"Message not found.";
+      else message_writer()<<"Message ID: "<<salchat::service::id_hex(m.id)<<"\nContact ID: "<<salchat::service::id_hex(m.contact_id)
+        <<"\nDirection: "<<(m.direction==salchat::message_direction::incoming?"incoming":"outgoing")<<"\nState: "<<state_name(m.state)
+        <<(m.sender_salvium_address.empty()?"":"\nSender address: "+m.sender_salvium_address)
+        <<"\nCreated: "<<m.created_at<<"\nMessage: "
+        <<mms::message_store::get_sanitized_text(m.content, salchat::MAX_TEXT_BYTES);
+    }
+    else if (args[0] == "delete" && args.size() == 2)
+      message_writer() << (service.delete_message(resolve_message(args[1]))?"Message deleted.":"Message not found.");
+    else if (args[0] == "status" && args.size() == 1)
+    {
+      bool enabled=false; uint64_t cached=0; std::string error;
+      const bool available=service.daemon_status(enabled,cached,error);
+      const bool identity_initialized = service.get_identity().initialized;
+      const std::size_t contact_count = service.contacts().size();
+      const std::size_t local_message_count = service.message_count();
+      const std::size_t waiting_message_count = available && enabled
+        ? service.check_waiting(100).new_messages.size() : 0;
+      message_writer()<<"Identity: "<<(identity_initialized?"ready":"not initialized")
+        <<"\nContacts: "<<contact_count<<"\nLocal messages: "<<local_message_count
+        <<"\nDaemon: "<<(available?(enabled?"Salchat enabled":"Salchat disabled"):"unavailable")
+        <<"\nDaemon cached messages: "<<cached
+        <<"\nMessages waiting for this wallet: "<<waiting_message_count
+        <<(error.empty()?"":"\nError: "+mms::message_store::get_sanitized_text(error, 1024))
+        <<"\nInbox: run 'salchat messages'.";
+    }
+    else { usage(); return true; }
+    return true;
+  }
+  catch (const std::exception& e)
+  {
+    fail_msg_writer() << "Salchat error: "
+      << mms::message_store::get_sanitized_text(e.what(), 1024);
+    // The command was recognized even when its operation failed. Returning
+    // false makes the console dispatcher print a second, misleading
+    // "unknown command" diagnostic.
+    return true;
+  }
 }
 
 bool simple_wallet::mms(const std::vector<std::string> &args)

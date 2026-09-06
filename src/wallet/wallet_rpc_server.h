@@ -32,7 +32,9 @@
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
+#include <deque>
 #include <string>
+#include <unordered_set>
 #include "common/util.h"
 #include "net/http_server_impl_base.h"
 #include "math_helper.h"
@@ -170,6 +172,20 @@ namespace tools
         MAP_JON_RPC_WE("setup_background_sync", on_setup_background_sync, wallet_rpc::COMMAND_RPC_SETUP_BACKGROUND_SYNC)
         MAP_JON_RPC_WE("start_background_sync", on_start_background_sync, wallet_rpc::COMMAND_RPC_START_BACKGROUND_SYNC)
         MAP_JON_RPC_WE("stop_background_sync", on_stop_background_sync, wallet_rpc::COMMAND_RPC_STOP_BACKGROUND_SYNC)
+        MAP_JON_RPC_WE("salchat_get_identity", on_salchat_get_identity, wallet_rpc::COMMAND_RPC_SALCHAT_GET_IDENTITY)
+        MAP_JON_RPC_WE("salchat_rotate_identity", on_salchat_rotate_identity, wallet_rpc::COMMAND_RPC_SALCHAT_ROTATE_IDENTITY)
+        MAP_JON_RPC_WE("salchat_get_address", on_salchat_get_address, wallet_rpc::COMMAND_RPC_SALCHAT_GET_ADDRESS)
+        MAP_JON_RPC_WE("salchat_add_contact", on_salchat_add_contact, wallet_rpc::COMMAND_RPC_SALCHAT_ADD_CONTACT)
+        MAP_JON_RPC_WE("salchat_accept_contact", on_salchat_accept_contact, wallet_rpc::COMMAND_RPC_SALCHAT_ACCEPT_CONTACT)
+        MAP_JON_RPC_WE("salchat_remove_contact", on_salchat_remove_contact, wallet_rpc::COMMAND_RPC_SALCHAT_REMOVE_CONTACT)
+        MAP_JON_RPC_WE("salchat_block_contact", on_salchat_block_contact, wallet_rpc::COMMAND_RPC_SALCHAT_BLOCK_CONTACT)
+        MAP_JON_RPC_WE("salchat_list_contacts", on_salchat_list_contacts, wallet_rpc::COMMAND_RPC_SALCHAT_LIST_CONTACTS)
+        MAP_JON_RPC_WE("salchat_send_message", on_salchat_send_message, wallet_rpc::COMMAND_RPC_SALCHAT_SEND_MESSAGE)
+        MAP_JON_RPC_WE("salchat_receive_messages", on_salchat_receive_messages, wallet_rpc::COMMAND_RPC_SALCHAT_RECEIVE_MESSAGES)
+        MAP_JON_RPC_WE("salchat_list_messages", on_salchat_list_messages, wallet_rpc::COMMAND_RPC_SALCHAT_LIST_MESSAGES)
+        MAP_JON_RPC_WE("salchat_get_message", on_salchat_get_message, wallet_rpc::COMMAND_RPC_SALCHAT_GET_MESSAGE)
+        MAP_JON_RPC_WE("salchat_delete_message", on_salchat_delete_message, wallet_rpc::COMMAND_RPC_SALCHAT_DELETE_MESSAGE)
+        MAP_JON_RPC_WE("salchat_get_status", on_salchat_get_status, wallet_rpc::COMMAND_RPC_SALCHAT_GET_STATUS)
       END_JSON_RPC_MAP()
     END_URI_MAP2()
 
@@ -271,6 +287,20 @@ namespace tools
       bool on_setup_background_sync(const wallet_rpc::COMMAND_RPC_SETUP_BACKGROUND_SYNC::request& req, wallet_rpc::COMMAND_RPC_SETUP_BACKGROUND_SYNC::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_start_background_sync(const wallet_rpc::COMMAND_RPC_START_BACKGROUND_SYNC::request& req, wallet_rpc::COMMAND_RPC_START_BACKGROUND_SYNC::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_stop_background_sync(const wallet_rpc::COMMAND_RPC_STOP_BACKGROUND_SYNC::request& req, wallet_rpc::COMMAND_RPC_STOP_BACKGROUND_SYNC::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
+      bool on_salchat_get_identity(const wallet_rpc::COMMAND_RPC_SALCHAT_GET_IDENTITY::request&, wallet_rpc::COMMAND_RPC_SALCHAT_GET_IDENTITY::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_rotate_identity(const wallet_rpc::COMMAND_RPC_SALCHAT_ROTATE_IDENTITY::request&, wallet_rpc::COMMAND_RPC_SALCHAT_ROTATE_IDENTITY::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_get_address(const wallet_rpc::COMMAND_RPC_SALCHAT_GET_ADDRESS::request&, wallet_rpc::COMMAND_RPC_SALCHAT_GET_ADDRESS::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_add_contact(const wallet_rpc::COMMAND_RPC_SALCHAT_ADD_CONTACT::request&, wallet_rpc::COMMAND_RPC_SALCHAT_ADD_CONTACT::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_accept_contact(const wallet_rpc::COMMAND_RPC_SALCHAT_ACCEPT_CONTACT::request&, wallet_rpc::COMMAND_RPC_SALCHAT_ACCEPT_CONTACT::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_remove_contact(const wallet_rpc::COMMAND_RPC_SALCHAT_REMOVE_CONTACT::request&, wallet_rpc::COMMAND_RPC_SALCHAT_REMOVE_CONTACT::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_block_contact(const wallet_rpc::COMMAND_RPC_SALCHAT_BLOCK_CONTACT::request&, wallet_rpc::COMMAND_RPC_SALCHAT_BLOCK_CONTACT::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_list_contacts(const wallet_rpc::COMMAND_RPC_SALCHAT_LIST_CONTACTS::request&, wallet_rpc::COMMAND_RPC_SALCHAT_LIST_CONTACTS::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_send_message(const wallet_rpc::COMMAND_RPC_SALCHAT_SEND_MESSAGE::request&, wallet_rpc::COMMAND_RPC_SALCHAT_SEND_MESSAGE::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_receive_messages(const wallet_rpc::COMMAND_RPC_SALCHAT_RECEIVE_MESSAGES::request&, wallet_rpc::COMMAND_RPC_SALCHAT_RECEIVE_MESSAGES::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_list_messages(const wallet_rpc::COMMAND_RPC_SALCHAT_LIST_MESSAGES::request&, wallet_rpc::COMMAND_RPC_SALCHAT_LIST_MESSAGES::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_get_message(const wallet_rpc::COMMAND_RPC_SALCHAT_GET_MESSAGE::request&, wallet_rpc::COMMAND_RPC_SALCHAT_GET_MESSAGE::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_delete_message(const wallet_rpc::COMMAND_RPC_SALCHAT_DELETE_MESSAGE::request&, wallet_rpc::COMMAND_RPC_SALCHAT_DELETE_MESSAGE::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
+      bool on_salchat_get_status(const wallet_rpc::COMMAND_RPC_SALCHAT_GET_STATUS::request&, wallet_rpc::COMMAND_RPC_SALCHAT_GET_STATUS::response&, epee::json_rpc::error&, const connection_context *ctx = NULL);
 
       //json rpc v2
       bool on_query_key(const wallet_rpc::COMMAND_RPC_QUERY_KEY::request& req, wallet_rpc::COMMAND_RPC_QUERY_KEY::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
@@ -300,5 +330,8 @@ namespace tools
       const boost::program_options::variables_map *m_vm;
       uint32_t m_auto_refresh_period;
       boost::posix_time::ptime m_last_auto_refresh_time;
+      boost::posix_time::ptime m_last_salchat_check_time;
+      std::unordered_set<std::string> m_salchat_notified_messages;
+      std::deque<std::string> m_salchat_notification_order;
   };
 }

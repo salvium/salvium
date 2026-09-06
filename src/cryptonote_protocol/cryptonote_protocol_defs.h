@@ -34,6 +34,7 @@
 #include "serialization/keyvalue_serialization.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/blobdatatype.h"
+#include "salchat_protocol_defs.h"
 
 namespace cryptonote
 {
@@ -374,6 +375,12 @@ namespace cryptonote
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<request_t> request;
+  };
+
+  struct NOTIFY_SALCHAT_ENVELOPE
+  {
+    static constexpr int ID = BC_COMMANDS_POOL_BASE + 11;
+    using request = salchat_p2p_envelope;
   };
     
 }

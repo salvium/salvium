@@ -181,7 +181,16 @@
 #define P2P_IDLE_CONNECTION_KILL_INTERVAL               (5*60) //5 minutes
 
 #define P2P_SUPPORT_FLAG_FLUFFY_BLOCKS                  0x01
+#define P2P_SUPPORT_FLAG_SALCHAT_V4                     0x02
 #define P2P_SUPPORT_FLAGS                               P2P_SUPPORT_FLAG_FLUFFY_BLOCKS
+
+static_assert((P2P_SUPPORT_FLAG_FLUFFY_BLOCKS & P2P_SUPPORT_FLAG_SALCHAT_V4) == 0,
+              "SALCHAT P2P capability bit collides with an existing capability");
+
+inline constexpr uint32_t get_p2p_support_flags(const bool salchat_enabled) noexcept
+{
+  return P2P_SUPPORT_FLAGS | (salchat_enabled ? P2P_SUPPORT_FLAG_SALCHAT_V4 : 0);
+}
 
 #define RPC_IP_FAILS_BEFORE_BLOCK                       3
 

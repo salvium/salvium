@@ -358,7 +358,7 @@ application.
     ```
 
 * Open the MingW shell via `MinGW-w64-Win64 Shell` shortcut on 64-bit Windows
-  or `MinGW-w64-Win64 Shell` shortcut on 32-bit Windows. Note that if you are
+  or `MinGW-w64-Win32 Shell` shortcut on 32-bit Windows. Note that if you are
   running 64-bit Windows, you will have both 64-bit and 32-bit MinGW shells.
 
 **Cloning**
@@ -383,19 +383,24 @@ application.
     git checkout v1.1.3
     ```
 
-* If you are on a 64-bit system, run:
+* From the matching MinGW/MSYS2 shell, build the native Windows platform with:
+
+    ```bash
+    make release-static
+    ```
+
+  The generic `release` and `release-static` targets detect MinGW64/UCRT64,
+  MinGW32, and Windows ARM64 shells and select the matching Windows triplet.
+  The explicit 64-bit and 32-bit targets remain available when needed:
 
     ```bash
     make release-static-win64
-    ```
-
-* If you are on a 32-bit system, run:
-
-    ```bash
     make release-static-win32
     ```
 
-* The resulting executables can be found in `build/release/bin`
+* The generic target writes executables to the compiler-triplet directory,
+  such as `build/x86_64-w64-mingw32/release/bin` or
+  `build/i686-w64-mingw32/release/bin`.
 
 * **Optional**: to build Windows binaries suitable for debugging on a 64-bit system, run:
 

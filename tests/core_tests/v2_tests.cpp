@@ -53,7 +53,7 @@ bool gen_v2_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
     miner_accounts[n].generate();
     CHECK_AND_ASSERT_MES(generator.construct_block_manually(blocks[n], *prev_block, miner_accounts[n],
         test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp,
-        2, 2, prev_block->timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
+        2, 2, prev_block->timestamp + current_difficulty_window(2),
           crypto::hash(), 0, transaction(), std::vector<crypto::hash>(), 0, 0),
         false, "Failed to generate block");
     events.push_back(blocks[n]);
@@ -64,12 +64,15 @@ bool gen_v2_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
   cryptonote::block blk_r;
   {
     cryptonote::block blk_last = blocks[3];
-    for (size_t i = 0; i < CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW; ++i)
+    // HF2 checks confidential inputs against the asset-wide output count.
+    // Keep more than 15 SAL outputs available so these are genuinely mixable
+    // inputs and a ring smaller than 16 reaches the intended rejection.
+    for (size_t i = 0; i < CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW + 1; ++i)
     {
       cryptonote::block blk;
       CHECK_AND_ASSERT_MES(generator.construct_block_manually(blk, blk_last, miner_account,
           test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp,
-          2, 2, blk_last.timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
+          2, 2, blk_last.timestamp + current_difficulty_window(2),
           crypto::hash(), 0, transaction(), std::vector<crypto::hash>(), 0, 0),
           false, "Failed to generate block");
       events.push_back(blk);
@@ -91,11 +94,16 @@ bool gen_v2_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
         idx = m+1; // one out of that size per miner tx, including genesis
       else
         idx = 0; // dusty, no other output of that size
-      src.push_output(idx, boost::get<txout_to_key>(blocks[m].miner_tx.vout[out_idx[out_idx_idx]].target).key, src.amount);
+      crypto::public_key output_key;
+      CHECK_AND_ASSERT_MES(get_output_public_key(blocks[m].miner_tx.vout[out_idx[out_idx_idx]], output_key),
+                           false, "failed to read miner output key");
+      src.push_output(idx, output_key, src.amount);
     }
     src.real_out_tx_key = cryptonote::get_tx_pub_key_from_extra(blocks[0].miner_tx);
     src.real_output = 0;
-    src.rct = false;
+    src.rct = true;
+    src.mask = rct::identity();
+    src.asset_type = "SAL";
     src.real_output_in_tx_index = out_idx[out_idx_idx];
   }
 
@@ -103,11 +111,21 @@ bool gen_v2_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
   tx_destination_entry td;
   td.addr = miner_account.get_keys().m_account_address;
   td.amount = amount_paid;
+  td.asset_type = "SAL";
   std::vector<tx_destination_entry> destinations;
   destinations.push_back(td);
 
+  tx_destination_entry change;
+  change.addr = miner_accounts[0].get_keys().m_account_address;
+  change.amount = sum_amount(sources) - amount_paid;
+  change.asset_type = "SAL";
+  change.is_change = true;
+  destinations.push_back(change);
+
   transaction tx;
-  bool r = construct_tx(miner_accounts[0].get_keys(), sources, destinations, 1/*hf_version*/, "SAL", cryptonote::transaction_type::TRANSFER, boost::none, std::vector<uint8_t>(), tx, 0);
+  bool r = construct_tx_rct(miner_accounts[0].get_keys(), sources, destinations,
+      miner_accounts[0].get_keys().m_account_address, {}, tx, 0, true,
+      rct::RangeProofPaddedBulletproof, 4, HF_VERSION_ENABLE_N_OUTS);
   CHECK_AND_ASSERT_MES(r, false, "failed to construct transaction");
   if (!valid)
     DO_CALLBACK(events, "mark_invalid_tx");
@@ -119,7 +137,9 @@ bool gen_v2_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
 bool gen_v2_tx_mixable_0_mixin::generate(std::vector<test_event_entry>& events) const
 {
   const int mixin = 0;
-  const int out_idx[] = {1, -1};
+  // Production miner output 0 is the spendable key output; output 1 is the
+  // protocol script output and cannot be used as a ring member.
+  const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false);
 }
@@ -127,7 +147,7 @@ bool gen_v2_tx_mixable_0_mixin::generate(std::vector<test_event_entry>& events) 
 bool gen_v2_tx_mixable_low_mixin::generate(std::vector<test_event_entry>& events) const
 {
   const int mixin = 1;
-  const int out_idx[] = {1, -1};
+  const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false);
 }
@@ -159,7 +179,7 @@ bool gen_v2_tx_unmixable_two::generate(std::vector<test_event_entry>& events) co
 bool gen_v2_tx_dust::generate(std::vector<test_event_entry>& events) const
 {
   const int mixin = 2;
-  const int out_idx[] = {1, -1};
+  const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10001;
   return generate_with(events, out_idx, mixin, amount_paid, false);
 }

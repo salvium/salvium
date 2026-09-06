@@ -53,20 +53,7 @@ namespace
     out2.amount = amount_2;
     out2.target = target;
     miner_tx.vout.push_back(out2);
-  }
-
-  void append_tx_source_entry(std::vector<cryptonote::tx_source_entry>& sources, const transaction& tx, size_t out_idx)
-  {
-    cryptonote::tx_source_entry se;
-    se.amount = tx.vout[out_idx].amount;
-    se.push_output(0, boost::get<cryptonote::txout_to_key>(tx.vout[out_idx].target).key, se.amount);
-    se.real_output = 0;
-    se.rct = false;
-    se.real_out_tx_key = get_tx_pub_key_from_extra(tx);
-    se.real_out_additional_tx_keys = get_additional_tx_pub_keys_from_extra(tx);
-    se.real_output_in_tx_index = out_idx;
-
-    sources.push_back(se);
+    miner_tx.invalidate_hashes();
   }
 }
 
@@ -103,10 +90,8 @@ bool gen_uint_overflow_1::generate(std::vector<test_event_entry>& events) const
   GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_0, miner_account, ts_start);
   DO_CALLBACK(events, "mark_last_valid_block");
-  MAKE_ACCOUNT(events, bob_account);
-  MAKE_ACCOUNT(events, alice_account);
-
-  // Problem 1. Miner tx output overflow
+  // Miner output sum overflow. Preserve the production HF1 coinbase shape and
+  // output variants, changing only the two clear amounts under test.
   MAKE_MINER_TX_MANUALLY(miner_tx_0, blk_0);
   split_miner_tx_outs(miner_tx_0, MONEY_SUPPLY);
   block blk_1;
@@ -114,26 +99,15 @@ bool gen_uint_overflow_1::generate(std::vector<test_event_entry>& events) const
     return false;
   events.push_back(blk_1);
 
-  // Problem 1. Miner tx outputs overflow
-  MAKE_MINER_TX_MANUALLY(miner_tx_1, blk_1);
-  split_miner_tx_outs(miner_tx_1, MONEY_SUPPLY);
+  // Miner amount_burnt + output overflow. This is independent of blk_1 so the
+  // block is validated rather than merely classified as an orphan.
+  MAKE_MINER_TX_MANUALLY(miner_tx_1, blk_0);
+  miner_tx_1.amount_burnt = std::numeric_limits<uint64_t>::max();
+  miner_tx_1.invalidate_hashes();
   block blk_2;
-  if (!generator.construct_block_manually(blk_2, blk_1, miner_account, test_generator::bf_miner_tx, 0, 0, 0, crypto::hash(), 0, miner_tx_1))
+  if (!generator.construct_block_manually(blk_2, blk_0, miner_account, test_generator::bf_miner_tx, 0, 0, 0, crypto::hash(), 0, miner_tx_1))
     return false;
   events.push_back(blk_2);
-
-  REWIND_BLOCKS(events, blk_2r, blk_2, miner_account);
-  MAKE_TX_LIST_START(events, txs_0, miner_account, bob_account, MONEY_SUPPLY, blk_2);
-  MAKE_TX_LIST(events, txs_0, miner_account, bob_account, MONEY_SUPPLY, blk_2);
-  MAKE_NEXT_BLOCK_TX_LIST(events, blk_3, blk_2r, miner_account, txs_0);
-  REWIND_BLOCKS(events, blk_3r, blk_3, miner_account);
-
-  // Problem 2. total_fee overflow, block_reward overflow
-  std::list<cryptonote::transaction> txs_1;
-  // Create txs with huge fee
-  txs_1.push_back(construct_tx_with_fee(events, blk_3, bob_account, alice_account, MK_COINS(1), MONEY_SUPPLY - MK_COINS(1)));
-  txs_1.push_back(construct_tx_with_fee(events, blk_3, bob_account, alice_account, MK_COINS(1), MONEY_SUPPLY - MK_COINS(1)));
-  MAKE_NEXT_BLOCK_TX_LIST(events, blk_4, blk_3r, miner_account, txs_1);
 
   return true;
 }
@@ -147,64 +121,36 @@ bool gen_uint_overflow_2::generate(std::vector<test_event_entry>& events) const
   GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_0, miner_account, ts_start);
   MAKE_ACCOUNT(events, bob_account);
-  MAKE_ACCOUNT(events, alice_account);
   REWIND_BLOCKS(events, blk_0r, blk_0, miner_account);
   DO_CALLBACK(events, "mark_last_valid_block");
 
-  // Problem 1. Regular tx outputs overflow
-  std::vector<cryptonote::tx_source_entry> sources;
-  for (size_t i = 0; i < blk_0.miner_tx.vout.size(); ++i)
-  {
-    if (TESTS_DEFAULT_FEE < blk_0.miner_tx.vout[i].amount)
-    {
-      append_tx_source_entry(sources, blk_0.miner_tx, i);
-      break;
-    }
-  }
-  if (sources.empty())
-  {
+  // Start from independently valid Bulletproof+ transactions so malformed
+  // clear amounts reach check_money_overflow before RingCT verification.
+  cryptonote::transaction output_overflow;
+  if (!construct_tx_to_key(events, output_overflow, blk_0r, miner_account,
+                           bob_account, MK_COINS(1), TESTS_DEFAULT_FEE, 0))
     return false;
-  }
+  CHECK_AND_ASSERT_MES(output_overflow.vout.size() == 2, false,
+                       "production overflow fixture requires two outputs");
+  output_overflow.vout[0].amount = std::numeric_limits<uint64_t>::max();
+  output_overflow.vout[1].amount = 1;
+  output_overflow.invalidate_hashes();
+  events.push_back(output_overflow);
 
-  std::vector<cryptonote::tx_destination_entry> destinations;
-  const account_public_address& bob_addr = bob_account.get_keys().m_account_address;
-  destinations.push_back(tx_destination_entry(MONEY_SUPPLY, bob_addr, false));
-  destinations.push_back(tx_destination_entry(MONEY_SUPPLY - 1, bob_addr, false));
-  // sources.front().amount = destinations[0].amount + destinations[2].amount + destinations[3].amount + TESTS_DEFAULT_FEE
-  destinations.push_back(tx_destination_entry(sources.front().amount - MONEY_SUPPLY - MONEY_SUPPLY + 1 - TESTS_DEFAULT_FEE, bob_addr, false));
-
-  cryptonote::transaction tx_1;
-  if (!construct_tx(miner_account.get_keys(), sources, destinations, 1/*hf_version*/, "SAL", cryptonote::transaction_type::TRANSFER, boost::none, std::vector<uint8_t>(), tx_1, 0))
+  cryptonote::transaction input_overflow;
+  if (!construct_tx_to_key(events, input_overflow, blk_0r, miner_account,
+                           bob_account, MK_COINS(1), TESTS_DEFAULT_FEE, 0))
     return false;
-  events.push_back(tx_1);
-
-  MAKE_NEXT_BLOCK_TX1(events, blk_1, blk_0r, miner_account, tx_1);
-  REWIND_BLOCKS(events, blk_1r, blk_1, miner_account);
-
-  // Problem 2. Regular tx inputs overflow
-  sources.clear();
-  for (size_t i = 0; i < tx_1.vout.size(); ++i)
-  {
-    auto& tx_1_out = tx_1.vout[i];
-    if (tx_1_out.amount < MONEY_SUPPLY - 1)
-      continue;
-
-    append_tx_source_entry(sources, tx_1, i);
-  }
-
-  destinations.clear();
-  cryptonote::tx_destination_entry de;
-  de.addr = alice_account.get_keys().m_account_address;
-  de.amount = MONEY_SUPPLY - TESTS_DEFAULT_FEE;
-  destinations.push_back(de);
-  destinations.push_back(de);
-
-  cryptonote::transaction tx_2;
-  if (!construct_tx(bob_account.get_keys(), sources, destinations, 1/*hf_version*/, "SAL", cryptonote::transaction_type::TRANSFER, boost::none, std::vector<uint8_t>(), tx_2, 0))
-    return false;
-  events.push_back(tx_2);
-
-  MAKE_NEXT_BLOCK_TX1(events, blk_2, blk_1r, miner_account, tx_2);
+  CHECK_AND_ASSERT_MES(input_overflow.vin.size() == 1 &&
+                       input_overflow.vin.front().type() == typeid(txin_to_key),
+                       false, "production overflow fixture requires one key input");
+  txin_to_key first = boost::get<txin_to_key>(input_overflow.vin.front());
+  first.amount = std::numeric_limits<uint64_t>::max();
+  txin_to_key second = first;
+  second.amount = 1;
+  input_overflow.vin = {first, second};
+  input_overflow.invalidate_hashes();
+  events.push_back(input_overflow);
 
   return true;
 }

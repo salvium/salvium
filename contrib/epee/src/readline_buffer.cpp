@@ -1,6 +1,7 @@
 #include "readline_buffer.h"
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <cstdlib>
 #include <iostream>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/lock_guard.hpp>
@@ -202,28 +203,38 @@ static bool same_as_last_line(const std::string& test_line)
 {
   // Note that state->offset == state->length, when a new line was entered.
   HISTORY_STATE* state = history_get_history_state();
-  return state->length > 0
+  const bool same = state && state->length > 0
     && test_line.compare(state->entries[state->length-1]->line) == 0;
+  std::free(state);
+  return same;
 }
 
 static char* completion_matches(const char* text, int state)
 {
   static size_t list_index;
   static size_t len;
+  static size_t replacement_start;
+  static std::string prefix;
 
   if(state == 0)
   {
     list_index = 0;
-    len = strlen(text);
+    replacement_start = static_cast<size_t>(rl_point) - strlen(text);
+    prefix.assign(rl_line_buffer, static_cast<size_t>(rl_point));
+    len = prefix.size();
   }
 
   const std::vector<std::string>& completions = rdln::readline_buffer::get_completions();
   for(; list_index<completions.size(); )
   {
     const std::string& cmd = completions[list_index++];
-    if(cmd.compare(0, len, text) == 0)
+    // While completing the command name, do not let registered subcommands
+    // make an otherwise exact command look ambiguous to readline.
+    if (replacement_start == 0 && cmd.find(' ') != std::string::npos)
+      continue;
+    if(cmd.compare(0, len, prefix) == 0)
     {
-      return strdup(cmd.c_str());
+      return strdup(cmd.c_str() + replacement_start);
     }
   }
 
@@ -259,4 +270,3 @@ void rdln::clear_screen()
 {
   rl_clear_screen(0, 0);
 }
-

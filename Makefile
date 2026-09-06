@@ -27,22 +27,60 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ANDROID_STANDALONE_TOOLCHAIN_PATH ?= /usr/local/toolchain
+RELEASE_CC ?= gcc-16
+RELEASE_CXX ?= g++-16
 
-dotgit=$(shell ls -d .git/config)
-ifneq ($(dotgit), .git/config)
-  USE_SINGLE_BUILDDIR=1
+host_system := $(shell uname -s)
+windows_host := $(filter MINGW% MSYS% CYGWIN%,$(host_system))
+linux_host := $(filter Linux,$(host_system))
+ifneq ($(windows_host),)
+  ifeq ($(origin RELEASE_CC),file)
+    RELEASE_CC := gcc
+  endif
+  ifeq ($(origin RELEASE_CXX),file)
+    RELEASE_CXX := g++
+  endif
 endif
-
-subbuilddir:=$(shell echo  `uname | sed -e 's|[:/\\ \(\)]|_|g'`/`git branch | grep '\* ' | cut -f2- -d' '| sed -e 's|[:/\\ \(\)]|_|g'`)
-ifeq ($(USE_SINGLE_BUILDDIR),)
-  builddir := build/"$(subbuilddir)"
-  topdir   := ../../../..
-  deldirs  := $(builddir)
-else
-  builddir := build
-  topdir   := ../..
-  deldirs  := $(builddir)/debug $(builddir)/release $(builddir)/fuzz
+native_target ?= $(if $(MINGW_CHOST),$(MINGW_CHOST),$(shell $(CC) -dumpmachine))
+release_static_builddir := build/$(native_target)
+release_target_arg :=
+release_static_generator :=
+release_static_build64 := ON
+release_static_platform_args :=
+release_static_compiler_check := @:
+ifneq ($(windows_host),)
+  ifneq ($(findstring i686,$(native_target)),)
+    release_target_arg := --OS=windows-i686
+    release_static_build64 := OFF
+    release_static_platform_args := -D ARCH="i686" -D BUILD_TAG="win-x32"
+  else ifneq ($(findstring aarch64,$(native_target)),)
+    release_target_arg := --OS=windows-aarch64
+    release_static_platform_args := -D ARCH="armv8-a" -D BUILD_TAG="win-arm64"
+  else
+    release_target_arg := --OS=windows-x86_64
+    release_static_platform_args := -D ARCH="x86-64" -D BUILD_TAG="win-x64"
+  endif
+  release_static_generator := -G "MSYS Makefiles"
+else ifneq ($(linux_host),)
+  release_static_platform_args := -D CMAKE_C_COMPILER="$(RELEASE_CC)" -D CMAKE_CXX_COMPILER="$(RELEASE_CXX)"
+  release_static_compiler_check := @if ! "$(RELEASE_CC)" -dumpfullversion | grep -Eq '^16([.]|$$)'; then echo "error: release-static requires GCC 16 (RELEASE_CC=$(RELEASE_CC))." >&2; exit 1; fi; if ! "$(RELEASE_CXX)" -dumpfullversion | grep -Eq '^16([.]|$$)'; then echo "error: release-static requires G++ 16 (RELEASE_CXX=$(RELEASE_CXX))." >&2; exit 1; fi
+  ifneq ($(findstring x86_64,$(native_target)),)
+    release_static_platform_args += -D ARCH="x86-64"
+  else ifneq ($(findstring i686,$(native_target)),)
+    release_static_build64 := OFF
+    release_static_platform_args += -D ARCH="i686"
+  else ifneq ($(findstring aarch64,$(native_target)),)
+    release_static_platform_args += -D ARCH="armv8-a"
+  else ifneq ($(findstring arm,$(native_target)),)
+    release_static_build64 := OFF
+    release_static_platform_args += -D ARCH="armv7-a"
+  else
+    release_static_platform_args += -D ARCH="default"
+  endif
 endif
+builddir := build/$(native_target)
+topdir   := ../../..
+deldirs  := $(builddir)/debug $(builddir)/release $(builddir)/fuzz
 
 all: release-all
 
@@ -92,7 +130,8 @@ cmake-release:
 	cd $(builddir)/release && cmake -D CMAKE_BUILD_TYPE=Release $(topdir)
 
 release:
-	./make_releases.sh --no-zip
+	mkdir -p $(builddir)/release
+	cd $(builddir)/release && CC="$(RELEASE_CC)" CXX="$(RELEASE_CXX)" cmake $(NATIVE_CMAKE_GENERATOR) -D CMAKE_C_COMPILER="$(RELEASE_CC)" -D CMAKE_CXX_COMPILER="$(RELEASE_CXX)" -D BUILD_TESTS=OFF -D STATIC=OFF -D CMAKE_BUILD_TYPE=Release $(topdir) && $(MAKE)
 
 release-test:
 	mkdir -p $(builddir)/release
@@ -103,8 +142,9 @@ release-all:
 	cd $(builddir)/release && cmake -D BUILD_TESTS=ON -D CMAKE_BUILD_TYPE=Release $(topdir) && $(MAKE)
 
 release-static:
-	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D STATIC=ON -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release $(topdir) && $(MAKE)
+	$(release_static_compiler_check)
+	mkdir -p $(release_static_builddir)/release
+	cd $(release_static_builddir)/release && CC="$(RELEASE_CC)" CXX="$(RELEASE_CXX)" cmake $(release_static_generator) -D CMAKE_C_COMPILER="$(RELEASE_CC)" -D CMAKE_CXX_COMPILER="$(RELEASE_CXX)" -D BUILD_TESTS=OFF -D STATIC=ON -D BUILD_64=$(release_static_build64) -D CMAKE_BUILD_TYPE=Release $(release_static_platform_args) ../../.. && $(MAKE)
 
 coverage:
 	mkdir -p $(builddir)/debug

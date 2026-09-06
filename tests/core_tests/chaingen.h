@@ -303,6 +303,8 @@ struct output_index {
   bool spent;
   bool rct;
   rct::key comm;
+  rct::key mask;
+  std::string asset_type;
   const cryptonote::block *p_blk;
   const cryptonote::transaction *p_tx;
 
@@ -310,13 +312,14 @@ struct output_index {
       : out(_out), amount(_a), blk_height(_h), tx_no(tno), out_no(ono), idx(0), unlock_time(0),
       is_coin_base(false), spent(false), rct(false), p_blk(_pb), p_tx(_pt)
   {
-
+    mask = rct::identity();
   }
 
   output_index(const output_index &other)
       : out(other.out), amount(other.amount), blk_height(other.blk_height), tx_no(other.tx_no), rct(other.rct),
       out_no(other.out_no), idx(other.idx), unlock_time(other.unlock_time), is_coin_base(other.is_coin_base),
-      spent(other.spent), comm(other.comm), p_blk(other.p_blk), p_tx(other.p_tx) {  }
+      spent(other.spent), comm(other.comm), mask(other.mask), asset_type(other.asset_type),
+      p_blk(other.p_blk), p_tx(other.p_tx) {  }
 
   void set_rct(bool arct) {
     rct = arct;
@@ -388,7 +391,9 @@ public:
   void process(const std::vector<const cryptonote::block*>& blockchain, const map_hash2tx_t& mtx);
   void process(const cryptonote::block* blk, const cryptonote::transaction * tx, size_t i);
   void global_indices(const cryptonote::transaction *tx, std::vector<uint64_t> &indices);
-  void get_fake_outs(size_t num_outs, uint64_t amount, uint64_t global_index, uint64_t cur_height, std::vector<get_outs_entry> &outs);
+  void get_fake_outs(size_t num_outs, uint64_t amount, const std::string& asset_type,
+                     uint64_t global_asset_index, uint64_t cur_height,
+                     std::vector<get_outs_entry> &outs);
 
   std::string dump_data();
   void dump_data(const std::string & fname);
@@ -412,14 +417,29 @@ cryptonote::account_public_address get_address(const cryptonote::account_keys& i
 cryptonote::account_public_address get_address(const cryptonote::account_base& inp);
 cryptonote::account_public_address get_address(const cryptonote::tx_destination_entry& inp);
 
-inline cryptonote::difficulty_type get_test_difficulty(const boost::optional<uint8_t>& hf_ver=boost::none) {return !hf_ver || hf_ver.get() <= 1 ? 1 : 2;}
-inline uint64_t current_difficulty_window(const boost::optional<uint8_t>& hf_ver=boost::none){ return !hf_ver || hf_ver.get() <= 1 ? DIFFICULTY_TARGET_V1 : DIFFICULTY_TARGET_V2; }
+inline cryptonote::difficulty_type get_test_difficulty(const boost::optional<uint8_t>& /*hf_ver*/=boost::none) { return 1; }
+// Core recomputes difficulty while replaying the generated chain. HF1 uses
+// the legacy ceil calculation, where exact target spacing yields 1. HF2+
+// uses LWMA with a 0.998 adjustment, so one second under target is required
+// to keep its integer result at 1 instead of truncating to zero.
+inline uint64_t current_difficulty_window(const boost::optional<uint8_t>& hf_ver=boost::none)
+{
+  return !hf_ver || hf_ver.get() <= HF_VERSION_BULLETPROOF_PLUS
+      ? DIFFICULTY_TARGET_V2
+      : DIFFICULTY_TARGET_V2 - 1;
+}
 
 cryptonote::tx_destination_entry build_dst(const var_addr_t& to, bool is_subaddr=false, uint64_t amount=0);
 std::vector<cryptonote::tx_destination_entry> build_dsts(const var_addr_t& to1, bool sub1=false, uint64_t am1=0);
 std::vector<cryptonote::tx_destination_entry> build_dsts(std::initializer_list<dest_wrapper_t> inps);
 uint64_t sum_amount(const std::vector<cryptonote::tx_destination_entry>& destinations);
 uint64_t sum_amount(const std::vector<cryptonote::tx_source_entry>& sources);
+
+bool fill_tx_source_from_miner_outputs(cryptonote::tx_source_entry& source,
+                                       const cryptonote::block* blocks,
+                                       size_t ring_size,
+                                       size_t real_output,
+                                       uint64_t first_global_asset_index = 1);
 
 bool construct_miner_tx_manually(size_t height, uint64_t already_generated_coins,
                                  const cryptonote::account_public_address& miner_address, cryptonote::transaction& tx,
@@ -428,19 +448,19 @@ bool construct_miner_tx_manually(size_t height, uint64_t already_generated_coins
 
 bool construct_tx_to_key(const std::vector<test_event_entry>& events, cryptonote::transaction& tx,
                          const cryptonote::block& blk_head, const cryptonote::account_base& from, const var_addr_t& to, uint64_t amount,
-                         uint64_t fee, size_t nmix, bool rct=false, rct::RangeProofType range_proof_type=rct::RangeProofBorromean, int bp_version = 0);
+                         uint64_t fee, size_t nmix, bool rct=true, rct::RangeProofType range_proof_type=rct::RangeProofPaddedBulletproof, int bp_version = 4);
 
 bool construct_tx_to_key(const std::vector<test_event_entry>& events, cryptonote::transaction& tx, const cryptonote::block& blk_head,
                          const cryptonote::account_base& from, std::vector<cryptonote::tx_destination_entry> destinations,
-                         uint64_t fee, size_t nmix, bool rct=false, rct::RangeProofType range_proof_type=rct::RangeProofBorromean, int bp_version = 0);
+                         uint64_t fee, size_t nmix, bool rct=true, rct::RangeProofType range_proof_type=rct::RangeProofPaddedBulletproof, int bp_version = 4);
 
 bool construct_tx_to_key(cryptonote::transaction& tx, const cryptonote::account_base& from, const var_addr_t& to, uint64_t amount,
                          std::vector<cryptonote::tx_source_entry> &sources,
-                         uint64_t fee, bool rct=false, rct::RangeProofType range_proof_type=rct::RangeProofBorromean, int bp_version = 0);
+                         uint64_t fee, bool rct=true, rct::RangeProofType range_proof_type=rct::RangeProofPaddedBulletproof, int bp_version = 4, uint8_t hf_version = 1);
 
 bool construct_tx_to_key(cryptonote::transaction& tx, const cryptonote::account_base& from, const std::vector<cryptonote::tx_destination_entry>& destinations,
                          std::vector<cryptonote::tx_source_entry> &sources,
-                         uint64_t fee, bool rct, rct::RangeProofType range_proof_type, int bp_version = 0);
+                         uint64_t fee, bool rct, rct::RangeProofType range_proof_type, int bp_version = 4, uint8_t hf_version = 1);
 
 cryptonote::transaction construct_tx_with_fee(std::vector<test_event_entry>& events, const cryptonote::block& blk_head,
                                             const cryptonote::account_base& acc_from, const var_addr_t& to,
@@ -451,7 +471,7 @@ bool construct_tx_rct(const cryptonote::account_keys& sender_account_keys,
     const std::vector<cryptonote::tx_destination_entry>& destinations,
     const boost::optional<cryptonote::account_public_address>& change_addr,
     std::vector<uint8_t> extra, cryptonote::transaction& tx, uint64_t unlock_time,
-    bool rct=false, rct::RangeProofType range_proof_type=rct::RangeProofBorromean, int bp_version = 0);
+    bool rct=true, rct::RangeProofType range_proof_type=rct::RangeProofPaddedBulletproof, int bp_version = 4, uint8_t hf_version = 1);
 
 
 uint64_t num_blocks(const std::vector<test_event_entry>& events);
@@ -939,7 +959,7 @@ inline bool do_replay_file(const std::string& filename)
   }
 
 #define MAKE_TX_MIX_LIST_RCT(VEC_EVENTS, SET_NAME, FROM, TO, AMOUNT, NMIX, HEAD) \
-        MAKE_TX_MIX_LIST_RCT_EX(VEC_EVENTS, SET_NAME, FROM, TO, AMOUNT, NMIX, HEAD, rct::RangeProofPaddedBulletproof, 1)
+        MAKE_TX_MIX_LIST_RCT_EX(VEC_EVENTS, SET_NAME, FROM, TO, AMOUNT, NMIX, HEAD, rct::RangeProofPaddedBulletproof, 4)
 #define MAKE_TX_MIX_LIST_RCT_EX(VEC_EVENTS, SET_NAME, FROM, TO, AMOUNT, NMIX, HEAD, RCT_TYPE, BP_VER)  \
   {                                                                                      \
     cryptonote::transaction t;                                                           \
@@ -949,7 +969,7 @@ inline bool do_replay_file(const std::string& filename)
   }
 
 #define MAKE_TX_MIX_DEST_LIST_RCT(VEC_EVENTS, SET_NAME, FROM, TO, NMIX, HEAD)            \
-        MAKE_TX_MIX_DEST_LIST_RCT_EX(VEC_EVENTS, SET_NAME, FROM, TO, NMIX, HEAD, rct::RangeProofPaddedBulletproof, 1)
+        MAKE_TX_MIX_DEST_LIST_RCT_EX(VEC_EVENTS, SET_NAME, FROM, TO, NMIX, HEAD, rct::RangeProofPaddedBulletproof, 4)
 #define MAKE_TX_MIX_DEST_LIST_RCT_EX(VEC_EVENTS, SET_NAME, FROM, TO, NMIX, HEAD, RCT_TYPE, BP_VER)  \
   {                                                                                      \
     cryptonote::transaction t;                                                           \
@@ -1088,4 +1108,4 @@ inline bool do_replay_file(const std::string& filename)
 #define CHECK_EQ(v1, v2) CHECK_AND_ASSERT_MES(v1 == v2, false, "[" << perr_context << "] failed: \"" << QUOTEME(v1) << " == " << QUOTEME(v2) << "\", " << v1 << " != " << v2)
 #define CHECK_NOT_EQ(v1, v2) CHECK_AND_ASSERT_MES(!(v1 == v2), false, "[" << perr_context << "] failed: \"" << QUOTEME(v1) << " != " << QUOTEME(v2) << "\", " << v1 << " == " << v2)
 #define MK_COINS(amount) (UINT64_C(amount) * COIN)
-#define TESTS_DEFAULT_FEE ((uint64_t)20000000000) // 2 * pow(10, 10)
+#define TESTS_DEFAULT_FEE ((uint64_t)10 * FEE_PER_KB)

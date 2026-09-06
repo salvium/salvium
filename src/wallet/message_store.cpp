@@ -718,10 +718,15 @@ std::string message_store::get_sanitized_text(const std::string &text, size_t ma
   {
     sanitized_text = tools::utf8canonical(sanitized_text, [](wint_t c)
     {
-      if ((c < 0x20) || (c == 0x7f) || (c >= 0x80 && c <= 0x9f))
+      if ((c < 0x20) || (c == 0x7f) || (c >= 0x80 && c <= 0x9f) ||
+          c == 0x00ad || c == 0x034f || c == 0x061c || c == 0x180e ||
+          (c >= 0x200b && c <= 0x200f) || (c >= 0x202a && c <= 0x202e) ||
+          (c >= 0x2060 && c <= 0x206f) || c == 0xfeff ||
+          (c >= 0x1bca0 && c <= 0x1bca3) || (c >= 0x1d173 && c <= 0x1d17a) ||
+          (c >= 0xe0000 && c <= 0xe007f))
       {
-        // Strip out any controls, especially ESC for getting rid of potentially dangerous
-        // ANSI escape sequences that a console window might interpret
+        // Strip terminal controls plus Unicode bidi and invisible formatting
+        // controls that can reorder or conceal attacker-controlled text.
         c = '?';
       }
       else if ((c == '<') || (c == '>'))

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Install Salvium build/release dependencies.
+# Install Salvium dependencies shared by release, release-static, debug,
+# test/sanitizer, coverage, fuzz, and cross-build targets.
 #
 # The filename intentionally matches the requested spelling:
 # install-depenencies.sh
@@ -21,7 +22,8 @@ Usage: ./install-depenencies.sh [mode]
 
 Options:
   --native       Install dependencies for the current Linux build.
-                 This is the default and fixes missing tools like gperf.
+                 This is the default and covers dynamic/static release,
+                 debug, test/sanitizer, coverage, and fuzz source builds.
   --windows      Also install MinGW tools for Windows x64/x86 releases.
   --linux-i686   Also install multilib tools for Linux 32-bit releases.
   --linux-cross  Also install ARM/RISC-V/ppc64le/s390x Linux cross tools.
@@ -30,6 +32,9 @@ Options:
   -h, --help     Show this help.
 
 Notes:
+  Every mode installs the common headers and static archives needed by all
+  build types, including ICU, zlib, zstd, and jitterentropy for Salchat and
+  static OpenSSL linkage. Cross modes then add their target toolchains.
   Ubuntu cannot install every cross toolchain together on some releases.
   In particular, gcc-multilib/g++-multilib can conflict with several
   architecture cross-compilers. Use one cross mode at a time.
@@ -71,11 +76,15 @@ have_command() {
 install_apt() {
   local packages=(
     build-essential
+    gcc-16
+    g++-16
     cmake
     pkg-config
     git
     curl
     ca-certificates
+    gnupg
+    software-properties-common
     zip
     unzip
     python3
@@ -83,6 +92,7 @@ install_apt() {
     doxygen
     graphviz
     gperf
+    afl++
     bison
     flex
     autoconf
@@ -90,7 +100,11 @@ install_apt() {
     libtool
     gettext
     bc
+    libicu-dev
     libssl-dev
+    zlib1g-dev
+    libzstd-dev
+    libjitterentropy3-dev
     libzmq3-dev
     libunbound-dev
     libsodium-dev
@@ -142,7 +156,31 @@ install_apt() {
   )
 
   $SUDO apt-get update
+  if ! apt-cache show gcc-16 >/dev/null 2>&1 ||
+      ! apt-cache show g++-16 >/dev/null 2>&1; then
+    local distro_id=""
+    if [ -r /etc/os-release ]; then
+      distro_id="$(. /etc/os-release && printf '%s' "${ID:-}")"
+    fi
+    if [ "${distro_id}" != "ubuntu" ]; then
+      echo "error: this distribution does not currently provide gcc-16/g++-16." >&2
+      echo "Enable a trusted GCC 16 package repository for this distribution, then rerun this installer." >&2
+      exit 1
+    fi
+    $SUDO apt-get install -y ca-certificates gnupg software-properties-common
+    $SUDO add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    local toolchain_keyring="/etc/apt/trusted.gpg.d/ubuntu-toolchain-r-ubuntu-test.gpg"
+    if [ ! -r "${toolchain_keyring}" ] ||
+        ! gpg --show-keys --with-colons "${toolchain_keyring}" 2>/dev/null |
+          grep -Fq 'fpr:::::::::C8EC952E2A0E1FBDC5090F6A2C277A0A352154E5:'; then
+      echo "error: Ubuntu Toolchain PPA signing-key fingerprint verification failed." >&2
+      exit 1
+    fi
+    $SUDO apt-get update
+  fi
   $SUDO apt-get install -y "${packages[@]}"
+  gcc-16 -dumpfullversion | grep -Eq '^16([.]|$)'
+  g++-16 -dumpfullversion | grep -Eq '^16([.]|$)'
 
   case "${MODE}" in
     native)
@@ -189,6 +227,7 @@ install_pacman() {
     doxygen
     graphviz
     gperf
+    afl++
     bison
     flex
     autoconf
@@ -197,7 +236,11 @@ install_pacman() {
     gettext
     bc
     boost
+    icu
     openssl
+    zlib
+    zstd
+    jitterentropy
     zeromq
     unbound
     libsodium
@@ -253,6 +296,7 @@ install_dnf() {
     doxygen
     graphviz
     gperf
+    american-fuzzy-lop
     bison
     flex
     autoconf
@@ -260,7 +304,11 @@ install_dnf() {
     libtool
     gettext
     bc
+    libicu-devel
     openssl-devel
+    zlib-devel
+    libzstd-devel
+    jitterentropy-devel
     zeromq-devel
     unbound-devel
     libsodium-devel
@@ -309,6 +357,7 @@ install_zypper() {
     doxygen
     graphviz
     gperf
+    afl
     bison
     flex
     autoconf
@@ -316,7 +365,11 @@ install_zypper() {
     libtool
     gettext-tools
     bc
+    libicu-devel
     libopenssl-devel
+    zlib-devel
+    libzstd-devel
+    jitterentropy-devel
     zeromq-devel
     unbound-devel
     libsodium-devel
@@ -373,4 +426,5 @@ else
 fi
 
 echo "Dependency installation complete."
-echo "You can now retry: ./make_releases.sh"
+echo "Native dependencies cover make release-static, release/debug, tests, sanitizers, coverage, and fuzz source builds."
+echo "You can now retry the requested make target."

@@ -54,8 +54,9 @@ class DaemonGetInfoTest():
 
         # hard_fork version should be set at height 1
         assert 'earliest_height' in res.keys()
-        #assert res['earliest_height'] == 1;
         assert res.earliest_height == 1
+        assert res.version == 13
+        assert res.enabled
 
     def _test_get_info(self):
         print('Test get_info')

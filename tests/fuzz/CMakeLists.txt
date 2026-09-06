@@ -112,6 +112,41 @@ set_property(TARGET load-from-binary_fuzz_tests
   PROPERTY
     FOLDER "tests")
 
+option(BUILD_SALCHAT_FUZZERS "Build SalChat fuzz targets" OFF)
+
+if(BUILD_SALCHAT_FUZZERS)
+monero_add_minimal_executable(salchat-envelope_fuzz_tests salchat_envelope.cpp fuzzer.cpp)
+target_link_libraries(salchat-envelope_fuzz_tests
+  PRIVATE
+    cryptonote_protocol
+    common
+    epee
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES}
+    $ENV{LIB_FUZZING_ENGINE})
+set_property(TARGET salchat-envelope_fuzz_tests
+  PROPERTY
+    FOLDER "tests")
+
+monero_add_minimal_executable(salchat-wallet_fuzz_tests salchat_wallet.cpp fuzzer.cpp)
+target_link_libraries(salchat-wallet_fuzz_tests
+  PRIVATE
+    wallet
+    cryptonote_protocol
+    cryptonote_core
+    p2p
+    epee
+    device
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES}
+    $ENV{LIB_FUZZING_ENGINE})
+set_property(TARGET salchat-wallet_fuzz_tests
+  PROPERTY
+    FOLDER "tests")
+endif()
+
 monero_add_minimal_executable(load-from-json_fuzz_tests load_from_json.cpp fuzzer.cpp)
 target_link_libraries(load-from-json_fuzz_tests
   PRIVATE

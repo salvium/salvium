@@ -218,6 +218,22 @@ public:
 
     virtual bool setCacheAttribute(const std::string &key, const std::string &val) override;
     virtual std::string getCacheAttribute(const std::string &key) const override;
+    bool salchatGetIdentity(SalchatIdentity &identity) const override;
+    bool salchatRotateIdentity(SalchatIdentity &identity) override;
+    bool salchatGetAddress(std::string &address) const override;
+    bool salchatAddContact(const std::string &label, const std::string &address,
+                           SalchatContact &contact, uint64_t &promotedMessages) override;
+    bool salchatAcceptContact(const std::string &label, const std::string &messageId,
+                              SalchatContact &contact, uint64_t &promotedMessages) override;
+    bool salchatRemoveContact(const std::string &contactId) override;
+    bool salchatBlockContact(const std::string &contactId, bool blocked) override;
+    std::vector<SalchatContact> salchatContacts() const override;
+    SalchatSendResult salchatSendMessage(const std::string &contactId, const std::string &message, uint64_t ttl) override;
+    SalchatReceiveResult salchatReceiveMessages(uint64_t limit) override;
+    std::vector<SalchatMessage> salchatMessages(const std::string &contactId, uint64_t limit) const override;
+    bool salchatGetMessage(const std::string &messageId, SalchatMessage &message) const override;
+    bool salchatDeleteMessage(const std::string &messageId) override;
+    SalchatStatus salchatStatus() const override;
 
     virtual void setOffline(bool offline) override;
     virtual bool isOffline() const override;
@@ -311,7 +327,7 @@ private:
     boost::mutex        m_refreshMutex;
 
     // synchronizing  sync and async refresh
-    boost::mutex        m_refreshMutex2;
+    mutable boost::mutex m_refreshMutex2;
     boost::condition_variable m_refreshCV;
     boost::thread       m_refreshThread;
     // flag indicating wallet is recovering from seed

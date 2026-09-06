@@ -471,6 +471,46 @@ struct WalletListener
     virtual void onSetWallet(Wallet * wallet) { (void)wallet; };
 };
 
+struct SalchatIdentity
+{
+    bool initialized = false;
+    std::string spendPublicKey, signingPublicKey, encryptionPublicKey, salviumAddress;
+    uint64_t createdAt = 0;
+};
+
+struct SalchatContact
+{
+    std::string contactId, label, spendPublicKey, signingPublicKey, encryptionPublicKey, salviumAddress;
+    bool blocked = false;
+    uint64_t createdAt = 0;
+};
+
+struct SalchatMessage
+{
+    std::string messageId, contactId, content, senderSalviumAddress, senderSigningPublicKey;
+    uint8_t type = 0, direction = 0, state = 0;
+    uint64_t createdAt = 0, receivedAt = 0, expiresHeight = 0, blocksLeft = 0;
+};
+
+struct SalchatSendResult
+{
+    std::string messageId, reason;
+    bool submitted = false;
+};
+
+struct SalchatReceiveResult
+{
+    uint64_t received = 0, quarantined = 0, rejected = 0;
+    std::vector<SalchatMessage> newMessages;
+};
+
+struct SalchatStatus
+{
+    bool identityInitialized = false, daemonAvailable = false, daemonEnabled = false;
+    uint64_t contacts = 0, messages = 0, cachedMessages = 0;
+    std::string error;
+};
+
 
 /**
  * @brief Interface for wallet operations.
@@ -1146,17 +1186,34 @@ struct Wallet
 
     /*!
      * \brief setCacheAttribute - attach an arbitrary string to a wallet cache attribute
-     * \param key - the key
+     * \param key - the key; the reserved salchat. namespace is rejected
      * \param val - the value
      * \return true if successful, false otherwise
      */
     virtual bool setCacheAttribute(const std::string &key, const std::string &val) = 0;
     /*!
      * \brief getCacheAttribute - return an arbitrary string attached to a wallet cache attribute
-     * \param key - the key
+     * \param key - the key; the reserved salchat. namespace is rejected
      * \return the attached string, or empty string if there is none
      */
     virtual std::string getCacheAttribute(const std::string &key) const = 0;
+
+    virtual bool salchatGetIdentity(SalchatIdentity &identity) const = 0;
+    virtual bool salchatRotateIdentity(SalchatIdentity &identity) = 0;
+    virtual bool salchatGetAddress(std::string &address) const = 0;
+    virtual bool salchatAddContact(const std::string &label, const std::string &address,
+                                  SalchatContact &contact, uint64_t &promotedMessages) = 0;
+    virtual bool salchatAcceptContact(const std::string &label, const std::string &messageId,
+                                     SalchatContact &contact, uint64_t &promotedMessages) = 0;
+    virtual bool salchatRemoveContact(const std::string &contactId) = 0;
+    virtual bool salchatBlockContact(const std::string &contactId, bool blocked) = 0;
+    virtual std::vector<SalchatContact> salchatContacts() const = 0;
+    virtual SalchatSendResult salchatSendMessage(const std::string &contactId, const std::string &message, uint64_t ttl = 604800) = 0;
+    virtual SalchatReceiveResult salchatReceiveMessages(uint64_t limit = 100) = 0;
+    virtual std::vector<SalchatMessage> salchatMessages(const std::string &contactId = {}, uint64_t limit = 100) const = 0;
+    virtual bool salchatGetMessage(const std::string &messageId, SalchatMessage &message) const = 0;
+    virtual bool salchatDeleteMessage(const std::string &messageId) = 0;
+    virtual SalchatStatus salchatStatus() const = 0;
     /*!
      * \brief setUserNote - attach an arbitrary string note to a txid
      * \param txid - the transaction id to attach the note to

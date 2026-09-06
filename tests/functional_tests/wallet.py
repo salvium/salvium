@@ -68,14 +68,14 @@ class WalletTest():
         except: pass
         seed = 'velvet lymph giddy number token physics poetry unquoted nibs useful sabotage limits benches lifestyle eden nitrogen anvil fewest avoid batch vials washing fences goat unquoted'
         res = wallet.restore_deterministic_wallet(seed = seed)
-        assert res.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+        assert wallet.get_carrot_address() == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
         assert res.seed == seed
 
     def check_main_address(self):
         print('Getting address')
         wallet = Wallet()
         res = wallet.get_address()
-        assert res.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', res
+        assert wallet.get_carrot_address() == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', res
         assert len(res.addresses) == 1
         assert res.addresses[0].address == res.address
         assert res.addresses[0].address_index == 0
@@ -96,70 +96,75 @@ class WalletTest():
         wallet = Wallet()
         res = wallet.create_account("idx1")
         assert res.account_index == 1, res
-        assert res.address == '82pP87g1Vkd3LUMssBCumk3MfyEsFqLAaGDf6oxddu61EgSFzt8gCwUD4tr3kp9TUfdPs2CnpD7xLZzyC1Ei9UsW3oyCWDf', res
+        self.account1_address = 'SaLvs6zXaGBcBKkztRcNev8q1WuusrW5wd6JPScD2HFL3CUCoEYpv952Saeut7byKuZdYJEhsCMApNg8Wz1K5Bbs1pWWHw27pXb'
+        assert res.address == self.account1_address, res
         res = wallet.create_account("idx2")
         assert res.account_index == 2, res
-        assert res.address == '8Bdb75y2MhvbkvaBnG7vYP6DCNneLWcXqNmfPmyyDkavAUUgrHQEAhTNK3jEq69kGPDrd3i5inPivCwTvvA12eQ4SJk9iyy', res
+        self.account2_address = 'SaLvsCwLxFz4skR2KbU94bGmQLK21i163d1kAU4Q9e6S5NBfvxcB6S1CiBur5rZQfdjRzBd7PfhcT8qKxfZysQehXJDPpJ1TrTg'
+        assert res.address == self.account2_address, res
 
         res = wallet.get_address(0, 0)
-        assert res.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', res
+        assert wallet.get_carrot_address() == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', res
         assert len(res.addresses) == 1
         assert res.addresses[0].address_index == 0, res
         res = wallet.get_address(1, 0)
-        assert res.address == '82pP87g1Vkd3LUMssBCumk3MfyEsFqLAaGDf6oxddu61EgSFzt8gCwUD4tr3kp9TUfdPs2CnpD7xLZzyC1Ei9UsW3oyCWDf', res
+        assert res.address == self.account1_address, res
         assert len(res.addresses) == 1
         assert res.addresses[0].label == 'idx1', res
         assert res.addresses[0].address_index == 0, res
         res = wallet.get_address(2, 0)
-        assert res.address == '8Bdb75y2MhvbkvaBnG7vYP6DCNneLWcXqNmfPmyyDkavAUUgrHQEAhTNK3jEq69kGPDrd3i5inPivCwTvvA12eQ4SJk9iyy', res
+        assert res.address == self.account2_address, res
         assert len(res.addresses) == 1
         assert res.addresses[0].label == 'idx2', res
         assert res.addresses[0].address_index == 0, res
 
-        res = wallet.create_address(0, "sub_0_1")
-        res = wallet.create_address(1, "sub_1_1")
-        res = wallet.create_address(1, "sub_1_2")
+        self.sub01_address = 'SaLvs84cNosSdQtt1nHrd9hKLY4nzcUN3G52bJhuMrPJbZG2iZBwuR8VVZVwEoK7qJKcPUQSGxxPyCMYGf5z6rPMPvRGXaSSguQ'
+        self.sub11_address = 'SaLvsAPDSXcBZxkS6gc8uw8LXoyvohEQyW5o7EW8doMgCAWLGvR11tZM3j8xwgaSoKgH7FhGQjKru8aLVJVZ6PUXUHufVNEgZEB'
+        self.sub12_address = 'SaLvsA2mZXraMWGgyWdDQmZCxsehMRtF5WU3bbtVBmhShvXwRqJfpwH8ytUkRLWqZ4cWNbYnk44Uu9LvhSJJasVXGcoPRKKom7b'
+        assert wallet.create_address(0, "sub_0_1").address == self.sub01_address
+        assert wallet.create_address(1, "sub_1_1").address == self.sub11_address
+        assert wallet.create_address(1, "sub_1_2").address == self.sub12_address
 
         res = wallet.get_address(0, [1])
         assert len(res.addresses) == 1
-        assert res.addresses[0].address == '84QRUYawRNrU3NN1VpFRndSukeyEb3Xpv8qZjjsoJZnTYpDYceuUTpog13D7qPxpviS7J29bSgSkR11hFFoXWk2yNdsR9WF'
+        assert res.addresses[0].address == self.sub01_address
         assert res.addresses[0].label == 'sub_0_1'
         res = wallet.get_address(1, [1])
         assert len(res.addresses) == 1
-        assert res.addresses[0].address == '87qyoPVaEcWikVBmG1TaP1KumZ3hB3Q5f4wZRjuppNdwYjWzs2RgbLYQgtpdu2YdoTT3EZhiUGaPJQt2FsykeFZbCtaGXU4'
+        assert res.addresses[0].address == self.sub11_address
         assert res.addresses[0].label == 'sub_1_1'
         res = wallet.get_address(1, [2])
         assert len(res.addresses) == 1
-        assert res.addresses[0].address == '87KfgTZ8ER5D3Frefqnrqif11TjVsTPaTcp37kqqKMrdDRUhpJRczeR7KiBmSHF32UJLP3HHhKUDmEQyJrv2mV8yFDCq8eB'
+        assert res.addresses[0].address == self.sub12_address
         assert res.addresses[0].label == 'sub_1_2'
         res = wallet.get_address(1, [0, 1, 2])
         assert len(res.addresses) == 3
-        assert res.addresses[0].address == '82pP87g1Vkd3LUMssBCumk3MfyEsFqLAaGDf6oxddu61EgSFzt8gCwUD4tr3kp9TUfdPs2CnpD7xLZzyC1Ei9UsW3oyCWDf'
+        assert res.addresses[0].address == self.account1_address
         assert res.addresses[0].label == 'idx1'
-        assert res.addresses[1].address == '87qyoPVaEcWikVBmG1TaP1KumZ3hB3Q5f4wZRjuppNdwYjWzs2RgbLYQgtpdu2YdoTT3EZhiUGaPJQt2FsykeFZbCtaGXU4'
+        assert res.addresses[1].address == self.sub11_address
         assert res.addresses[1].label == 'sub_1_1'
-        assert res.addresses[2].address == '87KfgTZ8ER5D3Frefqnrqif11TjVsTPaTcp37kqqKMrdDRUhpJRczeR7KiBmSHF32UJLP3HHhKUDmEQyJrv2mV8yFDCq8eB'
+        assert res.addresses[2].address == self.sub12_address
         assert res.addresses[2].label == 'sub_1_2'
 
         res = wallet.label_address((1, 2), "sub_1_2_new")
         res = wallet.get_address(1, [2])
         assert len(res.addresses) == 1
-        assert res.addresses[0].address == '87KfgTZ8ER5D3Frefqnrqif11TjVsTPaTcp37kqqKMrdDRUhpJRczeR7KiBmSHF32UJLP3HHhKUDmEQyJrv2mV8yFDCq8eB'
+        assert res.addresses[0].address == self.sub12_address
         assert res.addresses[0].label == 'sub_1_2_new'
 
         res = wallet.label_account(1, "idx1_new")
         res = wallet.get_address(1, [0])
         assert len(res.addresses) == 1
-        assert res.addresses[0].address == '82pP87g1Vkd3LUMssBCumk3MfyEsFqLAaGDf6oxddu61EgSFzt8gCwUD4tr3kp9TUfdPs2CnpD7xLZzyC1Ei9UsW3oyCWDf'
+        assert res.addresses[0].address == self.account1_address
         assert res.addresses[0].label == 'idx1_new'
 
-        res = wallet.get_address_index('87KfgTZ8ER5D3Frefqnrqif11TjVsTPaTcp37kqqKMrdDRUhpJRczeR7KiBmSHF32UJLP3HHhKUDmEQyJrv2mV8yFDCq8eB')
+        res = wallet.get_address_index(self.sub12_address)
         assert res.index == {'major': 1, 'minor': 2}
-        res = wallet.get_address_index('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm')
+        res = wallet.get_address_index('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB')
         assert res.index == {'major': 0, 'minor': 0}
-        res = wallet.get_address_index('84QRUYawRNrU3NN1VpFRndSukeyEb3Xpv8qZjjsoJZnTYpDYceuUTpog13D7qPxpviS7J29bSgSkR11hFFoXWk2yNdsR9WF')
+        res = wallet.get_address_index(self.sub01_address)
         assert res.index == {'major': 0, 'minor': 1}
-        res = wallet.get_address_index('82pP87g1Vkd3LUMssBCumk3MfyEsFqLAaGDf6oxddu61EgSFzt8gCwUD4tr3kp9TUfdPs2CnpD7xLZzyC1Ei9UsW3oyCWDf')
+        res = wallet.get_address_index(self.account1_address)
         assert res.index == {'major': 1, 'minor': 0}
 
         res = wallet.label_account(0, "main")
@@ -182,7 +187,7 @@ class WalletTest():
         res = wallet.get_accounts('tag0')
         assert len(res.subaddress_accounts) == 1
         assert res.subaddress_accounts[0].account_index == 1
-        assert res.subaddress_accounts[0].base_address == '82pP87g1Vkd3LUMssBCumk3MfyEsFqLAaGDf6oxddu61EgSFzt8gCwUD4tr3kp9TUfdPs2CnpD7xLZzyC1Ei9UsW3oyCWDf'
+        assert res.subaddress_accounts[0].base_address == self.account1_address
         assert res.subaddress_accounts[0].balance == 0
         assert res.subaddress_accounts[0].unlocked_balance == 0
         assert res.subaddress_accounts[0].label == 'idx1_new'
@@ -235,7 +240,7 @@ class WalletTest():
             assert x.balance == 0
             assert x.unlocked_balance == 0
             subaddress_accounts.append((x.account_index, x.base_address, x.label))
-        assert sorted(subaddress_accounts) == [(0, '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 'main'), (1, '82pP87g1Vkd3LUMssBCumk3MfyEsFqLAaGDf6oxddu61EgSFzt8gCwUD4tr3kp9TUfdPs2CnpD7xLZzyC1Ei9UsW3oyCWDf', 'idx1_new')]
+        assert sorted(subaddress_accounts) == [(0, 'SaLvdTfLFUK1LuPhZbqYYiLwmDEw4zTeChBU8Vbz4rw1U1bbDiyUtsZ9iYSE7AsekiSRpwAQt7qmNZ2MtE5hi2nMLG2Zwbb2rwH', 'main'), (1, self.account1_address, 'idx1_new')]
 
     def attributes(self):
         print('Testing attributes')
@@ -264,7 +269,7 @@ class WalletTest():
         wallet = Wallet()
 
         res = wallet.get_address()
-        assert res.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+        assert wallet.get_carrot_address() == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
 
         wallet.close_wallet()
         ok = False
@@ -272,9 +277,11 @@ class WalletTest():
         except: ok = True
         assert ok
 
-        wallet.restore_deterministic_wallet(seed = 'peeled mixture ionic radar utopia puddle buying illness nuns gadget river spout cavernous bounced paradise drunk looking cottage jump tequila melting went winter adjust spout')
+        restored = wallet.restore_deterministic_wallet(seed = 'peeled mixture ionic radar utopia puddle buying illness nuns gadget river spout cavernous bounced paradise drunk looking cottage jump tequila melting went winter adjust spout')
         res = wallet.get_address()
-        assert res.address == '44Kbx4sJ7JDRDV5aAhLJzQCjDz2ViLRduE3ijDZu3osWKBjMGkV1XPk4pfDUMqt1Aiezvephdqm6YD19GKFD9ZcXVUTp6BW'
+        assert restored.address == 'SaLvdUnWsRDgHpFyvuUo1HbQgYZYqmYVkLFxDpgqM5q511UREUDM2nVbFWfBMn4KqZbkDyz1up7Xe4UHEUBCqRwjT5mELfrm1kJ'
+        assert res.address == 'SaLvdUnWsRDgHpFyvuUo1HbQgYZYqmYVkLFxDpgqM5q511UREUDM2nVbFWfBMn4KqZbkDyz1up7Xe4UHEUBCqRwjT5mELfrm1kJ'
+        assert wallet.get_carrot_address() == 'SC11nUdwtMs4MBs66mPoVpFRmkGqgp4fU1M6rpL7kqdscTxz6u95ufQFZPWLhvAscQekBV8RCXokQDkJReWd6egW3mAfjccPP8'
 
         wallet.close_wallet()
         ok = False
@@ -284,7 +291,7 @@ class WalletTest():
 
         wallet.restore_deterministic_wallet(seed = 'velvet lymph giddy number token physics poetry unquoted nibs useful sabotage limits benches lifestyle eden nitrogen anvil fewest avoid batch vials washing fences goat unquoted')
         res = wallet.get_address()
-        assert res.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+        assert wallet.get_carrot_address() == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
 
     def languages(self):
         print('Testing languages')
@@ -318,13 +325,13 @@ class WalletTest():
 
         seed = 'velvet lymph giddy number token physics poetry unquoted nibs useful sabotage limits benches lifestyle eden nitrogen anvil fewest avoid batch vials washing fences goat unquoted'
         res = wallet.restore_deterministic_wallet(seed = seed, filename = 'test1')
-        assert res.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+        assert wallet.get_carrot_address() == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
         assert res.seed == seed
 
         wallet.close_wallet()
         res = wallet.open_wallet('test1', password = '')
         res = wallet.get_address()
-        assert res.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+        assert wallet.get_carrot_address() == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
 
         res = wallet.change_wallet_password(old_password = '', new_password = 'foo')
         wallet.close_wallet()
@@ -336,7 +343,7 @@ class WalletTest():
 
         res = wallet.open_wallet('test1', password = 'foo')
         res = wallet.get_address()
-        assert res.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+        assert wallet.get_carrot_address() == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
 
         wallet.close_wallet()
 
@@ -354,7 +361,7 @@ class WalletTest():
 
         seed = 'velvet lymph giddy number token physics poetry unquoted nibs useful sabotage limits benches lifestyle eden nitrogen anvil fewest avoid batch vials washing fences goat unquoted'
         res = wallet.restore_deterministic_wallet(seed = seed, filename = 'test1')
-        assert res.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+        assert wallet.get_carrot_address() == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
         assert res.seed == seed
 
         util_resources.remove_file('test1')

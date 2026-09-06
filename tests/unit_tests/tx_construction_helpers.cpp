@@ -210,15 +210,10 @@ cryptonote::transaction construct_pre_carrot_tx_with_fake_inputs(
 {
     // derive config from hf version
     const bool rct = hf_version >= HF_VERSION_DYNAMIC_FEE && !sweep_unmixable_override;
-    rct::RCTConfig rct_config;
-    switch (hf_version)
-    {
-        case 1:
-            rct_config = { rct::RangeProofPaddedBulletproof, 4 };
-            break;
-        default:
-            ASSERT_MES_AND_THROW("unrecognized hf version");
-    }
+    const int bp_version = hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS ? 6
+        : hf_version >= HF_VERSION_FULL_PROOFS ? 5
+        : 4;
+    const rct::RCTConfig rct_config{rct::RangeProofPaddedBulletproof, bp_version};
     const bool use_view_tags = hf_version >= HF_VERSION_VIEW_TAGS;
     const size_t mixin = 15;
     const uint64_t max_global_output_index = 1000000;
@@ -273,10 +268,26 @@ cryptonote::transaction construct_pre_carrot_tx_with_fake_inputs(
     // populate random sources
     std::vector<cryptonote::tx_source_entry> sources;
     sources.reserve(stripped_sources.size());
+    const std::string asset_type = hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS ? "SAL1" : "SAL";
     for (const auto &stripped_source : stripped_sources)
+    {
         sources.push_back(gen_tx_source_entry_fake_members(stripped_source,
             mixin,
             max_global_output_index));
+        sources.back().asset_type = asset_type;
+    }
+
+    for (auto &destination : destinations)
+        destination.asset_type = asset_type;
+
+    // Every deployed pre-Carrot transfer format requires at least two
+    // outputs. Add an explicit zero-valued self output when the caller only
+    // supplied the scanned recipient.
+    if (destinations.size() == 1)
+    {
+        destinations.emplace_back(0, sender_account_keys.m_account_address, false);
+        destinations.back().asset_type = asset_type;
+    }
 
     // construct tx
     cryptonote::transaction tx;
@@ -317,9 +328,9 @@ cryptonote::transaction construct_pre_carrot_tx_with_fake_inputs(
         sender_subaddress_map,
         sources,
         destinations,
-        1,
-        "SAL",
-        "SAL",
+        hf_version,
+        asset_type,
+        asset_type,
         cryptonote::transaction_type::TRANSFER,
         change_addr,
         extra,

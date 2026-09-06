@@ -58,6 +58,9 @@ private:
 
 public:
   TestDB() { m_open = true; }
+  void append_weight(size_t block_weight, uint64_t long_term_block_weight) {
+    blocks.push_back({block_weight, long_term_block_weight});
+  }
 
   virtual void add_block( const cryptonote::block& blk
                         , size_t block_weight
@@ -149,18 +152,14 @@ static uint32_t lcg()
 static void test(test_t t, uint64_t blocks)
 {
   PREFIX(10);
-
+  for (uint64_t h = 0; h < CRYPTONOTE_LONG_TERM_BLOCK_WEIGHT_WINDOW_SIZE; ++h)
+    static_cast<TestDB&>(bc->get_db()).append_weight(300000, 300000);
   for (uint64_t h = 0; h < LONG_TERM_BLOCK_WEIGHT_WINDOW; ++h)
   {
-    cryptonote::block b;
-    b.major_version = 1;
-    b.minor_version = 1;
-    cryptonote::audit_block_info abi;
-    cryptonote::yield_block_info ybi;
-    bc->get_db().add_block(std::make_pair(b, ""), 300000, 300000, bc->get_db().height(), bc->get_db().height(), {}, cryptonote::FAKECHAIN, ybi, abi);
+    static_cast<TestDB&>(bc->get_db()).append_weight(300000, 300000);
     if (!bc->update_next_cumulative_weight_limit())
     {
-      fprintf(stderr, "Failed to update cumulative weight limit 1\n");
+      fprintf(stderr, "Failed to warm block-weight median cache\n");
       exit(1);
     }
   }
@@ -188,12 +187,7 @@ static void test(test_t t, uint64_t blocks)
         exit(1);
     }
     uint64_t ltw = bc->get_next_long_term_block_weight(w);
-    cryptonote::block b;
-    b.major_version = HF_VERSION_2021_SCALING;
-    b.minor_version = HF_VERSION_2021_SCALING;
-    cryptonote::audit_block_info abi;
-    cryptonote::yield_block_info ybi;
-    bc->get_db().add_block(std::make_pair(std::move(b), ""), w, ltw, bc->get_db().height(), bc->get_db().height(), {}, cryptonote::FAKECHAIN, ybi, abi);
+    static_cast<TestDB&>(bc->get_db()).append_weight(w, ltw);
 
     if (!bc->update_next_cumulative_weight_limit())
     {
@@ -211,5 +205,10 @@ int main()
   test(test_lcg, 9 * LONG_TERM_BLOCK_WEIGHT_WINDOW);
   test(test_min, 1 * LONG_TERM_BLOCK_WEIGHT_WINDOW);
   return 0;
-  CATCH_ENTRY_L0("main", 1);
+  }
+  catch (const std::exception& ex)
+  {
+    std::cerr << "block_weight test exception: " << ex.what() << std::endl;
+    return 1;
+  }
 }

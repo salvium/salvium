@@ -1118,16 +1118,22 @@ char* Str::clearBuff(char buff[], std::size_t lim) {
 /// @brief Converst wchar* to char*
 ///        NOTE: Need to free return value after use!
 char* Str::wcharPtrToCharPtr(const wchar_t* line) {
-  std::size_t len_ = wcslen(line) + 1;
-  char* buff_ = static_cast<char*>(malloc(len_ + 1));
-#      if ELPP_OS_UNIX || (ELPP_OS_WINDOWS && !ELPP_CRT_DBG_WARNINGS)
-  std::wcstombs(buff_, line, len_);
-#      elif ELPP_OS_WINDOWS
-  std::size_t convCount_ = 0;
-  mbstate_t mbState_;
-  ::memset(static_cast<void*>(&mbState_), 0, sizeof(mbState_));
-  wcsrtombs_s(&convCount_, buff_, len_, &line, len_, &mbState_);
-#      endif  // ELPP_OS_UNIX || (ELPP_OS_WINDOWS && !ELPP_CRT_DBG_WARNINGS)
+  if (line == nullptr) return nullptr;
+  mbstate_t state_;
+  ::memset(static_cast<void*>(&state_), 0, sizeof(state_));
+  const wchar_t* source_ = line;
+  const std::size_t required_ = std::wcsrtombs(nullptr, &source_, 0, &state_);
+  if (required_ == static_cast<std::size_t>(-1)) return nullptr;
+  char* buff_ = static_cast<char*>(malloc(required_ + 1));
+  if (buff_ == nullptr) return nullptr;
+  ::memset(static_cast<void*>(&state_), 0, sizeof(state_));
+  source_ = line;
+  const std::size_t converted_ = std::wcsrtombs(buff_, &source_, required_ + 1, &state_);
+  if (converted_ == static_cast<std::size_t>(-1)) {
+    free(buff_);
+    return nullptr;
+  }
+  buff_[converted_] = '\0';
   return buff_;
 }
 
@@ -2647,7 +2653,7 @@ void DefaultLogDispatchCallback::dispatch(base::type::string_t&& rawLinePrefix, 
       sysLogPriority = LOG_NOTICE;
 #  if defined(ELPP_UNICODE)
     char* line = base::utils::Str::wcharPtrToCharPtr(logLine.c_str());
-    syslog(sysLogPriority, "%s", line);
+    syslog(sysLogPriority, "%s", line ? line : "(null)");
     free(line);
 #  else
     syslog(sysLogPriority, "%s", logLine.c_str());
@@ -2757,7 +2763,7 @@ void AsyncDispatchWorker::handle(AsyncLogItem* logItem) {
       sysLogPriority = LOG_NOTICE;
 #      if defined(ELPP_UNICODE)
     char* line = base::utils::Str::wcharPtrToCharPtr(logLine.c_str());
-    syslog(sysLogPriority, "%s", line);
+    syslog(sysLogPriority, "%s", line ? line : "(null)");
     free(line);
 #      else
     syslog(sysLogPriority, "%s", logLine.c_str());
@@ -2904,7 +2910,7 @@ MessageBuilder& MessageBuilder::operator<<(const wchar_t* msg) {
   m_logger->stream() << msg;
 #  else
   char* buff_ = base::utils::Str::wcharPtrToCharPtr(msg);
-  m_logger->stream() << buff_;
+  m_logger->stream() << (buff_ ? buff_ : base::consts::kNullPointer);
   free(buff_);
 #  endif
   if (ELPP->hasFlag(LoggingFlag::AutoSpacing)) {

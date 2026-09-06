@@ -763,6 +763,14 @@ TEST(cryptonote_protocol_handler, race_condition)
           }).options([]{
             options_description_t options_description{};
             cryptonote::core::init_options(options_description);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_enabled);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_packet_bytes);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_cache_bytes);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_cache_messages);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_ttl);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_relay_fanout);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_peer_kbps);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_global_kbps);
             return options_description;
           }()).run(),
           options
@@ -790,6 +798,14 @@ TEST(cryptonote_protocol_handler, race_condition)
           }).options([]{
             options_description_t options_description{};
             cryptonote::core::init_options(options_description);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_enabled);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_packet_bytes);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_cache_bytes);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_cache_messages);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_ttl);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_relay_fanout);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_peer_kbps);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_global_kbps);
             return options_description;
           }()).run(),
           options
@@ -812,6 +828,13 @@ TEST(cryptonote_protocol_handler, race_condition)
       io_context.run();
     });
   }
+  const auto stop_workers = epee::misc_utils::create_scope_leave_handler([&]{
+    work.reset();
+    io_context.stop();
+    for (auto& worker: workers)
+      if (worker.joinable())
+        worker.join();
+  });
 
   connection_t::set_rate_up_limit(std::numeric_limits<int64_t>::max());
   connection_t::set_rate_down_limit(std::numeric_limits<int64_t>::max());
@@ -922,6 +945,13 @@ TEST(cryptonote_protocol_handler, race_condition)
         check.io_context.run();
       });
     }
+    const auto stop_check_workers = epee::misc_utils::create_scope_leave_handler([&]{
+      check.work.reset();
+      check.io_context.stop();
+      for (auto& worker: check.workers)
+        if (worker.joinable())
+          worker.join();
+    });
     while (daemon.main.conn.size() < 1) {
       daemon.main.conn.emplace_back(new connection_t(check.io_context, daemon.main.shared_state, {}, {}));
       daemon.alt.conn.emplace_back(new connection_t(io_context, daemon.alt.shared_state, {}, {}));
@@ -954,7 +984,7 @@ TEST(cryptonote_protocol_handler, race_condition)
     events.prepare.wait();
     daemon.main.core->get_blockchain_storage().add_block_notify(
       [&events](height_t height, span::blocks blocks){
-        if (height >= CRYPTONOTE_PRUNING_STRIPE_SIZE)
+        if (height + blocks.size() >= CRYPTONOTE_PRUNING_STRIPE_SIZE)
           events.sync.raise();
       }
     );
@@ -1017,13 +1047,15 @@ TEST(cryptonote_protocol_handler, race_condition)
     daemon.alt.core.reset();
     check.work.reset();
     for (auto& w: check.workers) {
-      w.join();
+      if (w.joinable())
+        w.join();
     }
   }
 
   work.reset();
   for (auto& w: workers) {
-    w.join();
+    if (w.joinable())
+      w.join();
   }
   remove_tree(dir);
 }

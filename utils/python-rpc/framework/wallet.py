@@ -29,22 +29,62 @@
 
 """Daemon class to make rpc calls and store state."""
 
-from .rpc import JSONRPC 
+from .rpc import JSONRPC, Response
 
 class Wallet(object):
+
+    class background_sync_options:
+        off = 'off'
+        reuse_password = 'reuse-wallet-password'
+        custom_password = 'custom-background-password'
 
     def __init__(self, protocol='http', host='127.0.0.1', port=0, idx=0):
         self.host = host
         self.port = port
         self.rpc = JSONRPC('{protocol}://{host}:{port}'.format(protocol=protocol, host=host, port=port if port else 18090+idx))
 
-    def transfer(self, destinations, account_index = 0, subaddr_indices = [], priority = 0, ring_size = 0, unlock_time = 0, payment_id = '', get_tx_key = True, do_not_relay = False, get_tx_hex = False, get_tx_metadata = False):
+    def _json_rpc(self, method, **params):
+        request = {'method': method, 'jsonrpc': '2.0', 'id': '0'}
+        if params:
+            request['params'] = params
+        return self.rpc.send_json_rpc_request(request)
+
+    def audit(self, **params): return self._json_rpc('audit', **params)
+    def create_token(self, **params): return self._json_rpc('create_token', **params)
+    def get_tokens(self, **params): return self._json_rpc('get_tokens', **params)
+    def return_payment(self, **params): return self._json_rpc('return_payment', **params)
+    def get_multisig_key_exchange_booster(self, **params): return self._json_rpc('get_multisig_key_exchange_booster', **params)
+    def get_default_fee_priority(self, **params): return self._json_rpc('get_default_fee_priority', **params)
+    def get_token_info(self, **params): return self._json_rpc('get_token_info', **params)
+    def setup_background_sync(self, **params): return self._json_rpc('setup_background_sync', **params)
+    def start_background_sync(self, **params): return self._json_rpc('start_background_sync', **params)
+    def stop_background_sync(self, **params): return self._json_rpc('stop_background_sync', **params)
+    def salchat_get_identity(self, **params): return self._json_rpc('salchat_get_identity', **params)
+    def salchat_get_address(self, **params): return self._json_rpc('salchat_get_address', **params)
+    def salchat_add_contact(self, **params): return self._json_rpc('salchat_add_contact', **params)
+    def salchat_accept_contact(self, **params): return self._json_rpc('salchat_accept_contact', **params)
+    def salchat_remove_contact(self, **params): return self._json_rpc('salchat_remove_contact', **params)
+    def salchat_block_contact(self, **params): return self._json_rpc('salchat_block_contact', **params)
+    def salchat_list_contacts(self, **params): return self._json_rpc('salchat_list_contacts', **params)
+    def salchat_send_message(self, **params): return self._json_rpc('salchat_send_message', **params)
+    def salchat_receive_messages(self, **params): return self._json_rpc('salchat_receive_messages', **params)
+    def salchat_list_messages(self, **params): return self._json_rpc('salchat_list_messages', **params)
+    def salchat_get_message(self, **params): return self._json_rpc('salchat_get_message', **params)
+    def salchat_delete_message(self, **params): return self._json_rpc('salchat_delete_message', **params)
+    def salchat_get_status(self, **params): return self._json_rpc('salchat_get_status', **params)
+
+    def transfer(self, destinations, account_index = 0, subaddr_indices = [], subtract_fee_from_outputs = [], priority = 0, ring_size = 0, unlock_time = 0, payment_id = '', get_tx_key = True, do_not_relay = False, get_tx_hex = False, get_tx_metadata = False, source_asset = 'SAL1', dest_asset = 'SAL1', tx_type = 3):
+        destinations = [dict(destination, asset_type = destination.get('asset_type', dest_asset)) for destination in destinations]
         transfer = {
             'method': 'transfer',
             'params': {
                 'destinations': destinations,
+                'source_asset': source_asset,
+                'dest_asset': dest_asset,
+                'tx_type': tx_type,
                 'account_index': account_index,
                 'subaddr_indices': subaddr_indices,
+                'subtract_fee_from_outputs': subtract_fee_from_outputs,
                 'priority': priority,
                 'ring_size' : ring_size,
                 'unlock_time' : unlock_time,
@@ -59,13 +99,18 @@ class Wallet(object):
         }
         return self.rpc.send_json_rpc_request(transfer)   
 
-    def transfer_split(self, destinations, account_index = 0, subaddr_indices = [], priority = 0, ring_size = 0, unlock_time = 0, payment_id = '', get_tx_key = True, do_not_relay = False, get_tx_hex = False, get_tx_metadata = False):
+    def transfer_split(self, destinations, account_index = 0, subaddr_indices = [], subtract_fee_from_outputs = [], priority = 0, ring_size = 0, unlock_time = 0, payment_id = '', get_tx_key = True, do_not_relay = False, get_tx_hex = False, get_tx_metadata = False, source_asset = 'SAL1', dest_asset = 'SAL1', tx_type = 3):
+        destinations = [dict(destination, asset_type = destination.get('asset_type', dest_asset)) for destination in destinations]
         transfer = {
             "method": "transfer_split",
             "params": {
                 'destinations': destinations,
+                'source_asset': source_asset,
+                'dest_asset': dest_asset,
+                'tx_type': tx_type,
                 'account_index': account_index,
                 'subaddr_indices': subaddr_indices,
+                'subtract_fee_from_outputs': subtract_fee_from_outputs,
                 'priority': priority,
                 'ring_size' : ring_size,
                 'unlock_time' : unlock_time,
@@ -140,19 +185,53 @@ class Wallet(object):
         }
         return self.rpc.send_json_rpc_request(create_wallet)
 
-    def get_balance(self, account_index = 0, address_indices = [], all_accounts = False, strict = False):
+    def get_balance(self, account_index = 0, address_indices = [], all_accounts = False, strict = False, asset_type = 'SAL1', all_assets = False, allow_missing = False):
         get_balance = {
             'method': 'get_balance',
             'params': {
                 'account_index': account_index,
                 'address_indices': address_indices,
+                'asset_type': asset_type,
                 'all_accounts': all_accounts,
+                'all_assets': all_assets,
                 'strict': strict,
             },
             'jsonrpc': '2.0', 
             'id': '0'
         }
-        return self.rpc.send_json_rpc_request(get_balance)
+        try:
+            response = self.rpc.send_json_rpc_request(get_balance)
+        except AssertionError as error:
+            # v1.1.3c reports a missing per-wallet asset as an RPC error. Keep
+            # that exact behavior by default; bookkeeping tests which need a
+            # numeric value for an as-yet unseen asset must opt in explicitly.
+            if not allow_missing or all_assets or "Source asset '%s' not found in wallet" % asset_type not in str(error):
+                raise
+            return Response({
+                'asset_type': asset_type,
+                'balance': 0,
+                'unlocked_balance': 0,
+                'blocks_to_unlock': 0,
+                'time_to_unlock': 0,
+                'multisig_import_needed': False,
+                'per_subaddress': [],
+            })
+        if all_assets:
+            return response
+        for balance in response.get('balances', []):
+            if balance.asset_type == asset_type:
+                return balance
+        if not allow_missing:
+            raise AssertionError("Asset '%s' was absent from a successful get_balance response" % asset_type)
+        return Response({
+            'asset_type': asset_type,
+            'balance': 0,
+            'unlocked_balance': 0,
+            'blocks_to_unlock': 0,
+            'time_to_unlock': 0,
+            'multisig_import_needed': False,
+            'per_subaddress': [],
+        })
     getbalance = get_balance
 
     def sweep_dust(self, get_tx_keys = True, do_not_relay = False, get_tx_hex = False, get_tx_metadata = False):
@@ -214,18 +293,27 @@ class Wallet(object):
         }
         return self.rpc.send_json_rpc_request(sweep_single)
 
-    def get_address(self, account_index = 0, subaddresses = []):
+    def get_address(self, account_index = 0, subaddresses = [], carrot = True, cryptonote = True):
         get_address = {
             'method': 'get_address',
             'params' : {
                 'account_index' : account_index,
-                'address_index': subaddresses
+                'address_index': subaddresses,
+                'carrot': carrot,
+                'cryptonote': cryptonote
             },
             'jsonrpc': '2.0', 
             'id': '0'
         }
         return self.rpc.send_json_rpc_request(get_address)
     getaddress = get_address
+
+    def get_carrot_address(self, account_index = 0, address_index = 0):
+        response = self.get_address(account_index, [address_index], carrot = True, cryptonote = False)
+        assert len(response.addresses) == 1, response
+        address = response.addresses[0].address_carrot
+        assert address.startswith('SC'), response
+        return address
 
     def create_account(self, label = ""):
         create_account = {

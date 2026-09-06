@@ -51,40 +51,51 @@ namespace tools
         cp = *ptr++;
         bytes = 1;
       }
-      else if ((*ptr & 0xe0) == 0xc0)
+      else if ((static_cast<unsigned char>(*ptr) & 0xe0) == 0xc0)
       {
-        if (avail < 1)
+        if (avail < 1 || (static_cast<unsigned char>(ptr[1]) & 0xc0) != 0x80)
           throw std::runtime_error("Invalid UTF-8");
-        cp = (*ptr++ & 0x1f) << 6;
-        cp |= *ptr++ & 0x3f;
+        cp = (static_cast<unsigned char>(*ptr++) & 0x1f) << 6;
+        cp |= static_cast<unsigned char>(*ptr++) & 0x3f;
         --avail;
+        if (cp < 0x80)
+          throw std::runtime_error("Invalid UTF-8");
         bytes = 2;
       }
-      else if ((*ptr & 0xf0) == 0xe0)
+      else if ((static_cast<unsigned char>(*ptr) & 0xf0) == 0xe0)
       {
-        if (avail < 2)
+        if (avail < 2 || (static_cast<unsigned char>(ptr[1]) & 0xc0) != 0x80 ||
+            (static_cast<unsigned char>(ptr[2]) & 0xc0) != 0x80)
           throw std::runtime_error("Invalid UTF-8");
-        cp = (*ptr++ & 0xf) << 12;
-        cp |= (*ptr++ & 0x3f) << 6;
-        cp |= *ptr++ & 0x3f;
+        cp = (static_cast<unsigned char>(*ptr++) & 0xf) << 12;
+        cp |= (static_cast<unsigned char>(*ptr++) & 0x3f) << 6;
+        cp |= static_cast<unsigned char>(*ptr++) & 0x3f;
         avail -= 2;
+        if (cp < 0x800 || (cp >= 0xd800 && cp <= 0xdfff))
+          throw std::runtime_error("Invalid UTF-8");
         bytes = 3;
       }
-      else if ((*ptr & 0xf8) == 0xf0)
+      else if ((static_cast<unsigned char>(*ptr) & 0xf8) == 0xf0)
       {
-        if (avail < 3)
+        if (avail < 3 || (static_cast<unsigned char>(ptr[1]) & 0xc0) != 0x80 ||
+            (static_cast<unsigned char>(ptr[2]) & 0xc0) != 0x80 ||
+            (static_cast<unsigned char>(ptr[3]) & 0xc0) != 0x80)
           throw std::runtime_error("Invalid UTF-8");
-        cp = (*ptr++ & 0x7) << 18;
-        cp |= (*ptr++ & 0x3f) << 12;
-        cp |= (*ptr++ & 0x3f) << 6;
-        cp |= *ptr++ & 0x3f;
+        cp = (static_cast<unsigned char>(*ptr++) & 0x7) << 18;
+        cp |= (static_cast<unsigned char>(*ptr++) & 0x3f) << 12;
+        cp |= (static_cast<unsigned char>(*ptr++) & 0x3f) << 6;
+        cp |= static_cast<unsigned char>(*ptr++) & 0x3f;
         avail -= 3;
+        if (cp < 0x10000 || cp > 0x10ffff)
+          throw std::runtime_error("Invalid UTF-8");
         bytes = 4;
       }
       else
         throw std::runtime_error("Invalid UTF-8");
 
       cp = t(cp);
+      if (cp >= 0xd800 && cp <= 0xdfff)
+        throw std::runtime_error("Invalid code point UTF-8 transformation");
       if (cp <= 0x7f)
         bytes = 1;
       else if (cp <= 0x7ff)

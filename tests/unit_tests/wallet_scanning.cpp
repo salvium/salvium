@@ -47,6 +47,7 @@ TEST(wallet_scanning, view_scan_as_sender_mainaddr)
 
   carrot::carrot_and_legacy_account bob;
   bob.generate();
+  bob.generate_subaddress_map({0, 0});
   const cryptonote::account_public_address bob_main_addr = bob.get_keys().m_account_address;
   const crypto::public_key bob_main_spend_pubkey = bob_main_addr.m_spend_public_key;
 
@@ -54,7 +55,7 @@ TEST(wallet_scanning, view_scan_as_sender_mainaddr)
 
     const rct::xmr_amount fee = 565678;
 
-    for (uint8_t hf_version = 1; hf_version < HF_VERSION_CARROT; ++hf_version)
+    for (uint8_t hf_version = HF_VERSION_DYNAMIC_FEE; hf_version < HF_VERSION_CARROT; ++hf_version)
     {
         MDEBUG("view_scan_as_sender_mainaddr: hf_version=" << static_cast<int>(hf_version));
 
@@ -115,6 +116,7 @@ TEST(wallet_scanning, view_scan_long_payment_id)
 
   carrot::carrot_and_legacy_account bob;
   bob.generate();
+  bob.generate_subaddress_map({0, 0});
     const cryptonote::account_public_address bob_main_addr = bob.get_keys().m_account_address;
     const crypto::public_key bob_main_spend_pubkey = bob_main_addr.m_spend_public_key;
 
@@ -124,7 +126,7 @@ TEST(wallet_scanning, view_scan_long_payment_id)
 
     const crypto::hash payment_id = crypto::rand<crypto::hash>();
 
-    for (uint8_t hf_version = 1; hf_version < HF_VERSION_CARROT; ++hf_version)
+    for (uint8_t hf_version = HF_VERSION_DYNAMIC_FEE; hf_version < HF_VERSION_CARROT; ++hf_version)
     {
         MDEBUG("view_scan_as_sender_mainaddr: hf_version=" << static_cast<int>(hf_version));
 
@@ -187,6 +189,7 @@ TEST(wallet_scanning, view_scan_short_payment_id)
 
   carrot::carrot_and_legacy_account bob;
   bob.generate();
+  bob.generate_subaddress_map({0, 0});
     const cryptonote::account_public_address bob_main_addr = bob.get_keys().m_account_address;
     const crypto::public_key bob_main_spend_pubkey = bob_main_addr.m_spend_public_key;
 
@@ -201,7 +204,7 @@ TEST(wallet_scanning, view_scan_short_payment_id)
     ASSERT_FALSE(tools::wallet::is_long_payment_id(payment_id));
     ASSERT_NE(crypto::null_hash, payment_id);
 
-    for (uint8_t hf_version = 1; hf_version < HF_VERSION_CARROT; ++hf_version)
+    for (uint8_t hf_version = HF_VERSION_DYNAMIC_FEE; hf_version < HF_VERSION_CARROT; ++hf_version)
     {
         MDEBUG("view_scan_as_sender_mainaddr: hf_version=" << static_cast<int>(hf_version));
 

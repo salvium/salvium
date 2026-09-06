@@ -49,8 +49,6 @@ private:
 
   cryptonote::account_base m_recipient_account_1;
   cryptonote::account_base m_recipient_account_2;
-  cryptonote::account_base m_recipient_account_3;
-  cryptonote::account_base m_recipient_account_4;
 
   std::vector<cryptonote::transaction> m_tx_pool;
 };

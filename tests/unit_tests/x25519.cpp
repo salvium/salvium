@@ -201,7 +201,7 @@ TEST(x25519, scmul_key_convergence)
       {
         // D2 = a * D_base
         mx25519_pubkey res_mx;
-        mx25519_scmul_key(impl, &res_mx, &scalar, &point.second);
+        mx25519_scmul_key_unclamped(impl, &res_mx, &scalar, &point.second, MX25519_UNCLAMP_ALL);
 
         // D1 ?= D2
         EXPECT_EQ(res, res_mx);

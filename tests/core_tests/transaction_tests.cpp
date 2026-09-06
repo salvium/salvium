@@ -32,6 +32,7 @@
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
+#include "ringct/rctSigs.h"
 #include "misc_language.h"
 #include "string_tools.h"
 
@@ -77,7 +78,8 @@ bool test_genesis_tx()
 
   //Prepare genesis_tx
   cryptonote::transaction tx_genesis;
-  cryptonote::construct_miner_tx(0, 0, 0, 10, 0, miner_acc1.get_keys().m_account_address, tx_genesis);
+  crypto::public_key miner_reward_tx_key{};
+  cryptonote::construct_miner_tx(0, 0, 0, 10, 0, miner_acc1.get_keys().m_account_address, miner_reward_tx_key, tx_genesis);
   std::cout << "Object:" << std::endl;
   std::cout << obj_to_json_str(tx_genesis) << std::endl << std::endl;
 
@@ -93,7 +95,7 @@ bool test_genesis_tx()
 }
 
 
-bool test_transaction_generation_and_ring_signature()
+bool test_transaction_generation_and_ringct_signature()
 {
 
   account_base miner_acc1;
@@ -113,74 +115,89 @@ bool test_transaction_generation_and_ring_signature()
   rv_acc.generate();
   account_base rv_acc2;
   rv_acc2.generate();
+  crypto::public_key miner_reward_tx_key{};
   transaction tx_mine_1;
-  construct_miner_tx(0, 0, 0, 10, 0, miner_acc1.get_keys().m_account_address, tx_mine_1);
+  construct_miner_tx(0, 0, 0, 10, 0, miner_acc1.get_keys().m_account_address, miner_reward_tx_key, tx_mine_1);
   transaction tx_mine_2;
-  construct_miner_tx(0, 0, 0, 0, 0, miner_acc2.get_keys().m_account_address, tx_mine_2);
+  construct_miner_tx(0, 0, 0, 0, 0, miner_acc2.get_keys().m_account_address, miner_reward_tx_key, tx_mine_2);
   transaction tx_mine_3;
-  construct_miner_tx(0, 0, 0, 0, 0, miner_acc3.get_keys().m_account_address, tx_mine_3);
+  construct_miner_tx(0, 0, 0, 0, 0, miner_acc3.get_keys().m_account_address, miner_reward_tx_key, tx_mine_3);
   transaction tx_mine_4;
-  construct_miner_tx(0, 0, 0, 0, 0, miner_acc4.get_keys().m_account_address, tx_mine_4);
+  construct_miner_tx(0, 0, 0, 0, 0, miner_acc4.get_keys().m_account_address, miner_reward_tx_key, tx_mine_4);
   transaction tx_mine_5;
-  construct_miner_tx(0, 0, 0, 0, 0, miner_acc5.get_keys().m_account_address, tx_mine_5);
+  construct_miner_tx(0, 0, 0, 0, 0, miner_acc5.get_keys().m_account_address, miner_reward_tx_key, tx_mine_5);
   transaction tx_mine_6;
-  construct_miner_tx(0, 0, 0, 0, 0, miner_acc6.get_keys().m_account_address, tx_mine_6);
+  construct_miner_tx(0, 0, 0, 0, 0, miner_acc6.get_keys().m_account_address, miner_reward_tx_key, tx_mine_6);
 
   //fill inputs entry
   std::vector<tx_source_entry> sources;
   sources.resize(sources.size()+1);
   tx_source_entry& src = sources.back();
-  src.amount = 70368744177663;
+  src.amount = tx_mine_2.vout[0].amount;
+  src.asset_type = "SAL";
   {
-    src.push_output(0, boost::get<txout_to_key>(tx_mine_1.vout[0].target).key, src.amount);
-
-    src.push_output(1, boost::get<txout_to_key>(tx_mine_2.vout[0].target).key, src.amount);
-
-    src.push_output(2, boost::get<txout_to_key>(tx_mine_3.vout[0].target).key, src.amount);
-
-    src.push_output(3, boost::get<txout_to_key>(tx_mine_4.vout[0].target).key, src.amount);
-
-    src.push_output(4, boost::get<txout_to_key>(tx_mine_5.vout[0].target).key, src.amount);
-
-    src.push_output(5, boost::get<txout_to_key>(tx_mine_6.vout[0].target).key, src.amount);
+    const transaction* miner_txs[] = {
+      &tx_mine_1, &tx_mine_2, &tx_mine_3,
+      &tx_mine_4, &tx_mine_5, &tx_mine_6
+    };
+    for (size_t i = 0; i < std::size(miner_txs); ++i)
+    {
+      crypto::public_key output_key;
+      CHECK_AND_ASSERT_MES(get_output_public_key(miner_txs[i]->vout[0], output_key),
+                           false, "failed to read production miner output key");
+      src.push_output(i, output_key, src.amount);
+    }
 
     src.real_out_tx_key = cryptonote::get_tx_pub_key_from_extra(tx_mine_2);
     src.real_output = 1;
-    src.rct = false;
+    src.rct = true;
+    src.mask = rct::identity();
     src.real_output_in_tx_index = 0;
   }
   //fill outputs entry
   tx_destination_entry td;
   td.addr = rv_acc.get_keys().m_account_address;
-  td.amount = 69368744177663;
+  const uint64_t fee = 10 * FEE_PER_KB;
+  td.amount = src.amount - fee;
+  td.asset_type = "SAL";
   std::vector<tx_destination_entry> destinations;
   destinations.push_back(td);
+  tx_destination_entry change;
+  change.addr = miner_acc2.get_keys().m_account_address;
+  change.amount = 0;
+  change.asset_type = "SAL";
+  change.is_change = true;
+  destinations.push_back(change);
 
   transaction tx_rc1;
-  bool r = construct_tx(miner_acc2.get_keys(), sources, destinations, 1/*hf_version*/, "SAL", cryptonote::transaction_type::TRANSFER, boost::none, std::vector<uint8_t>(), tx_rc1, 0);
+  std::unordered_map<crypto::public_key, subaddress_index> subaddresses;
+  subaddresses[miner_acc2.get_keys().m_account_address.m_spend_public_key] = {0, 0};
+  crypto::secret_key tx_key;
+  std::vector<crypto::secret_key> additional_tx_keys;
+  bool r = construct_tx_and_get_tx_key(miner_acc2.get_keys(), subaddresses,
+      sources, destinations, HF_VERSION_BULLETPROOF_PLUS, "SAL", "SAL",
+      cryptonote::transaction_type::TRANSFER,
+      miner_acc2.get_keys().m_account_address, {}, tx_rc1, 0, tx_key,
+      additional_tx_keys, true,
+      {rct::RangeProofPaddedBulletproof, 4});
   CHECK_AND_ASSERT_MES(r, false, "failed to construct transaction");
 
-  crypto::hash pref_hash = get_transaction_prefix_hash(tx_rc1);
-  std::vector<const crypto::public_key *> output_keys;
-  output_keys.push_back(&boost::get<txout_to_key>(tx_mine_1.vout[0].target).key);
-  output_keys.push_back(&boost::get<txout_to_key>(tx_mine_2.vout[0].target).key);
-  output_keys.push_back(&boost::get<txout_to_key>(tx_mine_3.vout[0].target).key);
-  output_keys.push_back(&boost::get<txout_to_key>(tx_mine_4.vout[0].target).key);
-  output_keys.push_back(&boost::get<txout_to_key>(tx_mine_5.vout[0].target).key);
-  output_keys.push_back(&boost::get<txout_to_key>(tx_mine_6.vout[0].target).key);
-  r = crypto::check_ring_signature(pref_hash, boost::get<txin_to_key>(tx_rc1.vin[0]).k_image, output_keys, &tx_rc1.signatures[0][0]);
-  CHECK_AND_ASSERT_MES(r, false, "failed to check ring signature");
+  CHECK_AND_ASSERT_MES(tx_rc1.rct_signatures.type == rct::RCTTypeBulletproofPlus,
+                       false, "transaction did not use production Bulletproof+");
+  CHECK_AND_ASSERT_MES(rct::verRctSimple(tx_rc1.rct_signatures), false,
+                       "failed to check production RingCT signature");
 
   std::vector<size_t> outs;
   uint64_t money = 0;
 
   r = lookup_acc_outs(rv_acc.get_keys(), tx_rc1, get_tx_pub_key_from_extra(tx_rc1), get_additional_tx_pub_keys_from_extra(tx_rc1), outs,  money);
   CHECK_AND_ASSERT_MES(r, false, "failed to lookup_acc_outs");
-  CHECK_AND_ASSERT_MES(td.amount == money, false, "wrong money amount in new transaction");
+  CHECK_AND_ASSERT_MES(outs.size() == 1, false, "recipient output was not detected");
+  outs.clear();
   money = 0;
   r = lookup_acc_outs(rv_acc2.get_keys(), tx_rc1, get_tx_pub_key_from_extra(tx_rc1), get_additional_tx_pub_keys_from_extra(tx_rc1), outs,  money);
   CHECK_AND_ASSERT_MES(r, false, "failed to lookup_acc_outs");
-  CHECK_AND_ASSERT_MES(0 == money, false, "wrong money amount in new transaction");
+  CHECK_AND_ASSERT_MES(outs.empty(), false, "unrelated account detected an output");
   return true;
 }
 
@@ -192,13 +209,14 @@ bool test_block_creation()
   bool r = get_account_address_from_str(info, MAINNET, "0099be99c70ef10fd534c43c88e9d13d1c8853213df7e362afbec0e4ee6fec4948d0c190b58f4b356cd7feaf8d9d0a76e7c7e5a9a0a497a6b1faf7a765882dd08ac2");
   CHECK_AND_ASSERT_MES(r, false, "failed to import");
   block b;
-  r = construct_miner_tx(90, epee::misc_utils::median(szs), 3553616528562147, 33094, 10000000, info.address, b.miner_tx, cryptonote::network_type::FAKECHAIN, {}, blobdata(), 11);
+  crypto::public_key miner_reward_tx_key{};
+  r = construct_miner_tx(90, epee::misc_utils::median(szs), 3553616528562147, 33094, 10000000, info.address, miner_reward_tx_key, b.miner_tx, cryptonote::network_type::FAKECHAIN, {}, blobdata(), 11);
   return r;
 }
 
 bool test_transactions()
 {
-  if(!test_transaction_generation_and_ring_signature())
+  if(!test_transaction_generation_and_ringct_signature())
     return false;
   if(!test_block_creation())
     return false;

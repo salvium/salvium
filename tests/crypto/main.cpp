@@ -53,13 +53,39 @@ bool operator !=(const key_derivation &a, const key_derivation &b) {
   return 0 != memcmp(&a, &b, sizeof(key_derivation));
 }
 
+static void get_legacy_signature(std::istream &input, signature &sig) {
+  getvar(input, sizeof(sig.c) + sizeof(sig.r), &sig);
+  sig.sign_mask = 0;
+}
+
+static bool legacy_signature_equal(const signature &a, const signature &b) {
+  return std::memcmp(&a, &b, sizeof(a.c) + sizeof(a.r)) == 0;
+}
+
+static void get_legacy_signatures(std::istream &input, std::vector<signature> &sigs) {
+  std::string encoded;
+  input >> encoded;
+  constexpr std::size_t legacy_size = sizeof(ec_scalar) * 2;
+  if (encoded.size() != sigs.size() * legacy_size * 2) {
+    input.setstate(std::ios_base::failbit);
+    return;
+  }
+  for (std::size_t i = 0; i < sigs.size(); ++i) {
+    if (!hexdecode(encoded.data() + i * legacy_size * 2, legacy_size, &sigs[i])) {
+      input.setstate(std::ios_base::failbit);
+      return;
+    }
+    sigs[i].sign_mask = 0;
+  }
+}
+
 DISABLE_GCC_WARNING(maybe-uninitialized)
 
 int main(int argc, char *argv[]) {
-  TRY_ENTRY();
-  fstream input;
   string cmd;
   size_t test = 0;
+  TRY_ENTRY();
+  fstream input;
   bool error = false;
   setup_random();
   if (argc != 2) {
@@ -167,9 +193,10 @@ int main(int argc, char *argv[]) {
       public_key pub;
       secret_key sec;
       signature expected, actual;
-      get(input, prefix_hash, pub, sec, expected);
+      get(input, prefix_hash, pub, sec);
+      get_legacy_signature(input, expected);
       generate_signature(prefix_hash, pub, sec, actual);
-      if (expected != actual) {
+      if (!legacy_signature_equal(expected, actual)) {
         goto error;
       }
     } else if (cmd == "check_signature") {
@@ -177,7 +204,9 @@ int main(int argc, char *argv[]) {
       public_key pub;
       signature sig;
       bool expected, actual;
-      get(input, prefix_hash, pub, sig, expected);
+      get(input, prefix_hash, pub);
+      get_legacy_signature(input, sig);
+      get(input, expected);
       actual = check_signature(prefix_hash, pub, sig);
       if (expected != actual) {
         goto error;
@@ -226,10 +255,10 @@ int main(int argc, char *argv[]) {
       }
       get(input, sec, sec_index);
       expected.resize(pubs_count);
-      getvar(input, pubs_count * sizeof(signature), expected.data());
+      get_legacy_signatures(input, expected);
       actual.resize(pubs_count);
       generate_ring_signature(prefix_hash, image, pubs.data(), pubs_count, sec, sec_index, actual.data());
-      if (expected != actual) {
+      if (!std::equal(expected.begin(), expected.end(), actual.begin(), legacy_signature_equal)) {
         goto error;
       }
     } else if (cmd == "check_ring_signature") {
@@ -249,7 +278,7 @@ int main(int argc, char *argv[]) {
         pubs[i] = &vpubs[i];
       }
       sigs.resize(pubs_count);
-      getvar(input, pubs_count * sizeof(signature), sigs.data());
+      get_legacy_signatures(input, sigs);
       get(input, expected);
       actual = check_ring_signature(prefix_hash, image, pubs.data(), pubs_count, sigs.data());
       if (expected != actual) {
@@ -282,5 +311,13 @@ error:
     error = true;
   }
   return error ? 1 : 0;
-  CATCH_ENTRY_L0("main", 1);
+  }
+  catch (const std::exception& ex) {
+    cerr << "Exception on test " << test << " (" << cmd << "): " << ex.what() << endl;
+    return 1;
+  }
+  catch (...) {
+    cerr << "Unknown exception on test " << test << " (" << cmd << ")" << endl;
+    return 1;
+  }
 }

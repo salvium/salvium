@@ -86,7 +86,8 @@ TEST(carrot_core, ECDH_mx25519_convergence)
 
     // do Q = a * P using mx25519
     mx25519_pubkey Q_mx25519;
-    mx25519_scmul_key(impl, &Q_mx25519, reinterpret_cast<const mx25519_privkey*>(&a), &P);
+    mx25519_scmul_key_unclamped(impl, &Q_mx25519,
+        reinterpret_cast<const mx25519_privkey*>(&a), &P, MX25519_UNCLAMP_ALL);
 
     // do Q = a * P using make_carrot_uncontextualized_shared_key_receiver()
     mx25519_pubkey Q_carrot;
@@ -106,6 +107,7 @@ TEST(carrot_core, main_address_normal_scan_completeness)
     const CarrotPaymentProposalV1 proposal = CarrotPaymentProposalV1{
         .destination = main_address,
         .amount = crypto::rand<rct::xmr_amount>(),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -177,6 +179,7 @@ TEST(carrot_core, subaddress_normal_scan_completeness)
     const CarrotPaymentProposalV1 proposal = CarrotPaymentProposalV1{
         .destination = subaddress,
         .amount = crypto::rand<rct::xmr_amount>(),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -245,6 +248,7 @@ TEST(carrot_core, integrated_address_normal_scan_completeness)
     const CarrotPaymentProposalV1 proposal = CarrotPaymentProposalV1{
         .destination = integrated_address,
         .amount = crypto::rand<rct::xmr_amount>(),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -456,6 +460,7 @@ TEST(carrot_core, main_address_internal_scan_completeness)
 {
     carrot::carrot_and_legacy_account keys;
     keys.generate();
+    keys.generate_subaddress_map({mock::MAX_SUBADDRESS_MAJOR_INDEX, mock::MAX_SUBADDRESS_MINOR_INDEX});
 
     const CarrotDestinationV1 main_address = keys.cryptonote_address();
 
@@ -469,7 +474,8 @@ TEST(carrot_core, main_address_internal_scan_completeness)
             .amount = crypto::rand<rct::xmr_amount>(),
             .enote_type = enote_type,
             .enote_ephemeral_pubkey = gen_x25519_pubkey(),
-            .internal_message = gen_janus_anchor()
+            .internal_message = gen_janus_anchor(),
+        .asset_type = "SAL1",
         };
 
         const crypto::key_image tx_first_key_image = rct::rct2ki(rct::pkGen()); 
@@ -530,6 +536,7 @@ TEST(carrot_core, subaddress_internal_scan_completeness)
 {
     carrot::carrot_and_legacy_account keys;
     keys.generate();
+    keys.generate_subaddress_map({mock::MAX_SUBADDRESS_MAJOR_INDEX, mock::MAX_SUBADDRESS_MINOR_INDEX});
 
     const uint32_t j_major = crypto::rand_idx(mock::MAX_SUBADDRESS_MAJOR_INDEX);
     const uint32_t j_minor = crypto::rand_idx(mock::MAX_SUBADDRESS_MINOR_INDEX);
@@ -546,7 +553,8 @@ TEST(carrot_core, subaddress_internal_scan_completeness)
             .amount = crypto::rand<rct::xmr_amount>(),
             .enote_type = enote_type,
             .enote_ephemeral_pubkey = gen_x25519_pubkey(),
-            .internal_message = gen_janus_anchor()
+            .internal_message = gen_janus_anchor(),
+        .asset_type = "SAL1",
         };
 
         const crypto::key_image tx_first_key_image = rct::rct2ki(rct::pkGen()); 
@@ -613,6 +621,7 @@ TEST(carrot_core, main_address_coinbase_scan_completeness)
     const CarrotPaymentProposalV1 proposal = CarrotPaymentProposalV1{
         .destination = main_address,
         .amount = crypto::rand<rct::xmr_amount>(),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -707,6 +716,7 @@ static void subtest_2out_transfer_get_output_enote_proposals_completeness(const 
     const CarrotPaymentProposalV1 bob_payment_proposal = CarrotPaymentProposalV1{
         .destination = bob_address,
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -716,7 +726,8 @@ static void subtest_2out_transfer_get_output_enote_proposals_completeness(const 
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .enote_type = CarrotEnoteType::CHANGE,
         .enote_ephemeral_pubkey = get_enote_ephemeral_pubkey(bob_payment_proposal, input_context),
-        .internal_message = alice_internal_selfsends ? std::make_optional(gen_janus_anchor()) : std::nullopt
+        .internal_message = alice_internal_selfsends ? std::make_optional(gen_janus_anchor()) : std::nullopt,
+    .asset_type = "SAL1",
     };
 
     // calculate dummy encrypted pid
@@ -994,6 +1005,7 @@ TEST(carrot_core, janus_protection_non_coinbase_main_sub_readjust_NOT_in_d_e)
         .normal = carrot::CarrotPaymentProposalV1{
             .destination = bob_main,
             .amount = amount,
+            .asset_type = "SAL1",
             .randomness = carrot::gen_janus_anchor()
         },
         .readjusted_opening_subaddress_spend_pubkey = bob_subaddr.address_spend_pubkey,
@@ -1087,6 +1099,7 @@ TEST(carrot_core, janus_protection_non_coinbase_main_sub_readjust_in_d_e)
         .normal = carrot::CarrotPaymentProposalV1{
             .destination = bob_main,
             .amount = amount,
+            .asset_type = "SAL1",
             .randomness = carrot::gen_janus_anchor()
         },
         .readjusted_opening_subaddress_spend_pubkey = bob_subaddr.address_spend_pubkey,
@@ -1180,6 +1193,7 @@ TEST(carrot_core, janus_protection_non_coinbase_sub_main_readjust_NOT_in_d_e)
         .normal = carrot::CarrotPaymentProposalV1{
             .destination = bob_subaddr,
             .amount = amount,
+            .asset_type = "SAL1",
             .randomness = carrot::gen_janus_anchor()
         },
         .readjusted_opening_subaddress_spend_pubkey = bob_main.address_spend_pubkey,
@@ -1273,6 +1287,7 @@ TEST(carrot_core, janus_protection_non_coinbase_sub_main_readjust_in_d_e)
         .normal = carrot::CarrotPaymentProposalV1{
             .destination = bob_subaddr,
             .amount = amount,
+            .asset_type = "SAL1",
             .randomness = carrot::gen_janus_anchor()
         },
         .readjusted_opening_subaddress_spend_pubkey = bob_main.address_spend_pubkey,
@@ -1366,6 +1381,7 @@ TEST(carrot_core, janus_protection_non_coinbase_sub_sub_readjust_NOT_in_d_e)
         .normal = carrot::CarrotPaymentProposalV1{
             .destination = bob_subaddr1,
             .amount = amount,
+            .asset_type = "SAL1",
             .randomness = carrot::gen_janus_anchor()
         },
         .readjusted_opening_subaddress_spend_pubkey = bob_subaddr2.address_spend_pubkey,
@@ -1459,6 +1475,7 @@ TEST(carrot_core, janus_protection_non_coinbase_sub_sub_readjust_in_d_e)
         .normal = carrot::CarrotPaymentProposalV1{
             .destination = bob_subaddr1,
             .amount = amount,
+            .asset_type = "SAL1",
             .randomness = carrot::gen_janus_anchor()
         },
         .readjusted_opening_subaddress_spend_pubkey = bob_subaddr2.address_spend_pubkey,
@@ -1626,6 +1643,7 @@ TEST(carrot_core, janus_protection_coinbase_main_sub_readjust_NOT_in_d_e)
         .normal = carrot::CarrotPaymentProposalV1{
             .destination = bob_main,
             .amount = amount,
+            .asset_type = "SAL1",
             .randomness = carrot::gen_janus_anchor()
         },
         .readjusted_opening_subaddress_spend_pubkey = bob_subaddr.address_spend_pubkey,
@@ -1695,6 +1713,7 @@ TEST(carrot_core, janus_protection_coinbase_main_sub_readjust_in_d_e)
         .normal = carrot::CarrotPaymentProposalV1{
             .destination = bob_main,
             .amount = amount,
+            .asset_type = "SAL1",
             .randomness = carrot::gen_janus_anchor()
         },
         .readjusted_opening_subaddress_spend_pubkey = bob_subaddr.address_spend_pubkey,
@@ -1764,6 +1783,7 @@ TEST(carrot_core, janus_protection_use_readjusted_spend_pubkey_in_ephemeral_priv
         .normal = carrot::CarrotPaymentProposalV1{
             .destination = bob_main,
             .amount = amount,
+            .asset_type = "SAL1",
             .randomness = carrot::gen_janus_anchor()
         },
         .readjusted_opening_subaddress_spend_pubkey = bob_subaddr.address_spend_pubkey,

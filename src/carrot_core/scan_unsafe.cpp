@@ -44,7 +44,7 @@ namespace carrot
 {
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void scan_carrot_dest_info(const crypto::public_key &onetime_address,
+void scan_carrot_dest_info(const crypto::public_key &onetime_address,
     const rct::key &amount_commitment,
     const encrypted_janus_anchor_t &encrypted_janus_anchor,
     const std::optional<encrypted_payment_id_t> &encrypted_payment_id,
