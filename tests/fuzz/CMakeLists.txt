@@ -112,6 +112,41 @@ set_property(TARGET load-from-binary_fuzz_tests
   PROPERTY
     FOLDER "tests")
 
+option(BUILD_SALCHAT_FUZZERS "Build SalChat fuzz targets" OFF)
+
+if(BUILD_SALCHAT_FUZZERS)
+monero_add_minimal_executable(salchat-envelope_fuzz_tests salchat_envelope.cpp fuzzer.cpp)
+target_link_libraries(salchat-envelope_fuzz_tests
+  PRIVATE
+    cryptonote_protocol
+    common
+    epee
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES}
+    $ENV{LIB_FUZZING_ENGINE})
+set_property(TARGET salchat-envelope_fuzz_tests
+  PROPERTY
+    FOLDER "tests")
+
+monero_add_minimal_executable(salchat-wallet_fuzz_tests salchat_wallet.cpp fuzzer.cpp)
+target_link_libraries(salchat-wallet_fuzz_tests
+  PRIVATE
+    wallet
+    cryptonote_protocol
+    cryptonote_core
+    p2p
+    epee
+    device
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES}
+    $ENV{LIB_FUZZING_ENGINE})
+set_property(TARGET salchat-wallet_fuzz_tests
+  PROPERTY
+    FOLDER "tests")
+endif()
+
 monero_add_minimal_executable(load-from-json_fuzz_tests load_from_json.cpp fuzzer.cpp)
 target_link_libraries(load-from-json_fuzz_tests
   PRIVATE
@@ -187,6 +222,7 @@ set_property(TARGET levin_fuzz_tests
 monero_add_minimal_executable(bulletproof_fuzz_tests bulletproof.cpp fuzzer.cpp)
 target_link_libraries(bulletproof_fuzz_tests
   PRIVATE
+    ringct
     common
     epee
     ${Boost_THREAD_LIBRARY}
@@ -197,6 +233,23 @@ target_link_libraries(bulletproof_fuzz_tests
     ${EXTRA_LIBRARIES}
     $ENV{LIB_FUZZING_ENGINE})
 set_property(TARGET bulletproof_fuzz_tests
+  PROPERTY
+    FOLDER "tests")
+
+monero_add_minimal_executable(bulletproof-plus_fuzz_tests bulletproof-plus.cpp fuzzer.cpp)
+target_link_libraries(bulletproof-plus_fuzz_tests
+  PRIVATE
+    ringct
+    common
+    epee
+    ${Boost_THREAD_LIBRARY}
+    ${Boost_CHRONO_LIBRARY}
+    ${Boost_REGEX_LIBRARY}
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES}
+    $ENV{LIB_FUZZING_ENGINE})
+set_property(TARGET bulletproof-plus_fuzz_tests
   PROPERTY
     FOLDER "tests")
 
@@ -228,3 +281,11 @@ target_link_libraries(utf8_fuzz_tests
     ${CMAKE_THREAD_LIBS_INIT}
     ${EXTRA_LIBRARIES}
     $ENV{LIB_FUZZING_ENGINE})
+
+# Current-format output import and bounded network serialization regressions.
+monero_add_minimal_executable(wallet-output-import_fuzz_tests wallet-output-import.cpp fuzzer.cpp)
+target_link_libraries(wallet-output-import_fuzz_tests PRIVATE wallet cryptonote_core p2p epee device
+  ${CMAKE_THREAD_LIBS_INIT} ${EXTRA_LIBRARIES} $ENV{LIB_FUZZING_ENGINE})
+monero_add_minimal_executable(rpc-serialization_fuzz_tests rpc-serialization.cpp fuzzer.cpp)
+target_link_libraries(rpc-serialization_fuzz_tests PRIVATE common epee ${Boost_PROGRAM_OPTIONS_LIBRARY}
+  ${CMAKE_THREAD_LIBS_INIT} ${EXTRA_LIBRARIES} $ENV{LIB_FUZZING_ENGINE})

@@ -67,7 +67,7 @@ class MiningTest():
         daemon = Daemon()
         res = daemon.get_height()
         daemon.pop_blocks(res.height - 1)
-        daemon.flush_txpool()
+        daemon.flush_txpool(confirm_all=True)
 
     def create(self):
         print('Creating wallet')
@@ -80,6 +80,19 @@ class MiningTest():
     def mine(self, via_daemon):
         print("Test mining via " + ("daemon" if via_daemon else "wallet"))
 
+        daemon = Daemon()
+        wallet = Wallet()
+
+        if not via_daemon:
+            try:
+                wallet.start_mining(threads_count = 1)
+            except AssertionError as error:
+                # The wallet RPC supplies its legacy CryptoNote primary
+                # address; v1.1.3c rejects it after Carrot activation.
+                assert "Couldn't start mining" in str(error)
+                return
+            raise AssertionError('wallet mining unexpectedly accepted a legacy address')
+
         cores_init = multiprocessing.cpu_count() # RX init uses all cores
         cores_mine = 1                           # Mining uses a parametric number of cores
         is_mining_measurent = 'MINING_NO_MEASUREMENT' not in os.environ
@@ -91,28 +104,24 @@ class MiningTest():
         available_ram = self.get_available_ram() # So far no ideas how to use this var, other than printing it
 
         start = monotonic.monotonic()
-        daemon = Daemon()
-        wallet = Wallet()
-
         # check info/height/balance before generating blocks
         res_info = daemon.get_info()
         initial_height = res_info.height
-        res_getbalance = wallet.get_balance()
+        # A newly restored wallet has not seen SAL1 yet; production reports
+        # that as a missing asset rather than returning a zero balance.
+        res_getbalance = wallet.get_balance(allow_missing = True)
         prev_balance = res_getbalance.balance
 
         res_status = daemon.mining_status()
 
-        if via_daemon:
-            res = daemon.start_mining('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', threads_count = 1)
-        else:
-            res = wallet.start_mining(threads_count = cores_mine)
+        res = daemon.start_mining('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', threads_count = 1)
 
         res_status = daemon.mining_status()
         assert res_status.active == True
         assert res_status.threads_count == cores_mine
-        assert res_status.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+        assert res_status.address == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
         assert res_status.is_background_mining_enabled == False
-        assert res_status.block_reward >= 600000000000
+        assert res_status.block_reward >= 60000000
 
         # wait till we mined a few of them
         target_height = initial_height + 5
@@ -135,20 +144,23 @@ class MiningTest():
             After the first pass, the timeout is being reset to a lower value.
             """
 
-            def calc_timeout(seconds_constant, time_pi, cores):
+            def calc_timeout(seconds_constant, time_pi):
                 """
                 The time it took to calculate pi under certain conditions
                 is proportional to the time it will take to calculate the real job.
 
-                The number of cores used decreases the time almost linearly.
+                cpu_power_test already runs the requested number of workers in
+                parallel and returns their wall-clock completion time. Dividing
+                that measurement by the worker count again makes the RandomX
+                initialization timeout shrink as CPUs are added.
                 """
-                timeout = float(seconds_constant) * time_pi / float(cores)
+                timeout = float(seconds_constant) * time_pi
                 return timeout
 
             timeout_base_init = 60 # RX init needs more time
             timeout_base_mine = 20
-            timeout_init = calc_timeout(timeout_base_init, time_pi_all_cores,  cores_init)
-            timeout_mine = calc_timeout(timeout_base_mine, time_pi_single_cpu, cores_mine)
+            timeout_init = calc_timeout(timeout_base_init, time_pi_all_cores)
+            timeout_mine = calc_timeout(timeout_base_mine, time_pi_single_cpu)
         
         msg_timeout_src = "adjusted for the currently available CPU power" if is_mining_measurent else "selected to have the default value"
         msg = "Timeout for {} {}, is {:.1f} s"
@@ -189,18 +201,18 @@ class MiningTest():
         wallet.refresh()
         res_getbalance = wallet.get_balance()
         balance = res_getbalance.balance
-        assert balance >= prev_balance + (new_height - initial_height) * 600000000000
+        assert balance >= prev_balance + (new_height - initial_height) * 60000000
 
         if via_daemon:
-            res = daemon.start_mining('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', threads_count = 1, do_background_mining = True)
+            res = daemon.start_mining('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', threads_count = 1, do_background_mining = True)
         else:
             res = wallet.start_mining(threads_count = 1, do_background_mining = True)
         res_status = daemon.mining_status()
         assert res_status.active == True
         assert res_status.threads_count == 1
-        assert res_status.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+        assert res_status.address == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
         assert res_status.is_background_mining_enabled == True
-        assert res_status.block_reward >= 600000000000
+        assert res_status.block_reward >= 60000000
 
         # don't wait, might be a while if the machine is busy, which it probably is
         if via_daemon:
@@ -233,7 +245,7 @@ class MiningTest():
         daemon = Daemon()
         res = daemon.get_height()
         height = res.height
-        res = daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 5)
+        res = daemon.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 5)
         assert len(res.blocks) == 5
         hashes = res.blocks
         blocks = []
@@ -276,11 +288,11 @@ class MiningTest():
 
         res = daemon.get_height()
         daemon.pop_blocks(res.height - 1)
-        daemon.flush_txpool()
+        daemon.flush_txpool(confirm_all=True)
 
         epoch = int(os.environ['SEEDHASH_EPOCH_BLOCKS'])
         lag = int(os.environ['SEEDHASH_EPOCH_LAG'])
-        address = '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+        address = 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
 
         # check we can generate blocks, and that the seed hash changes when expected
         res = daemon.getblocktemplate(address)

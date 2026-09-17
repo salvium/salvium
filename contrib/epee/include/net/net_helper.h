@@ -32,6 +32,8 @@
 //#include <Winsock2.h>
 //#include <Ws2tcpip.h>
 #include <atomic>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <boost/version.hpp>
 #include <boost/asio/io_context.hpp>
@@ -142,6 +144,7 @@ namespace net_utils
 
 		inline void set_ssl(ssl_options_t ssl_options)
 		{
+			std::lock_guard<std::recursive_mutex> io_lock(m_io_mutex);
 			if (ssl_options)
 				m_ctx = ssl_options.create_context();
 			else
@@ -158,6 +161,7 @@ namespace net_utils
     inline
 			try_connect_result_t try_connect(const std::string& addr, const std::string& port, std::chrono::milliseconds timeout)
 		{
+			std::lock_guard<std::recursive_mutex> io_lock(m_io_mutex);
 				m_deadline.expires_after(timeout);
 				boost::unique_future<boost::asio::ip::tcp::socket> connection = m_connector(addr, port, m_deadline);
 				for (;;)
@@ -165,6 +169,10 @@ namespace net_utils
 					m_io_service.restart();
 					m_io_service.run_one();
 
+					// Connector handlers own their state; abandoning the future on
+					// shutdown must not wait for a remote connection to time out.
+					if (m_shutdowned)
+						return CONNECT_FAILURE;
 					if (connection.is_ready())
 						break;
 				}
@@ -180,6 +188,8 @@ namespace net_utils
 					{
 						if (!m_ssl_options.handshake(m_io_service, *m_ssl_socket, boost::asio::ssl::stream_base::client, {}, addr, timeout))
 						{
+							if (m_shutdowned)
+								return CONNECT_FAILURE;
 							if (m_ssl_options.support == epee::net_utils::ssl_support_t::e_ssl_support_autodetect)
 							{
 								boost::system::error_code ignored_ec;
@@ -196,6 +206,11 @@ namespace net_utils
 							}
 						}
 					}
+					if (m_shutdowned)
+					{
+						m_connected = false;
+						return CONNECT_FAILURE;
+					}
 					return CONNECT_SUCCESS;
 				}else
 				{
@@ -208,10 +223,15 @@ namespace net_utils
     inline
 			bool connect(const std::string& addr, const std::string& port, std::chrono::milliseconds timeout)
 		{
+			std::lock_guard<std::recursive_mutex> io_lock(m_io_mutex);
+			m_io_service.restart();
+			m_io_service.poll();
+			m_shutdowned = false;
 			m_connected = false;
 			try
 			{
 				m_ssl_socket->next_layer().close();
+				m_pending_read.reset();
 
 				// Set SSL options
 				// disable sslv2
@@ -255,6 +275,7 @@ namespace net_utils
 		inline 
 		bool disconnect()
 		{
+			std::lock_guard<std::recursive_mutex> io_lock(m_io_mutex);
 			try
 			{	
 				if(m_connected)
@@ -282,6 +303,7 @@ namespace net_utils
 		inline 
 		bool send(const boost::string_ref buff, std::chrono::milliseconds timeout)
 		{
+			std::lock_guard<std::recursive_mutex> io_lock(m_io_mutex);
 
 			try
 			{
@@ -336,6 +358,7 @@ namespace net_utils
 		inline 
 			bool send(const void* data, size_t sz)
 		{
+			std::lock_guard<std::recursive_mutex> io_lock(m_io_mutex);
 			try
 			{
 				/*
@@ -393,16 +416,70 @@ namespace net_utils
 
 		bool is_connected(bool *ssl = NULL)
 		{
+			std::lock_guard<std::recursive_mutex> io_lock(m_io_mutex);
 			if (!m_connected || !m_ssl_socket->next_layer().is_open())
 				return false;
+
+			boost::system::error_code ec;
+			if (m_ssl_options)
+			{
+				// let Asio process TLS alerts and retain a byte of application data for recv
+				if (!m_pending_read)
+				{
+					const auto pending = std::make_shared<pending_read>();
+					// reconnect may replace the stream before this handler completes
+					const auto socket = m_ssl_socket;
+					socket->async_read_some(boost::asio::buffer(&pending->byte, 1),
+						[socket, pending](const boost::system::error_code& error, size_t) {
+							pending->error = error;
+							if (pending->handler)
+							{
+								auto handler = std::move(pending->handler);
+								handler(error, pending->byte);
+							}
+						});
+					m_pending_read = pending;
+				}
+				m_io_service.restart();
+				m_io_service.poll();
+				ec = m_pending_read->error;
+			}
+			else
+			{
+				// peek for EOF without consuming application data or changing the socket mode
+				auto& socket = m_ssl_socket->next_layer();
+				const bool non_blocking = socket.non_blocking();
+				socket.non_blocking(true, ec);
+				if (!ec)
+				{
+					char byte;
+					socket.receive(boost::asio::buffer(&byte, 1), boost::asio::ip::tcp::socket::message_peek, ec);
+					boost::system::error_code restore_error;
+					socket.non_blocking(non_blocking, restore_error);
+					if (restore_error)
+					{
+						m_connected = false;
+						return false;
+					}
+				}
+			}
+			if (ec && ec != boost::asio::error::would_block &&
+				ec != boost::asio::error::try_again && ec != boost::asio::error::interrupted)
+			{
+				MDEBUG("Peer closed idle connection, marking disconnected: " << ec.message());
+				m_connected = false;
+				return false;
+			}
+
 			if (ssl)
 				*ssl = m_ssl_options.support != ssl_support_t::e_ssl_support_disabled;
-			return true;
+			return m_connected;
 		}
 
 		inline 
 		bool recv(std::string& buff, std::chrono::milliseconds timeout)
 		{
+			std::lock_guard<std::recursive_mutex> io_lock(m_io_mutex);
 
 			try
 			{
@@ -434,7 +511,7 @@ namespace net_utils
 				async_read(&buff[0], max_size, boost::asio::transfer_at_least(1), hndlr);
 
 				// Block until the asynchronous operation has completed.
-				while (ec == boost::asio::error::would_block && !m_shutdowned)
+				while (ec == boost::asio::error::would_block)
 				{
 					m_io_service.restart();
 					m_io_service.run_one(); 
@@ -443,6 +520,7 @@ namespace net_utils
 
 				if (ec)
 				{
+					m_connected = false;
                     MTRACE("READ ENDS: Connection err_code " << ec.value());
                     if(ec == boost::asio::error::eof)
                     {
@@ -453,7 +531,6 @@ namespace net_utils
                     }
 
 					MDEBUG("Problems at read: " << ec.message());
-                    m_connected = false;
 					return false;
 				}else
 				{
@@ -489,6 +566,7 @@ namespace net_utils
 
 		inline bool recv_n(std::string& buff, int64_t sz, std::chrono::milliseconds timeout)
 		{
+			std::lock_guard<std::recursive_mutex> io_lock(m_io_mutex);
 
 			try
 			{
@@ -518,9 +596,10 @@ namespace net_utils
 				async_read((char*)buff.data(), buff.size(), boost::asio::transfer_at_least(buff.size()), hndlr);
 				
 				// Block until the asynchronous operation has completed.
-				while (ec == boost::asio::error::would_block && !m_shutdowned)
+				while (ec == boost::asio::error::would_block)
 				{
-					m_io_service.run_one(); 
+					m_io_service.restart();
+					m_io_service.run_one();
 				}
 
 				if (ec)
@@ -562,24 +641,28 @@ namespace net_utils
 		
 		bool shutdown()
 		{
-			m_deadline.cancel();
-			boost::system::error_code ec;
-			if(m_ssl_options)
-				shutdown_ssl();
-			m_ssl_socket->next_layer().cancel(ec);
-			if(ec)
-				MDEBUG("Problems at cancel: " << ec.message());
-			m_ssl_socket->next_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-			if(ec)
-				MDEBUG("Problems at shutdown: " << ec.message());
-			m_ssl_socket->next_layer().close(ec);
-			if(ec)
-				MDEBUG("Problems at close: " << ec.message());
-			m_shutdowned = true;
-      m_connected = false;
+			if (!m_shutdowned.exchange(true))
+			{
+				m_connected = false;
+				boost::asio::post(m_io_service, [this] {
+					boost::system::error_code ignored;
+					m_deadline.cancel();
+					m_ssl_socket->next_layer().cancel(ignored);
+					m_ssl_socket->next_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ignored);
+					m_ssl_socket->next_layer().close(ignored);
+				});
+			}
+			// An active receive drives this cancellation itself and drains its
+			// handler before returning. Drive it here only if the client is idle.
+			std::unique_lock<std::recursive_mutex> io_lock(m_io_mutex, std::try_to_lock);
+			if (io_lock.owns_lock())
+			{
+				m_io_service.restart();
+				m_io_service.poll();
+			}
 			return true;
 		}
-		
+
 		boost::asio::io_context& get_io_service()
 		{
 			return m_io_service;
@@ -601,6 +684,13 @@ namespace net_utils
 		}
 
 	private:
+
+		struct pending_read
+		{
+			char byte = 0;
+			boost::system::error_code error = boost::asio::error::would_block;
+			std::function<void(const boost::system::error_code&, char)> handler;
+		};
 
 		void check_deadline()
 		{
@@ -668,6 +758,34 @@ namespace net_utils
 		
 		void async_read(char* buff, size_t sz, boost::asio::detail::transfer_at_least_t transfer_at_least, handler_obj& hndlr)
 		{
+			// finish the probe before starting another TLS read
+			if (sz && m_pending_read)
+			{
+				const auto pending = m_pending_read;
+				auto on_read = [socket = m_ssl_socket, buff, sz, transfer_at_least, hndlr]
+					(const boost::system::error_code& error, char byte) mutable {
+						if (error)
+						{
+							hndlr(error, 0);
+							return;
+						}
+						buff[0] = byte;
+						if (!transfer_at_least(error, 1) || sz == 1)
+							hndlr(error, 1);
+						else
+							boost::asio::async_read(*socket, boost::asio::buffer(buff + 1, sz - 1),
+								[transfer_at_least](const boost::system::error_code& ec, size_t bytes) mutable {
+									return transfer_at_least(ec, bytes + 1);
+								},
+								[hndlr](const boost::system::error_code& ec, size_t bytes) mutable { hndlr(ec, bytes + 1); });
+					};
+				if (pending->error == boost::asio::error::would_block)
+					pending->handler = std::move(on_read);
+				m_pending_read.reset();
+				if (pending->error != boost::asio::error::would_block)
+					on_read(pending->error, pending->byte);
+				return;
+			}
 			if(m_ssl_options.support == ssl_support_t::e_ssl_support_disabled)
 				boost::asio::async_read(m_ssl_socket->next_layer(), boost::asio::buffer(buff, sz), transfer_at_least, hndlr);
 			else
@@ -676,13 +794,15 @@ namespace net_utils
 		}
 		
 	protected:
+		std::recursive_mutex m_io_mutex;
 		boost::asio::io_context m_io_service;
 		boost::asio::ssl::context m_ctx;
 		std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>> m_ssl_socket;
+		std::shared_ptr<pending_read> m_pending_read;
 		std::function<connect_func> m_connector;
 		ssl_options_t m_ssl_options;
 		bool m_initialized;
-		bool m_connected;
+		std::atomic<bool> m_connected;
 		boost::asio::steady_timer m_deadline;
 		std::atomic<bool> m_shutdowned;
 		std::atomic<uint64_t> m_bytes_sent;
@@ -690,4 +810,3 @@ namespace net_utils
 	};
 }
 }
-

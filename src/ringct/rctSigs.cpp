@@ -1923,8 +1923,8 @@ namespace rct {
         {
           if (semantics) {
             tools::threadpool& tpool = tools::threadpool::getInstanceForCompute();
-            tools::threadpool::waiter waiter(tpool);
             std::deque<bool> results(rv.outPk.size(), false);
+            tools::threadpool::waiter waiter(tpool);
             DP("range proofs verified?");
             for (size_t i = 0; i < rv.outPk.size(); i++)
               tpool.submit(&waiter, [&, i] { results[i] = verRange(rv.outPk[i].mask, rv.p.rangeSigs[i]); });
@@ -1974,8 +1974,8 @@ namespace rct {
         PERF_TIMER(verRctSemanticsSimple);
 
         tools::threadpool& tpool = tools::threadpool::getInstanceForCompute();
-        tools::threadpool::waiter waiter(tpool);
         std::deque<bool> results;
+        tools::threadpool::waiter waiter(tpool);
         std::vector<const Bulletproof*> bp_proofs;
         std::vector<const BulletproofPlus*> bpp_proofs;
         size_t max_non_bp_proofs = 0, offset = 0;
@@ -2130,12 +2130,11 @@ namespace rct {
 
         std::deque<bool> results(threads);
         tools::threadpool& tpool = tools::threadpool::getInstanceForCompute();
-        tools::threadpool::waiter waiter(tpool);
-
         const keyV &pseudoOuts = bulletproof || bulletproof_plus ? rv.p.pseudoOuts : rv.pseudoOuts;
 
         const key message = get_pre_mlsag_hash(rv, hw::get_device("default"));
-        
+        tools::threadpool::waiter waiter(tpool);
+
         results.clear();
         results.resize(rv.mixRing.size());
         for (size_t i = 0 ; i < rv.mixRing.size() ; i++) {

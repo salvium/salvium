@@ -46,7 +46,7 @@ def run(t, blocks):
 
       # determine the effective weight
       stmedian = get_median(weights[-MEDIAN_WINDOW_SMALL:])
-      embw = min(max(MEDIAN_THRESHOLD,stmedian),int(MULTIPLIER_BIG*ltembw))
+      embw = min(max(ltembw,stmedian),int(MULTIPLIER_BIG*ltembw))
 
       # drop the lowest values
       weights = weights[1:]
@@ -64,7 +64,8 @@ def run(t, blocks):
       else:
         sys.exit(1)
       weights.append(max_weight)
-      lt_weights.append(min(max_weight,int(ltembw + int(ltembw * 2 / 5))))
+      # Production bounds long-term weight to [median / 1.7, median * 1.7].
+      lt_weights.append(min(max(max_weight, int(ltembw * 10 / 17)), int(ltembw * 17 / 10)))
 
       #print "H %u, r %u, BW %u, EMBW %u, LTBW %u, LTEMBW %u, ltmedian %u" % (block, r, max_weight, embw, lt_weights[-1], ltembw, ltmedian)
       print("H %u, BW %u, EMBW %u, LTBW %u" % (block, max_weight, embw, lt_weights[-1]))

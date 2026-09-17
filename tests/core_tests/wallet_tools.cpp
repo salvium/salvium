@@ -165,10 +165,12 @@ void wallet_tools::gen_tx_src(size_t mixin, uint64_t cur_height, const tools::wa
 {
   CHECK_AND_ASSERT_THROW_MES(mixin != 0, "mixin is zero");
   src.amount = td.amount();
+  src.asset_type = td.asset_type;
   src.rct = td.is_rct();
 
   std::vector<tools::wallet2::get_outs_entry> outs;
-  bt.get_fake_outs(mixin, td.is_rct() ? 0 : td.amount(), td.m_global_output_index, cur_height, outs);
+  bt.get_fake_outs(mixin, td.is_rct() ? 0 : td.amount(), td.asset_type,
+                   td.m_asset_type_output_index, cur_height, outs);
 
   for (size_t n = 0; n < mixin; ++n)
   {
@@ -182,8 +184,11 @@ void wallet_tools::gen_tx_src(size_t mixin, uint64_t cur_height, const tools::wa
   size_t real_idx = crypto::rand<size_t>() % mixin;
 
   cryptonote::tx_source_entry::output_entry &real_oe = src.outputs[real_idx];
-  real_oe.first = td.m_global_output_index;
-  real_oe.second.dest = rct::pk2rct(boost::get<txout_to_key>(td.m_tx.vout[td.m_internal_output_index].target).key);
+  real_oe.first = td.m_asset_type_output_index;
+  crypto::public_key output_public_key;
+  CHECK_AND_ASSERT_THROW_MES(cryptonote::get_output_public_key(td.m_tx.vout[td.m_internal_output_index], output_public_key),
+                             "Wallet fixture output has no public key");
+  real_oe.second.dest = rct::pk2rct(output_public_key);
   real_oe.second.mask = rct::commit(td.amount(), td.m_mask);
 
   std::sort(src.outputs.begin(), src.outputs.end(), [&](const cryptonote::tx_source_entry::output_entry i0, const cryptonote::tx_source_entry::output_entry i1) {
@@ -191,7 +196,7 @@ void wallet_tools::gen_tx_src(size_t mixin, uint64_t cur_height, const tools::wa
   });
 
   for (size_t i = 0; i < src.outputs.size(); ++i){
-    if (src.outputs[i].first == td.m_global_output_index){
+    if (src.outputs[i].first == td.m_asset_type_output_index){
       src.real_output = i;
       break;
     }
@@ -278,12 +283,29 @@ bool construct_tx_to_key(cryptonote::transaction& tx,
 
 bool construct_tx_rct(tools::wallet2 * sender_wallet, std::vector<cryptonote::tx_source_entry>& sources, const std::vector<cryptonote::tx_destination_entry>& destinations, const boost::optional<cryptonote::account_public_address>& change_addr, std::vector<uint8_t> extra, cryptonote::transaction& tx, uint64_t unlock_time, bool rct, rct::RangeProofType range_proof_type, int bp_version)
 {
+  CHECK_AND_ASSERT_MES(!sources.empty(), false, "Wallet transaction fixture has no sources");
+  const std::string source_asset = sources.front().asset_type;
+  CHECK_AND_ASSERT_MES(source_asset == "SAL" || source_asset == "SAL1", false,
+                       "Wallet transaction fixture has an unsupported source asset");
+  CHECK_AND_ASSERT_MES(std::all_of(sources.begin(), sources.end(), [&](const cryptonote::tx_source_entry& source) {
+                         return source.asset_type == source_asset;
+                       }), false, "Wallet transaction fixture mixes source asset types");
+
+  const uint8_t hf_version = source_asset == "SAL1" ? HF_VERSION_SALVIUM_ONE_PROOFS : HF_VERSION_BULLETPROOF_PLUS;
+  const int production_bp_version = source_asset == "SAL1" ? 6 : 4;
+  CHECK_AND_ASSERT_MES(range_proof_type == rct::RangeProofPaddedBulletproof && bp_version == production_bp_version,
+                       false, "Wallet transaction fixture requested a non-production range-proof configuration");
+
   subaddresses_t & subaddresses = wallet_accessor_test::get_subaddresses(sender_wallet);
   crypto::secret_key tx_key;
   std::vector<crypto::secret_key> additional_tx_keys;
   std::vector<tx_destination_entry> destinations_copy = destinations;
   rct::RCTConfig rct_config = {range_proof_type, bp_version};
-  std::string source_asset = "FULM";
-  std::string dest_asset = "FULM";
-  return construct_tx_and_get_tx_key(sender_wallet->get_account().get_keys(), subaddresses, sources, destinations_copy, 1/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, rct, rct_config);
+  for (cryptonote::tx_destination_entry& destination : destinations_copy)
+  {
+    CHECK_AND_ASSERT_MES(destination.asset_type.empty() || destination.asset_type == source_asset,
+                         false, "Wallet transaction fixture destination asset differs from its source asset");
+    destination.asset_type = source_asset;
+  }
+  return construct_tx_and_get_tx_key(sender_wallet->get_account().get_keys(), subaddresses, sources, destinations_copy, hf_version, source_asset, source_asset, cryptonote::transaction_type::TRANSFER, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, rct, rct_config);
 }

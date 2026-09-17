@@ -25,6 +25,7 @@ if not os.path.exists(common_defs):
 # regenerate messages
 try:
     selected = [
+        "options.proto",
         "messages.proto",
         "messages-common.proto",
         "messages-management.proto",

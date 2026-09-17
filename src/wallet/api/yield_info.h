@@ -30,6 +30,7 @@
 
 #include "wallet/api/wallet2_api.h"
 #include "wallet/wallet2.h"
+#include "wallet/yield_summary.h"
 
 #include <string>
 #include <vector>
@@ -52,6 +53,11 @@ public:
   uint64_t ybi_data_size() const override;
   uint64_t yield() const override;
   uint64_t yield_per_stake() const override;
+  uint64_t total_accrued_from_past_completions() const override;
+  uint64_t currently_staked() const override;
+  uint64_t accrued_from_current_stake() const override;
+  uint64_t blockchain_height() const override;
+  uint64_t stake_lock_period() const override;
   std::string period() const override;
   std::vector<std::tuple<size_t, std::string, std::string, uint64_t, uint64_t>> payouts() const override;
 
@@ -67,7 +73,9 @@ private:
   uint64_t m_yield;
   uint64_t m_yield_per_stake;
   uint64_t m_num_entries;
-  std::string m_period;
+  tools::yield_totals m_totals;
+  uint64_t m_blockchain_height = 0;
+  uint64_t m_stake_lock_period = 0;
   std::vector<std::tuple<size_t, std::string, std::string, uint64_t, uint64_t>> m_payouts;
 };
 

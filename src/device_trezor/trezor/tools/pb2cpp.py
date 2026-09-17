@@ -128,6 +128,8 @@ def protoc(files, out_dir, additional_includes=(), package=None, force=False):
 
 
 def update_message_files(tmpdir_out, out_dir, force=False):
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
     files = glob.glob(os.path.join(tmpdir_out, '*.pb.*'))
     for fname in files:
         bname = os.path.basename(fname)

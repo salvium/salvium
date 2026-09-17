@@ -55,12 +55,17 @@ public:
     {
       m_miners[i].generate();
 
-      if (!construct_miner_tx(0, 0, 0, 2, 0, m_miners[i].get_keys().m_account_address, m_miner_txs[i]))
+      crypto::public_key miner_reward_tx_key{};
+      if (!construct_miner_tx(0, 0, 0, 2, 0, m_miners[i].get_keys().m_account_address, miner_reward_tx_key, m_miner_txs[i]))
         return false;
 
-      txout_to_key tx_out = boost::get<txout_to_key>(m_miner_txs[i].vout[0].target);
-      output_entries.push_back(std::make_pair(i, rct::ctkey({rct::pk2rct(tx_out.key), rct::zeroCommit(m_miner_txs[i].vout[0].amount)})));
-      m_public_keys[i] = tx_out.key;
+      crypto::public_key output_public_key;
+      if (!get_output_public_key(m_miner_txs[i].vout[0], output_public_key))
+        return false;
+      output_entries.push_back(std::make_pair(i, rct::ctkey({
+          rct::pk2rct(output_public_key),
+          rct::commit(m_miner_txs[i].vout[0].amount, rct::identity())})));
+      m_public_keys[i] = output_public_key;
       m_public_key_ptrs[i] = &m_public_keys[i];
     }
 
@@ -68,12 +73,16 @@ public:
 
     tx_source_entry source_entry;
     source_entry.amount = m_source_amount;
+    if (!get_output_asset_type(m_miner_txs[real_source_idx].vout[0], source_entry.asset_type))
+      return false;
     source_entry.real_out_tx_key = get_tx_pub_key_from_extra(m_miner_txs[real_source_idx]);
     source_entry.real_output_in_tx_index = 0;
     source_entry.outputs.swap(output_entries);
     source_entry.real_output = real_source_idx;
     source_entry.mask = rct::identity();
-    source_entry.rct = false;
+    // Version-2 miner outputs are stored as pseudo-confidential outputs with
+    // an identity mask in production.
+    source_entry.rct = true;
 
     m_sources.push_back(source_entry);
 

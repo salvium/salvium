@@ -30,6 +30,7 @@
 
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
+#include <memory>
 
 #include "include_base_utils.h"
 #include "misc_log_ex.h"
@@ -59,11 +60,14 @@ namespace
 
       //std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-      boost::unique_lock<boost::mutex> lock(m_open_close_test_mutex);
-      if (!m_open_close_test_conn_id.is_nil())
+      std::shared_ptr<open_close_test_helper> helper;
       {
-        EXIT_ON_ERROR(m_open_close_test_helper->handle_new_connection(context.m_connection_id, true));
+        boost::unique_lock<boost::mutex> lock(m_open_close_test_mutex);
+        if (!m_open_close_test_conn_id.is_nil())
+          helper = m_open_close_test_helper;
       }
+      if (helper)
+        EXIT_ON_ERROR(helper->handle_new_connection(context.m_connection_id, true));
     }
 
     virtual void on_connection_close(test_connection_context& context)
@@ -75,7 +79,7 @@ namespace
       {
         LOG_PRINT_L0("Stop open/close test");
         m_open_close_test_conn_id = boost::uuids::nil_uuid();
-        m_open_close_test_helper.reset(0);
+        m_open_close_test_helper.reset();
       }
     }
 
@@ -117,12 +121,12 @@ namespace
     int handle_start_open_close_test(int command, const CMD_START_OPEN_CLOSE_TEST::request& req, CMD_START_OPEN_CLOSE_TEST::response&, test_connection_context& context)
     {
       boost::unique_lock<boost::mutex> lock(m_open_close_test_mutex);
-      if (0 == m_open_close_test_helper.get())
+      if (!m_open_close_test_helper)
       {
         LOG_PRINT_L0("Start open/close test (" << req.open_request_target << ", " << req.max_opened_conn_count << ")");
 
         m_open_close_test_conn_id = context.m_connection_id;
-        m_open_close_test_helper.reset(new open_close_test_helper(m_tcp_server, req.open_request_target, req.max_opened_conn_count));
+        m_open_close_test_helper = std::make_shared<open_close_test_helper>(m_tcp_server, req.open_request_target, req.max_opened_conn_count);
         return 1;
       }
       else
@@ -168,41 +172,27 @@ namespace
     {
       LOG_PRINT_L0("Closing connections. Number of opened connections: " << m_tcp_server.get_config_object().get_connections_count());
 
-      size_t count = 0;
       m_tcp_server.get_config_object().foreach_connection([&](test_connection_context& ctx) {
-        if (ctx.m_connection_id != cmd_conn_id)
+        if (ctx.m_connection_id == cmd_conn_id)
         {
-          ++count;
-          if (!ctx.m_closed)
+          return true;
+        }
+
+        if (!ctx.m_closed)
+        {
+          ctx.m_closed = true;
+          if (!m_tcp_server.get_config_object().close(ctx.m_connection_id))
           {
-            ctx.m_closed = true;
-            m_tcp_server.get_config_object().close(ctx.m_connection_id);
+            ctx.m_closed = false;
+            LOG_PRINT_L0("Close connection error: " << ctx.m_connection_id);
           }
-          else
-          {
-            LOG_PRINT_L0(count << " connection already closed");
-          }
+        }
+        else
+        {
+          LOG_PRINT_L0("Connection already closed");
         }
         return true;
       });
-
-      if (0 < count)
-      {
-        // Perhaps not all connections were closed, try to close it after 7 seconds
-        boost::shared_ptr<boost::asio::deadline_timer> sh_deadline(new boost::asio::deadline_timer(m_tcp_server.get_io_context(), boost::posix_time::seconds(7)));
-        sh_deadline->async_wait([=](const boost::system::error_code& ec)
-        {
-          boost::shared_ptr<boost::asio::deadline_timer> t = sh_deadline; // Capture sh_deadline
-          if (!ec)
-          {
-            close_connections(cmd_conn_id);
-          }
-          else
-          {
-            LOG_PRINT_L0("ERROR: " << ec.message() << ':' << ec.value());
-          }
-        });
-      }
     }
 
   private:
@@ -210,7 +200,7 @@ namespace
 
     boost::uuids::uuid m_open_close_test_conn_id;
     boost::mutex m_open_close_test_mutex;
-    std::unique_ptr<open_close_test_helper> m_open_close_test_helper;
+    std::shared_ptr<open_close_test_helper> m_open_close_test_helper;
   };
 }
 
@@ -229,7 +219,7 @@ int main(int argc, char** argv)
 
   srv_levin_commands_handler *commands_handler = new srv_levin_commands_handler(tcp_server);
   tcp_server.get_config_object().set_handler(commands_handler, [](epee::levin::levin_commands_handler<test_connection_context> *handler) { delete handler; });
-  tcp_server.get_config_object().m_invoke_timeout = 10000;
+  tcp_server.get_config_object().m_invoke_timeout = 4 * 30000;
   //tcp_server.get_config_object().m_max_packet_size = max_packet_size;
 
   if (!tcp_server.run_server(thread_count, true))

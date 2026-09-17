@@ -40,7 +40,15 @@ namespace
     const account_public_address& miner_address, std::vector<size_t>& block_weights, size_t target_tx_weight,
     size_t target_block_weight, uint64_t fee = 0)
   {
-    if (!construct_miner_tx(height, misc_utils::median(block_weights), already_generated_coins, target_block_weight, fee, miner_address, miner_tx))
+    crypto::public_key miner_reward_tx_key{};
+    // Blockchain::update_next_cumulative_weight_limit keeps the effective
+    // production median at least at the v5 penalty-free zone, including on
+    // an HF1 test chain.  Mirror that input when constructing the fixture's
+    // claimed reward.
+    const size_t reward_median = std::max(
+        misc_utils::median(block_weights),
+        static_cast<size_t>(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5));
+    if (!construct_miner_tx(height, reward_median, already_generated_coins, target_block_weight, fee, miner_address, miner_reward_tx_key, miner_tx))
       return false;
 
     size_t current_weight = get_transaction_weight(miner_tx);
@@ -78,16 +86,38 @@ namespace
     generator.get_last_n_block_weights(block_weights, get_block_hash(blk_prev), median_block_count);
 
     size_t median = misc_utils::median(block_weights);
-    median = std::max(median, static_cast<size_t>(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1));
+    median = std::max(median, static_cast<size_t>(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5));
 
     transaction miner_tx;
     bool r = construct_miner_tx_by_weight(miner_tx, get_block_height(blk_prev) + 1, generator.get_already_generated_coins(blk_prev),
-      miner_account.get_keys().m_account_address, block_weights, 2 * median, 2 * median);
+      miner_account.get_keys().m_account_address, block_weights, 2 * median - 1, 2 * median - 1);
     if (!r)
       return false;
 
     return generator.construct_block_manually(blk, blk_prev, miner_account, test_generator::bf_miner_tx, 0, 0, 0,
       crypto::hash(), 0, miner_tx);
+  }
+
+  bool construct_mismatched_reward_block(test_generator& generator, block& blk,
+    const block& blk_prev, const account_base& miner_account, bool reward_weight_is_high)
+  {
+    std::vector<size_t> block_weights;
+    generator.get_last_n_block_weights(block_weights, get_block_hash(blk_prev),
+                                       CRYPTONOTE_REWARD_BLOCKS_WINDOW);
+    size_t median = std::max(misc_utils::median(block_weights),
+                             static_cast<size_t>(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5));
+    const size_t actual_weight = 3 * median / 2;
+    const size_t reward_weight = reward_weight_is_high ? 7 * median / 4 : 5 * median / 4;
+
+    transaction miner_tx;
+    if (!construct_miner_tx_by_weight(miner_tx, get_block_height(blk_prev) + 1,
+        generator.get_already_generated_coins(blk_prev),
+        miner_account.get_keys().m_account_address, block_weights,
+        actual_weight, reward_weight))
+      return false;
+
+    return generator.construct_block_manually(blk, blk_prev, miner_account,
+      test_generator::bf_miner_tx, 0, 0, 0, crypto::hash(), 0, miner_tx);
   }
 
   bool rewind_blocks(std::vector<test_event_entry>& events, test_generator& generator, block& blk, const block& blk_prev,
@@ -111,7 +141,12 @@ namespace
   {
     uint64_t amount = 0;
     BOOST_FOREACH(auto& o, tx.vout)
+    {
+      CHECK_AND_ASSERT_THROW_MES(
+          amount <= std::numeric_limits<uint64_t>::max() - o.amount,
+          "miner output amount overflow in block-reward fixture");
       amount += o.amount;
+    }
     return amount;
   }
 }
@@ -138,16 +173,19 @@ bool gen_block_reward::generate(std::vector<test_event_entry>& events) const
   if (!rewind_blocks(events, generator, blk_0r, blk_0, miner_account, CRYPTONOTE_REWARD_BLOCKS_WINDOW))
     return false;
 
-  // Test: block reward is calculated using median of the latest CRYPTONOTE_REWARD_BLOCKS_WINDOW blocks
+  // Test: the claimed reward must be calculated from the block's actual
+  // cumulative weight. Both an under- and over-penalized reward are invalid.
   DO_CALLBACK(events, "mark_invalid_block");
   block blk_1_bad_1;
-  if (!construct_max_weight_block(generator, blk_1_bad_1, blk_0r, miner_account, CRYPTONOTE_REWARD_BLOCKS_WINDOW + 1))
+  if (!construct_mismatched_reward_block(generator, blk_1_bad_1, blk_0r,
+                                         miner_account, false))
     return false;
   events.push_back(blk_1_bad_1);
 
   DO_CALLBACK(events, "mark_invalid_block");
   block blk_1_bad_2;
-  if (!construct_max_weight_block(generator, blk_1_bad_2, blk_0r, miner_account, CRYPTONOTE_REWARD_BLOCKS_WINDOW - 1))
+  if (!construct_mismatched_reward_block(generator, blk_1_bad_2, blk_0r,
+                                         miner_account, true))
     return false;
   events.push_back(blk_1_bad_2);
 
@@ -242,33 +280,81 @@ bool gen_block_reward::mark_checked_block(cryptonote::core& /*c*/, size_t ev_ind
   return true;
 }
 
-bool gen_block_reward::check_block_rewards(cryptonote::core& /*c*/, size_t /*ev_index*/, const std::vector<test_event_entry>& events)
+bool gen_block_reward::check_block_rewards(cryptonote::core& c, size_t /*ev_index*/, const std::vector<test_event_entry>& events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_block_reward_without_txs::check_block_rewards");
 
-  std::array<uint64_t, 7> blk_rewards;
-  blk_rewards[0] = MONEY_SUPPLY >> EMISSION_SPEED_FACTOR_PER_MINUTE;
-  uint64_t cumulative_reward = blk_rewards[0];
-  for (size_t i = 1; i < blk_rewards.size(); ++i)
+  CHECK_EQ(8, m_checked_blocks_indices.size());
+  std::vector<crypto::hash> checked_hashes;
+  checked_hashes.reserve(m_checked_blocks_indices.size());
+  for (const size_t event_index : m_checked_blocks_indices)
+    checked_hashes.push_back(get_block_hash(boost::get<block>(events[event_index])));
+
+  std::vector<block> chain;
+  map_hash2tx_t transactions;
+  CHECK_TEST_CONDITION(find_block_chain(
+      events, chain, transactions, checked_hashes.back()));
+
+  uint64_t already_generated = 0;
+  size_t checked_count = 0;
+  std::vector<size_t> recent_block_weights;
+  for (size_t height = 0; height < chain.size(); ++height)
   {
-    blk_rewards[i] = (MONEY_SUPPLY - cumulative_reward) >> EMISSION_SPEED_FACTOR_PER_MINUTE;
-    cumulative_reward += blk_rewards[i];
+    const block& current = chain[height];
+    uint64_t fees = 0;
+    size_t block_weight = get_transaction_weight(current.miner_tx);
+    for (const crypto::hash& tx_hash : current.tx_hashes)
+    {
+      const auto tx_it = transactions.find(tx_hash);
+      CHECK_TEST_CONDITION(tx_it != transactions.end());
+      uint64_t fee = 0;
+      CHECK_TEST_CONDITION(tx_it->second != nullptr);
+      CHECK_TEST_CONDITION(get_tx_fee(*tx_it->second, fee));
+      CHECK_TEST_CONDITION(fees <= std::numeric_limits<uint64_t>::max() - fee);
+      fees += fee;
+      CHECK_TEST_CONDITION(block_weight <= std::numeric_limits<size_t>::max() -
+          get_transaction_weight(*tx_it->second));
+      block_weight += get_transaction_weight(*tx_it->second);
+    }
+
+    const uint64_t output_amount = get_tx_out_amount(current.miner_tx);
+    CHECK_TEST_CONDITION(output_amount <= std::numeric_limits<uint64_t>::max() -
+        current.miner_tx.amount_burnt);
+    const uint64_t claimed = output_amount + current.miner_tx.amount_burnt;
+    CHECK_TEST_CONDITION(claimed >= fees);
+    const uint64_t claimed_base_reward = claimed - fees;
+
+    // Ask the production reward function for the expected emission using the
+    // same prior-block median and historical hard-fork version that core used
+    // for this block.  The effective production median never falls below the
+    // v5 penalty-free zone, even for this legacy HF1 replay fixture.
+    const size_t reward_median = std::max(
+        recent_block_weights.empty()
+            ? size_t{0}
+            : misc_utils::median(recent_block_weights),
+        static_cast<size_t>(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5));
+    uint64_t expected_base_reward = 0;
+    CHECK_TEST_CONDITION(get_block_reward(
+        reward_median, block_weight, already_generated,
+        expected_base_reward,
+        c.get_blockchain_storage().get_hard_fork_version(height)));
+
+    if (std::find(checked_hashes.begin(), checked_hashes.end(),
+                  get_block_hash(current)) != checked_hashes.end())
+    {
+      CHECK_EQ(expected_base_reward, claimed_base_reward);
+      ++checked_count;
+    }
+
+    CHECK_TEST_CONDITION(already_generated <=
+                         std::numeric_limits<uint64_t>::max() - expected_base_reward);
+    already_generated += expected_base_reward;
+
+    recent_block_weights.push_back(block_weight);
+    if (recent_block_weights.size() > CRYPTONOTE_REWARD_BLOCKS_WINDOW)
+      recent_block_weights.erase(recent_block_weights.begin());
   }
-
-  for (size_t i = 0; i < 5; ++i)
-  {
-    block blk_i = boost::get<block>(events[m_checked_blocks_indices[i]]);
-    CHECK_EQ(blk_rewards[i], get_tx_out_amount(blk_i.miner_tx));
-  }
-
-  block blk_n1 = boost::get<block>(events[m_checked_blocks_indices[5]]);
-  CHECK_EQ(blk_rewards[5] + 3 * TESTS_DEFAULT_FEE, get_tx_out_amount(blk_n1.miner_tx));
-
-  block blk_n2 = boost::get<block>(events[m_checked_blocks_indices[6]]);
-  CHECK_EQ(blk_rewards[6] + (5 + 7) * TESTS_DEFAULT_FEE, get_tx_out_amount(blk_n2.miner_tx));
-
-  block blk_n3 = boost::get<block>(events[m_checked_blocks_indices[7]]);
-  CHECK_EQ((11 + 13) * TESTS_DEFAULT_FEE, get_tx_out_amount(blk_n3.miner_tx));
+  CHECK_EQ(checked_hashes.size(), checked_count);
 
   return true;
 }

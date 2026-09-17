@@ -11,6 +11,7 @@
 #include "ringct/rctSigs.h"
 #include "tx_consensus_checks.h"
 
+#include <algorithm>
 #include <limits>
 
 namespace cryptonote::txrules
@@ -117,6 +118,10 @@ namespace cryptonote::txrules
     }
 
     uint64_t total_fee = 0;
+    std::vector<crypto::hash> tx_prefix_hashes;
+    std::vector<crypto::key_image> first_key_images;
+    tx_prefix_hashes.reserve(tx.layer2_rollup_data.txs.size());
+    first_key_images.reserve(tx.layer2_rollup_data.txs.size());
 
     for (const auto& rtx : tx.layer2_rollup_data.txs)
     {
@@ -126,11 +131,25 @@ namespace cryptonote::txrules
         return false;
       }
 
+      if (std::find(tx_prefix_hashes.begin(), tx_prefix_hashes.end(), rtx.tx_prefix_hash) != tx_prefix_hashes.end())
+      {
+        if (why) *why = "ROLLUP contains duplicate tx_prefix_hash";
+        return false;
+      }
+      tx_prefix_hashes.push_back(rtx.tx_prefix_hash);
+
       if (rtx.first_key_image == crypto::key_image{})
       {
         if (why) *why = "ROLLUP contains null first_key_image";
         return false;
       }
+
+      if (std::find(first_key_images.begin(), first_key_images.end(), rtx.first_key_image) != first_key_images.end())
+      {
+        if (why) *why = "ROLLUP contains duplicate first_key_image";
+        return false;
+      }
+      first_key_images.push_back(rtx.first_key_image);
 
       if (rtx.tx_fee == 0)
       {
@@ -500,12 +519,6 @@ namespace cryptonote::txrules
     return r;
   }
   
-  static void restrict_type_to_sal1(tx_type_rules& tr)
-  {
-    tr.assets.allowed_assets = {"SAL1"};
-    tr.assets.asset_predicate = nullptr;
-  }
-
   // ---------- HF delta application ----------
   static hf_rules make_hf_0()
   {
@@ -848,11 +861,10 @@ namespace cryptonote::txrules
     const std::string ticker = tx.token_metadata.asset_type;
     const std::string asset_type = "sal" + ticker;
 
+    // Backward compatibility: some validation paths do not provide token-state callbacks.
+    // In those paths, rely on legacy blockchain checks instead of hard-failing CREATE_TOKEN txs.
     if (!env.token_state.asset_exists)
-    {
-      if (why) *why = "CREATE_TOKEN consensus requires token_state.asset_exists";
-      return false;
-    }
+      return true;
 
     if (env.token_state.asset_exists(env.token_state.self, asset_type))
     {

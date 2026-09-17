@@ -88,9 +88,9 @@ namespace
 
 struct zmq_internals
 {
-  explicit zmq_internals(t_core& core, t_p2p& p2p, const bool restricted)
+  explicit zmq_internals(t_core& core, t_p2p& p2p, const bool restricted, bool curve, const std::string& key_file)
     : rpc_handler{core.get(), p2p.get(), restricted}
-    , server{rpc_handler}
+    , server{rpc_handler, restricted, curve, key_file}
   {}
 
   cryptonote::rpc::DaemonHandler rpc_handler;
@@ -135,7 +135,13 @@ public:
       verify_zmq_rpc_bind(vm);
 
       const bool restricted_zmq = command_line::get_arg(vm, daemon_args::arg_restricted_zmq_rpc);
-      zmq.reset(new zmq_internals{core, p2p, restricted_zmq});
+      const auto curve_setting = command_line::get_arg(vm, daemon_args::arg_zmq_curve);
+      if (curve_setting > 1) throw std::runtime_error{"zmq-curve must be 1 or 0"};
+      const bool curve = curve_setting != 0;
+      auto key_file = command_line::get_arg(vm, daemon_args::arg_zmq_curve_secret_key_file);
+      if (curve && key_file.empty())
+        key_file = (boost::filesystem::path(command_line::get_arg(vm, cryptonote::arg_data_dir)) / "zmq-curve.key").string();
+      zmq.reset(new zmq_internals{core, p2p, restricted_zmq, curve, key_file});
 
       const std::string zmq_port = command_line::get_arg(vm, daemon_args::arg_zmq_rpc_bind_port);
       const std::string zmq_address = command_line::get_arg(vm, daemon_args::arg_zmq_rpc_bind_ip);

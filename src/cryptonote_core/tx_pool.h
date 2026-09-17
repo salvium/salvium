@@ -32,6 +32,7 @@
 #include "include_base_utils.h"
 
 #include <atomic>
+#include <chrono>
 #include <set>
 #include <tuple>
 #include <unordered_map>
@@ -54,6 +55,9 @@
 
 namespace cryptonote
 {
+  constexpr std::chrono::seconds TXPOOL_STARTUP_VALIDATION_MAX_TIME{30};
+  constexpr std::size_t TXPOOL_STARTUP_VALIDATION_MAX_TXS = 4096;
+
   class Blockchain;
   /************************************************************************/
   /*                                                                      */
@@ -385,6 +389,8 @@ namespace cryptonote
      * @return the number of transactions removed
      */
     size_t validate(uint8_t version);
+    size_t validate(uint8_t version, std::chrono::steady_clock::duration max_validation_time,
+      size_t max_validation_txs);
 
      /**
       * @brief return the cookie
@@ -591,6 +597,7 @@ namespace cryptonote
      */
     bool is_transaction_ready_to_go(txpool_tx_meta_t& txd, const crypto::hash &txid, const cryptonote::blobdata_ref &txblob, transaction&tx) const;
     bool is_transaction_ready_to_go(txpool_tx_meta_t& txd, const crypto::hash &txid, const cryptonote::blobdata &txblob, transaction&tx) const;
+    bool have_pending_create_token(const std::string &ticker, const crypto::hash &ignore_txid) const;
 
     /**
      * @brief mark all transactions double spending the one passed
@@ -726,6 +733,3 @@ namespace boost
 }
 BOOST_CLASS_VERSION(cryptonote::tx_memory_pool, CURRENT_MEMPOOL_ARCHIVE_VER)
 BOOST_CLASS_VERSION(cryptonote::tx_memory_pool::tx_details, CURRENT_MEMPOOL_TX_DETAILS_ARCHIVE_VER)
-
-
-

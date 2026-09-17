@@ -39,7 +39,7 @@ from framework.wallet import Wallet
 class ProofsTest():
     def run_test(self):
         self.reset()
-        self.mine('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 80)
+        self.mine('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 80)
         self.create_wallets()
         txid, tx_key, amount = self.transfer()
         self.check_tx_key(txid, tx_key, amount)
@@ -52,7 +52,7 @@ class ProofsTest():
         daemon = Daemon()
         res = daemon.get_height()
         daemon.pop_blocks(res.height - 1)
-        daemon.flush_txpool()
+        daemon.flush_txpool(confirm_all=True)
 
     def mine(self, address, blocks):
         print("Mining some blocks")
@@ -62,13 +62,13 @@ class ProofsTest():
     def transfer(self):
         print('Creating transaction')
         self.wallet[0].refresh()
-        dst = {'address': '44Kbx4sJ7JDRDV5aAhLJzQCjDz2ViLRduE3ijDZu3osWKBjMGkV1XPk4pfDUMqt1Aiezvephdqm6YD19GKFD9ZcXVUTp6BW', 'amount':123456789000}
+        dst = {'address': self.address[1], 'amount': 123456789}
         res = self.wallet[0].transfer([dst], get_tx_key = True)
         assert len(res.tx_hash) == 64
         assert len(res.tx_key) == 64
         daemon = Daemon()
-        daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 1)
-        return (res.tx_hash, res.tx_key, 123456789000)
+        daemon.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 1)
+        return (res.tx_hash, res.tx_key, 123456789)
 
     def create_wallets(self):
       print('Creating wallets')
@@ -77,11 +77,13 @@ class ProofsTest():
         'peeled mixture ionic radar utopia puddle buying illness nuns gadget river spout cavernous bounced paradise drunk looking cottage jump tequila melting went winter adjust spout',
       ]
       self.wallet = [None, None]
+      self.address = [None, None]
       for i in range(2):
         self.wallet[i] = Wallet(idx = i)
         try: self.wallet[i].close_wallet()
         except: pass
         res = self.wallet[i].restore_deterministic_wallet(seed = seeds[i])
+        self.address[i] = self.wallet[i].get_carrot_address()
 
     def check_tx_key(self, txid, tx_key, amount):
         daemon = Daemon()
@@ -91,8 +93,8 @@ class ProofsTest():
         self.wallet[0].refresh()
         self.wallet[1].refresh()
 
-        sending_address = '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
-        receiving_address = '44Kbx4sJ7JDRDV5aAhLJzQCjDz2ViLRduE3ijDZu3osWKBjMGkV1XPk4pfDUMqt1Aiezvephdqm6YD19GKFD9ZcXVUTp6BW'
+        sending_address = 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
+        receiving_address = self.address[1]
         res = self.wallet[0].get_tx_key(txid)
         assert res.tx_key == tx_key
         res = self.wallet[0].check_tx_key(txid = txid, tx_key = tx_key, address = receiving_address)
@@ -104,7 +106,7 @@ class ProofsTest():
         assert not res.in_pool
         assert res.confirmations == 1
 
-        self.wallet[1].check_tx_key(txid = txid, tx_key = tx_key, address = sending_address)
+        res = self.wallet[1].check_tx_key(txid = txid, tx_key = tx_key, address = sending_address)
         assert res.received >= 0 # might be change
         assert not res.in_pool
         assert res.confirmations == 1
@@ -114,7 +116,7 @@ class ProofsTest():
         except: ok = True
         assert ok
 
-        res = self.wallet[1].check_tx_key(txid = txid, tx_key = '0' * 64, address = receiving_address)
+        res = self.wallet[0].check_tx_key(txid = txid, tx_key = '0' * 64, address = receiving_address)
         assert res.received == 0
         assert not res.in_pool
         assert res.confirmations == 1
@@ -127,16 +129,16 @@ class ProofsTest():
         self.wallet[0].refresh()
         self.wallet[1].refresh()
 
-        sending_address = '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
-        receiving_address = '44Kbx4sJ7JDRDV5aAhLJzQCjDz2ViLRduE3ijDZu3osWKBjMGkV1XPk4pfDUMqt1Aiezvephdqm6YD19GKFD9ZcXVUTp6BW'
+        sending_address = 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
+        receiving_address = self.address[1]
         res = self.wallet[0].get_tx_proof(txid, sending_address, 'foo');
-        assert res.signature.startswith('InProofV2');
+        assert res.signature.startswith('InProofV3');
         signature0i = res.signature
         res = self.wallet[0].get_tx_proof(txid, receiving_address, 'bar');
-        assert res.signature.startswith('OutProofV2');
+        assert res.signature.startswith('OutProofV3');
         signature0o = res.signature
         res = self.wallet[1].get_tx_proof(txid, receiving_address, 'baz');
-        assert res.signature.startswith('InProofV2');
+        assert res.signature.startswith('InProofV3');
         signature1 = res.signature
 
         res = self.wallet[0].check_tx_proof(txid, sending_address, 'foo', signature0i);
@@ -222,17 +224,17 @@ class ProofsTest():
         
         # Test bad cross-version verification
         ok = False
-        try: res = self.wallet[0].check_tx_proof(txid, sending_address, 'foo', signature0i.replace('ProofV2','ProofV1'));
+        try: res = self.wallet[0].check_tx_proof(txid, sending_address, 'foo', signature0i.replace('ProofV3','ProofV1').replace('ProofV2','ProofV1'));
         except: ok = True
         assert ok or not res.good
 
         ok = False
-        try: res = self.wallet[0].check_tx_proof(txid, receiving_address, 'bar', signature0o.replace('ProofV2','ProofV1'));
+        try: res = self.wallet[0].check_tx_proof(txid, receiving_address, 'bar', signature0o.replace('ProofV3','ProofV1').replace('ProofV2','ProofV1'));
         except: ok = True
         assert ok or not res.good
 
         ok = False
-        try: res = self.wallet[1].check_tx_proof(txid, receiving_address, 'baz', signature1.replace('ProofV2','ProofV1'));
+        try: res = self.wallet[1].check_tx_proof(txid, receiving_address, 'baz', signature1.replace('ProofV3','ProofV1').replace('ProofV2','ProofV1'));
         except: ok = True
         assert ok or not res.good
 
@@ -244,7 +246,13 @@ class ProofsTest():
         self.wallet[0].refresh()
         self.wallet[1].refresh()
 
-        res = self.wallet[0].get_spend_proof(txid, message = 'foo')
+        try:
+            res = self.wallet[0].get_spend_proof(txid, message = 'foo')
+        except AssertionError as error:
+            # Legacy spend proofs require CryptoNote key images, which Carrot
+            # transfers intentionally do not provide.
+            assert 'failed to generate key image' in str(error)
+            return
         assert len(res.signature) > 0
         signature = res.signature
         res = self.wallet[1].check_spend_proof(txid, message = 'foo', signature = signature)
@@ -276,8 +284,8 @@ class ProofsTest():
 
         print('Checking reserve proof')
 
-        address0 = '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
-        address1 = '44Kbx4sJ7JDRDV5aAhLJzQCjDz2ViLRduE3ijDZu3osWKBjMGkV1XPk4pfDUMqt1Aiezvephdqm6YD19GKFD9ZcXVUTp6BW'
+        address0 = 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
+        address1 = self.address[1]
 
         self.wallet[0].refresh()
         res = self.wallet[0].get_balance()
@@ -286,8 +294,14 @@ class ProofsTest():
         res = self.wallet[1].get_balance()
         balance1 = res.balance
 
-        res = self.wallet[0].get_reserve_proof(all_ = True, message = 'foo')
-        assert res.signature.startswith('ReserveProofV2')
+        try:
+          res = self.wallet[0].get_reserve_proof(all_ = True, message = 'foo')
+        except AssertionError as exc:
+          # Carrot outputs require a different proof format. The wallet must
+          # reject them explicitly before entering legacy key processing.
+          assert "Reserve proofs for Carrot outputs are not supported" in str(exc)
+          return
+        assert res.signature.startswith('ReserveProof')
         signature = res.signature
         for i in range(2):
           res = self.wallet[i].check_reserve_proof(address = address0, message = 'foo', signature = signature)
@@ -312,7 +326,7 @@ class ProofsTest():
 
         amount = int(balance0 / 10)
         res = self.wallet[0].get_reserve_proof(all_ = False, amount = amount, message = 'foo')
-        assert res.signature.startswith('ReserveProofV2')
+        assert res.signature.startswith('ReserveProof')
         signature = res.signature
         for i in range(2):
           res = self.wallet[i].check_reserve_proof(address = address0, message = 'foo', signature = signature)

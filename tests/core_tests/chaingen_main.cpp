@@ -58,7 +58,10 @@ int main(int argc, char* argv[])
 
   //set up logging options
   mlog_configure(mlog_get_default_log_path("core_tests.log"), true);
-  mlog_set_log_level(2);
+  // Core tests intentionally trigger many validation errors.  Keep the
+  // console/file output at the summary/error level so a full security run
+  // remains usable instead of producing gigabytes of expected debug logs.
+  mlog_set_log_level(0);
   
   po::options_description desc_options("Allowed options");
   command_line::add_arg(desc_options, command_line::arg_help);
@@ -133,10 +136,10 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(gen_block_miner_tx_out_is_big);
     GENERATE_AND_PLAY(gen_block_miner_tx_has_no_out);
     GENERATE_AND_PLAY(gen_block_miner_tx_has_out_to_alice);
-    GENERATE_AND_PLAY(gen_block_miner_tx_out_has_no_view_tag_before_hf_view_tags);
-    GENERATE_AND_PLAY(gen_block_miner_tx_out_has_no_view_tag_from_hf_view_tags);
-    GENERATE_AND_PLAY(gen_block_miner_tx_out_has_view_tag_before_hf_view_tags);
-    GENERATE_AND_PLAY(gen_block_miner_tx_out_has_view_tag_from_hf_view_tags);
+    GENERATE_AND_PLAY(gen_block_miner_sal_untagged_output_accepted_hf1);
+    GENERATE_AND_PLAY(gen_block_miner_sal1_untagged_output_accepted_hf6);
+    GENERATE_AND_PLAY(gen_block_miner_sal_tagged_output_accepted_hf1);
+    GENERATE_AND_PLAY(gen_block_miner_sal1_tagged_output_accepted_hf6);
     GENERATE_AND_PLAY(gen_block_has_invalid_tx);
     GENERATE_AND_PLAY(gen_block_is_too_big);
     GENERATE_AND_PLAY(gen_block_invalid_binary_format); // Takes up to 3 hours, if CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW == 500, up to 30 minutes, if CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW == 10
@@ -158,7 +161,7 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(gen_tx_key_image_is_invalid);
     GENERATE_AND_PLAY(gen_tx_check_input_unlock_time);
     GENERATE_AND_PLAY(gen_tx_txout_to_key_has_invalid_key);
-    GENERATE_AND_PLAY(gen_tx_output_with_zero_amount);
+    GENERATE_AND_PLAY(gen_tx_output_with_nonzero_clear_amount);
     GENERATE_AND_PLAY(gen_tx_output_is_not_txout_to_key);
     GENERATE_AND_PLAY(gen_tx_signatures_are_invalid);
 
@@ -195,43 +198,42 @@ int main(int argc, char* argv[])
 //    GENERATE_AND_PLAY(gen_v2_tx_unmixable_two);
     GENERATE_AND_PLAY(gen_v2_tx_dust);
 
-    GENERATE_AND_PLAY(gen_rct_tx_valid_from_pre_rct);
+    GENERATE_AND_PLAY(gen_rct_tx_valid_from_coinbase);
     GENERATE_AND_PLAY(gen_rct_tx_valid_from_rct);
     GENERATE_AND_PLAY(gen_rct_tx_valid_from_mixed);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_bad_real_dest);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_bad_real_mask);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_bad_fake_dest);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_bad_fake_mask);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_bad_real_dest);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_bad_real_mask);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_bad_fake_dest);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_bad_fake_mask);
     GENERATE_AND_PLAY(gen_rct_tx_rct_bad_real_dest);
     GENERATE_AND_PLAY(gen_rct_tx_rct_bad_real_mask);
     GENERATE_AND_PLAY(gen_rct_tx_rct_bad_fake_dest);
     GENERATE_AND_PLAY(gen_rct_tx_rct_bad_fake_mask);
     GENERATE_AND_PLAY(gen_rct_tx_rct_spend_with_zero_commit);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_zero_vin_amount);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_zero_vin_amount);
     GENERATE_AND_PLAY(gen_rct_tx_rct_non_zero_vin_amount);
     GENERATE_AND_PLAY(gen_rct_tx_non_zero_vout_amount);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_duplicate_key_image);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_duplicate_key_image);
     GENERATE_AND_PLAY(gen_rct_tx_rct_duplicate_key_image);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_wrong_key_image);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_wrong_key_image);
     GENERATE_AND_PLAY(gen_rct_tx_rct_wrong_key_image);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_wrong_fee);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_wrong_fee);
     GENERATE_AND_PLAY(gen_rct_tx_rct_wrong_fee);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_remove_vin);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_remove_vin);
     GENERATE_AND_PLAY(gen_rct_tx_rct_remove_vin);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_add_vout);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_add_vout);
     GENERATE_AND_PLAY(gen_rct_tx_rct_add_vout);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_increase_vin_and_fee);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_altered_extra);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_increase_vin_and_fee);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_altered_extra);
     GENERATE_AND_PLAY(gen_rct_tx_rct_altered_extra);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_has_no_view_tag_before_hf_view_tags);
-    // TODO: base test needs to be restructured to handle pre rct outputs after HF v12
-    // GENERATE_AND_PLAY(gen_rct_tx_pre_rct_has_no_view_tag_from_hf_view_tags);
-    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_has_view_tag_before_hf_view_tags);
-    // GENERATE_AND_PLAY(gen_rct_tx_pre_rct_has_view_tag_from_hf_view_tags);
-    GENERATE_AND_PLAY(gen_rct_tx_rct_has_no_view_tag_before_hf_view_tags);
-    GENERATE_AND_PLAY(gen_rct_tx_rct_has_no_view_tag_from_hf_view_tags);
-    GENERATE_AND_PLAY(gen_rct_tx_rct_has_view_tag_before_hf_view_tags);
-    GENERATE_AND_PLAY(gen_rct_tx_rct_has_view_tag_from_hf_view_tags);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_untagged_output_accepted_hf6_immediate);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_untagged_output_accepted_hf6_after_rewind);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_tagged_output_accepted_hf6_immediate);
+    GENERATE_AND_PLAY(gen_rct_tx_coinbase_tagged_output_accepted_hf6_after_rewind);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_untagged_output_rejected_while_locked_hf6);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_untagged_output_accepted_hf6_after_rewind);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_tagged_output_rejected_while_locked_hf6);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_tagged_output_accepted_hf6_after_rewind);
     GENERATE_AND_PLAY(gen_rct_tx_uses_output_too_early);
 
     GENERATE_AND_PLAY(gen_multisig_tx_valid_22_1_2);
@@ -263,26 +265,13 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(gen_multisig_tx_invalid_48_1_no_signers);
     GENERATE_AND_PLAY(gen_multisig_tx_invalid_48_1_23_no_threshold);
 
-    GENERATE_AND_PLAY(gen_bp_tx_valid_1_before_12);
-    GENERATE_AND_PLAY(gen_bp_tx_invalid_1_from_12);
-    GENERATE_AND_PLAY(gen_bp_tx_invalid_1_1);
-    GENERATE_AND_PLAY(gen_bp_tx_valid_2);
-    GENERATE_AND_PLAY(gen_bp_tx_valid_3);
-    GENERATE_AND_PLAY(gen_bp_tx_valid_16);
-    GENERATE_AND_PLAY(gen_bp_tx_invalid_4_2_1);
-    GENERATE_AND_PLAY(gen_bp_tx_invalid_16_16);
-    GENERATE_AND_PLAY(gen_bp_txs_valid_2_and_2);
-    GENERATE_AND_PLAY(gen_bp_txs_invalid_2_and_8_2_and_16_16_1);
-    GENERATE_AND_PLAY(gen_bp_txs_valid_2_and_3_and_2_and_4);
-    GENERATE_AND_PLAY(gen_bp_tx_invalid_not_enough_proofs);
-    GENERATE_AND_PLAY(gen_bp_tx_invalid_empty_proofs);
-    GENERATE_AND_PLAY(gen_bp_tx_invalid_too_many_proofs);
-    GENERATE_AND_PLAY(gen_bp_tx_invalid_wrong_amount);
+    // Salvium production starts at Bulletproof+; retain only explicit checks
+    // that its transaction constructor rejects the three legacy proof modes.
     GENERATE_AND_PLAY(gen_bp_tx_invalid_borromean_type);
     GENERATE_AND_PLAY(gen_bp_tx_invalid_bulletproof2_type);
     GENERATE_AND_PLAY(gen_bp_tx_invalid_clsag_type);
 
-    GENERATE_AND_PLAY(gen_bpp_tx_invalid_before_fork);
+    GENERATE_AND_PLAY(gen_bpp_tx_invalid_missing_proof_at_activation);
     GENERATE_AND_PLAY(gen_bpp_tx_valid_at_fork);
     GENERATE_AND_PLAY(gen_bpp_tx_invalid_1_1);
     GENERATE_AND_PLAY(gen_bpp_tx_valid_2);

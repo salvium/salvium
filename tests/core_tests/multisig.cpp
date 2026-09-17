@@ -117,7 +117,7 @@ static bool make_multisig_accounts(std::vector<cryptonote::account_base> &accoun
 // Tests
 
 bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry>& events,
-    size_t inputs, size_t mixin, uint64_t amount_paid, bool valid,
+    size_t inputs, size_t mixin, uint64_t amount_paid, bool has_signing_threshold,
     size_t threshold, size_t total, size_t creator, std::vector<size_t> other_signers,
     const std::function<void(std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations)> &pre_tx,
     const std::function<void(transaction &tx)> &post_tx) const
@@ -154,7 +154,7 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
     account_base &account = n < inputs ? miner_account[creator] : miner_accounts[n];
     CHECK_AND_ASSERT_MES(generator.construct_block_manually(blocks[n], *prev_block, account,
         test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_hf_version | test_generator::bf_max_outs,
-        HF_VERSION_BULLETPROOF_PLUS, HF_VERSION_BULLETPROOF_PLUS, prev_block->timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
+        HF_VERSION_BULLETPROOF_PLUS, HF_VERSION_BULLETPROOF_PLUS, prev_block->timestamp + current_difficulty_window(HF_VERSION_BULLETPROOF_PLUS),
           crypto::hash(), 0, transaction(), std::vector<crypto::hash>(), 0, 1, 4),
         false, "Failed to generate block");
     events.push_back(blocks[n]);
@@ -170,7 +170,7 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
       cryptonote::block blk;
       CHECK_AND_ASSERT_MES(generator.construct_block_manually(blk, blk_last, miner_accounts[0],
           test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_hf_version | test_generator::bf_max_outs,
-          HF_VERSION_BULLETPROOF_PLUS, HF_VERSION_BULLETPROOF_PLUS, blk_last.timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
+          HF_VERSION_BULLETPROOF_PLUS, HF_VERSION_BULLETPROOF_PLUS, blk_last.timestamp + current_difficulty_window(HF_VERSION_BULLETPROOF_PLUS),
           crypto::hash(), 0, transaction(), std::vector<crypto::hash>(), 0, 1, 4),
           false, "Failed to generate block");
       events.push_back(blk);
@@ -280,6 +280,7 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
     src.real_output_in_tx_index = 0;
     src.mask = rct::identity();
     src.rct = true;
+    src.asset_type = "SAL";
     src.multisig_kLRki = kLRkis[n];
 
     for (size_t m = 0; m <= mixin; ++m)
@@ -290,7 +291,9 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
       ctkey.dest = rct::pk2rct(output_public_key);
       MDEBUG("using " << (m == n ? "real" : "fake") << " input " << ctkey.dest);
       ctkey.mask = rct::commit(blocks[m].miner_tx.vout[0].amount, rct::identity()); // since those are coinbases, the masks are known
-      src.outputs.push_back(std::make_pair(m, ctkey));
+      // Genesis owns SAL asset index 0; these post-genesis miner outputs
+      // therefore start at index 1 in production's per-asset index.
+      src.outputs.push_back(std::make_pair(m + 1, ctkey));
     }
   }
 
@@ -298,9 +301,11 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
   tx_destination_entry td;
   td.addr = miner_account[creator].get_keys().m_account_address;
   td.amount = amount_paid;
+  td.asset_type = "SAL";
   std::vector<tx_destination_entry> destinations;  //tx need two outputs since HF_VERSION_MIN_2_OUTPUTS
   destinations.push_back(td);
   td.amount = 0;
+  td.is_change = true;
   destinations.push_back(td);
 
   if (pre_tx)
@@ -312,7 +317,7 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
   crypto::secret_key multisig_tx_key_entropy;
   auto sources_copy = sources;
   multisig::signing::tx_builder_ringct_t tx_builder;
-  CHECK_AND_ASSERT_MES(tx_builder.init(miner_account[creator].get_keys(), {}, cryptonote::transaction_type::TRANSFER, 1, 0, 0, {0}, sources, destinations, {}, {rct::RangeProofPaddedBulletproof, 4}, true, false, tx_key, additional_tx_secret_keys, multisig_tx_key_entropy, tx), false, "error: multisig::signing::tx_builder_ringct_t::init");
+  CHECK_AND_ASSERT_MES(tx_builder.init(miner_account[creator].get_keys(), {}, cryptonote::transaction_type::TRANSFER, 1, 0, 0, {0}, sources, destinations, destinations.back(), {rct::RangeProofPaddedBulletproof, 4}, true, false, tx_key, additional_tx_secret_keys, multisig_tx_key_entropy, tx), false, "error: multisig::signing::tx_builder_ringct_t::init");
 
   // work out the permutation done on sources
   std::vector<size_t> ins_order;
@@ -401,7 +406,7 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
     }
     tools::apply_permutation(ins_order, k);
     multisig::signing::tx_builder_ringct_t signer_tx_builder;
-    CHECK_AND_ASSERT_MES(signer_tx_builder.init(miner_account[signer].get_keys(), {}, cryptonote::transaction_type::TRANSFER, 1, 0, 0, {0}, sources, destinations, {}, {rct::RangeProofPaddedBulletproof, 4}, true, true, tx_key, additional_tx_secret_keys, multisig_tx_key_entropy, tx), false, "error: multisig::signing::tx_builder_ringct_t::init");
+    CHECK_AND_ASSERT_MES(signer_tx_builder.init(miner_account[signer].get_keys(), {}, cryptonote::transaction_type::TRANSFER, 1, 0, 0, {0}, sources, destinations, destinations.back(), {rct::RangeProofPaddedBulletproof, 4}, true, true, tx_key, additional_tx_secret_keys, multisig_tx_key_entropy, tx), false, "error: multisig::signing::tx_builder_ringct_t::init");
 
     MDEBUG("signing with k size " << k.size());
     for (size_t n = 0; n < multisig::signing::kAlphaComponents; ++n)
@@ -449,8 +454,30 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
   if (post_tx)
     post_tx(tx);
 
-  if (!valid)
-    DO_CALLBACK(events, "mark_invalid_tx");
+  // v1.1.3c's multisig builder is not compatible with any production
+  // consensus era: this HF1 fixture spends SAL, while the builder declares
+  // SAL1 and does not set destination_asset_type.  HF6 requires SAL1 but also
+  // requires a proof version the builder rejects.  Exercise signing above,
+  // then verify production consensus rejects this exact unsupported output.
+  CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL1", false,
+                       "unexpected v1.1.3c multisig source asset declaration");
+  CHECK_AND_ASSERT_MES(tx.destination_asset_type.empty(), false,
+                       "unexpected v1.1.3c multisig destination asset declaration");
+  for (const auto& input : tx.vin)
+    CHECK_AND_ASSERT_MES(boost::get<txin_to_key>(input).asset_type == "SAL", false,
+                         "HF1 multisig fixture input is not SAL");
+  for (const auto& output : tx.vout)
+  {
+    std::string output_asset_type;
+    CHECK_AND_ASSERT_MES(get_output_asset_type(output, output_asset_type), false,
+                         "HF1 multisig fixture output has no asset type");
+    CHECK_AND_ASSERT_MES(output_asset_type == "SAL", false,
+                         "HF1 multisig fixture output is not SAL");
+  }
+  if (has_signing_threshold)
+    CHECK_AND_ASSERT_MES(tx.rct_signatures.p.CLSAGs.size() == tx.vin.size(), false,
+                         "complete multisig quorum did not finalize every CLSAG");
+  DO_CALLBACK(events, "mark_invalid_tx");
   events.push_back(tx);
   LOG_PRINT_L0("Test tx: " << obj_to_json_str(tx));
 

@@ -66,8 +66,8 @@ namespace net_utils
   std::string hex_to_dec_2bytes(const char *s)
   {
     const char *hex = get_hex_vals();
-    int i0 = get_index(hex, toupper(s[0]));
-    int i1 = get_index(hex, toupper(s[1]));
+    int i0 = get_index(hex, toupper(static_cast<unsigned char>(s[0])));
+    int i1 = get_index(hex, toupper(static_cast<unsigned char>(s[1])));
     if (i0 < 0 || i1 < 0)
       return std::string("%") + std::string(1, s[0]) + std::string(1, s[1]);
     return std::string(1, i0 * 16 | i1);
@@ -144,6 +144,8 @@ namespace http
       else if (parsed.schema == "https")
         parsed.port = 443;
     }
+    if (parsed.schema == "https")
+      ssl_options.support = ssl_support_t::e_ssl_support_enabled;
     set_server(std::move(parsed.host), std::to_string(parsed.port), std::move(user), std::move(ssl_options));
     return true;
   }

@@ -38,6 +38,7 @@
 #include "json_serialization.h"
 #include "net/zmq.h"
 #include "rpc/message.h"
+#include "rpc/rpc_request_limits.h"
 #include "rpc/zmq_pub.h"
 #include "rpc/zmq_server.h"
 #include "serialization/json_object.h"
@@ -45,6 +46,17 @@
 #define MASSERT(...)                                                      \
   if (!(__VA_ARGS__))                                                     \
     return testing::AssertionFailure() << BOOST_PP_STRINGIZE(__VA_ARGS__)
+
+TEST(ZmqRequestLimits, OutputHistogramAmounts)
+{
+  std::vector<std::uint64_t> normalized;
+  EXPECT_TRUE(cryptonote::normalize_distribution_amounts({7, 7, 9}, normalized));
+  EXPECT_EQ((std::vector<std::uint64_t>{7, 9}), normalized);
+
+  std::vector<std::uint64_t> oversized(cryptonote::MAX_OUTPUT_DISTRIBUTION_AMOUNTS + 1, 7);
+  EXPECT_FALSE(cryptonote::normalize_distribution_amounts(oversized, normalized));
+  EXPECT_TRUE(normalized.empty());
+}
 
 TEST(ZmqFullMessage, InvalidRequest)
 {
@@ -320,7 +332,7 @@ namespace
     zmq_server()
       : zmq_base(),
         handler(),
-        server(handler),
+        server(handler, false),
         pub(),
         sub()
     {
@@ -774,4 +786,85 @@ TEST_F(zmq_server, pub)
   ASSERT_LE(2u, pubs.size());
   EXPECT_TRUE(compare_minimal_txpool(epee::to_span(events), pubs.front()));
   EXPECT_TRUE(compare_minimal_block(200, epee::to_span(blocks), pubs.back()));
+}
+
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/filesystem.hpp>
+#include "file_io_utils.h"
+#include "misc_language.h"
+
+namespace
+{
+struct curve_echo_handler final : cryptonote::rpc::RpcHandler
+{
+  epee::byte_slice handle(std::string&& request) override
+  {
+    return epee::byte_slice(std::move(request));
+  }
+};
+}
+TEST(zmq_curve, encrypted_rpc_rejects_plaintext_and_wrong_server_key)
+{
+  curve_echo_handler handler;
+  cryptonote::rpc::ZmqServer server(handler, false);
+  boost::asio::io_context io;
+  boost::asio::ip::tcp::acceptor reservation(io, {boost::asio::ip::make_address("127.0.0.1"), 0});
+  const auto port = reservation.local_endpoint().port();
+  reservation.close();
+  ASSERT_TRUE(server.init_rpc("127.0.0.1", std::to_string(port)));
+  const std::string endpoint = "tcp://127.0.0.1:" + std::to_string(port);
+  server.run();
+  auto stop = epee::misc_utils::create_scope_leave_handler([&] { server.stop(); });
+  for (unsigned mode = 0; mode < 3; ++mode)
+  {
+    net::zmq::context context(zmq_init(1));
+    net::zmq::socket client(zmq_socket(context.get(), ZMQ_REQ));
+    const int timeout = mode == 2 ? 3000 : 250, linger = 0;
+    ASSERT_EQ(0, zmq_setsockopt(client.get(), ZMQ_RCVTIMEO, &timeout, sizeof(timeout)));
+    ASSERT_EQ(0, zmq_setsockopt(client.get(), ZMQ_SNDTIMEO, &timeout, sizeof(timeout)));
+    ASSERT_EQ(0, zmq_setsockopt(client.get(), ZMQ_LINGER, &linger, sizeof(linger)));
+    if (mode)
+    {
+      char pub[41], secret[41], wrong_pub[41], wrong_secret[41];
+      ASSERT_EQ(0, zmq_curve_keypair(pub, secret));
+      ASSERT_EQ(0, zmq_curve_keypair(wrong_pub, wrong_secret));
+      ASSERT_EQ(0, zmq_setsockopt(client.get(), ZMQ_CURVE_PUBLICKEY, pub, 40));
+      ASSERT_EQ(0, zmq_setsockopt(client.get(), ZMQ_CURVE_SECRETKEY, secret, 40));
+      ASSERT_EQ(0, zmq_setsockopt(client.get(), ZMQ_CURVE_SERVERKEY, mode == 2 ? server.public_key().data() : wrong_pub, 40));
+    }
+    ASSERT_EQ(0, zmq_connect(client.get(), endpoint.c_str()));
+    ASSERT_EQ(5, zmq_send(client.get(), "hello", 5, 0));
+    char response[32]{};
+    const int received = zmq_recv(client.get(), response, sizeof(response), 0);
+    if (mode == 2)
+    {
+      EXPECT_EQ(5, received);
+      EXPECT_EQ(std::string("hello"), std::string(response, received > 0 ? received : 0));
+    }
+    else EXPECT_EQ(-1, received);
+  }
+}
+TEST(zmq_curve, identity_persists_and_invalid_key_fails_closed)
+{
+  const auto directory = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path("salvium-curve-%%%%-%%%%");
+  boost::filesystem::create_directories(directory);
+  auto cleanup = epee::misc_utils::create_scope_leave_handler([&] { boost::filesystem::remove_all(directory); });
+  const auto key_file = (directory / "curve.key").string();
+  curve_echo_handler handler;
+  std::string first;
+  {
+    cryptonote::rpc::ZmqServer server(handler, false, true, key_file);
+    first = server.public_key();
+    EXPECT_EQ(40u, first.size());
+  }
+  {
+    cryptonote::rpc::ZmqServer server(handler, false, true, key_file);
+    EXPECT_EQ(first, server.public_key());
+    std::string published;
+    ASSERT_TRUE(epee::file_io_utils::load_file_to_string(key_file + ".pub", published, 41));
+    EXPECT_EQ(first + "\n", published);
+  }
+  ASSERT_TRUE(epee::file_io_utils::save_string_to_file(key_file, "broken"));
+  EXPECT_THROW(cryptonote::rpc::ZmqServer(handler, false, true, key_file), std::runtime_error);
+  EXPECT_THROW(cryptonote::rpc::ZmqServer(handler, false, false, key_file), std::runtime_error);
 }

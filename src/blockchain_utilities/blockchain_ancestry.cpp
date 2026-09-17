@@ -161,7 +161,11 @@ struct ancestry_state_t
     {
       std::unordered_map<uint64_t, cryptonote::block> old_block_cache;
       a & old_block_cache;
-      block_cache.resize(old_block_cache.size());
+      uint64_t max_height = 0;
+      for (const auto &entry : old_block_cache)
+        max_height = std::max(max_height, entry.first);
+      CHECK_AND_ASSERT_THROW_MES(old_block_cache.empty() || max_height < block_cache.max_size(), "Corrupt ancestry state: block height too large");
+      block_cache.resize(old_block_cache.empty() ? 0 : max_height + 1);
       for (const auto& i: old_block_cache)
         block_cache[i.first] = i.second;
     }

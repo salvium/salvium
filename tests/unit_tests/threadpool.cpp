@@ -145,3 +145,76 @@ TEST(threadpool, leaf_reentrancy)
   waiter.wait();
   ASSERT_EQ(counter, 500000);
 }
+
+TEST(threadpool, waiter_leaves_unrelated_jobs_queued)
+{
+  // With no background worker, queue order and execution are deterministic.
+  std::unique_ptr<tools::threadpool> pool(tools::threadpool::getNewForUnitTests(1));
+  tools::threadpool::waiter light(*pool), heavy(*pool);
+  int light_done = 0, heavy_done = 0;
+  pool->submit(&light, [&] { ++light_done; });
+  pool->submit(&heavy, [&] { ++heavy_done; });
+  ASSERT_TRUE(light.wait());
+  EXPECT_EQ(1, light_done);
+  EXPECT_EQ(0, heavy_done);
+  ASSERT_TRUE(heavy.wait());
+  EXPECT_EQ(1, heavy_done);
+}
+
+TEST(threadpool, empty_waiter_does_not_run_unrelated_jobs)
+{
+  std::unique_ptr<tools::threadpool> pool(tools::threadpool::getNewForUnitTests(1));
+  tools::threadpool::waiter heavy(*pool);
+  int completed = 0;
+  pool->submit(&heavy, [&] { ++completed; });
+  {
+    tools::threadpool::waiter empty(*pool);
+    ASSERT_TRUE(empty.wait());
+    EXPECT_EQ(0, completed);
+  }
+  EXPECT_EQ(0, completed);
+  ASSERT_TRUE(heavy.wait());
+  EXPECT_EQ(1, completed);
+}
+
+TEST(threadpool, exception_without_waiter_does_not_kill_worker)
+{
+  std::unique_ptr<tools::threadpool> pool(tools::threadpool::getNewForUnitTests(1));
+  tools::threadpool::waiter done(*pool);
+  bool completed = false;
+  pool->submit(nullptr, [] { throw std::runtime_error("expected failure"); });
+  pool->submit(&done, [&] { completed = true; });
+  EXPECT_TRUE(done.wait());
+  EXPECT_TRUE(completed);
+}
+TEST(threadpool, nonstandard_exception_releases_waiter)
+{
+  std::unique_ptr<tools::threadpool> pool(tools::threadpool::getNewForUnitTests(1));
+  tools::threadpool::waiter failed(*pool), done(*pool);
+  pool->submit(&failed, [] { throw 42; });
+  EXPECT_FALSE(failed.wait());
+  bool completed = false;
+  pool->submit(&done, [&] { completed = true; });
+  EXPECT_TRUE(done.wait());
+  EXPECT_TRUE(completed);
+}
+TEST(threadpool, inline_exception_restores_thread_state)
+{
+  std::unique_ptr<tools::threadpool> pool(tools::threadpool::getNewForUnitTests(1));
+  tools::threadpool::waiter done(*pool);
+  bool caught = false, completed = false;
+  pool->submit(&done, [&] {
+    try { pool->submit(nullptr, [] { throw 42; }); }
+    catch (int) { caught = true; }
+    pool->submit(nullptr, [&] { completed = true; });
+  });
+  EXPECT_TRUE(done.wait());
+  EXPECT_TRUE(caught);
+  EXPECT_TRUE(completed);
+  bool later = false;
+  pool->submit(&done, [&] { later = true; });
+  EXPECT_FALSE(later); // restored depth queues work submitted outside a worker
+  EXPECT_EQ(1, done.get_num());
+  EXPECT_TRUE(done.wait());
+  EXPECT_TRUE(later);
+}

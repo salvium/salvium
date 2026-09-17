@@ -144,6 +144,7 @@ public:
   MAKE_ACCOUNT(events, bob_account);                                       \
   MAKE_ACCOUNT(events, alice_account);                                     \
   REWIND_BLOCKS(events, blk_0r, blk_0, miner_account);                     \
+  SET_EVENT_VISITOR_SETT(events, event_visitor_settings::set_txs_keeped_by_block); \
   MAKE_TX(events, tx_0, miner_account, bob_account, send_amount, blk_0);   \
   MAKE_NEXT_BLOCK_TX1(events, blk_1, blk_0r, miner_account, tx_0);         \
   REWIND_BLOCKS(events, blk_1r, blk_1, miner_account);

@@ -32,11 +32,15 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 set(wallet_sources
   wallet2.cpp
+  pending_tx_validation.cpp
   wallet_args.cpp
   ringdb.cpp
   node_rpc_proxy.cpp
   message_store.cpp
   message_transporter.cpp
+  scanning_tools.cpp
+  salchat_protocol.cpp
+  salchat_service.cpp
   wallet_rpc_payments.cpp
   tx_builder.cpp
 )
@@ -55,6 +59,7 @@ target_link_libraries(wallet
     carrot_impl
     common
     cryptonote_core
+    cryptonote_protocol
     mnemonics
     device_trezor
     net

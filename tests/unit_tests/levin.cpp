@@ -384,6 +384,20 @@ TEST(make_header, no_expect_return)
     EXPECT_EQ(SWAP32LE(5601), header1.m_flags);
 }
 
+TEST(connection_context, rejects_unsolicited_and_bounds_expected_block_responses)
+{
+    cryptonote::cryptonote_connection_context context{};
+    EXPECT_EQ(0u, context.get_max_bytes(cryptonote::NOTIFY_RESPONSE_GET_OBJECTS::ID));
+
+    context.m_expect_response = cryptonote::NOTIFY_RESPONSE_GET_OBJECTS::ID;
+    context.m_expected_response_max_bytes = 3 * 1024 * 1024;
+    EXPECT_EQ(3u * 1024u * 1024u,
+        context.get_max_bytes(cryptonote::NOTIFY_RESPONSE_GET_OBJECTS::ID));
+
+    context.set_state_normal();
+    EXPECT_EQ(0u, context.get_max_bytes(cryptonote::NOTIFY_RESPONSE_GET_OBJECTS::ID));
+}
+
 TEST(make_header, expect_return)
 {
     const epee::levin::bucket_head2 header1 = epee::levin::make_header(65535, 0, 0, true);
@@ -646,6 +660,45 @@ TEST_F(levin_notify, fluff_without_padding)
             EXPECT_TRUE(notification.dandelionpp_fluff);
         }
     }
+}
+
+TEST_F(levin_notify, fluff_overload_is_split_without_dropping_transactions)
+{
+    std::shared_ptr<cryptonote::levin::notify> notifier_ptr = make_notifier(0, true, false);
+    auto& notifier = *notifier_ptr;
+
+    get_connections().m_initial_max_packet_size = LEVIN_DEFAULT_MAX_PACKET_SIZE;
+    add_connection(true);  // source
+    add_connection(false); // destination
+    notifier.new_out_connection();
+    io_service_.poll();
+
+    std::vector<cryptonote::blobdata> txs(6);
+    for (std::size_t i = 0; i < txs.size(); ++i)
+        txs[i].assign(1024 * 1024 - 1024, static_cast<char>('a' + i));
+    const std::vector<cryptonote::blobdata> original = txs;
+
+    ASSERT_TRUE(notifier.send_txs(txs, contexts_.front().get_id(), cryptonote::relay_method::fluff));
+    io_service_.restart();
+    ASSERT_LT(0u, io_service_.poll());
+    notifier.run_fluff();
+    ASSERT_LT(0u, io_service_.poll());
+
+    EXPECT_EQ(0u, contexts_.front().process_send_queue());
+    EXPECT_EQ(2u, contexts_.back().process_send_queue());
+    EXPECT_EQ(original, events_.take_relayed(cryptonote::relay_method::fluff));
+
+    std::vector<cryptonote::blobdata> received;
+    while (receiver_.notified_size() != 0)
+    {
+        auto notification = receiver_.get_notification<cryptonote::NOTIFY_NEW_TRANSACTIONS>().second;
+        EXPECT_TRUE(notification.dandelionpp_fluff);
+        std::move(notification.txs.begin(), notification.txs.end(), std::back_inserter(received));
+    }
+    std::sort(received.begin(), received.end());
+    std::vector<cryptonote::blobdata> expected = original;
+    std::sort(expected.begin(), expected.end());
+    EXPECT_EQ(expected, received);
 }
 
 TEST_F(levin_notify, stem_without_padding)

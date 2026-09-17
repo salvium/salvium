@@ -38,6 +38,7 @@
 
 #include <string>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 #include <unordered_map>
 #include "wipeable_string.h"
@@ -367,7 +368,7 @@ namespace crypto
         MERROR("Invalid seed: wrong output size");
         return false;
       }
-      dst = *(const crypto::secret_key*)s.data();
+      std::memcpy(dst.data, s.data(), sizeof(dst.data));
       return true;
     }
 

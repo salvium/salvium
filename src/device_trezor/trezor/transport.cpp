@@ -376,7 +376,7 @@ namespace trezor{
     }
 
     for(rapidjson::Value::ConstValueIterator itr = bridge_res.Begin(); itr != bridge_res.End(); ++itr){
-      auto element = itr->GetObject();
+      const auto &element = *itr;
       auto t = std::make_shared<BridgeTransport>(boost::make_optional(json_get_string(element["path"])));
 
       auto itr_vendor = element.FindMember("vendor");
@@ -474,14 +474,14 @@ namespace trezor{
     }
 
     boost::optional<epee::wipeable_string> bin_data = m_response->parse_hexstr();
-    if (!bin_data){
+    if (!bin_data || bin_data->size() < PROTO_HEADER_SIZE){
       throw exc::CommunicationException("Response is not well hexcoded");
     }
 
     uint16_t msg_tag;
     uint32_t msg_len;
     deserialize_message_header(bin_data->data(), msg_tag, msg_len);
-    if (bin_data->size() != msg_len + 6){
+    if (bin_data->size() - PROTO_HEADER_SIZE != msg_len){
       throw exc::CommunicationException("Response is not well hexcoded");
     }
 
@@ -1289,4 +1289,3 @@ namespace trezor{
 
 }
 }
-

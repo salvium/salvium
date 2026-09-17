@@ -42,6 +42,7 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_basic/blobdatatype.h"
 #include "cryptonote_config.h"
+#include "rpc/rpc_request_limits.h"
 #include "ringct/rctSigs.h"
 #include "version.h"
 
@@ -151,6 +152,7 @@ namespace rpc
 
     res.blocks.resize(blocks.size());
     res.output_indices.resize(blocks.size());
+    res.asset_type_output_indices.resize(blocks.size());
 
     auto it = blocks.begin();
 
@@ -163,6 +165,7 @@ namespace rpc
       {
         res.blocks.clear();
         res.output_indices.clear();
+        res.asset_type_output_indices.clear();
         res.status = Message::STATUS_FAILED;
         res.error_details = "failed retrieving a requested block";
         return;
@@ -172,6 +175,7 @@ namespace rpc
       {
           res.blocks.clear();
           res.output_indices.clear();
+          res.asset_type_output_indices.clear();
           res.status = Message::STATUS_FAILED;
           res.error_details = "incorrect number of transactions retrieved for block";
           return;
@@ -432,9 +436,18 @@ namespace rpc
     }
 
     tx_verification_context tvc = AUTO_VAL_INIT(tvc);
+    bool verification_busy = false;
 
-    if(!m_core.handle_incoming_tx({tx_blob, crypto::null_hash}, tvc, (relay ? relay_method::local : relay_method::none), false) || tvc.m_verifivation_failed)
+    if(!m_core.handle_incoming_tx_rpc({tx_blob, crypto::null_hash}, tvc,
+        (relay ? relay_method::local : relay_method::none), verification_busy) ||
+        tvc.m_verifivation_failed)
     {
+      if (verification_busy)
+      {
+        res.status = Message::STATUS_FAILED;
+        res.error_details = "Transaction verification is temporarily busy";
+        return;
+      }
       if (tvc.m_verifivation_failed)
       {
         MERROR("[SendRawTx]: tx verification failed");
@@ -784,6 +797,15 @@ namespace rpc
   {
     bool r = m_core.get_pool_for_rpc(res.transactions, res.key_images);
 
+    if (r && m_restricted)
+    {
+      for (auto &tx: res.transactions)
+      {
+        tx.receive_time = 0;
+        tx.last_relayed_time = 0;
+      }
+    }
+
     if (!r) res.status = Message::STATUS_FAILED;
     else res.status = Message::STATUS_OK;
   }
@@ -848,8 +870,15 @@ namespace rpc
 
   void DaemonHandler::handle(const GetOutputHistogram::Request& req, GetOutputHistogram::Response& res)
   {
-    size_t amounts = req.amounts.size();
-    if (m_restricted && amounts == 0)
+    std::vector<uint64_t> amounts;
+    if (!normalize_distribution_amounts(req.amounts, amounts))
+    {
+      res.status = Message::STATUS_FAILED;
+      res.error_details = "Too many amounts requested";
+      return;
+    }
+
+    if (m_restricted && amounts.empty())
     {
       res.status = Message::STATUS_FAILED;
       res.error_details = "Restricted RPC will not serve histograms on the whole blockchain. Use your own node.";
@@ -868,7 +897,7 @@ namespace rpc
     std::map<uint64_t, std::tuple<uint64_t, uint64_t, uint64_t> > histogram;
     try
     {
-      histogram = m_core.get_blockchain_storage().get_output_histogram(req.amounts, req.unlocked, req.recent_cutoff);
+      histogram = m_core.get_blockchain_storage().get_output_histogram(amounts, req.unlocked, req.recent_cutoff);
     }
     catch (const std::exception &e)
     {

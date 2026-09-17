@@ -48,6 +48,7 @@
 #include <vector>
 #include <atomic>
 #include <functional>
+#include <future>
 
 
 using namespace std;
@@ -96,6 +97,51 @@ std::string MAINNET_DAEMON_ADDRESS = "localhost:18081";
 
 
 using namespace Consts;
+
+namespace
+{
+struct LegacyPassphraseListener : Monero::WalletListener
+{
+    bool host = true;
+    void moneySpent(const std::string&, uint64_t) override {}
+    void moneyReceived(const std::string&, uint64_t) override {}
+    void unconfirmedMoneyReceived(const std::string&, uint64_t) override {}
+    void newBlock(uint64_t) override {}
+    void updated() override {}
+    void refreshed() override {}
+    Monero::optional<std::string> onDevicePassphraseRequest(bool& on_device) override
+    {
+        on_device = !host;
+        return host ? Monero::optional<std::string>("test passphrase") : Monero::optional<std::string>();
+    }
+};
+}
+
+TEST(WalletListenerTest, SecurePassphraseHandoffSupportsLegacyListeners)
+{
+    LegacyPassphraseListener listener;
+    bool on_device = true;
+    bool called = false;
+    listener.onDevicePassphraseRequestSecure(on_device, [&](const char* data, std::size_t size) {
+        called = true;
+        EXPECT_EQ(std::string(data, size), "test passphrase");
+    });
+    EXPECT_TRUE(called);
+    EXPECT_FALSE(on_device);
+    listener.host = false;
+    called = false;
+    listener.onDevicePassphraseRequestSecure(on_device, [&](const char*, std::size_t) { called = true; });
+    EXPECT_FALSE(called);
+    EXPECT_TRUE(on_device);
+}
+
+TEST(WalletListenerTest, SecurePassphraseHandoffPropagatesReceiverFailure)
+{
+    LegacyPassphraseListener listener;
+    bool on_device = false;
+    EXPECT_THROW(listener.onDevicePassphraseRequestSecure(on_device,
+        [](const char*, std::size_t) { throw std::runtime_error("receiver failure"); }), std::runtime_error);
+}
 
 struct Utils
 {
@@ -220,6 +266,87 @@ TEST_F(WalletManagerTest, WalletManagerCreatesWallet)
     std::cout << "** address: " << wallet->mainAddress() << std::endl;
     ASSERT_TRUE(wmgr->closeWallet(wallet));
 
+}
+
+TEST_F(WalletManagerTest, ZeroStakeReturnsErrorWithoutDaemon)
+{
+    Monero::Wallet *wallet = wmgr->createWallet(
+        WALLET_NAME, WALLET_PASS, WALLET_LANG, Monero::NetworkType::MAINNET);
+    ASSERT_NE(wallet, nullptr);
+    ASSERT_EQ(Monero::Wallet::Status_Ok, wallet->status());
+
+    Monero::PendingTransaction *tx = wallet->createStakeTransaction(
+        0, 0, Monero::PendingTransaction::Priority_Default, 0, {});
+    ASSERT_NE(tx, nullptr);
+    EXPECT_EQ(Monero::PendingTransaction::Status_Error, tx->status());
+    EXPECT_EQ("Stake amount must be greater than zero", tx->errorString());
+    EXPECT_EQ(Monero::Wallet::Status_Error, wallet->status());
+    EXPECT_EQ(0, tx->txCount());
+    wallet->disposeTransaction(tx);
+    EXPECT_TRUE(wmgr->closeWallet(wallet));
+}
+
+TEST_F(WalletManagerTest, AuditCreationReturnsErrorWithoutDaemon)
+{
+    Monero::Wallet *wallet = wmgr->createWallet(
+        WALLET_NAME, WALLET_PASS, WALLET_LANG, Monero::NetworkType::MAINNET);
+    ASSERT_NE(wallet, nullptr);
+    for (const bool direct : {true, false}) {
+        Monero::PendingTransaction *tx = direct
+            ? wallet->createAuditTransaction(0, Monero::PendingTransaction::Priority_Default, 0, {})
+            : wallet->createTransactionMultDest(Monero::transaction_type::AUDIT, {}, "",
+                std::vector<uint64_t>{}, 0, "SAL", false);
+        ASSERT_NE(tx, nullptr);
+        EXPECT_EQ(Monero::PendingTransaction::Status_Error, tx->status());
+        EXPECT_EQ("Creating new AUDIT transactions is no longer supported", tx->errorString());
+        EXPECT_EQ(0, tx->txCount());
+        wallet->disposeTransaction(tx);
+    }
+    EXPECT_TRUE(wmgr->closeWallet(wallet));
+}
+
+TEST_F(WalletManagerTest, FailedDeviceRecoveryDoesNotSaveOnClose)
+{
+    const auto directory = boost::filesystem::temp_directory_path() /
+        boost::filesystem::unique_path("salvium-device-recovery-%%%%-%%%%");
+    boost::filesystem::create_directory(directory);
+    auto cleanup = epee::misc_utils::create_scope_leave_handler([&] {
+        boost::system::error_code error;
+        boost::filesystem::remove_all(directory, error);
+    });
+    const auto path = (directory / "wallet").string();
+    Monero::Wallet *wallet = wmgr->createWalletFromDevice(path, "", Monero::MAINNET,
+        "nonexistent-test-device", 1);
+    ASSERT_NE(nullptr, wallet);
+    EXPECT_EQ(Monero::Wallet::Status_Critical, wallet->status());
+    EXPECT_TRUE(wmgr->closeWallet(wallet, true));
+    EXPECT_FALSE(boost::filesystem::exists(path));
+    EXPECT_FALSE(boost::filesystem::exists(path + ".keys"));
+}
+
+TEST_F(WalletManagerTest, ReservedSalchatCacheAttributesAreDenied)
+{
+    Monero::Wallet *wallet = wmgr->createWallet(
+        WALLET_NAME, WALLET_PASS, WALLET_LANG, Monero::NetworkType::MAINNET);
+    ASSERT_NE(wallet, nullptr);
+    ASSERT_EQ(wallet->status(), Monero::Wallet::Status_Ok);
+
+    ASSERT_TRUE(wallet->setCacheAttribute("gui.test", "visible"));
+    EXPECT_EQ(wallet->getCacheAttribute("gui.test"), "visible");
+
+    EXPECT_FALSE(wallet->setCacheAttribute("salchat.state.v4", "exposed"));
+    EXPECT_EQ(wallet->status(), Monero::Wallet::Status_Error);
+    EXPECT_FALSE(wallet->errorString().empty());
+    EXPECT_TRUE(wallet->getCacheAttribute("salchat.message-key.v4").empty());
+    EXPECT_EQ(wallet->status(), Monero::Wallet::Status_Error);
+
+    // Reject only the reserved namespace, not unrelated application keys that
+    // happen to begin with the same word.
+    EXPECT_TRUE(wallet->setCacheAttribute("salchat-ui.preference", "allowed"));
+    EXPECT_EQ(wallet->getCacheAttribute("salchat-ui.preference"), "allowed");
+    EXPECT_EQ(wallet->status(), Monero::Wallet::Status_Ok);
+
+    ASSERT_TRUE(wmgr->closeWallet(wallet));
 }
 
 TEST_F(WalletManagerTest, WalletManagerOpensWallet)
@@ -381,6 +508,45 @@ TEST_F(WalletManagerTest, WalletManagerRecoversWallet)
     ASSERT_TRUE(wallet2->seed() == seed1);
     ASSERT_TRUE(wallet2->mainAddress() == address1);
     ASSERT_TRUE(wmgr->closeWallet(wallet2));
+}
+
+TEST_F(WalletManagerTest, WalletManagerStoresPasswordOfWalletRecoveredFromSeed)
+{
+    Monero::Wallet * wallet1 = wmgr->createWallet(WALLET_NAME, WALLET_PASS, WALLET_LANG, Monero::NetworkType::MAINNET);
+    std::string seed1 = wallet1->seed();
+    std::string address1 = wallet1->mainAddress();
+    ASSERT_TRUE(wmgr->closeWallet(wallet1));
+    Utils::deleteWallet(WALLET_NAME);
+    Monero::Wallet * wallet2 = wmgr->recoveryWallet(WALLET_NAME, WALLET_PASS, seed1, Monero::NetworkType::MAINNET, 0);
+    ASSERT_TRUE(wallet2->status() == Monero::Wallet::Status_Ok);
+    ASSERT_TRUE(wallet2->mainAddress() == address1);
+    ASSERT_TRUE(wallet2->store(WALLET_NAME_COPY));
+    ASSERT_TRUE(wmgr->closeWallet(wallet2));
+    Monero::Wallet * wallet3 = wmgr->openWallet(WALLET_NAME_COPY, WALLET_PASS, Monero::NetworkType::MAINNET);
+    ASSERT_TRUE(wallet3->status() == Monero::Wallet::Status_Ok);
+    ASSERT_TRUE(wallet3->mainAddress() == address1);
+    ASSERT_TRUE(wmgr->closeWallet(wallet3));
+}
+
+TEST_F(WalletManagerTest, WalletManagerStoresPasswordOfWalletRecoveredFromKeys)
+{
+    Monero::Wallet * wallet1 = wmgr->createWallet(WALLET_NAME, WALLET_PASS, WALLET_LANG, Monero::NetworkType::MAINNET);
+    // Legacy key import requires the legacy address; the seed recovery test
+    // above exercises the current Carrot address and wallet creation path.
+    std::string address1 = wallet1->mainAddress(false);
+    std::string viewkey1 = wallet1->secretViewKey();
+    std::string spendkey1 = wallet1->secretSpendKey();
+    ASSERT_TRUE(wmgr->closeWallet(wallet1));
+    Utils::deleteWallet(WALLET_NAME);
+    Monero::Wallet * wallet2 = wmgr->createWalletFromKeys(WALLET_NAME, WALLET_PASS, WALLET_LANG, Monero::NetworkType::MAINNET, 0, address1, viewkey1, spendkey1);
+    ASSERT_TRUE(wallet2->status() == Monero::Wallet::Status_Ok) << wallet2->errorString();
+    ASSERT_TRUE(wallet2->mainAddress(false) == address1);
+    ASSERT_TRUE(wallet2->store(WALLET_NAME_COPY));
+    ASSERT_TRUE(wmgr->closeWallet(wallet2));
+    Monero::Wallet * wallet3 = wmgr->openWallet(WALLET_NAME_COPY, WALLET_PASS, Monero::NetworkType::MAINNET);
+    ASSERT_TRUE(wallet3->status() == Monero::Wallet::Status_Ok);
+    ASSERT_TRUE(wallet3->mainAddress(false) == address1);
+    ASSERT_TRUE(wmgr->closeWallet(wallet3));
 }
 
 
@@ -581,6 +747,8 @@ TEST_F(WalletTest1, WalletTransaction)
                                                                              PAYMENT_ID_EMPTY,
                                                                              AMOUNT_10XMR,
                                                                              MIXIN_COUNT,
+                                                                             "SAL1",
+                                                                             false,
                                                                              Monero::PendingTransaction::Priority_Medium,
                                                                              0,
                                                                              std::set<uint32_t>{});
@@ -622,7 +790,8 @@ TEST_F(WalletTest1, WalletTransactionWithMixin)
         std::cerr << "Transaction mixin count: " << mixin << std::endl;
 	
         Monero::PendingTransaction * transaction = wallet1->createTransaction(
-                    recepient_address, payment_id, AMOUNT_5XMR, mixin, Monero::PendingTransaction::Priority_Medium, 0, std::set<uint32_t>{});
+                    recepient_address, payment_id, AMOUNT_5XMR, mixin, "SAL1", false,
+                    Monero::PendingTransaction::Priority_Medium, 0, std::set<uint32_t>{});
 
         std::cerr << "Transaction status: " << transaction->status() << std::endl;
         std::cerr << "Transaction fee: " << Monero::Wallet::displayAmount(transaction->fee()) << std::endl;
@@ -664,7 +833,8 @@ TEST_F(WalletTest1, WalletTransactionWithPriority)
         std::cerr << "Transaction priority: " << *it << std::endl;
 	
         Monero::PendingTransaction * transaction = wallet1->createTransaction(
-                    recepient_address, payment_id, AMOUNT_5XMR, mixin, *it, 0, std::set<uint32_t>{});
+                    recepient_address, payment_id, AMOUNT_5XMR, mixin, "SAL1", false,
+                    *it, 0, std::set<uint32_t>{});
         std::cerr << "Transaction status: " << transaction->status() << std::endl;
         std::cerr << "Transaction fee: " << Monero::Wallet::displayAmount(transaction->fee()) << std::endl;
         std::cerr << "Transaction error: " << transaction->errorString() << std::endl;
@@ -720,7 +890,8 @@ TEST_F(WalletTest1, WalletTransactionAndHistory)
 
     Monero::PendingTransaction * tx = wallet_src->createTransaction(wallet4_addr,
                                                                        PAYMENT_ID_EMPTY,
-                                                                       AMOUNT_10XMR * 5, 1, Monero::PendingTransaction::Priority_Medium, 0, std::set<uint32_t>{});
+                                                                       AMOUNT_10XMR * 5, 1, "SAL1", false,
+                                                                       Monero::PendingTransaction::Priority_Medium, 0, std::set<uint32_t>{});
 
     ASSERT_TRUE(tx->status() == Monero::PendingTransaction::Status_Ok);
     ASSERT_TRUE(tx->commit());
@@ -762,7 +933,8 @@ TEST_F(WalletTest1, WalletTransactionWithPaymentId)
 
     Monero::PendingTransaction * tx = wallet_src->createTransaction(wallet4_addr,
                                                                        payment_id,
-                                                                       AMOUNT_1XMR, 1, Monero::PendingTransaction::Priority_Medium, 0, std::set<uint32_t>{});
+                                                                       AMOUNT_1XMR, 1, "SAL1", false,
+                                                                       Monero::PendingTransaction::Priority_Medium, 0, std::set<uint32_t>{});
 
     ASSERT_TRUE(tx->status() == Monero::PendingTransaction::Status_Ok);
     ASSERT_TRUE(tx->commit());
@@ -878,6 +1050,73 @@ struct MyWalletListener : public Monero::WalletListener
 
 
 
+namespace
+{
+struct BlockingRefreshListener : MyWalletListener
+{
+    std::promise<void> entered;
+    std::promise<void> release;
+    std::future<void> released = release.get_future();
+    std::atomic<bool> blocked{false};
+
+    explicit BlockingRefreshListener(Monero::Wallet* wallet): MyWalletListener(wallet) {}
+
+    void refreshed() override
+    {
+        if (!blocked.exchange(true))
+        {
+            entered.set_value();
+            // Keep failures bounded even if an assertion interrupts the test.
+            released.wait_for(std::chrono::seconds(10));
+        }
+    }
+};
+}
+
+TEST_F(WalletManagerTest, StoreWaitsForActiveRefresh)
+{
+    auto* wallet = wmgr->createWallet(WALLET_NAME, WALLET_PASS, WALLET_LANG, Monero::NetworkType::MAINNET);
+    ASSERT_EQ(wallet->status(), Monero::Wallet::Status_Ok);
+    const auto address = wallet->mainAddress();
+    BlockingRefreshListener listener(wallet);
+    auto entered = listener.entered.get_future();
+    wallet->startRefresh();
+    EXPECT_EQ(entered.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+    std::promise<void> storing;
+    auto saving = std::async(std::launch::async, [&] {
+        storing.set_value();
+        return wallet->store("");
+    });
+    storing.get_future().wait();
+    EXPECT_EQ(saving.wait_for(std::chrono::milliseconds(200)), std::future_status::timeout);
+    listener.release.set_value();
+    EXPECT_TRUE(saving.get());
+    EXPECT_TRUE(wmgr->closeWallet(wallet));
+    wallet = wmgr->openWallet(WALLET_NAME, WALLET_PASS, Monero::NetworkType::MAINNET);
+    EXPECT_EQ(wallet->status(), Monero::Wallet::Status_Ok);
+    EXPECT_EQ(wallet->mainAddress(), address);
+    EXPECT_TRUE(wmgr->closeWallet(wallet));
+}
+
+TEST_F(WalletManagerTest, CloseWaitsForActiveRefresh)
+{
+    auto* wallet = wmgr->createWallet(WALLET_NAME, WALLET_PASS, WALLET_LANG, Monero::NetworkType::MAINNET);
+    ASSERT_EQ(wallet->status(), Monero::Wallet::Status_Ok);
+    BlockingRefreshListener listener(wallet);
+    auto entered = listener.entered.get_future();
+    wallet->startRefresh();
+    EXPECT_EQ(entered.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+    std::promise<void> closing;
+    auto closed = std::async(std::launch::async, [&] {
+        closing.set_value();
+        return wmgr->closeWallet(wallet);
+    });
+    closing.get_future().wait();
+    EXPECT_EQ(closed.wait_for(std::chrono::milliseconds(200)), std::future_status::timeout);
+    listener.release.set_value();
+    EXPECT_TRUE(closed.get());
+}
+
 TEST_F(WalletTest2, WalletCallBackRefreshedSync)
 {
 
@@ -935,7 +1174,8 @@ TEST_F(WalletTest2, WalletCallbackSent)
 
     Monero::PendingTransaction * tx = wallet_src->createTransaction(wallet_dst->mainAddress(),
                                                                        PAYMENT_ID_EMPTY,
-                                                                       amount, 1, Monero::PendingTransaction::Priority_Medium, 0, std::set<uint32_t>{});
+                                                                       amount, 1, "SAL1", false,
+                                                                       Monero::PendingTransaction::Priority_Medium, 0, std::set<uint32_t>{});
     std::cout << "** Committing transaction: " << Monero::Wallet::displayAmount(tx->amount())
               << " with fee: " << Monero::Wallet::displayAmount(tx->fee());
 
@@ -976,7 +1216,8 @@ TEST_F(WalletTest2, WalletCallbackReceived)
     std::cout << "** Sending " << Monero::Wallet::displayAmount(amount) << " to " << wallet_dst->mainAddress();
     Monero::PendingTransaction * tx = wallet_src->createTransaction(wallet_dst->mainAddress(),
                                                                        PAYMENT_ID_EMPTY,
-                                                                       amount, 1, Monero::PendingTransaction::Priority_Medium, 0, std::set<uint32_t>{});
+                                                                       amount, 1, "SAL1", false,
+                                                                       Monero::PendingTransaction::Priority_Medium, 0, std::set<uint32_t>{});
 
     std::cout << "** Committing transaction: " << Monero::Wallet::displayAmount(tx->amount())
               << " with fee: " << Monero::Wallet::displayAmount(tx->fee());

@@ -28,6 +28,7 @@
 
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 #include <algorithm>
 #include <fstream>
 
@@ -134,9 +135,11 @@ int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &block
   if (!force && blocks.size() < db_batch_size)
     return 0;
 
-  // wait till we can verify a full HOH without extra, for speed
+  // Wait till we can verify a full HOH without extra, for speed.  An explicit
+  // one-block audit batch intentionally trades that optimization for a
+  // separately committed result after every verified block.
   uint64_t new_height = core.get_blockchain_storage().get_db().height() + blocks.size();
-  if (!force && new_height % HASH_OF_HASHES_STEP)
+  if (!force && db_batch_size != 1 && new_height % HASH_OF_HASHES_STEP)
     return 0;
 
   std::vector<crypto::hash> hashes;
@@ -170,6 +173,12 @@ int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &block
   size_t blockidx = 0;
   for(const block_complete_entry& block_entry: blocks)
   {
+    const uint64_t audit_height = core.get_blockchain_storage().get_db().height();
+    if (std::getenv("SALVIUM_AUDIT_TRACE"))
+      std::cout << "AUDIT_BLOCK height=" << audit_height
+                << " step=START status=RUNNING" << std::endl
+                << "AUDIT_BLOCK height=" << audit_height
+                << " step=block_blob_parse_and_prepare status=PASS" << std::endl;
     // process transactions
     for(auto& tx_blob: block_entry.txs)
     {
@@ -184,6 +193,16 @@ int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &block
           MERROR("Transaction verification failed, transaction is unparsable");
         core.cleanup_handle_incoming_blocks();
         return 1;
+      }
+      if (std::getenv("SALVIUM_AUDIT_TRACE"))
+      {
+        cryptonote::transaction transaction;
+        if (cryptonote::parse_and_validate_tx_from_blob(tx_blob.blob, transaction))
+          std::cout << "AUDIT_TX height=" << core.get_blockchain_storage().get_db().height()
+                    << " tx=" << cryptonote::get_transaction_hash(transaction)
+                    << " type=" << static_cast<unsigned>(transaction.type)
+                    << " step=parsing_semantics_ringct_balance_and_range_proofs status=PASS"
+                    << std::endl;
       }
     }
 

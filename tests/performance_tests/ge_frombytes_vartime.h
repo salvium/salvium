@@ -31,47 +31,32 @@
 #pragma once
 
 #include "crypto/crypto.h"
-#include "cryptonote_basic/cryptonote_basic.h"
 
-#include "single_tx_test_base.h"
-
-class test_ge_frombytes_vartime : public multi_tx_test_base<1>
+class test_ge_frombytes_vartime
 {
 public:
   static const size_t loop_count = 10000;
 
-  typedef multi_tx_test_base<1> base_class;
-
   bool init()
   {
-    using namespace cryptonote;
-
-    if (!base_class::init())
-      return false;
-
-    cryptonote::account_base m_alice;
-    cryptonote::transaction m_tx;
-
-    m_alice.generate();
-
-    std::vector<tx_destination_entry> destinations;
-    destinations.push_back(tx_destination_entry(1, m_alice.get_keys().m_account_address, false));
-
-    if (!construct_tx(this->m_miners[this->real_source_idx].get_keys(), this->m_sources, destinations, 1/*hf_version*/, "SAL", cryptonote::transaction_type::TRANSFER, boost::none, std::vector<uint8_t>(), m_tx, 0))
-      return false;
-
-    const cryptonote::txin_to_key& txin = boost::get<cryptonote::txin_to_key>(m_tx.vin[0]);
-    m_key = rct::ki2rct(txin.k_image);
-
+    // This benchmark needs a valid encoded curve point, not a transaction.
+    // Generate the key image through the same production primitive used by
+    // both legacy and Carrot spends so transfer output-count rules cannot
+    // prevent the curve benchmark from running.
+    crypto::public_key public_key;
+    crypto::secret_key secret_key;
+    crypto::generate_keys(public_key, secret_key);
+    crypto::generate_key_image(public_key, secret_key, m_key_image);
     return true;
   }
 
   bool test()
   {
     ge_p3 unp;
-    return ge_frombytes_vartime(&unp, (const unsigned char*) &m_key) == 0;
+    return ge_frombytes_vartime(
+        &unp, reinterpret_cast<const unsigned char*>(&m_key_image)) == 0;
   }
 
 private:
-  rct::key m_key;
+  crypto::key_image m_key_image;
 };

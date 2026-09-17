@@ -36,6 +36,7 @@
 #include <type_traits>
 #include <vector>
 #include <random>
+#include <stdexcept>
 
 #include "common/pod-class.h"
 #include "memwipe.h"
@@ -203,6 +204,8 @@ namespace crypto {
    */
   template<typename T>
   typename std::enable_if<std::is_unsigned<T>::value, T>::type rand_idx(T sz) {
+    if (sz == 0)
+      throw std::invalid_argument("Cannot select an index from an empty range");
     return crypto::rand_range<T>(0, sz-1);
   }
 

@@ -35,6 +35,11 @@
 #include <system_error>
 
 #include "byte_slice.h"
+#include "common/util.h"
+#include "file_io_utils.h"
+#include "misc_language.h"
+#include "memwipe.h"
+#include <boost/filesystem.hpp>
 #include "rpc/zmq_pub.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
@@ -49,7 +54,7 @@ namespace
   constexpr const std::int64_t max_message_size = 10 * 1024 * 1024; // 10 MiB
   constexpr const std::chrono::seconds linger_timeout{2}; // wait period for pending out messages
 
-  net::zmq::socket init_socket(void* context, int type, epee::span<const std::string> addresses)
+  net::zmq::socket init_socket(void* context, int type, epee::span<const std::string> addresses, const char* curve_secret_key = nullptr)
   {
     if (context == nullptr)
       throw std::logic_error{"NULL context provided"};
@@ -75,6 +80,17 @@ namespace
       return nullptr;
     }
 
+    if (curve_secret_key && *curve_secret_key)
+    {
+      const int curve_server = 1;
+      if (zmq_setsockopt(out.get(), ZMQ_CURVE_SERVER, &curve_server, sizeof(curve_server)) != 0 ||
+          zmq_setsockopt(out.get(), ZMQ_CURVE_SECRETKEY, curve_secret_key, 40) != 0)
+      {
+        MONERO_LOG_ZMQ_ERROR("Failed to enable ZMQ CURVE encryption");
+        return nullptr;
+      }
+    }
+
     for (const std::string& address : addresses)
     {
       if (zmq_bind(out.get(), address.c_str()) < 0)
@@ -92,8 +108,9 @@ namespace
 namespace rpc
 {
 
-ZmqServer::ZmqServer(RpcHandler& h) :
+ZmqServer::ZmqServer(RpcHandler& h, const bool restricted, const bool curve, const std::string& key_file) :
     handler(h),
+    restricted(restricted),
     context(zmq_init(num_zmq_threads)),
     rep_socket(nullptr),
     pub_socket(nullptr),
@@ -102,10 +119,63 @@ ZmqServer::ZmqServer(RpcHandler& h) :
 {
     if (!context)
         MONERO_ZMQ_THROW("Unable to create ZMQ context");
+    if (!curve)
+    {
+      if (!key_file.empty()) throw std::runtime_error{"ZMQ key file requires zmq-curve=1"};
+      return;
+    }
+    if (!zmq_has("curve"))
+      throw std::runtime_error{"ZMQ CURVE is unavailable: rebuild libzmq with libsodium/CURVE support"};
+
+    std::array<char, 41> secret{}, pub{};
+    std::string data;
+    auto wipe = epee::misc_utils::create_scope_leave_handler([&] {
+      memwipe(secret.data(), secret.size());
+      if (!data.empty()) memwipe(&data[0], data.size());
+    });
+    // Serialize first creation so simultaneous processes cannot replace an identity.
+    std::unique_ptr<tools::file_locker> lock;
+    if (!key_file.empty())
+    {
+      lock.reset(new tools::file_locker(key_file + ".lock"));
+      if (!lock->locked()) throw std::runtime_error{"Cannot lock ZMQ CURVE key file"};
+    }
+    if (!key_file.empty() && boost::filesystem::exists(key_file))
+    {
+      if (!epee::file_io_utils::load_file_to_string(key_file, data, 41))
+        throw std::runtime_error{"Cannot read ZMQ CURVE key file (expected 40 Z85 characters)"};
+      if (data.size() == 41 && data.back() == '\n') data.pop_back();
+      if (data.size() != 40) throw std::runtime_error{"Invalid ZMQ CURVE secret key length"};
+      std::copy(data.begin(), data.end(), secret.begin());
+      if (zmq_curve_public(pub.data(), secret.data()) != 0)
+        throw std::runtime_error{"Invalid ZMQ CURVE secret key"};
+    }
+    else
+    {
+      if (zmq_curve_keypair(pub.data(), secret.data()) != 0)
+        MONERO_ZMQ_THROW("Cannot generate ZMQ CURVE identity");
+      if (!key_file.empty())
+      {
+        data.assign(secret.data(), 40);
+        const auto temporary = key_file + ".tmp";
+        if (!epee::file_io_utils::save_string_to_file(temporary, data) || tools::replace_file(temporary, key_file))
+          throw std::runtime_error{"Cannot save ZMQ CURVE identity"};
+      }
+    }
+    curve_public_key.assign(pub.data(), 40);
+    if (!key_file.empty())
+    {
+      if (!epee::file_io_utils::save_string_to_file(key_file + ".pub", curve_public_key + "\n") ||
+          tools::sync_parent_directory(key_file + ".pub"))
+        throw std::runtime_error{"Cannot save ZMQ CURVE public key"};
+    }
+    curve_secret_key = secret;
+    MINFO("ZMQ CURVE server public key: " << curve_public_key);
 }
 
 ZmqServer::~ZmqServer()
 {
+  memwipe(curve_secret_key.data(), curve_secret_key.size());
 }
 
 void ZmqServer::serve()
@@ -167,7 +237,10 @@ void ZmqServer::serve()
         }
         else // no errors
         {
-          MDEBUG("Received RPC request: \"" << *message << "\"");
+          if (restricted)
+            MDEBUG("Received RPC request");
+          else
+            MDEBUG("Received RPC request: \"" << *message << "\"");
           epee::byte_slice response = handler.handle(std::move(*message));
 
           const boost::string_ref response_view{reinterpret_cast<const char*>(response.data()), response.size()};
@@ -210,7 +283,7 @@ void* ZmqServer::init_rpc(boost::string_ref address, boost::string_ref port)
   bind_address += ":";
   bind_address.append(port.data(), port.size());
 
-  rep_socket = init_socket(context.get(), ZMQ_REP, {std::addressof(bind_address), 1});
+  rep_socket = init_socket(context.get(), ZMQ_REP, {std::addressof(bind_address), 1}, curve_secret_key.data());
   return bool(rep_socket) ? context.get() : nullptr;
 }
 
@@ -219,7 +292,7 @@ std::shared_ptr<listener::zmq_pub> ZmqServer::init_pub(epee::span<const std::str
   try
   {
     shared_state = std::make_shared<listener::zmq_pub>(context.get());
-    pub_socket = init_socket(context.get(), ZMQ_XPUB, addresses);
+    pub_socket = init_socket(context.get(), ZMQ_XPUB, addresses, curve_secret_key.data());
     if (!pub_socket)
       throw std::runtime_error{"Unable to initialize ZMQ_XPUB socket"};
 

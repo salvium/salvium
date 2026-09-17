@@ -79,6 +79,7 @@ using namespace epee;
 #else 
   #include <sys/file.h>
   #include <sys/stat.h>
+  #include <fcntl.h>
 #endif
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
@@ -408,6 +409,23 @@ namespace tools
     return res;
   }
 
+  std::error_code sync_parent_directory(const std::string& filename)
+  {
+#ifdef WIN32
+    return {}; // replace_file uses MOVEFILE_WRITE_THROUGH on Windows.
+#else
+    const auto parent = boost::filesystem::path(filename).parent_path();
+    const std::string directory = parent.empty() ? "." : parent.string();
+    const int fd = ::open(directory.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (fd < 0) return {errno, std::system_category()};
+    int result;
+    do { result = ::fsync(fd); } while (result < 0 && errno == EINTR);
+    const int error = result < 0 ? errno : 0;
+    const int closed = ::close(fd);
+    return {error ? error : (closed < 0 ? errno : 0), std::system_category()};
+#endif
+  }
+
   std::error_code replace_file(const std::string& old_name, const std::string& new_name)
   {
     int code;
@@ -426,11 +444,17 @@ namespace tools
       ::SetFileAttributesW(wide_replaced_name.c_str(), attributes & (~FILE_ATTRIBUTE_READONLY));
     }
 
-    bool ok = 0 != ::MoveFileExW(wide_replacement_name.c_str(), wide_replaced_name.c_str(), MOVEFILE_REPLACE_EXISTING);
+    bool ok = 0 != ::MoveFileExW(wide_replacement_name.c_str(), wide_replaced_name.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
     code = ok ? 0 : static_cast<int>(::GetLastError());
 #else
     bool ok = 0 == std::rename(old_name.c_str(), new_name.c_str());
     code = ok ? 0 : errno;
+    if (ok)
+    {
+      if (auto error = sync_parent_directory(new_name)) return error;
+      if (boost::filesystem::path(old_name).parent_path() != boost::filesystem::path(new_name).parent_path())
+        return sync_parent_directory(old_name);
+    }
 #endif
     return std::error_code(code, std::system_category());
   }

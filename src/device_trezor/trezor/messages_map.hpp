@@ -64,14 +64,14 @@ namespace trezor {
 
     template<class t_message=google::protobuf::Message>
     static messages::MessageType get_message_wire_number() {
-      BOOST_STATIC_ASSERT(boost::is_base_of<google::protobuf::Message, t_message>::value);
-      return get_message_wire_number(t_message::default_instance().GetDescriptor()->name());
+      static_assert(std::is_base_of<google::protobuf::Message, t_message>::value, "Expected a protobuf message");
+      return get_message_wire_number(t_message::default_instance());
     }
   };
 
   template<class t_message=google::protobuf::Message>
   std::shared_ptr<t_message> message_ptr_retype(std::shared_ptr<google::protobuf::Message> & in){
-    BOOST_STATIC_ASSERT(boost::is_base_of<google::protobuf::Message, t_message>::value);
+    static_assert(std::is_base_of<google::protobuf::Message, t_message>::value, "Expected a protobuf message");
     if (!in){
       return nullptr;
     }
@@ -81,7 +81,7 @@ namespace trezor {
 
   template<class t_message=google::protobuf::Message>
   std::shared_ptr<t_message> message_ptr_retype_static(std::shared_ptr<google::protobuf::Message> & in){
-    BOOST_STATIC_ASSERT(boost::is_base_of<google::protobuf::Message, t_message>::value);
+    static_assert(std::is_base_of<google::protobuf::Message, t_message>::value, "Expected a protobuf message");
     if (!in){
       return nullptr;
     }

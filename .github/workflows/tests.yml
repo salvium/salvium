@@ -13,7 +13,7 @@ env:
 
 jobs:
   unit-and-tools:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,7 +32,7 @@ jobs:
             build-essential cmake pkg-config libssl-dev libzmq3-dev libunbound-dev \
             libsodium-dev libunwind-dev liblzma-dev libreadline-dev libexpat1-dev \
             libpgm-dev libhidapi-dev libusb-1.0-0-dev libprotobuf-dev \
-            protobuf-compiler libudev-dev libboost-all-dev python3 ccache gperf \
+            protobuf-compiler libudev-dev libboost-all-dev python3 python3-requests python3-psutil python3-monotonic python3-zmq ccache gperf \
             libtool autotools-dev automake bsdmainutils git ca-certificates
 
       - name: configure debug tests
@@ -44,16 +44,19 @@ jobs:
             -D USE_DEVICE_TREZOR=OFF
 
       - name: build focused tests
-        run: cmake --build build/ci-debug --target unit_tests block_weight hash-target-tests
+        run: cmake --build build/ci-debug --target unit_tests salchat_unit_tests wallet_rpc_server block_weight hash-target-tests
 
       - name: run focused tests
-        run: ctest --test-dir build/ci-debug --output-on-failure -R "unit_tests|block_weight|hash"
+        run: ctest --test-dir build/ci-debug --output-on-failure -R "unit_tests|block_weight|hash-target"
 
       - name: check python tools
         run: python3 -m py_compile utils/protocol_invariants.py
 
+      - name: check wallet RPC serialization and lifecycle
+        run: python3 tests/functional_tests/wallet_rpc_lifecycle.py "$PWD/build/ci-debug/bin/salvium-wallet-rpc"
+
   asan-unit:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,7 +69,7 @@ jobs:
             build-essential cmake pkg-config libssl-dev libzmq3-dev libunbound-dev \
             libsodium-dev libunwind-dev liblzma-dev libreadline-dev libexpat1-dev \
             libpgm-dev libhidapi-dev libusb-1.0-0-dev libprotobuf-dev \
-            protobuf-compiler libudev-dev libboost-all-dev python3 gperf \
+            protobuf-compiler libudev-dev libboost-all-dev python3 python3-requests python3-psutil python3-monotonic python3-zmq gperf \
             libtool autotools-dev automake bsdmainutils git ca-certificates
 
       - name: configure asan tests
@@ -78,7 +81,56 @@ jobs:
             -D USE_DEVICE_TREZOR=OFF
 
       - name: build asan unit tests
-        run: cmake --build build/ci-asan --target unit_tests
+        run: cmake --build build/ci-asan --target unit_tests salchat_unit_tests
 
       - name: run asan unit tests
         run: ctest --test-dir build/ci-asan --output-on-failure -R unit_tests
+
+  salchat-fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends \
+            build-essential clang cmake pkg-config libssl-dev libzmq3-dev libunbound-dev \
+            libsodium-dev libunwind-dev liblzma-dev libreadline-dev libexpat1-dev \
+            libpgm-dev libhidapi-dev libusb-1.0-0-dev libprotobuf-dev \
+            protobuf-compiler libudev-dev libboost-all-dev python3 python3-requests python3-psutil python3-monotonic python3-zmq gperf \
+            libtool autotools-dev automake bsdmainutils git ca-certificates
+
+      - name: build instrumented SalChat fuzzers
+        env:
+          LIB_FUZZING_ENGINE: -fsanitize=fuzzer
+        run: |
+          # Clang supplies libFuzzer for this isolated test build. Release
+          # artifacts still use the normal GCC 16 compiler check.
+          make release-static -j2 RELEASE_CC=clang RELEASE_CXX=clang++ \
+            release_static_compiler_check='@:' \
+            release_static_builddir=build/ci-salchat-fuzz \
+            RELEASE_STATIC_TARGETS='salchat-envelope_fuzz_tests salchat-wallet_fuzz_tests' \
+            release_static_platform_args='-D ARCH=x86-64 -D BUILD_TESTS=ON -D OSSFUZZ=ON -D BUILD_SALCHAT_FUZZERS=ON -D USE_DEVICE_TREZOR=OFF -D USE_LTO=OFF -D SANITIZE=ON -D STACK_TRACE=OFF -D CMAKE_DISABLE_FIND_PACKAGE_Libunwind=TRUE -D CMAKE_C_FLAGS="-fsanitize=fuzzer-no-link,address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer" -D CMAKE_CXX_FLAGS="-fsanitize=fuzzer-no-link,address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"'
+
+      - name: fuzz SalChat envelopes and wallet payloads
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          for target in salchat-envelope salchat-wallet; do
+            mkdir -p "build/fuzz-corpus/$target" "build/fuzz-artifacts/$target"
+            cp -R "tests/data/fuzz/$target/." "build/fuzz-corpus/$target/"
+            "build/ci-salchat-fuzz/release/tests/fuzz/${target}_fuzz_tests" \
+              "build/fuzz-corpus/$target" -max_total_time=60 -max_len=16385 -timeout=10 \
+              -rss_limit_mb=2048 -artifact_prefix="build/fuzz-artifacts/$target/"
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: salchat-fuzz-failures
+          path: build/fuzz-artifacts

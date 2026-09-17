@@ -120,22 +120,22 @@ struct gen_block_no_miner_tx : public gen_block_verification_base<1>
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_unlock_time_is_low : public gen_block_verification_base<1>
+struct gen_block_unlock_time_is_low : public gen_block_accepted_base<2>
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_unlock_time_is_high : public gen_block_verification_base<1>
+struct gen_block_unlock_time_is_high : public gen_block_accepted_base<2>
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_unlock_time_is_timestamp_in_past : public gen_block_verification_base<1>
+struct gen_block_unlock_time_is_timestamp_in_past : public gen_block_accepted_base<2>
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_unlock_time_is_timestamp_in_future : public gen_block_verification_base<1>
+struct gen_block_unlock_time_is_timestamp_in_future : public gen_block_accepted_base<2>
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
@@ -231,35 +231,35 @@ struct get_test_options<gen_block_low_coinbase> {
   };
 };
 
-struct gen_block_miner_tx_out_has_no_view_tag_before_hf_view_tags : public gen_block_accepted_base<2>
+struct gen_block_miner_sal_untagged_output_accepted_hf1 : public gen_block_accepted_base<2>
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_miner_tx_out_has_no_view_tag_from_hf_view_tags : public gen_block_verification_base<1>
+struct gen_block_miner_sal1_untagged_output_accepted_hf6 : public gen_block_accepted_base<2>
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
 template<>
-struct get_test_options<gen_block_miner_tx_out_has_no_view_tag_from_hf_view_tags> {
-  const std::pair<uint8_t, uint64_t> hard_forks[3] = {std::make_pair(1, 0), std::make_pair(HF_VERSION_VIEW_TAGS+1, 1), std::make_pair(0, 0)};
+struct get_test_options<gen_block_miner_sal1_untagged_output_accepted_hf6> {
+  const std::pair<uint8_t, uint64_t> hard_forks[3] = {std::make_pair(1, 0), std::make_pair(HF_VERSION_SALVIUM_ONE_PROOFS, 1), std::make_pair(0, 0)};
   const cryptonote::test_options test_options = {
     hard_forks, 0
   };
 };
 
-struct gen_block_miner_tx_out_has_view_tag_before_hf_view_tags : public gen_block_verification_base<1>
+struct gen_block_miner_sal_tagged_output_accepted_hf1 : public gen_block_accepted_base<2>
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_miner_tx_out_has_view_tag_from_hf_view_tags : public gen_block_accepted_base<2>
+struct gen_block_miner_sal1_tagged_output_accepted_hf6 : public gen_block_accepted_base<2>
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
 template<>
-struct get_test_options<gen_block_miner_tx_out_has_view_tag_from_hf_view_tags> {
-  const std::pair<uint8_t, uint64_t> hard_forks[3] = {std::make_pair(1, 0), std::make_pair(HF_VERSION_VIEW_TAGS, 1), std::make_pair(0, 0)};
+struct get_test_options<gen_block_miner_sal1_tagged_output_accepted_hf6> {
+  const std::pair<uint8_t, uint64_t> hard_forks[3] = {std::make_pair(1, 0), std::make_pair(HF_VERSION_SALVIUM_ONE_PROOFS, 1), std::make_pair(0, 0)};
   const cryptonote::test_options test_options = {
     hard_forks, 0
   };

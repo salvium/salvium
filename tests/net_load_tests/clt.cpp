@@ -75,6 +75,7 @@ namespace
       , m_open_request_target(open_request_target)
       , m_next_id(0)
       , m_error_count(0)
+      , m_completed_count(0)
       , m_connections(open_request_target)
     {
       for (auto& conn_id : m_connections)
@@ -96,11 +97,13 @@ namespace
         {
           m_error_count.fetch_add(1, std::memory_order_relaxed);
         }
-      });
+        m_completed_count.fetch_add(1);
+      }, "0.0.0.0", epee::net_utils::ssl_support_t::e_ssl_support_disabled);
 
       if (!r)
       {
         m_error_count.fetch_add(1, std::memory_order_relaxed);
+        m_completed_count.fetch_add(1);
       }
 
       return true;
@@ -120,12 +123,14 @@ namespace
     }
 
     size_t error_count() const { return m_error_count.load(std::memory_order_relaxed); }
+    size_t completed_count() const { return m_completed_count.load(); }
 
   private:
     test_tcp_server& m_tcp_server;
     size_t m_open_request_target;
     std::atomic<size_t> m_next_id;
     std::atomic<size_t> m_error_count;
+    std::atomic<size_t> m_completed_count;
     std::vector<boost::uuids::uuid> m_connections;
   };
 
@@ -137,6 +142,7 @@ namespace
       , m_open_request_target(open_request_target)
       , m_open_request_count(0)
       , m_error_count(0)
+      , m_completed_count(0)
       , m_open_close_test_helper(tcp_server, open_request_target, max_opened_connection_count)
     {
     }
@@ -156,11 +162,13 @@ namespace
         {
           m_error_count.fetch_add(1, std::memory_order_relaxed);
         }
-      });
+        m_completed_count.fetch_add(1);
+      }, "0.0.0.0", epee::net_utils::ssl_support_t::e_ssl_support_disabled);
 
       if (!r)
       {
         m_error_count.fetch_add(1, std::memory_order_relaxed);
+        m_completed_count.fetch_add(1);
       }
 
       return true;
@@ -173,12 +181,14 @@ namespace
 
     size_t opened_connection_count() const { return m_open_close_test_helper.opened_connection_count(); }
     size_t error_count() const { return m_error_count.load(std::memory_order_relaxed); }
+    size_t completed_count() const { return m_completed_count.load(); }
 
   private:
     test_tcp_server& m_tcp_server;
     size_t m_open_request_target;
     std::atomic<size_t> m_open_request_count;
     std::atomic<size_t> m_error_count;
+    std::atomic<size_t> m_completed_count;
     open_close_test_helper m_open_close_test_helper;
   };
 
@@ -195,7 +205,7 @@ namespace
       m_thread_count = (std::max)(min_thread_count, boost::thread::hardware_concurrency() / 2);
 
       m_tcp_server.get_config_object().set_handler(&m_commands_handler);
-      m_tcp_server.get_config_object().m_invoke_timeout = CONNECTION_TIMEOUT;
+      m_tcp_server.get_config_object().m_invoke_timeout = 4 * DEFAULT_OPERATION_TIMEOUT;
 
       ASSERT_TRUE(m_tcp_server.init_server(clt_port, "127.0.0.1"));
       ASSERT_TRUE(m_tcp_server.run_server(m_thread_count, false));
@@ -213,7 +223,7 @@ namespace
           LOG_ERROR("Connection error: " << ec.message());
         }
         conn_status.store(1, std::memory_order_seq_cst);
-      }));
+      }, "0.0.0.0", epee::net_utils::ssl_support_t::e_ssl_support_disabled));
 
       EXPECT_TRUE(busy_wait_for(DEFAULT_OPERATION_TIMEOUT, [&]{ return 0 != conn_status.load(std::memory_order_seq_cst); })) << "connect_async timed out";
       ASSERT_EQ(1, conn_status.load(std::memory_order_seq_cst));
@@ -243,7 +253,7 @@ namespace
       test_levin_commands_handler &commands_handler = *commands_handler_ptr;
       test_tcp_server tcp_server(epee::net_utils::e_connection_type_RPC);
       tcp_server.get_config_object().set_handler(commands_handler_ptr, [](epee::levin::levin_commands_handler<test_connection_context> *handler)->void { delete handler; });
-      tcp_server.get_config_object().m_invoke_timeout = CONNECTION_TIMEOUT;
+      tcp_server.get_config_object().m_invoke_timeout = 4 * DEFAULT_OPERATION_TIMEOUT;
 
       if (!tcp_server.init_server(clt_port, "127.0.0.1")) return;
       if (!tcp_server.run_server(2, false)) return;
@@ -254,7 +264,7 @@ namespace
       tcp_server.connect_async("127.0.0.1", srv_port, CONNECTION_TIMEOUT, [&](const test_connection_context& context, const boost::system::error_code& ec) {
         cmd_context = context;
         conn_status.store(!ec ? 1 : -1, std::memory_order_seq_cst);
-      });
+      }, "0.0.0.0", epee::net_utils::ssl_support_t::e_ssl_support_disabled);
 
       if (!busy_wait_for(DEFAULT_OPERATION_TIMEOUT, [&]{ return 0 != conn_status.load(std::memory_order_seq_cst); })) return;
       if (1 != conn_status.load(std::memory_order_seq_cst)) return;
@@ -312,7 +322,7 @@ namespace
           req_status.store(0 < code ? 1 : -1, std::memory_order_seq_cst);
       }));
 
-      EXPECT_TRUE(busy_wait_for(DEFAULT_OPERATION_TIMEOUT, [&]{ return 0 != req_status.load(std::memory_order_seq_cst); })) << "get_server_statistics timed out";
+      EXPECT_TRUE(busy_wait_for(4 * DEFAULT_OPERATION_TIMEOUT, [&]{ return 0 != req_status.load(std::memory_order_seq_cst); })) << "get_server_statistics timed out";
       ASSERT_EQ(1, req_status.load(std::memory_order_seq_cst));
     }
 
@@ -358,7 +368,7 @@ TEST_F(net_load_test_clt, a_lot_of_client_connections_and_connections_closed_by_
   });
 
   // Wait for all open requests to complete
-  EXPECT_TRUE(busy_wait_for(DEFAULT_OPERATION_TIMEOUT, [&]{ return CONNECTION_COUNT + RESERVED_CONN_CNT <= m_commands_handler.new_connection_counter() + connection_opener.error_count(); }));
+  EXPECT_TRUE(busy_wait_for(DEFAULT_OPERATION_TIMEOUT, [&]{ return CONNECTION_COUNT <= connection_opener.completed_count(); }));
   LOG_PRINT_L0("number of opened connections / fails (total): " << m_commands_handler.new_connection_counter() <<
     " / " << connection_opener.error_count() << " (" << (m_commands_handler.new_connection_counter() + connection_opener.error_count()) << ")");
 
@@ -415,7 +425,7 @@ TEST_F(net_load_test_clt, a_lot_of_client_connections_and_connections_closed_by_
   });
 
   // Wait for all open requests to complete
-  EXPECT_TRUE(busy_wait_for(DEFAULT_OPERATION_TIMEOUT, [&](){ return CONNECTION_COUNT + RESERVED_CONN_CNT <= m_commands_handler.new_connection_counter() + connection_opener.error_count(); }));
+  EXPECT_TRUE(busy_wait_for(DEFAULT_OPERATION_TIMEOUT, [&](){ return CONNECTION_COUNT <= connection_opener.completed_count(); }));
   LOG_PRINT_L0("number of opened connections / fails (total): " << m_commands_handler.new_connection_counter() <<
     " / " << connection_opener.error_count() << " (" << (m_commands_handler.new_connection_counter() + connection_opener.error_count()) << ")");
 
@@ -492,7 +502,7 @@ TEST_F(net_load_test_clt, permament_open_and_close_and_connections_closed_by_cli
   });
 
   // Wait for all open requests to complete
-  EXPECT_TRUE(busy_wait_for(DEFAULT_OPERATION_TIMEOUT, [&](){ return CONNECTION_COUNT + RESERVED_CONN_CNT <= m_commands_handler.new_connection_counter() + connection_opener.error_count(); }));
+  EXPECT_TRUE(busy_wait_for(DEFAULT_OPERATION_TIMEOUT, [&](){ return CONNECTION_COUNT <= connection_opener.completed_count(); }));
   LOG_PRINT_L0("number of opened connections / fails (total): " << m_commands_handler.new_connection_counter() <<
     " / " << connection_opener.error_count() << " (" << (m_commands_handler.new_connection_counter() + connection_opener.error_count()) << ")");
 
@@ -564,7 +574,7 @@ TEST_F(net_load_test_clt, permament_open_and_close_and_connections_closed_by_ser
   });
 
   // Wait for all open requests to complete
-  EXPECT_TRUE(busy_wait_for(DEFAULT_OPERATION_TIMEOUT, [&](){ return CONNECTION_COUNT + RESERVED_CONN_CNT <= m_commands_handler.new_connection_counter() + connection_opener.error_count(); }));
+  EXPECT_TRUE(busy_wait_for(DEFAULT_OPERATION_TIMEOUT, [&](){ return CONNECTION_COUNT <= connection_opener.completed_count(); }));
   LOG_PRINT_L0("number of opened connections / fails (total): " << m_commands_handler.new_connection_counter() <<
     " / " << connection_opener.error_count() << " (" << (m_commands_handler.new_connection_counter() + connection_opener.error_count()) << ")");
   LOG_PRINT_L0("actual number of opened connections: " << m_tcp_server.get_config_object().get_connections_count());

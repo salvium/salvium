@@ -126,25 +126,21 @@ bool gen_double_spend_in_tx<txs_keeped_by_block>::generate(std::vector<test_even
   DO_CALLBACK(events, "mark_last_valid_block");
 
   std::vector<cryptonote::tx_source_entry> sources;
-  cryptonote::tx_source_entry se;
-  se.amount = tx_0.vout[0].amount;
-  se.push_output(0, boost::get<cryptonote::txout_to_key>(tx_0.vout[0].target).key, se.amount);
-  se.real_output = 0;
-  se.rct = false;
-  se.real_out_tx_key = get_tx_pub_key_from_extra(tx_0);
-  se.real_output_in_tx_index = 0;
-  sources.push_back(se);
+  std::vector<cryptonote::tx_destination_entry> unused_destinations;
+  fill_tx_sources_and_destinations(events, blk_1, bob_account, alice_account,
+                                   send_amount - TESTS_DEFAULT_FEE, TESTS_DEFAULT_FEE, 0,
+                                   sources, unused_destinations);
+  CHECK_AND_ASSERT_MES(sources.size() == 1, false, "Expected one production source for double-spend fixture");
   // Double spend!
-  sources.push_back(se);
-
-  cryptonote::tx_destination_entry de;
-  de.addr = alice_account.get_keys().m_account_address;
-  de.amount = 2 * se.amount - TESTS_DEFAULT_FEE;
-  std::vector<cryptonote::tx_destination_entry> destinations;
-  destinations.push_back(de);
+  sources.push_back(sources.front());
 
   cryptonote::transaction tx_1;
-  if (!construct_tx(bob_account.get_keys(), sources, destinations, 1/*hf_version*/, "SAL", cryptonote::transaction_type::TRANSFER, boost::none, std::vector<uint8_t>(), tx_1, 0))
+  CHECK_AND_ASSERT_MES(sources.front().amount <= std::numeric_limits<uint64_t>::max() / 2,
+                       false, "Double-spend fixture amount overflow");
+  if (!construct_tx_to_key(tx_1, bob_account, alice_account,
+                           2 * sources.front().amount - TESTS_DEFAULT_FEE,
+                           sources, TESTS_DEFAULT_FEE, true,
+                           rct::RangeProofPaddedBulletproof, 4, 1))
     return false;
 
   SET_EVENT_VISITOR_SETT(events, txs_keeped_by_block ? event_visitor_settings::set_txs_keeped_by_block : 0);

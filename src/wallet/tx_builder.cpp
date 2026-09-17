@@ -36,7 +36,7 @@
 #include "carrot_core/exceptions.h"
 #include "carrot_core/output_set_finalization.h"
 #include "carrot_core/scan.h"
-#include "carrot_core/scan_unsafe.cpp"
+#include "carrot_core/scan_unsafe.h"
 #include "carrot_core/address_utils.h"
 #include "carrot_core/core_types.h"
 #include "carrot_impl/address_device_ram_borrowed.h"
@@ -45,9 +45,10 @@
 #include "carrot_impl/input_selection.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "ringct/bulletproofs_plus.h"
-#include "wallet/scanning_tools.cpp"
+#include "ringct/rctSigs.h"
+#include "wallet/scanning_tools.h"
 #include "common/container_helpers.h"
-#include "carrot_core/payment_proposal.cpp"
+#include "carrot_core/payment_proposal.h"
 
 //third party headers
 
@@ -64,6 +65,30 @@ namespace wallet
 {
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+carrot::CarrotDestinationV1 tx_builder_detail::make_carrot_destination(
+    const cryptonote::tx_destination_entry& destination, const cryptonote::network_type nettype)
+{
+    carrot::payment_id_t payment_id = carrot::null_payment_id;
+    if (destination.is_integrated)
+    {
+        cryptonote::address_parse_info info;
+        CHECK_AND_ASSERT_THROW_MES(!destination.original.empty() &&
+            cryptonote::get_account_address_from_str(info, nettype, destination.original) &&
+            info.has_payment_id && info.is_carrot && info.address == destination.addr &&
+            info.is_subaddress == destination.is_subaddress,
+            "Integrated destination does not match its original Carrot address");
+        payment_id = carrot::raw_byte_convert<carrot::payment_id_t>(info.payment_id);
+        CHECK_AND_ASSERT_THROW_MES(payment_id != carrot::null_payment_id,
+            "A Carrot integrated address must have a nonzero payment ID");
+    }
+    return carrot::CarrotDestinationV1{
+        .address_spend_pubkey = destination.addr.m_spend_public_key,
+        .address_view_pubkey = destination.addr.m_view_public_key,
+        .is_subaddress = destination.is_subaddress,
+        .payment_id = payment_id,
+    };
+}
+
 template <typename T>
 static constexpr T div_ceil(T dividend, T divisor)
 {
@@ -87,13 +112,19 @@ static bool is_transfer_usable_for_input_selection(const wallet2::transfer_detai
     */
     // Reject locked outputs
     size_t blocks_locked_for = CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE;
-    if (td.m_tx.type == cryptonote::transaction_type::MINER || td.m_tx.type == cryptonote::transaction_type::PROTOCOL)
+    const bool is_miner_or_protocol =
+        td.m_tx.type == cryptonote::transaction_type::MINER ||
+        td.m_tx.type == cryptonote::transaction_type::PROTOCOL;
+    if (is_miner_or_protocol)
       blocks_locked_for = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
 
     return !td.m_spent
         && td.m_key_image_known
         && !td.m_key_image_partial
         && !td.m_frozen
+        // Inputs without a resolved asset-type output index can produce
+        // invalid ring references in carrot-era input verification.
+        && td.m_asset_type_output_index != std::numeric_limits<uint64_t>::max()
         && (top_block_index +1 >= td.m_block_height + blocks_locked_for)
         // && last_locked_block_index <= top_block_index
         && td.m_subaddr_index.major == from_account
@@ -108,10 +139,11 @@ static bool is_transfer_usable_for_input_selection(const wallet2::transfer_detai
 static bool build_payment_proposals(std::vector<carrot::CarrotPaymentProposalV1> &normal_payment_proposals_inout,
     std::vector<carrot::CarrotPaymentProposalVerifiableSelfSendV1> &selfsend_payment_proposals_inout,
     const cryptonote::tx_destination_entry &tx_dest_entry,
-    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map)
+    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> &subaddress_map,
+    const cryptonote::network_type nettype)
 {
     const auto subaddr_it = subaddress_map.find(tx_dest_entry.addr.m_spend_public_key);
-    const bool is_selfsend_dest = subaddr_it != subaddress_map.cend();
+    const bool is_selfsend_dest = !tx_dest_entry.is_integrated && subaddr_it != subaddress_map.cend();
 
     // Make N destinations
     if (is_selfsend_dest)
@@ -129,12 +161,7 @@ static bool build_payment_proposals(std::vector<carrot::CarrotPaymentProposalV1>
     }
     else // not *known* self-send address
     {
-        const carrot::CarrotDestinationV1 dest{
-            .address_spend_pubkey = tx_dest_entry.addr.m_spend_public_key,
-            .address_view_pubkey = tx_dest_entry.addr.m_view_public_key,
-            .is_subaddress = tx_dest_entry.is_subaddress
-            //! @TODO: payment ID 
-        };
+        const auto dest = tx_builder_detail::make_carrot_destination(tx_dest_entry, nettype);
 
         normal_payment_proposals_inout.push_back(carrot::CarrotPaymentProposalV1{
             .destination = dest,
@@ -149,12 +176,15 @@ static bool build_payment_proposals(std::vector<carrot::CarrotPaymentProposalV1>
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static cryptonote::tx_destination_entry make_tx_destination_entry(
-    const carrot::CarrotPaymentProposalV1 &payment_proposal)
+    const carrot::CarrotPaymentProposalV1 &payment_proposal, const cryptonote::network_type nettype)
 {
     cryptonote::tx_destination_entry dest = cryptonote::tx_destination_entry(payment_proposal.amount,
         {payment_proposal.destination.address_spend_pubkey, payment_proposal.destination.address_view_pubkey, /*m_is_carrot*/true},
         payment_proposal.destination.is_subaddress);
     dest.is_integrated = payment_proposal.destination.payment_id != carrot::null_payment_id;
+    if (dest.is_integrated)
+        dest.original = cryptonote::get_account_integrated_address_as_str(nettype, dest.addr,
+            carrot::raw_byte_convert<crypto::hash8>(payment_proposal.destination.payment_id));
     dest.asset_type = payment_proposal.asset_type;
     return dest;
 }
@@ -248,6 +278,20 @@ carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
     const std::string &asset_type,
     std::set<size_t> &selected_transfer_indices_out)
 {
+    struct input_filter_stats_t
+    {
+        size_t total = 0;
+        size_t spent = 0;
+        size_t key_image = 0;
+        size_t frozen = 0;
+        size_t locked = 0;
+        size_t account = 0;
+        size_t subaddress = 0;
+        size_t amount = 0;
+        size_t asset = 0;
+        size_t accepted = 0;
+    } stats;
+
     // Collect transfer_container into a `std::vector<carrot::InputCandidate>` for usable inputs
     std::vector<carrot::InputCandidate> input_candidates;
     std::vector<size_t> input_candidates_transfer_indices;
@@ -256,6 +300,56 @@ carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
     for (size_t i = 0; i < transfers.size(); ++i)
     {
         const wallet2::transfer_details &td = transfers.at(i);
+        ++stats.total;
+
+        size_t blocks_locked_for = CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE;
+        const bool is_miner_or_protocol =
+            td.m_tx.type == cryptonote::transaction_type::MINER ||
+            td.m_tx.type == cryptonote::transaction_type::PROTOCOL;
+        if (is_miner_or_protocol)
+            blocks_locked_for = CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
+
+        if (td.m_spent)
+        {
+            ++stats.spent;
+            continue;
+        }
+        if (!td.m_key_image_known || td.m_key_image_partial)
+        {
+            ++stats.key_image;
+            continue;
+        }
+        if (td.m_frozen)
+        {
+            ++stats.frozen;
+            continue;
+        }
+        if (!(top_block_index + 1 >= td.m_block_height + blocks_locked_for))
+        {
+            ++stats.locked;
+            continue;
+        }
+        if (td.m_subaddr_index.major != from_account)
+        {
+            ++stats.account;
+            continue;
+        }
+        if (!(from_subaddresses.empty() || from_subaddresses.count(td.m_subaddr_index.minor) == 1))
+        {
+            ++stats.subaddress;
+            continue;
+        }
+        if (!(td.amount() >= ignore_below && td.amount() <= ignore_above))
+        {
+            ++stats.amount;
+            continue;
+        }
+        if (td.asset_type != asset_type)
+        {
+            ++stats.asset;
+            continue;
+        }
+
         if (is_transfer_usable_for_input_selection(td,
                                                    from_account,
                                                    from_subaddresses,
@@ -264,6 +358,7 @@ carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
                                                    top_block_index,
                                                    asset_type))
         {
+            ++stats.accepted;
             input_candidates.push_back(carrot::InputCandidate{
                 .core = carrot::CarrotSelectedInput{
                     .amount = td.amount(),
@@ -275,6 +370,25 @@ carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
             });
             input_candidates_transfer_indices.push_back(i);
         }
+    }
+
+    if (input_candidates.empty())
+    {
+        MERROR("No usable input candidates. total=" << stats.total
+            << ", spent=" << stats.spent
+            << ", key_image=" << stats.key_image
+            << ", frozen=" << stats.frozen
+            << ", locked=" << stats.locked
+            << ", account=" << stats.account
+            << ", subaddress=" << stats.subaddress
+            << ", amount=" << stats.amount
+            << ", asset=" << stats.asset
+            << ", accepted=" << stats.accepted
+            << ", from_account=" << from_account
+            << ", top_block_index=" << top_block_index
+            << ", ignore_range=[" << cryptonote::print_money(ignore_below)
+            << "," << cryptonote::print_money(ignore_above) << "]"
+            << ", requested_asset='" << asset_type << "'");
     }
 
     // Create wrapper around `make_single_transfer_input_selector`
@@ -363,6 +477,7 @@ std::vector<cryptonote::tx_source_entry> get_sources(
 
         // Sanity check the asset_type for this TD is correct
         THROW_WALLET_EXCEPTION_IF(td.asset_type != source_asset, error::wallet_internal_error, "Input has wrong asset_type - expected " + source_asset + " but found " + td.asset_type);
+        THROW_WALLET_EXCEPTION_IF(td.m_tx.vin.empty(), error::wallet_internal_error, "Input TX has no inputs");
 
         src.amount = td.amount();
         src.rct = td.is_rct();
@@ -398,21 +513,13 @@ std::vector<cryptonote::tx_source_entry> get_sources(
         //paste real transaction to the random index
         auto it_to_replace = std::find_if(src.outputs.begin(), src.outputs.end(), [&](const tx_output_entry& a)
         {
-            // HERE BE DRAGONS!!!
-            // SRCG: ring tweak to indexed per asset_type - DO NOT COMMIT UNTIL IT IS ALL WORKING
-            //return a.first == td.m_global_output_index;
-            return a.first == td.m_asset_type_output_index;
-            // LAND AHOY!!!
+            return a.second.dest == rct::pk2rct(td.get_public_key());
         });
         THROW_WALLET_EXCEPTION_IF(it_to_replace == src.outputs.end(), error::wallet_internal_error,
             "real output not found");
 
         tx_output_entry real_oe;
-        // HERE BE DRAGONS!!!
-        // SRCG: ring tweak to indexed per asset_type - DO NOT COMMIT UNTIL IT IS ALL WORKING
-        //real_oe.first = td.m_global_output_index;
-        real_oe.first = td.m_asset_type_output_index;
-        // LAND AHOY!!!
+        real_oe.first = it_to_replace->first;
         real_oe.second.dest = rct::pk2rct(td.get_public_key());
         real_oe.second.mask = rct::commit(td.amount(), td.m_mask);
         *it_to_replace = real_oe;
@@ -474,7 +581,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
             build_payment_proposals(normal_payment_proposals,
                 selfsend_payment_proposals,
                 dst,
-                w.get_account().get_subaddress_map_cn());
+                w.get_account().get_subaddress_map_cn(), w.nettype());
             dsts.pop_back();
         }
 
@@ -579,6 +686,17 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     wallet2::unique_index_container subtract_fee_from_outputs,
     const std::uint64_t top_block_index)
 {
+    THROW_WALLET_EXCEPTION_IF(dsts.empty(), error::zero_destination);
+    const auto integrated_count = std::count_if(dsts.begin(), dsts.end(),
+        [](const cryptonote::tx_destination_entry& d) { return d.is_integrated; });
+    CHECK_AND_ASSERT_THROW_MES(integrated_count <= 1,
+        "A Carrot transaction may contain at most one integrated destination");
+    std::vector<uint8_t> proposal_extra = extra;
+    if (integrated_count)
+        CHECK_AND_ASSERT_THROW_MES(cryptonote::remove_field_from_tx_extra(proposal_extra,
+            typeid(cryptonote::tx_extra_nonce)), "Cannot remove legacy integrated payment ID");
+
+
     // Make sure all destinations have the SAME asset_type
     std::string asset_type = dsts[0].asset_type;
     if (dsts.size() > 1) {
@@ -611,7 +729,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
             const bool is_selfsend = build_payment_proposals(normal_payment_proposals,
                 selfsend_payment_proposals,
                 dst,
-                w.get_account().get_subaddress_map_cn());
+                w.get_account().get_subaddress_map_cn(), w.nettype());
             if (subtract_fee_from_outputs.count(dsts.size() - 1))
             {
                 if (is_selfsend)
@@ -643,7 +761,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
                                                              selfsend_payment_proposals,
                                                              fee_per_weight,
                                                              fee_quantization_mask,
-                                                             extra,
+                                                             proposal_extra,
                                                              tx_type,
                                                              std::move(select_inputs),
                                                              change_address_spend_pubkey,
@@ -775,6 +893,25 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const crypto::public_key change_address_spend_pubkey
       = find_change_address_spend_pubkey(w.get_account().get_subaddress_map_ref(), subaddr_account);
 
+    // Sweep callers encode integrated IDs in extra because their API accepts a
+    // decoded address. Move that ID into the Carrot destination before signing.
+    std::vector<uint8_t> proposal_extra = extra;
+    std::vector<cryptonote::tx_extra_field> extra_fields;
+    CHECK_AND_ASSERT_THROW_MES(cryptonote::parse_tx_extra(extra, extra_fields), "Invalid sweep transaction extra");
+    cryptonote::tx_extra_nonce nonce;
+    crypto::hash8 payment_id{};
+    const bool integrated = cryptonote::find_tx_extra_field_by_type(extra_fields, nonce);
+    if (integrated)
+    {
+        CHECK_AND_ASSERT_THROW_MES(!is_subaddress &&
+            cryptonote::get_encrypted_payment_id_from_tx_extra_nonce(nonce.nonce, payment_id),
+            "Carrot sweeps require a short payment ID in an integrated address");
+        CHECK_AND_ASSERT_THROW_MES(n_dests_per_tx == 1,
+            "An integrated sweep requires one destination per transaction");
+        CHECK_AND_ASSERT_THROW_MES(cryptonote::remove_field_from_tx_extra(proposal_extra,
+            typeid(cryptonote::tx_extra_nonce)), "Cannot remove legacy integrated payment ID");
+    }
+
     // get 1 payment proposal corresponding to (address, is_subaddres)
     std::vector<carrot::CarrotPaymentProposalV1> normal_payment_proposals;
     std::vector<carrot::CarrotPaymentProposalVerifiableSelfSendV1> selfsend_payment_proposals;
@@ -785,10 +922,13 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         de.addr = address;
         de.is_subaddress = is_subaddress;
         de.asset_type = asset_type;
+        de.is_integrated = integrated;
+        if (integrated)
+            de.original = cryptonote::get_account_integrated_address_as_str(w.nettype(), address, payment_id);
         const bool is_selfsend_dest = build_payment_proposals(normal_payment_proposals,
             selfsend_payment_proposals,
             de,
-            w.get_account().get_subaddress_map_cn());
+            w.get_account().get_subaddress_map_cn(), w.nettype());
         CHECK_AND_ASSERT_THROW_MES((is_selfsend_dest && selfsend_payment_proposals.size() == i+1)
                 || (!is_selfsend_dest && normal_payment_proposals.size() == i+1),
             __func__ << ": BUG in build_payment_proposals: incorrect count for payment proposal lists");
@@ -817,7 +957,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
                                                           selfsend_payment_proposals,
                                                           fee_per_weight,
                                                           fee_quantization_mask,
-                                                          extra,
+                                                          proposal_extra,
                                                           tx_type,
                                                           std::move(selected_inputs),
                                                           change_address_spend_pubkey,
@@ -1055,8 +1195,8 @@ bool get_address_openings_x_y(
         crypto::public_key address_spend_pubkey_out;
         carrot::payment_id_t nominal_payment_id_out;
         carrot::janus_anchor_t nominal_janus_anchor_out;
-        carrot::encrypted_janus_anchor_t encrypted_janus_anchor;
-        carrot::encrypted_payment_id_t encrypted_payment_id;
+        carrot::encrypted_janus_anchor_t encrypted_janus_anchor{};
+        carrot::encrypted_payment_id_t encrypted_payment_id{};
         carrot::scan_carrot_dest_info(
             rct::rct2pk(src.outputs[src.real_output].second.dest),
             src.outputs[src.real_output].second.mask,
@@ -1092,47 +1232,29 @@ void encrypt_change_index(
     const std::vector<carrot::CarrotPaymentProposalSelfSendV1> &selfsend_proposal_cores,
     const crypto::key_image &tx_first_key_image,
     const size_t change_index,
-    const std::unordered_map<crypto::public_key, size_t> &payments_indices,
+    const std::vector<std::pair<bool, size_t>> &output_order,
     std::vector<uint8_t> &change_masks_out
 ) {
     // 1. input context: input_context = "R" || KI_1
     const carrot::input_context_t input_context = carrot::make_carrot_input_context(tx_first_key_image);
 
-    // 2. collect proposals and selfsend proposals destinations
-    std::vector<std::tuple<crypto::public_key, size_t, bool>> destinations;
-    for (const auto &p : proposals) {
-        destinations.emplace_back(p.destination.address_spend_pubkey, payments_indices.at(p.destination.address_spend_pubkey), true);
-    }
-    for (const auto &p : selfsend_proposal_cores) {
-        destinations.emplace_back(p.destination_address_spend_pubkey, payments_indices.at(p.destination_address_spend_pubkey), false);
-    }
-
-    // 3. sort by indices
-    std::sort(destinations.begin(), destinations.end(),
-        [](const auto &a, const auto &b) {
-            return std::get<1>(a) < std::get<1>(b);
-        }
-    );
-
-    // 4. calculate change masks 
-    for (const auto &d: destinations) {
-        // get shared secret
+    CHECK_AND_ASSERT_THROW_MES(output_order.size() == proposals.size() + selfsend_proposal_cores.size() &&
+        change_index < output_order.size(), "Invalid output order for change encryption");
+    change_masks_out.clear();
+    change_masks_out.reserve(output_order.size());
+    std::vector<bool> normal_seen(proposals.size()), self_seen(selfsend_proposal_cores.size());
+    for (size_t output_index = 0; output_index < output_order.size(); ++output_index) {
+        const auto& position = output_order[output_index];
+        auto& seen = position.first ? self_seen : normal_seen;
+        CHECK_AND_ASSERT_THROW_MES(position.second < seen.size() && !seen[position.second], "Invalid or duplicate proposal position");
+        seen[position.second] = true;
         mx25519_pubkey eph_pubkey;
         mx25519_pubkey s_sender_receiver_unctx;
-        if (std::get<2>(d)) {
-            // normal payment proposal
-            const auto it = std::find_if(proposals.begin(), proposals.end(),
-                [&d](const carrot::CarrotPaymentProposalV1 &p) {
-                    return p.destination.address_spend_pubkey == std::get<0>(d);
-                });
-            CHECK_AND_ASSERT_THROW_MES(it != proposals.end(), "Failed to find normal payment proposal");
+        if (!position.first) {
             carrot::get_normal_proposal_ecdh_parts(
-                *it,
-                input_context,
-                eph_pubkey,
-                s_sender_receiver_unctx
-            );
+                proposals.at(position.second), input_context, eph_pubkey, s_sender_receiver_unctx);
         } else {
+            // Self-send outputs carry random padding, not a return destination.
             s_sender_receiver_unctx = crypto::rand<mx25519_pubkey>();
         }
 
@@ -1142,7 +1264,7 @@ void encrypt_change_index(
         memcpy(output_index_derivation.data, s_sender_receiver_unctx.data, sizeof(output_index_derivation.data));
         crypto::derivation_to_scalar(
             output_index_derivation,
-            std::get<1>(d),
+            output_index,
             output_index_key
         );
 
@@ -1198,6 +1320,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     size_t change_index = static_cast<size_t>(-1); // sentinel if no change output;
     carrot::RCTOutputEnoteProposal return_enote_out;
     std::unordered_map<crypto::public_key, size_t> payments_indices;
+    std::vector<std::pair<bool, size_t>> output_order;
     carrot::get_output_enote_proposals(tx_proposal.normal_payment_proposals,
         selfsend_payment_proposal_cores,
         tx_proposal.dummy_encrypted_payment_id,
@@ -1210,7 +1333,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         tx_proposal.tx_type,
         change_index,
         payments_indices,
-        nullptr);
+        &output_order);
     CHECK_AND_ASSERT_THROW_MES(output_enote_proposals.size() == n_outputs,
         "finalize_all_proofs_from_transfer_details: unexpected number of output enote proposals");
 
@@ -1240,7 +1363,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         selfsend_payment_proposal_cores,
         tx_proposal.key_images_sorted.at(0),
         change_index,
-        payments_indices,
+        output_order,
         change_masks);
 
     // serialize transaction
@@ -1262,7 +1385,17 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
     // Is this a ROLLUP TX? If so, store the rollup data
     if (tx_proposal.tx_type == cryptonote::transaction_type::ROLLUP)
       tx.layer2_rollup_data = tx_proposal.layer2_rollup_data;
+
+    CHECK_AND_ASSERT_THROW_MES(tx_proposal.extra.size() <= MAX_TX_EXTRA_SIZE - tx.extra.size(), "Oversized proposal extra");
+    tx.extra.insert(tx.extra.end(), tx_proposal.extra.begin(), tx_proposal.extra.end());
+    CHECK_AND_ASSERT_THROW_MES(cryptonote::sort_tx_extra(tx.extra, tx.extra, false), "Malformed proposal extra");
     
+    // Verify ownership, destinations and the complete unsigned payload before
+    // opening spend secrets or constructing proofs.
+    auto unsigned_pending = make_pending_carrot_tx(tx_proposal, transfers, w.get_account(), w.nettype());
+    unsigned_pending.tx = tx;
+    w.validate_pending_tx(unsigned_pending);
+
     // aliases
     hw::device &hwdev = acc_keys.get_device();
     const auto &sources = tx_proposal.sources;
@@ -1427,7 +1560,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
 //-------------------------------------------------------------------------------------------------------------------
 wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionProposalV1 &tx_proposal,
     const wallet2::transfer_container &transfers,
-    const carrot::carrot_and_legacy_account &account)
+    const carrot::carrot_and_legacy_account &account, const cryptonote::network_type nettype)
 {
     const std::size_t n_inputs = tx_proposal.key_images_sorted.size();
     const std::size_t n_outputs = tx_proposal.normal_payment_proposals.size() +
@@ -1515,7 +1648,7 @@ wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionPropos
         {
             const carrot::CarrotPaymentProposalV1 &normal_payment_proposal =
                 tx_proposal.normal_payment_proposals.at(payment_idx.second);
-            dest = make_tx_destination_entry(normal_payment_proposal);
+            dest = make_tx_destination_entry(normal_payment_proposal, nettype);
             ephemeral_privkeys.push_back(carrot::get_enote_ephemeral_privkey(normal_payment_proposal,
                 carrot::make_carrot_input_context(tx_first_key_image)));
         }
@@ -1575,12 +1708,13 @@ wallet2::pending_tx finalize_all_proofs_from_transfer_details_as_pending_tx(
 {
     wallet2::pending_tx ptx = make_pending_carrot_tx(tx_proposal,
         transfers,
-        w.get_account());
+        w.get_account(), w.nettype());
 
     ptx.tx = finalize_all_proofs_from_transfer_details(
         tx_proposal,
         w
     );
+    w.validate_pending_tx(ptx);
 
     return ptx;
 }

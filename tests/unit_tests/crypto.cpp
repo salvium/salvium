@@ -27,6 +27,13 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cstdint>
+#include <array>
+#include <boost/multiprecision/cpp_int.hpp>
+extern "C"
+{
+#include "crypto/crypto-ops.h"
+}
+#include <cstring>
 #include <gtest/gtest.h>
 #include <memory>
 #include <sstream>
@@ -81,12 +88,85 @@ TEST(Crypto, Ostream)
   EXPECT_TRUE(is_formatted<rct::key>());
 }
 
+TEST(Crypto, RandomIndexRejectsEmptyRange)
+{
+  EXPECT_THROW(crypto::rand_idx(uint64_t{0}), std::invalid_argument);
+  EXPECT_THROW(crypto::rand_idx(unsigned{0}), std::invalid_argument);
+  EXPECT_EQ(crypto::rand_idx(uint64_t{1}), 0);
+  for (unsigned i = 0; i < 100; ++i)
+    EXPECT_LT(crypto::rand_idx(uint64_t{7}), 7);
+}
+
+TEST(Crypto, ScalarReductionMatchesIntegerModulus)
+{
+  using boost::multiprecision::cpp_int;
+  const cpp_int order = (cpp_int(1) << 252) + cpp_int("27742317777372353535851937790883648493");
+  std::uint32_t random = 1;
+  for (std::size_t size : {32, 64})
+  {
+    for (unsigned int sample = 0; sample < 256; ++sample)
+    {
+      std::array<unsigned char, 64> bytes{};
+      for (std::size_t i = 0; i < size; ++i)
+      {
+        random = random * 1664525u + 1013904223u;
+        bytes[i] = sample < 3 ? (sample == 0 ? 0 : sample == 1 ? 0xff : 0x80) : random >> 24;
+      }
+      cpp_int expected = 0;
+      for (std::size_t i = size; i != 0; --i)
+        expected = (expected << 8) + bytes[i - 1];
+      expected %= order;
+      const auto original = bytes;
+      std::array<unsigned char, 32> copied{};
+      if (size == 32)
+      {
+        sc_reduce32copy(copied.data(), bytes.data());
+        ASSERT_EQ(bytes, original);
+      }
+      if (size == 32) sc_reduce32(bytes.data());
+      else sc_reduce(bytes.data());
+      for (std::size_t i = 0; i < 32; ++i)
+      {
+        ASSERT_EQ(bytes[i], static_cast<unsigned int>(expected & 0xff)) << size << ":" << sample << ":" << i;
+        if (size == 32) ASSERT_EQ(copied[i], bytes[i]);
+        expected >>= 8;
+      }
+      if (size == 32)
+      {
+        auto overlapping = original;
+        sc_reduce32copy(overlapping.data() + 1, overlapping.data());
+        ASSERT_TRUE(std::equal(bytes.begin(), bytes.begin() + 32, overlapping.begin() + 1));
+      }
+    }
+  }
+}
+
 TEST(Crypto, null_keys)
 {
   char zero[32];
   memset(zero, 0, 32);
   ASSERT_EQ(memcmp(crypto::null_skey.data, zero, 32), 0);
   ASSERT_EQ(memcmp(crypto::null_pkey.data, zero, 32), 0);
+}
+
+TEST(Crypto, groestl_unaligned_input)
+{
+  constexpr std::size_t input_size = 128;
+  alignas(std::uint32_t) std::uint8_t aligned[input_size];
+  alignas(std::uint32_t) std::uint8_t input[input_size + alignof(std::uint32_t)];
+  char expected[crypto::HASH_SIZE];
+  char actual[crypto::HASH_SIZE];
+
+  for (std::size_t i = 0; i < input_size; ++i)
+    aligned[i] = static_cast<std::uint8_t>(i);
+  crypto::hash_extra_groestl(aligned, input_size, expected);
+
+  for (std::size_t offset = 0; offset < alignof(std::uint32_t); ++offset)
+  {
+    std::memcpy(input + offset, aligned, input_size);
+    crypto::hash_extra_groestl(input + offset, input_size, actual);
+    EXPECT_EQ(0, std::memcmp(expected, actual, sizeof(expected)));
+  }
 }
 
 TEST(Crypto, verify_32)

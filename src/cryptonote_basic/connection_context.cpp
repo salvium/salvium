@@ -35,7 +35,7 @@
 
 namespace cryptonote
 {
-  std::size_t cryptonote_connection_context::get_max_bytes(const int command) noexcept
+  std::size_t cryptonote_connection_context::get_max_bytes(const int command) const noexcept
   {
     switch (command)
     {
@@ -54,7 +54,12 @@ namespace cryptonote
     case cryptonote::NOTIFY_REQUEST_GET_OBJECTS::ID:
       return 1024 * 1024 * 2; // 2 MB
     case cryptonote::NOTIFY_RESPONSE_GET_OBJECTS::ID:
-      return 1024 * 1024 * 128; // 128 MB (max packet is a bit less than 100 MB though)
+      // A response is valid only for the block hashes requested on this
+      // connection. This is a protocol-state check, not a traffic-volume cap.
+      if (m_expect_response != cryptonote::NOTIFY_RESPONSE_GET_OBJECTS::ID ||
+          m_expected_response_max_bytes == 0)
+        return 0;
+      return std::min<std::size_t>(1024 * 1024 * 128, m_expected_response_max_bytes);
     case cryptonote::NOTIFY_REQUEST_CHAIN::ID:
       return 512 * 1024; // 512 kB
     case cryptonote::NOTIFY_RESPONSE_CHAIN_ENTRY::ID:
@@ -65,6 +70,8 @@ namespace cryptonote
       return 1024 * 1024; // 1 MB
     case cryptonote::NOTIFY_GET_TXPOOL_COMPLEMENT::ID:
       return 1024 * 1024 * 4; // 4 MB
+    case cryptonote::NOTIFY_SALCHAT_ENVELOPE::ID:
+      return cryptonote::SALCHAT_MAX_PACKET_BYTES;
     default:
       break;
     };
@@ -80,6 +87,7 @@ namespace cryptonote
     m_expected_heights.clear();
     m_expected_heights.shrink_to_fit();
     m_requested_objects.clear();
+    m_expected_response_max_bytes = 0;
   }
 
   boost::optional<crypto::hash> cryptonote_connection_context::get_expected_hash(const uint64_t height) const

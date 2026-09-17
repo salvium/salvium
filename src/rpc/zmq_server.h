@@ -36,6 +36,7 @@
 
 #include "common/command_line.h"
 #include "cryptonote_basic/fwd.h"
+#include <array>
 #include "net/zmq.h"
 #include "rpc/fwd.h"
 #include "rpc/rpc_handler.h"
@@ -51,7 +52,9 @@ class ZmqServer final
 {
   public:
 
-    ZmqServer(RpcHandler& h);
+    // Empty key_file creates an ephemeral identity (useful for embedded tests).
+    ZmqServer(RpcHandler& h, bool restricted, bool curve = true, const std::string& key_file = {});
+    const std::string& public_key() const noexcept { return curve_public_key; }
 
     ~ZmqServer();
 
@@ -68,6 +71,9 @@ class ZmqServer final
 
   private:
     RpcHandler& handler;
+    const bool restricted;
+    std::array<char, 41> curve_secret_key{};
+    std::string curve_public_key;
 
     net::zmq::context context;
 

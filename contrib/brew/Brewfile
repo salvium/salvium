@@ -1,5 +1,6 @@
-# Brewfile for Monero
-# A homebrew Brewfile installs all required dependencies in one shot
+# Brewfile for Salvium
+# Install dependencies for release/static, debug, tests/sanitizers, coverage,
+# and fuzz builds in one shot.
 # see https://coderwall.com/p/afmnbq/homebrew-s-new-feature-brewfiles
 #     https://github.com/Homebrew/homebrew-bundle
 # execute brew bundle in the directory containing the Brewfile
@@ -18,6 +19,10 @@ brew "cmake"
 brew "pkg-config"
 brew "boost"
 brew "openssl"
+brew "icu4c"
+brew "zlib"
+brew "zstd"
+brew "afl++"
 brew "hidapi"
 brew "zmq"
 brew "libpgm"

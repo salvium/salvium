@@ -85,7 +85,7 @@ bool one_block::verify_1(cryptonote::core& c, size_t ev_index, const std::vector
     CHECK_TEST_CONDITION(r);
     CHECK_TEST_CONDITION(blocks.size() == 1);
     //CHECK_TEST_CONDITION(outs.size() == blocks.size());
-    CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 1);
+    CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 2);
     CHECK_TEST_CONDITION(blocks.back() == boost::get<cryptonote::block>(events[0]));
 
     return true;
@@ -120,6 +120,7 @@ bool gen_simple_chain_001::generate(std::vector<test_event_entry> &events)
     std::cout << "BALANCE = " << get_balance(miner, chain, mtx) << std::endl;
 
     REWIND_BLOCKS(events, blk_2r, blk_2, miner);
+    SET_EVENT_VISITOR_SETT(events, event_visitor_settings::set_txs_keeped_by_block);
     MAKE_TX_LIST_START(events, txlist_0, miner, alice, MK_COINS(1), blk_2);
     MAKE_TX_LIST(events, txlist_0, miner, alice, MK_COINS(2), blk_2);
     MAKE_TX_LIST(events, txlist_0, miner, alice, MK_COINS(4), blk_2);

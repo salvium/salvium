@@ -28,6 +28,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "gtest/gtest.h"
+#include "wallet/output_distribution.h"
 #include "misc_log_ex.h"
 #include "rpc/rpc_handler.h"
 #include "cryptonote_core/cryptonote_core.h"
@@ -177,4 +178,19 @@ TEST(output_distribution, part_noncumulative)
   ASSERT_TRUE(res != boost::none);
   ASSERT_EQ(res->distribution.size(), 5);
   ASSERT_EQ(res->distribution, std::vector<uint64_t>({0, 1, 5, 1, 4}));
+}
+
+TEST(wallet_output_distribution, validates_before_accumulating) {
+  std::vector<uint64_t> counts{2,0,3};
+  ASSERT_TRUE(tools::accumulate_output_distribution(counts, 4, 100, 7));
+  EXPECT_EQ((std::vector<uint64_t>{6,6,9}), counts);
+  for (const auto bad : {std::vector<uint64_t>{}, std::vector<uint64_t>{UINT64_MAX,1}}) {
+    auto actual = bad;
+    EXPECT_FALSE(tools::accumulate_output_distribution(actual, 0, 0, 0)); EXPECT_EQ(bad, actual);
+  }
+  counts = {1};
+  EXPECT_FALSE(tools::accumulate_output_distribution(counts, UINT64_MAX, 0, 0));
+  EXPECT_FALSE(tools::accumulate_output_distribution(counts, 0, UINT64_MAX, 0));
+  EXPECT_FALSE(tools::accumulate_output_distribution(counts, 0, 0, 2));
+  EXPECT_EQ((std::vector<uint64_t>{1}), counts);
 }

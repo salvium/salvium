@@ -30,6 +30,7 @@
 #ifndef MONERO_DEBUG_LINK_H
 #define MONERO_DEBUG_LINK_H
 
+#include <type_traits>
 #include "transport.hpp"
 #include "messages/messages-debug.pb.h"
 
@@ -60,7 +61,7 @@ namespace trezor {
         const boost::optional<messages::MessageType> &resp_type = boost::none,
         bool no_wait = false)
     {
-      BOOST_STATIC_ASSERT(boost::is_base_of<google::protobuf::Message, t_message>::value);
+      static_assert(std::is_base_of<google::protobuf::Message, t_message>::value, "Expected a protobuf message");
 
       m_transport->write(req);
       if (no_wait){

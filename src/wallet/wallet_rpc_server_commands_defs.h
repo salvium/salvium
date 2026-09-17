@@ -47,7 +47,7 @@
 // advance which version they will stop working with
 // Don't go over 32767 for any of these
 #define WALLET_RPC_VERSION_MAJOR 1
-#define WALLET_RPC_VERSION_MINOR 28
+#define WALLET_RPC_VERSION_MINOR 29
 #define MAKE_WALLET_RPC_VERSION(major,minor) (((major)<<16)|(minor))
 #define WALLET_RPC_VERSION MAKE_WALLET_RPC_VERSION(WALLET_RPC_VERSION_MAJOR, WALLET_RPC_VERSION_MINOR)
 namespace tools
@@ -1683,6 +1683,101 @@ namespace wallet_rpc
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
+  // A reserve proof bound to one public audit challenge and one synchronized
+  // chain snapshot. Private wallet keys are used locally and are never
+  // serialized into either the request or response.
+  struct COMMAND_RPC_GET_AUDIT_RESERVE_PROOF
+  {
+    struct request_t
+    {
+      bool all;
+      uint32_t account_index;
+      uint64_t amount;
+      std::string epoch_id;       // 32-byte hex
+      std::string challenge;      // 32-byte random hex nonce
+      std::string policy_hash;    // 32-byte hex
+      uint64_t snapshot_height;
+      std::string snapshot_hash;  // 32-byte hex
+      uint64_t expiry_height;
+      std::string confirmation;   // hash of the canonical audit context
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(all)
+        KV_SERIALIZE(account_index)
+        KV_SERIALIZE(amount)
+        KV_SERIALIZE(epoch_id)
+        KV_SERIALIZE(challenge)
+        KV_SERIALIZE(policy_hash)
+        KV_SERIALIZE(snapshot_height)
+        KV_SERIALIZE(snapshot_hash)
+        KV_SERIALIZE(expiry_height)
+        KV_SERIALIZE(confirmation)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    struct response_t
+    {
+      std::string signature;
+      std::string confirmation;
+      std::string address;
+      uint64_t s_view_balance;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(signature)
+        KV_SERIALIZE(confirmation)
+        KV_SERIALIZE(address)
+        KV_SERIALIZE(s_view_balance)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  struct COMMAND_RPC_CHECK_AUDIT_RESERVE_PROOF
+  {
+    struct request_t
+    {
+      std::string address;
+      std::string epoch_id;
+      std::string challenge;
+      std::string policy_hash;
+      uint64_t snapshot_height;
+      std::string snapshot_hash;
+      uint64_t expiry_height;
+      std::string signature;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(address)
+        KV_SERIALIZE(epoch_id)
+        KV_SERIALIZE(challenge)
+        KV_SERIALIZE(policy_hash)
+        KV_SERIALIZE(snapshot_height)
+        KV_SERIALIZE(snapshot_hash)
+        KV_SERIALIZE(expiry_height)
+        KV_SERIALIZE(signature)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    struct response_t
+    {
+      bool good;
+      uint64_t total;
+      uint64_t spent;
+      bool snapshot_current;
+      std::string confirmation;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(good)
+        KV_SERIALIZE(total)
+        KV_SERIALIZE(spent)
+        KV_SERIALIZE(snapshot_current)
+        KV_SERIALIZE(confirmation)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
   struct COMMAND_RPC_GET_TRANSFERS
   {
     struct request_t
@@ -3037,6 +3132,117 @@ namespace wallet_rpc
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  struct salchat_identity_info
+  {
+    bool initialized; std::string spend_public_key, signing_public_key, encryption_public_key, salvium_address; uint64_t created_at;
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(initialized) KV_SERIALIZE(spend_public_key) KV_SERIALIZE(signing_public_key) KV_SERIALIZE(encryption_public_key)
+      KV_SERIALIZE(salvium_address) KV_SERIALIZE(created_at)
+    END_KV_SERIALIZE_MAP()
+  };
+  struct salchat_contact_info
+  {
+    std::string contact_id, label, spend_public_key, signing_public_key, encryption_public_key, salvium_address;
+    bool blocked; uint64_t created_at;
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(contact_id) KV_SERIALIZE(label) KV_SERIALIZE(spend_public_key) KV_SERIALIZE(signing_public_key)
+      KV_SERIALIZE(encryption_public_key) KV_SERIALIZE(salvium_address)
+      KV_SERIALIZE(blocked) KV_SERIALIZE(created_at)
+    END_KV_SERIALIZE_MAP()
+  };
+  struct salchat_message_info
+  {
+    std::string message_id, contact_id, content, sender_salvium_address, sender_signing_public_key;
+    uint8_t type, direction, state; uint64_t created_at, received_at, expires_height, blocks_left;
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(message_id) KV_SERIALIZE(contact_id) KV_SERIALIZE(content)
+      KV_SERIALIZE(sender_salvium_address) KV_SERIALIZE(sender_signing_public_key)
+      KV_SERIALIZE(type) KV_SERIALIZE(direction)
+      KV_SERIALIZE(state) KV_SERIALIZE(created_at) KV_SERIALIZE(received_at)
+      KV_SERIALIZE(expires_height) KV_SERIALIZE(blocks_left)
+    END_KV_SERIALIZE_MAP()
+  };
+
+  struct COMMAND_RPC_SALCHAT_GET_IDENTITY
+  {
+    struct request_t { BEGIN_KV_SERIALIZE_MAP() END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { salchat_identity_info identity; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(identity) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_ROTATE_IDENTITY
+  {
+    struct request_t { BEGIN_KV_SERIALIZE_MAP() END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { salchat_identity_info identity; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(identity) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_GET_ADDRESS
+  {
+    struct request_t { BEGIN_KV_SERIALIZE_MAP() END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { std::string address; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(address) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_ADD_CONTACT
+  {
+    struct request_t { std::string label, address, encryption_public_key; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(label) KV_SERIALIZE(address) KV_SERIALIZE(encryption_public_key) END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { salchat_contact_info contact; uint64_t promoted_messages; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(contact) KV_SERIALIZE(promoted_messages) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_ACCEPT_CONTACT
+  {
+    struct request_t { std::string label, message_id; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(label) KV_SERIALIZE(message_id) END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { salchat_contact_info contact; uint64_t promoted_messages; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(contact) KV_SERIALIZE(promoted_messages) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_REMOVE_CONTACT
+  {
+    struct request_t { std::string contact_id; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(contact_id) END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { bool removed; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(removed) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_BLOCK_CONTACT
+  {
+    struct request_t { std::string contact_id; bool blocked; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(contact_id) KV_SERIALIZE_OPT(blocked,true) END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { bool updated; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(updated) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_LIST_CONTACTS
+  {
+    struct request_t { BEGIN_KV_SERIALIZE_MAP() END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { std::vector<salchat_contact_info> contacts; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(contacts) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_SEND_MESSAGE
+  {
+    struct request_t { std::string contact_id, message; uint64_t ttl; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(contact_id) KV_SERIALIZE(message) KV_SERIALIZE_OPT(ttl,(uint64_t)cryptonote::SALCHAT_MAX_TTL_SECONDS) END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { std::string message_id, reason; bool submitted; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(message_id) KV_SERIALIZE(submitted) KV_SERIALIZE(reason) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_RECEIVE_MESSAGES
+  {
+    struct request_t { uint64_t limit; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE_OPT(limit,(uint64_t)100) END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t
+    {
+      uint64_t received, quarantined, rejected;
+      std::vector<salchat_message_info> new_messages;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(received) KV_SERIALIZE(quarantined) KV_SERIALIZE(rejected)
+        KV_SERIALIZE(new_messages)
+      END_KV_SERIALIZE_MAP()
+    };
+    using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_LIST_MESSAGES
+  {
+    struct request_t { std::string contact_id; uint64_t limit; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE_OPT(contact_id,(std::string)"") KV_SERIALIZE_OPT(limit,(uint64_t)100) END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { std::vector<salchat_message_info> messages; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(messages) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_GET_MESSAGE
+  {
+    struct request_t { std::string message_id; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(message_id) END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { bool found; salchat_message_info message; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(found) KV_SERIALIZE(message) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_DELETE_MESSAGE
+  {
+    struct request_t { std::string message_id; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(message_id) END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { bool removed; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(removed) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
+  };
+  struct COMMAND_RPC_SALCHAT_GET_STATUS
+  {
+    struct request_t { BEGIN_KV_SERIALIZE_MAP() END_KV_SERIALIZE_MAP() }; using request=epee::misc_utils::struct_init<request_t>;
+    struct response_t { bool identity_initialized, daemon_available, daemon_enabled; uint64_t contacts, messages, cached_messages, waiting_messages; std::string error; BEGIN_KV_SERIALIZE_MAP() KV_SERIALIZE(identity_initialized) KV_SERIALIZE(daemon_available) KV_SERIALIZE(daemon_enabled) KV_SERIALIZE(contacts) KV_SERIALIZE(messages) KV_SERIALIZE(cached_messages) KV_SERIALIZE(waiting_messages) KV_SERIALIZE(error) END_KV_SERIALIZE_MAP() }; using response=epee::misc_utils::struct_init<response_t>;
   };
 }
 }

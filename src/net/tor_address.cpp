@@ -27,6 +27,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "net/host.h"
 #include "tor_address.h"
 
 #include <algorithm>
@@ -112,7 +113,9 @@ namespace net
         const boost::string_ref port =
             address.substr(host.size() + (host.size() == address.size() ? 0 : 1));
 
-        MONERO_CHECK(host_check(host));
+        std::string normalized_host{host};
+        net::canonicalize_host(normalized_host);
+        MONERO_CHECK(host_check(normalized_host));
 
         std::uint16_t porti = default_port;
         if (!port.empty() && !epee::string_tools::get_xtype_from_string(porti, std::string{port}))
@@ -120,7 +123,7 @@ namespace net
 
         static_assert(v2_length <= v3_length, "bad internal host size");
         static_assert(v3_length + sizeof(tld) == sizeof(tor_address::host_), "bad internal host size");
-        return tor_address{host, porti};
+        return tor_address{normalized_host, porti};
     }
 
     bool tor_address::_load(epee::serialization::portable_storage& src, epee::serialization::section* hparent)

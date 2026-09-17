@@ -28,6 +28,7 @@
 
 set(libwallet_api_tests_sources
   main.cpp
+  refresh_lock.cpp
 )
 
 set(libwallet_api_tests_headers

@@ -57,6 +57,10 @@ namespace cryptonote
 {
 namespace levin
 {
+  // Keep transaction relay frames below the transport's soft queue ceiling.
+  // This is relay framing only; it does not change transaction validity.
+  constexpr std::size_t TX_RELAY_BATCH_MAX_BYTES = 4 * 1024 * 1024;
+
   namespace detail
   {
     using p2p_context = nodetool::p2p_connection_context_t<cryptonote::cryptonote_connection_context>;

@@ -49,13 +49,7 @@ BEGIN_INIT_SIMPLE_FUZZER()
   wallet->set_subaddress_lookahead(1, 1);
   wallet->generate("", "", spendkey, true, false);
 
-  cryptonote::address_parse_info info;
-  if (!cryptonote::get_account_address_from_str_or_url(info, cryptonote::TESTNET, "9uVsvEryzpN8WH2t1WWhFFCG5tS8cBNdmJYNRuckLENFimfauV5pZKeS1P2CbxGkSDTUPHXWwiYE5ZGSXDAGbaZgDxobqDN"))
-  {
-    std::cerr << "failed to parse address" << std::endl;
-    return 1;
-  }
-  address = info.address;
+  address = wallet->get_account().get_keys().m_account_address;
 END_INIT_SIMPLE_FUZZER()
 
 BEGIN_SIMPLE_FUZZER()

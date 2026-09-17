@@ -39,10 +39,12 @@
 #include "subaddress_account.h"
 #include "common_defines.h"
 #include "common/util.h"
+#include "wallet/salchat_service.h"
 
 #include "mnemonics/electrum-words.h"
 #include "mnemonics/english.h"
 #include <boost/format.hpp>
+#include <cstring>
 #include <sstream>
 #include <unordered_map>
 
@@ -54,19 +56,6 @@ using namespace cryptonote;
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "WalletAPI"
-
-#define LOCK_REFRESH() \
-    bool refresh_enabled = m_refreshEnabled; \
-    m_refreshEnabled = false; \
-    m_wallet->stop(); \
-    m_refreshCV.notify_one(); \
-    boost::mutex::scoped_lock lock(m_refreshMutex); \
-    boost::mutex::scoped_lock lock2(m_refreshMutex2); \
-    epee::misc_utils::auto_scope_leave_caller scope_exit_handler = epee::misc_utils::create_scope_leave_handler([&](){ \
-        /* m_refreshMutex's still locked here */ \
-        if (refresh_enabled) \
-            startRefresh(); \
-    })
 
 #define PRE_VALIDATE_BACKGROUND_SYNC() \
   do \
@@ -92,7 +81,34 @@ using namespace cryptonote;
 
 namespace Monero {
 
+void WalletListener::onDevicePassphraseRequestSecure(bool& on_device,
+    const DevicePassphraseCallback& receive)
+{
+    // Preserve existing listener implementations, but erase the returned
+    // string even if allocation or the receiving callback throws.
+    auto passphrase = onDevicePassphraseRequest(on_device);
+    struct WipeReturnedPassphrase
+    {
+        optional<std::string>& value;
+        ~WipeReturnedPassphrase()
+        {
+            if (value && !(*value).empty())
+                memwipe(&(*value)[0], (*value).size());
+        }
+    } wipe{passphrase};
+    if (passphrase && !on_device)
+        receive((*passphrase).data(), (*passphrase).size());
+}
+
 namespace {
+    struct RefreshContext
+    {
+        WalletImpl *wallet;
+        RefreshContext *previous;
+    };
+
+    thread_local RefreshContext *current_refresh = nullptr;
+
     // copy-pasted from simplewallet
     static const int    DEFAULT_REFRESH_INTERVAL_MILLIS = 1000 * 10;
     // limit maximum refresh interval as one minute
@@ -101,6 +117,33 @@ namespace {
     static const int    DEFAULT_REMOTE_NODE_REFRESH_INTERVAL_MILLIS = 1000 * 10;
     // Connection timeout 20 sec
     static const int    DEFAULT_CONNECTION_TIMEOUT_MILLIS = 1000 * 20;
+
+    bool is_reserved_cache_attribute(const std::string &key)
+    {
+      return key.compare(0, 8, "salchat.") == 0;
+    }
+
+    SalchatIdentity salchat_identity(const salchat::public_identity &in)
+    {
+      return {in.initialized, in.spend_public_key, in.signing_public_key, in.encryption_public_key,
+        in.salvium_address, in.created_at};
+    }
+
+    SalchatContact salchat_contact(const salchat::contact &in)
+    {
+      return {salchat::service::id_hex(in.id), in.label,
+        salchat::service::key_hex(in.spend_public_key),
+        salchat::service::key_hex(in.signing_public_key), salchat::service::key_hex(in.encryption_public_key),
+        in.salvium_address, in.blocked, in.created_at};
+    }
+
+    SalchatMessage salchat_message(const salchat::message &in, const uint64_t currentHeight)
+    {
+      return {salchat::service::id_hex(in.id), salchat::service::id_hex(in.contact_id), in.content,
+        in.sender_salvium_address, salchat::service::key_hex(in.sender_signing_public_key), static_cast<uint8_t>(in.type),
+        static_cast<uint8_t>(in.direction), static_cast<uint8_t>(in.state), in.created_at, in.received_at,
+        in.expires_height, in.expires_height > currentHeight ? in.expires_height-currentHeight : 0};
+    }
 
     std::string get_default_ringdb_path(cryptonote::network_type nettype)
     {
@@ -274,15 +317,18 @@ struct Wallet2CallbackImpl : public tools::i_wallet2_callback
 
     virtual boost::optional<epee::wipeable_string> on_device_passphrase_request(bool & on_device)
     {
+      boost::optional<epee::wipeable_string> passphrase;
       if (m_listener) {
-        auto passphrase = m_listener->onDevicePassphraseRequest(on_device);
-        if (passphrase) {
-          return boost::make_optional(epee::wipeable_string((*passphrase).data(), (*passphrase).size()));
-        }
+        m_listener->onDevicePassphraseRequestSecure(on_device,
+          [&](const char* data, std::size_t size) {
+            passphrase.emplace();
+            if (size != 0)
+              passphrase->append(data, size);
+          });
       } else {
         on_device = true;
       }
-      return boost::none;
+      return on_device ? boost::none : std::move(passphrase);
     }
 
     virtual void on_device_progress(const hw::device_progress & event)
@@ -358,7 +404,8 @@ bool Wallet::keyValid(const std::string &secret_key_string, const std::string &a
       error = tr("Failed to parse key");
       return false;
   }
-  crypto::secret_key key = *reinterpret_cast<const crypto::secret_key*>(key_data.data());
+  crypto::secret_key key;
+  std::memcpy(key.data, key_data.data(), sizeof(key.data));
 
   // check the key match the given address
   crypto::public_key pkey;
@@ -422,6 +469,98 @@ void Wallet::error(const std::string &category, const std::string &str) {
 }
 
 ///////////////////////// WalletImpl implementation ////////////////////////
+thread_local WalletImpl::RefreshLock *WalletImpl::RefreshLock::s_current = nullptr;
+
+WalletImpl::RefreshLock::RefreshLock(WalletImpl &wallet, bool interrupt_refresh)
+    : m_wallet(wallet)
+    , m_previous(nullptr)
+    , m_refreshLock(wallet.m_refreshMutex, boost::defer_lock)
+    , m_refreshLock2(wallet.m_refreshMutex2, boost::defer_lock)
+{
+    if (wallet.refreshCallbackOnCurrentThread() || heldByCurrentThread())
+        throw std::logic_error("Cannot mutate wallet from a refresh callback or another wallet operation");
+    {
+        boost::lock_guard<boost::mutex> lock(m_wallet.m_refreshLockStateMutex);
+        ++m_wallet.m_refreshLockRequests;
+        if (m_wallet.m_refreshEnabled.exchange(false))
+            m_wallet.m_refreshLockRestart = true;
+        if (interrupt_refresh && m_wallet.m_refreshLockRequests == 1)
+        {
+            m_wallet.m_wallet->suspend_refresh();
+        }
+    }
+    try
+    {
+        m_refreshLock.lock();
+        m_refreshLock2.lock();
+        if (!interrupt_refresh)
+            m_wallet.m_wallet->resume_refresh();
+    }
+    catch (...)
+    {
+        release();
+        throw;
+    }
+    m_previous = s_current;
+    s_current = this;
+}
+
+WalletImpl::RefreshLock::~RefreshLock()
+{
+    s_current = m_previous;
+    release();
+}
+
+bool WalletImpl::RefreshLock::heldByCurrentThread(const WalletImpl &wallet)
+{
+    for (RefreshLock *lock = s_current; lock; lock = lock->m_previous)
+        if (&lock->m_wallet == &wallet)
+            return true;
+    return false;
+}
+
+bool WalletImpl::RefreshLock::heldByCurrentThread()
+{
+    return s_current != nullptr;
+}
+
+void WalletImpl::RefreshLock::release()
+{
+    boost::lock_guard<boost::mutex> lock(m_wallet.m_refreshLockStateMutex);
+    if (--m_wallet.m_refreshLockRequests == 0)
+    {
+        m_wallet.m_wallet->resume_refresh();
+        if (m_wallet.m_refreshLockRestart && !m_wallet.m_refreshThreadDone)
+            m_wallet.m_refreshEnabled = true;
+        m_wallet.m_refreshLockRestart = false;
+        if (m_wallet.m_refreshEnabled)
+            m_wallet.requestRefresh();
+    }
+}
+
+bool WalletImpl::refreshingOnCurrentThread() const
+{
+    for (RefreshContext *context = current_refresh; context; context = context->previous)
+        if (context->wallet == this)
+            return true;
+    return false;
+}
+
+bool WalletImpl::refreshCallbackOnCurrentThread() const
+{
+    return current_refresh != nullptr;
+}
+
+bool WalletImpl::refreshLockedOnCurrentThread() const
+{
+    return RefreshLock::heldByCurrentThread(*this);
+}
+
+bool WalletImpl::refreshLockHeldOnCurrentThread() const
+{
+    return RefreshLock::heldByCurrentThread();
+}
+
 WalletImpl::WalletImpl(NetworkType nettype, uint64_t kdf_rounds)
     :m_wallet(nullptr)
     , m_status(Wallet::Status_Ok)
@@ -456,13 +595,8 @@ WalletImpl::~WalletImpl()
 {
 
     LOG_PRINT_L1(__FUNCTION__);
+    close(false); // Stops refresh before deinitializing the wallet or its callback.
     m_wallet->callback(NULL);
-    // Pause refresh thread - prevents refresh from starting again
-    WalletImpl::pauseRefresh(); // Call the method directly (not polymorphically) to protect against UB in destructor.
-    // Close wallet - stores cache and stops ongoing refresh operation 
-    close(false); // do not store wallet as part of the closing activities
-    // Stop refresh thread
-    stopRefresh();
 
     if (m_wallet2Callback->getListener()) {
       m_wallet2Callback->getListener()->onSetWallet(nullptr);
@@ -608,7 +742,7 @@ bool WalletImpl::recoverFromKeysWithPassword(const std::string &path,
             return false;
         }
         has_spendkey = true;
-        spendkey = *reinterpret_cast<const crypto::secret_key*>(spendkey_data.data());
+        std::memcpy(spendkey.data, spendkey_data.data(), sizeof(spendkey.data));
     }
 
     // parse view secret key
@@ -630,7 +764,7 @@ bool WalletImpl::recoverFromKeysWithPassword(const std::string &path,
           setStatusError(tr("failed to parse secret view key"));
           return false;
       }
-      viewkey = *reinterpret_cast<const crypto::secret_key*>(viewkey_data.data());
+      std::memcpy(viewkey.data, viewkey_data.data(), sizeof(viewkey.data));
     }
     // check the spend and view keys match the given address
     crypto::public_key pkey;
@@ -676,6 +810,7 @@ bool WalletImpl::recoverFromKeysWithPassword(const std::string &path,
         setStatusError(string(tr("failed to generate new wallet: ")) + e.what());
         return false;
     }
+    m_password = password;
     return true;
 }
 
@@ -690,9 +825,10 @@ bool WalletImpl::recoverFromDevice(const std::string &path, const std::string &p
         LOG_PRINT_L1("Generated new wallet from device: " + device_name);
     }
     catch (const std::exception& e) {
-        setStatusError(string(tr("failed to generate new wallet: ")) + e.what());
+        setStatusCritical(string(tr("failed to generate new wallet: ")) + e.what());
         return false;
     }
+    m_password = password;
     return true;
 }
 
@@ -761,6 +897,7 @@ bool WalletImpl::recover(const std::string &path, const std::string &password, c
     try {
         m_wallet->set_seed_language(old_language);
         m_wallet->generate(path, password, recovery_key, true, false);
+        m_password = password;
 
     } catch (const std::exception &e) {
         setStatusCritical(e.what());
@@ -770,10 +907,25 @@ bool WalletImpl::recover(const std::string &path, const std::string &password, c
 
 bool WalletImpl::close(bool store)
 {
+    if (refreshCallbackOnCurrentThread())
+    {
+        setStatusError(tr("Cannot close wallet from a refresh callback"));
+        return false;
+    }
+    if (refreshLockHeldOnCurrentThread())
+    {
+        setStatusError(tr("Cannot close wallet from another wallet operation"));
+        return false;
+    }
 
     bool result = false;
     LOG_PRINT_L1("closing wallet...");
     try {
+        // Join the background thread before acquiring its mutexes. Suspension
+        // prevents a synchronous refresh from restarting while close waits.
+        m_wallet->suspend_refresh();
+        stopRefresh();
+        RefreshLock refresh_lock(*this);
         if (store) {
             // Do not store wallet with invalid status
             // Status Critical refers to errors on opening or creating wallets.
@@ -783,6 +935,7 @@ bool WalletImpl::close(bool store)
                 LOG_ERROR("Status_Critical - not saving wallet");
             LOG_PRINT_L1("wallet::store done");
         }
+        pauseRefresh();
         LOG_PRINT_L1("Calling wallet::stop...");
         m_wallet->stop();
         LOG_PRINT_L1("wallet::stop done");
@@ -977,8 +1130,20 @@ void WalletImpl::stop()
 
 bool WalletImpl::store(const std::string &path)
 {
-    clearStatus();
+    if (refreshCallbackOnCurrentThread())
+    {
+        setStatusError(tr("Cannot store wallet from a refresh callback"));
+        return false;
+    }
+    if (refreshLockHeldOnCurrentThread())
+    {
+        setStatusError(tr("Cannot store wallet from another wallet operation"));
+        return false;
+    }
+
+    RefreshLock refresh_lock(*this);
     try {
+        clearStatus();
         if (path.empty()) {
             m_wallet->store();
         } else {
@@ -1005,9 +1170,12 @@ string WalletImpl::keysFilename() const
 
 bool WalletImpl::init(const std::string &daemon_address, uint64_t upper_transaction_size_limit, const std::string &daemon_username, const std::string &daemon_password, bool use_ssl, bool lightWallet, const std::string &proxy_address)
 {
+    (void)lightWallet;
     clearStatus();
     if(daemon_username != "")
         m_daemon_login.emplace(daemon_username, daemon_password);
+    else
+        m_daemon_login = boost::none;
     return doInit(daemon_address, proxy_address, upper_transaction_size_limit, use_ssl);
 }
 
@@ -1107,28 +1275,44 @@ bool WalletImpl::synchronized() const
 
 bool WalletImpl::refresh()
 {
-    clearStatus();
-    //TODO: make doRefresh return bool to know whether the error occured during refresh or not
-    //otherwise one may try, say, to send transaction, transfer fails and this method returns false
-    doRefresh();
-    return status() == Status_Ok;
+    if (refreshCallbackOnCurrentThread())
+    {
+        setStatusError(tr("Cannot refresh wallet from a refresh callback"));
+        return false;
+    }
+    if (refreshLockHeldOnCurrentThread())
+    {
+        setStatusError(tr("Cannot refresh wallet from another wallet operation"));
+        return false;
+    }
+
+    return doRefresh(true) == refresh_result::success;
 }
 
 void WalletImpl::refreshAsync()
 {
     LOG_PRINT_L3(__FUNCTION__ << ": Refreshing asynchronously..");
     clearStatus();
-    m_refreshCV.notify_one();
+    requestRefresh();
 }
 
 bool WalletImpl::rescanBlockchain()
 {
+    if (refreshCallbackOnCurrentThread())
+    {
+        setStatusError(tr("Cannot rescan blockchain from a refresh callback"));
+        return false;
+    }
+    if (refreshLockHeldOnCurrentThread())
+    {
+        setStatusError(tr("Cannot rescan blockchain from another wallet operation"));
+        return false;
+    }
+
     if (checkBackgroundSync("cannot rescan blockchain"))
         return false;
-    clearStatus();
     m_refreshShouldRescan = true;
-    doRefresh();
-    return status() == Status_Ok;
+    return doRefresh(true) == refresh_result::success;
 }
 
 void WalletImpl::rescanBlockchainAsync()
@@ -1177,6 +1361,16 @@ UnsignedTransaction *WalletImpl::loadUnsignedTx(const std::string &unsigned_file
 }
 
 bool WalletImpl::submitTransaction(const string &fileName) {
+  if (refreshCallbackOnCurrentThread()) {
+    setStatusError(tr("Cannot submit transaction from a refresh callback"));
+    return false;
+  }
+  if (refreshLockHeldOnCurrentThread()) {
+    setStatusError(tr("Cannot submit transaction from another wallet operation"));
+    return false;
+  }
+
+  RefreshLock refresh_lock(*this);
   clearStatus();
   if (checkBackgroundSync("cannot submit tx"))
     return false;
@@ -1188,7 +1382,7 @@ bool WalletImpl::submitTransaction(const string &fileName) {
     return false;
   }
   
-  if(!transaction->commit()) {
+  if(!transaction->commitWithRefreshLock()) {
     setStatusError(transaction->m_errorString);
     return false;
   }
@@ -1358,6 +1552,17 @@ bool WalletImpl::scanTransactions(const std::vector<std::string> &txids)
 
 bool WalletImpl::setupBackgroundSync(const Wallet::BackgroundSyncType background_sync_type, const std::string &wallet_password, const optional<std::string> &background_cache_password)
 {
+    if (refreshCallbackOnCurrentThread())
+    {
+        setStatusError(tr("Cannot setup background sync from a refresh callback"));
+        return false;
+    }
+    if (refreshLockHeldOnCurrentThread())
+    {
+        setStatusError(tr("Cannot setup background sync from another wallet operation"));
+        return false;
+    }
+
     try
     {
         PRE_VALIDATE_BACKGROUND_SYNC();
@@ -1375,7 +1580,8 @@ bool WalletImpl::setupBackgroundSync(const Wallet::BackgroundSyncType background
             ? boost::optional<epee::wipeable_string>(*background_cache_password)
             : boost::none;
 
-        LOCK_REFRESH();
+        RefreshLock refresh_lock(*this);
+        clearStatus();
         m_wallet->setup_background_sync(bgs_type, wallet_password, bgc_password);
     }
     catch (const std::exception &e)
@@ -1400,10 +1606,22 @@ Wallet::BackgroundSyncType WalletImpl::getBackgroundSyncType() const
 
 bool WalletImpl::startBackgroundSync()
 {
+    if (refreshCallbackOnCurrentThread())
+    {
+        setStatusError(tr("Cannot start background sync from a refresh callback"));
+        return false;
+    }
+    if (refreshLockHeldOnCurrentThread())
+    {
+        setStatusError(tr("Cannot start background sync from another wallet operation"));
+        return false;
+    }
+
     try
     {
         PRE_VALIDATE_BACKGROUND_SYNC();
-        LOCK_REFRESH();
+        RefreshLock refresh_lock(*this);
+        clearStatus();
         m_wallet->start_background_sync();
     }
     catch (const std::exception &e)
@@ -1417,10 +1635,22 @@ bool WalletImpl::startBackgroundSync()
 
 bool WalletImpl::stopBackgroundSync(const std::string &wallet_password)
 {
+    if (refreshCallbackOnCurrentThread())
+    {
+        setStatusError(tr("Cannot stop background sync from a refresh callback"));
+        return false;
+    }
+    if (refreshLockHeldOnCurrentThread())
+    {
+        setStatusError(tr("Cannot stop background sync from another wallet operation"));
+        return false;
+    }
+
     try
     {
         PRE_VALIDATE_BACKGROUND_SYNC();
-        LOCK_REFRESH();
+        RefreshLock refresh_lock(*this);
+        clearStatus();
         m_wallet->stop_background_sync(epee::wipeable_string(wallet_password));
     }
     catch (const std::exception &e)
@@ -1560,7 +1790,17 @@ bool WalletImpl::exportMultisigImages(string& images) {
 }
 
 size_t WalletImpl::importMultisigImages(const vector<string>& images) {
+    if (refreshCallbackOnCurrentThread()) {
+        setStatusError(tr("Cannot import multisig images from a refresh callback"));
+        return 0;
+    }
+    if (refreshLockHeldOnCurrentThread()) {
+        setStatusError(tr("Cannot import multisig images from another wallet operation"));
+        return 0;
+    }
+
     try {
+        RefreshLock refresh_lock(*this, false);
         clearStatus();
         checkMultisigWalletReady(m_wallet);
 
@@ -1631,6 +1871,22 @@ PendingTransaction* WalletImpl::restoreMultisigTransaction(const string& signDat
 
 PendingTransaction *WalletImpl::createStakeTransaction(uint64_t amount, uint32_t mixin_count, PendingTransaction::Priority priority, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
 {
+    if (refreshCallbackOnCurrentThread() || refreshLockHeldOnCurrentThread())
+    {
+        auto *transaction = new PendingTransactionImpl(*this);
+        setStatusError(tr("Cannot create transaction from a refresh callback or another wallet operation"));
+        statusWithErrorString(transaction->m_status, transaction->m_errorString);
+        return transaction;
+    }
+    RefreshLock refresh_lock(*this);
+  if (amount == 0) {
+    clearStatus();
+    auto *transaction = new PendingTransactionImpl(*this);
+    setStatusError(tr("Stake amount must be greater than zero"));
+    statusWithErrorString(transaction->m_status, transaction->m_errorString);
+    return transaction;
+  }
+
   // Need to populate {dst_entr, payment_id, asset_type, is_return}
   const bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
   const string dst_addr = m_wallet->get_subaddress_as_str({{subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});//MY LOCAL (SUB)ADDRESS
@@ -1640,19 +1896,28 @@ PendingTransaction *WalletImpl::createStakeTransaction(uint64_t amount, uint32_t
 
   LOG_ERROR("createStakeTransaction: called");
   
-  return createTransactionMultDest(Monero::transaction_type::STAKE, std::vector<string> {dst_addr}, payment_id, amount ? (std::vector<uint64_t> {amount}) : (optional<std::vector<uint64_t>>()), mixin_count, asset_type, is_return, priority, subaddr_account, subaddr_indices);
+  return createTransactionMultDestInternal(Monero::transaction_type::STAKE, std::vector<string> {dst_addr}, payment_id, std::vector<uint64_t> {amount}, mixin_count, asset_type, is_return, priority, subaddr_account, subaddr_indices);
 }
 
 PendingTransaction *WalletImpl::createCreateTokenTransaction(const std::string &asset_type, uint64_t supply, const std::string &metadata, const std::string &name, uint32_t size, std::string hash, std::string url, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices){
 
-    PendingTransactionImpl * transaction = new PendingTransactionImpl(*this);
+    if (refreshCallbackOnCurrentThread() || refreshLockHeldOnCurrentThread())
+    {
+        auto *transaction = new PendingTransactionImpl(*this);
+        setStatusError(tr("Cannot create transaction from a refresh callback or another wallet operation"));
+        statusWithErrorString(transaction->m_status, transaction->m_errorString);
+        return transaction;
+    }
+    RefreshLock refresh_lock(*this);
+    std::unique_ptr<PendingTransactionImpl> transaction(new PendingTransactionImpl(*this));
     std::string token_metadata_hex;
     crypto::hash hash_signature{};
     if (!hash.empty()) {
       if (!epee::string_tools::hex_to_pod(hash, hash_signature)) {
         if (metadata.empty()){
             setStatusError(tr("Invalid hash format."));
-            return transaction;
+            statusWithErrorString(transaction->m_status, transaction->m_errorString);
+            return transaction.release();
         }
       }
     }
@@ -1684,12 +1949,12 @@ PendingTransaction *WalletImpl::createCreateTokenTransaction(const std::string &
         if (m_wallet->get_tokens(asset_type, existing_tokens) && !existing_tokens.empty()) {
             setStatusError(tr("Token with ticker '") + asset_type + tr("' already exists"));
             statusWithErrorString(transaction->m_status, transaction->m_errorString);
-            return transaction;
+            return transaction.release();
         }
 
         transaction->m_pending_tx = m_wallet->create_token(asset_type, supply, token_metadata_hex, subaddr_account, subaddr_indices
         );
-        pendingTxPostProcess(transaction);
+        pendingTxPostProcess(transaction.get());
     } catch (const tools::error::daemon_busy&) {
         setStatusError(tr("daemon is busy. Please try again later."));
     } catch (const tools::error::no_connection_to_daemon&) {
@@ -1741,7 +2006,7 @@ PendingTransaction *WalletImpl::createCreateTokenTransaction(const std::string &
         setStatusError(tr("unknown error"));
     }
     statusWithErrorString(transaction->m_status, transaction->m_errorString);
-    return transaction;
+    return transaction.release();
 }
 
 PendingTransaction *WalletImpl::createAuditTransaction(
@@ -1750,27 +2015,11 @@ PendingTransaction *WalletImpl::createAuditTransaction(
     uint32_t subaddr_account,
     std::set<uint32_t> subaddr_indices
 ) {
-    // Need to populate {dst_entr, payment_id, asset_type, is_return}
-    const bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
-    const string dst_addr = m_wallet->get_subaddress_as_str({{subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});//MY LOCAL (SUB)ADDRESS
-    const string payment_id = "";
-    const string asset_type = "SAL";
-    const bool is_return = false;
-
-    LOG_ERROR("createAuditTransaction: called");
-  
-    return createTransactionMultDest(
-        Monero::transaction_type::AUDIT,
-        std::vector<string> {dst_addr},
-        payment_id,
-        (optional<std::vector<uint64_t>>()), 
-        mixin_count,
-        asset_type,
-        is_return,
-        priority,
-        subaddr_account,
-        subaddr_indices
-    );
+    clearStatus();
+    auto *transaction = new PendingTransactionImpl(*this);
+    setStatusError(tr("Creating new AUDIT transactions is no longer supported"));
+    statusWithErrorString(transaction->m_status, transaction->m_errorString);
+    return transaction;
 }
 
 // TODO:
@@ -1784,19 +2033,36 @@ PendingTransaction *WalletImpl::createAuditTransaction(
 //    - confirmed_transfer_details)
 
 PendingTransaction *WalletImpl::createTransactionMultDest(const Monero::transaction_type &tx_type, const std::vector<string> &dst_addr, const string &payment_id, optional<std::vector<uint64_t>> amount, uint32_t mixin_count, const std::string &asset_type, const bool is_return, PendingTransaction::Priority priority, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
+{
+    if (refreshCallbackOnCurrentThread() || refreshLockHeldOnCurrentThread())
+    {
+        auto *transaction = new PendingTransactionImpl(*this);
+        setStatusError(tr("Cannot create transaction from a refresh callback or another wallet operation"));
+        statusWithErrorString(transaction->m_status, transaction->m_errorString);
+        return transaction;
+    }
+    RefreshLock refresh_lock(*this);
+    return createTransactionMultDestInternal(tx_type, dst_addr, payment_id, amount, mixin_count,
+        asset_type, is_return, priority, subaddr_account, std::move(subaddr_indices));
+}
+
+PendingTransaction *WalletImpl::createTransactionMultDestInternal(const Monero::transaction_type &tx_type, const std::vector<string> &dst_addr, const string &payment_id, optional<std::vector<uint64_t>> amount, uint32_t mixin_count, const std::string &asset_type, const bool is_return, PendingTransaction::Priority priority, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
 
 {
     clearStatus();
-    // Pause refresh thread while creating transaction
-    pauseRefresh();
-      
+    if (tx_type == Monero::transaction_type::AUDIT) {
+        auto *transaction = new PendingTransactionImpl(*this);
+        setStatusError(tr("Creating new AUDIT transactions is no longer supported"));
+        statusWithErrorString(transaction->m_status, transaction->m_errorString);
+        return transaction;
+    }
     cryptonote::address_parse_info info;
 
     uint32_t adjusted_priority = m_wallet->adjust_priority(static_cast<uint32_t>(priority));
 
     const cryptonote::transaction_type converted_tx_type = static_cast<cryptonote::transaction_type>(static_cast<uint8_t>(tx_type));
     
-    PendingTransactionImpl * transaction = new PendingTransactionImpl(*this);
+    std::unique_ptr<PendingTransactionImpl> transaction(new PendingTransactionImpl(*this));
 
     do {
         if (checkBackgroundSync("cannot create transactions"))
@@ -1814,6 +2080,10 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const Monero::transact
             break;
         }
         if (!payment_id.empty()) {
+            if (m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT) {
+                setStatusError(tr("Standalone payment IDs are not supported for Carrot transactions. Use an integrated address instead."));
+                break;
+            }
             crypto::hash payment_id_long;
             if (tools::wallet2::parse_long_payment_id(payment_id, payment_id_long)) {
                 cryptonote::set_payment_id_to_tx_extra_nonce(extra_nonce, payment_id_long);
@@ -1872,43 +2142,20 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const Monero::transact
                                                                           adjusted_priority,
                                                                           extra, subaddr_account, subaddr_indices);
             } else {
-              std::vector<tools::wallet2::pending_tx> m_pending_txs;
-              for (const auto subaddr_index : subaddr_indices) {
-
-                // Skip this wallet if there is no balance unlocked to audit
-                std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddr = m_wallet->unlocked_balance_per_subaddress(subaddr_account, asset_type, true);
-                if (unlocked_balance_per_subaddr.count(subaddr_index) == 0) continue;
-
-                try {
-          
-                  const auto result = m_wallet->create_transactions_all(0,
-                                                                        converted_tx_type,
-                                                                        asset_type,
-                                                                        info.address,
-                                                                        info.is_subaddress,
-                                                                        1,
-                                                                        fake_outs_count,
-                                                                        0 /* unlock_time */,
-                                                                        adjusted_priority,
-                                                                        extra,
-                                                                        subaddr_account,
-                                                                        std::set<uint32_t> {subaddr_index}
-                                                                        );
-                  m_pending_txs.insert(m_pending_txs.end(), result.begin(), result.end());
-
-                } catch (const std::exception &e) {
-                  
-                  // Let's skip this wallet - we have already reported the error
-                  if (unlocked_balance_per_subaddr[subaddr_index].first < 250000000) {
-                    std::ostringstream writer;
-                    writer << boost::format(tr("Subaddress index %u has insufficient funds (%s) to pay for audit")) % subaddr_index % print_money(unlocked_balance_per_subaddr[subaddr_index].first);
-                    setStatusError(writer.str());
-                  }
-                }
-              }
-              transaction->m_pending_tx = m_pending_txs;
+              transaction->m_pending_tx = m_wallet->create_transactions_all(0,
+                                                                            converted_tx_type,
+                                                                            asset_type,
+                                                                            info.address,
+                                                                            info.is_subaddress,
+                                                                            1,
+                                                                            fake_outs_count,
+                                                                            0 /* unlock_time */,
+                                                                            adjusted_priority,
+                                                                            extra,
+                                                                            subaddr_account,
+                                                                            subaddr_indices);
             }
-            pendingTxPostProcess(transaction);
+            pendingTxPostProcess(transaction.get());
 
             if (multisig().isMultisig) {
                 auto tx_set = m_wallet->make_multisig_tx_set(transaction->m_pending_tx);
@@ -1981,9 +2228,7 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const Monero::transact
     } while (false);
 
     statusWithErrorString(transaction->m_status, transaction->m_errorString);
-    // Resume refresh thread
-    startRefresh();
-    return transaction;
+    return transaction.release();
 }
 
 PendingTransaction *WalletImpl::createTransaction(const string &dst_addr, const string &payment_id, optional<uint64_t> amount, uint32_t mixin_count,
@@ -1996,10 +2241,22 @@ PendingTransaction *WalletImpl::createTransaction(const string &dst_addr, const 
 PendingTransaction *WalletImpl::createSweepUnmixableTransaction()
 
 {
+    std::unique_ptr<PendingTransactionImpl> transaction(new PendingTransactionImpl(*this));
+    if (refreshCallbackOnCurrentThread())
+    {
+        setStatusError(tr("Cannot create transaction from a refresh callback"));
+        statusWithErrorString(transaction->m_status, transaction->m_errorString);
+        return transaction.release();
+    }
+    if (refreshLockHeldOnCurrentThread())
+    {
+        setStatusError(tr("Cannot create transaction from another wallet operation"));
+        statusWithErrorString(transaction->m_status, transaction->m_errorString);
+        return transaction.release();
+    }
+    RefreshLock refresh_lock(*this);
     clearStatus();
     cryptonote::tx_destination_entry de;
-
-    PendingTransactionImpl * transaction = new PendingTransactionImpl(*this);
 
     do {
         if (checkBackgroundSync("cannot sweep"))
@@ -2007,7 +2264,7 @@ PendingTransaction *WalletImpl::createSweepUnmixableTransaction()
 
         try {
             transaction->m_pending_tx = m_wallet->create_unmixable_sweep_transactions();
-            pendingTxPostProcess(transaction);
+            pendingTxPostProcess(transaction.get());
 
         } catch (const tools::error::daemon_busy&) {
             // TODO: make it translatable with "tr"?
@@ -2075,7 +2332,7 @@ PendingTransaction *WalletImpl::createSweepUnmixableTransaction()
     } while (false);
 
     statusWithErrorString(transaction->m_status, transaction->m_errorString);
-    return transaction;
+    return transaction.release();
 }
 
 void WalletImpl::disposeTransaction(PendingTransaction *t)
@@ -2145,6 +2402,12 @@ void WalletImpl::setDefaultMixin(uint32_t arg)
 
 bool WalletImpl::setCacheAttribute(const std::string &key, const std::string &val)
 {
+    clearStatus();
+    if (is_reserved_cache_attribute(key))
+    {
+        setStatusError(tr("Reserved private Salchat state cannot be accessed through generic attributes."));
+        return false;
+    }
     if (checkBackgroundSync("cannot set cache attribute"))
         return false;
     m_wallet->set_attribute(key, val);
@@ -2153,9 +2416,131 @@ bool WalletImpl::setCacheAttribute(const std::string &key, const std::string &va
 
 std::string WalletImpl::getCacheAttribute(const std::string &key) const
 {
+    clearStatus();
+    if (is_reserved_cache_attribute(key))
+    {
+        setStatusError(tr("Reserved private Salchat state cannot be accessed through generic attributes."));
+        return {};
+    }
     std::string value;
     m_wallet->get_attribute(key, value);
     return value;
+}
+
+bool WalletImpl::salchatGetIdentity(SalchatIdentity &identity) const
+{
+    try { clearStatus(); boost::lock_guard<boost::mutex> guard(m_refreshMutex2); epee::wipeable_string password(m_password); tools::wallet_keys_unlocker unlocker(*m_wallet, &password); identity = salchat_identity(salchat::service(*m_wallet).get_identity()); return true; }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatRotateIdentity(SalchatIdentity &identity)
+{
+    try { RefreshLock refresh_lock(*this); clearStatus(); epee::wipeable_string password(m_password); tools::wallet_keys_unlocker unlocker(*m_wallet, &password); identity = salchat_identity(salchat::service(*m_wallet).rotate_identity()); return true; }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatGetAddress(std::string &address) const
+{
+    try { clearStatus(); boost::lock_guard<boost::mutex> guard(m_refreshMutex2); epee::wipeable_string password(m_password); tools::wallet_keys_unlocker unlocker(*m_wallet, &password); address = salchat::service(*m_wallet).get_address(); return true; }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatAddContact(const std::string &label, const std::string &address,
+                                  SalchatContact &contact, uint64_t &promotedMessages)
+{
+    try { RefreshLock refresh_lock(*this); clearStatus(); std::size_t promoted=0; contact = salchat_contact(salchat::service(*m_wallet).add_contact(label, address, {}, &promoted)); promotedMessages=promoted; return true; }
+    catch (const std::exception &e) { promotedMessages=0; setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatAcceptContact(const std::string &label, const std::string &messageId,
+                                     SalchatContact &contact, uint64_t &promotedMessages)
+{
+    try { RefreshLock refresh_lock(*this); clearStatus(); std::size_t promoted=0; contact = salchat_contact(salchat::service(*m_wallet).accept_contact(label, messageId, &promoted)); promotedMessages=promoted; return true; }
+    catch (const std::exception &e) { promotedMessages=0; setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatRemoveContact(const std::string &contactId)
+{
+    try { RefreshLock refresh_lock(*this); clearStatus(); return salchat::service(*m_wallet).remove_contact(contactId); }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatBlockContact(const std::string &contactId, bool blocked)
+{
+    try { RefreshLock refresh_lock(*this); clearStatus(); return salchat::service(*m_wallet).block_contact(contactId, blocked); }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+std::vector<SalchatContact> WalletImpl::salchatContacts() const
+{
+    std::vector<SalchatContact> out;
+    try { clearStatus(); boost::lock_guard<boost::mutex> guard(m_refreshMutex2); for (const auto &item: salchat::service(*m_wallet).contacts()) out.push_back(salchat_contact(item)); }
+    catch (const std::exception &e) { setStatusError(e.what()); }
+    return out;
+}
+
+SalchatSendResult WalletImpl::salchatSendMessage(const std::string &contactId, const std::string &message, uint64_t ttl)
+{
+    try
+    {
+      RefreshLock refresh_lock(*this); clearStatus(); epee::wipeable_string password(m_password); tools::wallet_keys_unlocker unlocker(*m_wallet, &password); const auto result = salchat::service(*m_wallet).send_text(contactId, message, ttl);
+      return {result.message_id, result.reason, result.submitted};
+    }
+    catch (const std::exception &e) { setStatusError(e.what()); return {{}, e.what(), false}; }
+}
+
+SalchatReceiveResult WalletImpl::salchatReceiveMessages(uint64_t limit)
+{
+    try
+    {
+      RefreshLock refresh_lock(*this); clearStatus(); epee::wipeable_string password(m_password); tools::wallet_keys_unlocker unlocker(*m_wallet, &password); const auto result = salchat::service(*m_wallet).receive(limit);
+      SalchatReceiveResult out{result.received, result.quarantined, result.rejected};
+      out.newMessages.reserve(result.new_messages.size());
+      const auto height=m_wallet->get_blockchain_current_height();
+      for (const auto &item: result.new_messages) out.newMessages.push_back(salchat_message(item,height));
+      return out;
+    }
+    catch (const std::exception &e) { setStatusError(e.what()); return {}; }
+}
+
+std::vector<SalchatMessage> WalletImpl::salchatMessages(const std::string &contactId, uint64_t limit) const
+{
+    std::vector<SalchatMessage> out;
+    try { clearStatus(); boost::lock_guard<boost::mutex> guard(m_refreshMutex2); const auto height=m_wallet->get_blockchain_current_height(); for (const auto &item: salchat::service(*m_wallet).messages(contactId, limit)) out.push_back(salchat_message(item,height)); }
+    catch (const std::exception &e) { setStatusError(e.what()); }
+    return out;
+}
+
+bool WalletImpl::salchatGetMessage(const std::string &messageId, SalchatMessage &message) const
+{
+    try
+    {
+      clearStatus(); boost::lock_guard<boost::mutex> guard(m_refreshMutex2);
+      salchat::message found; if (!salchat::service(*m_wallet).get_message(messageId, found)) return false;
+      message = salchat_message(found,m_wallet->get_blockchain_current_height()); return true;
+    }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+bool WalletImpl::salchatDeleteMessage(const std::string &messageId)
+{
+    try { RefreshLock refresh_lock(*this); clearStatus(); return salchat::service(*m_wallet).delete_message(messageId); }
+    catch (const std::exception &e) { setStatusError(e.what()); return false; }
+}
+
+SalchatStatus WalletImpl::salchatStatus() const
+{
+    SalchatStatus out;
+    try
+    {
+      clearStatus(); boost::lock_guard<boost::mutex> guard(m_refreshMutex2);
+      salchat::service service(*m_wallet); bool enabled = false; std::string error;
+      out.daemonAvailable = service.daemon_status(enabled, out.cachedMessages, error);
+      out.daemonEnabled = enabled; out.error = error; out.identityInitialized = service.get_identity().initialized;
+      out.contacts = service.contacts().size(); out.messages = service.message_count();
+    }
+    catch (const std::exception &e) { out.error = e.what(); setStatusError(e.what()); }
+    return out;
 }
 
 bool WalletImpl::setUserNote(const std::string &txid, const std::string &note)
@@ -2165,7 +2550,8 @@ bool WalletImpl::setUserNote(const std::string &txid, const std::string &note)
     cryptonote::blobdata txid_data;
     if(!epee::string_tools::parse_hexstr_to_binbuff(txid, txid_data) || txid_data.size() != sizeof(crypto::hash))
       return false;
-    const crypto::hash htxid = *reinterpret_cast<const crypto::hash*>(txid_data.data());
+    crypto::hash htxid;
+    std::memcpy(std::addressof(htxid), txid_data.data(), sizeof(htxid));
 
     m_wallet->set_tx_note(htxid, note);
     return true;
@@ -2178,7 +2564,8 @@ std::string WalletImpl::getUserNote(const std::string &txid) const
     cryptonote::blobdata txid_data;
     if(!epee::string_tools::parse_hexstr_to_binbuff(txid, txid_data) || txid_data.size() != sizeof(crypto::hash))
       return "";
-    const crypto::hash htxid = *reinterpret_cast<const crypto::hash*>(txid_data.data());
+    crypto::hash htxid;
+    std::memcpy(std::addressof(htxid), txid_data.data(), sizeof(htxid));
 
     return m_wallet->get_tx_note(htxid);
 }
@@ -2490,7 +2877,8 @@ bool WalletImpl::verifyMessageWithPublicKey(const std::string &message, const st
     }
 
     try {
-        crypto::public_key pkey = *reinterpret_cast<const crypto::public_key*>(pkeyData.data());
+        crypto::public_key pkey;
+        std::memcpy(std::addressof(pkey), pkeyData.data(), sizeof(pkey));
         return m_wallet->verify_with_public_key(message, pkey, signature);
     } catch (const std::exception& e) {
         m_status = Status_Error;
@@ -2594,18 +2982,28 @@ void WalletImpl::refreshThreadFunc()
     LOG_PRINT_L3(__FUNCTION__ << ": starting refresh thread");
 
     while (true) {
+        {
+            boost::mutex::scoped_lock lock(m_refreshRequestMutex);
+            LOG_PRINT_L3(__FUNCTION__ << ": waiting for refresh...");
+            // if auto refresh enabled, we wait for the "m_refreshIntervalSeconds" interval.
+            // if not - we wait forever
+            const auto refresh_requested = [this] {
+                return m_refreshThreadDone || m_refreshRequested;
+            };
+            if (!m_refreshRequested) {
+                if (m_refreshIntervalMillis > 0) {
+                    boost::posix_time::milliseconds wait_for_ms(m_refreshIntervalMillis.load());
+                    m_refreshCV.timed_wait(lock, wait_for_ms, refresh_requested);
+                } else {
+                    m_refreshCV.wait(lock, refresh_requested);
+                }
+            }
+            m_refreshRequested = false;
+        }
+
         boost::mutex::scoped_lock lock(m_refreshMutex);
         if (m_refreshThreadDone) {
             break;
-        }
-        LOG_PRINT_L3(__FUNCTION__ << ": waiting for refresh...");
-        // if auto refresh enabled, we wait for the "m_refreshIntervalSeconds" interval.
-        // if not - we wait forever
-        if (m_refreshIntervalMillis > 0) {
-            boost::posix_time::milliseconds wait_for_ms(m_refreshIntervalMillis.load());
-            m_refreshCV.timed_wait(lock, wait_for_ms);
-        } else {
-            m_refreshCV.wait(lock);
         }
 
         LOG_PRINT_L3(__FUNCTION__ << ": refresh lock acquired...");
@@ -2620,19 +3018,58 @@ void WalletImpl::refreshThreadFunc()
     LOG_PRINT_L3(__FUNCTION__ << ": refresh thread stopped");
 }
 
-void WalletImpl::doRefresh()
+void WalletImpl::requestRefresh()
+{
+    {
+        boost::lock_guard<boost::mutex> lock(m_refreshRequestMutex);
+        m_refreshRequested = true;
+    }
+    m_refreshCV.notify_one();
+}
+
+WalletImpl::refresh_result WalletImpl::doRefresh(bool clear_status)
 {
     bool rescan = m_refreshShouldRescan.exchange(false);
     // synchronizing async and sync refresh calls
     boost::lock_guard<boost::mutex> guarg(m_refreshMutex2);
+    if (clear_status)
+        clearStatus();
+    if (m_refreshLockRequests != 0)
+    {
+        if (rescan)
+            m_refreshShouldRescan = true;
+        if (clear_status)
+            setStatusError(tr("Refresh interrupted by another wallet operation"));
+        return refresh_result::deferred;
+    }
+    RefreshContext *const previous_refresh = current_refresh;
+    RefreshContext refresh_context{this, previous_refresh};
+    current_refresh = &refresh_context;
+    const auto refresh_guard = epee::misc_utils::create_scope_leave_handler([previous_refresh] {
+        current_refresh = previous_refresh;
+    });
+    bool refresh_failed = false;
+    bool rescan_completed = false;
+    // Keep queued rescans pending while an API operation holds the refresh locks.
     do try {
         LOG_PRINT_L3(__FUNCTION__ << ": doRefresh, rescan = "<<rescan);
         // Syncing daemon and refreshing wallet simultaneously is very resource intensive.
         // Disable refresh if wallet is disconnected or daemon isn't synced.
         if (daemonSynced()) {
             if(rescan)
+            {
                 m_wallet->rescan_blockchain(false);
-            m_wallet->refresh(trustedDaemon());
+                rescan_completed = true;
+            }
+            const bool refresh_completed = m_wallet->refresh_with_status(trustedDaemon());
+            if (!refresh_completed)
+            {
+                if (rescan && !rescan_completed)
+                    m_refreshShouldRescan = true;
+                if (clear_status)
+                    setStatusError(tr("Refresh interrupted by another wallet operation"));
+                return refresh_result::deferred;
+            }
             m_synchronized = m_wallet->is_synced();
             // assuming if we have empty history, it wasn't initialized yet
             // for further history changes client need to update history in
@@ -2645,21 +3082,34 @@ void WalletImpl::doRefresh()
         }
     } catch (const std::exception &e) {
         setStatusError(e.what());
+        refresh_failed = true;
         break;
-    }while(!rescan && (rescan=m_refreshShouldRescan.exchange(false))); // repeat if not rescanned and rescan was requested
+    }while(m_refreshLockRequests == 0 && !rescan &&
+        (rescan=m_refreshShouldRescan.exchange(false)));
 
     if (m_wallet2Callback->getListener()) {
         m_wallet2Callback->getListener()->refreshed();
     }
+    if (refresh_failed)
+        return refresh_result::failure;
+    return status() == Status_Ok ? refresh_result::success : refresh_result::failure;
 }
 
 
 void WalletImpl::startRefresh()
 {
+    boost::lock_guard<boost::mutex> lock(m_refreshLockStateMutex);
+    if (m_refreshThreadDone)
+        return;
+    if (m_refreshLockRequests != 0)
+    {
+        m_refreshLockRestart = true;
+        return;
+    }
     if (!m_refreshEnabled) {
         LOG_PRINT_L2(__FUNCTION__ << ": refresh started/resumed...");
         m_refreshEnabled = true;
-        m_refreshCV.notify_one();
+        requestRefresh();
     }
 }
 
@@ -2668,9 +3118,13 @@ void WalletImpl::startRefresh()
 void WalletImpl::stopRefresh()
 {
     if (!m_refreshThreadDone) {
-        m_refreshEnabled = false;
-        m_refreshThreadDone = true;
-        m_refreshCV.notify_one();
+        {
+            boost::lock_guard<boost::mutex> lock(m_refreshLockStateMutex);
+            m_refreshEnabled = false;
+            m_refreshLockRestart = false;
+            m_refreshThreadDone = true;
+        }
+        requestRefresh();
         m_refreshThread.join();
     }
 }
@@ -2678,9 +3132,10 @@ void WalletImpl::stopRefresh()
 void WalletImpl::pauseRefresh()
 {
     LOG_PRINT_L2(__FUNCTION__ << ": refresh paused...");
-    // TODO synchronize access
+    boost::lock_guard<boost::mutex> lock(m_refreshLockStateMutex);
     if (!m_refreshThreadDone) {
         m_refreshEnabled = false;
+        m_refreshLockRestart = false;
     }
 }
 
@@ -2712,7 +3167,11 @@ void WalletImpl::pendingTxPostProcess(PendingTransactionImpl * pending)
 
 bool WalletImpl::doInit(const string &daemon_address, const std::string &proxy_address, uint64_t upper_transaction_size_limit, bool ssl)
 {
-    if (!m_wallet->init(daemon_address, m_daemon_login, proxy_address, upper_transaction_size_limit))
+    const epee::net_utils::ssl_options_t ssl_options(
+        ssl ? epee::net_utils::ssl_support_t::e_ssl_support_enabled
+            : epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
+    if (!m_wallet->init(daemon_address, m_daemon_login, proxy_address,
+                        upper_transaction_size_limit, true, ssl_options))
        return false;
 
     // in case new wallet, this will force fast-refresh (pulling hashes instead of blocks)
@@ -3028,7 +3487,10 @@ uint64_t WalletImpl::getBytesSent()
 YieldInfo * WalletImpl::getYieldInfo()
 {
   auto yi = new YieldInfoImpl(*this);
-  bool ok = m_wallet->get_yield_summary_info(yi->m_burnt, yi->m_supply, yi->m_locked, yi->m_yield, yi->m_yield_per_stake, yi->m_num_entries, yi->m_payouts);
+  if (!yi->update())
+  {
+    setStatusError(yi->errorString());
+  }
   return yi;
 }
 

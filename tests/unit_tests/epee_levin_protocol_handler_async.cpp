@@ -506,7 +506,6 @@ TEST_F(positive_test_connection_to_levin_protocol_handler_calls, handler_process
   }
 
   std::string compare_buffer(1024 * 4, 'c');
-  compare_buffer.resize(((1024 - sizeof(epee::levin::bucket_head2)) * 5) - sizeof(epee::levin::bucket_head2)); // add padding zeroes
 
   ASSERT_EQ(4u, m_commands_handler.notify_counter());
   ASSERT_EQ(0u, m_commands_handler.invoke_counter());
@@ -629,6 +628,18 @@ TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_two_re
   ASSERT_EQ(2, m_commands_handler.invoke_counter());
 }
 
+TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_header_after_odd_length_body)
+{
+  m_in_data.resize(1);
+  m_req_head.m_cb = SWAP64LE(m_in_data.size());
+  prepare_buf();
+  ASSERT_NE(0u, m_buf.size() % alignof(uint64_t));
+  m_buf.append(m_buf);
+
+  ASSERT_TRUE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), m_buf.size()));
+  ASSERT_EQ(2, m_commands_handler.invoke_counter());
+}
+
 TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_unexpected_response)
 {
   m_req_head.m_flags = SWAP32LE(LEVIN_PACKET_RESPONSE);
@@ -648,6 +659,17 @@ TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_short_
   ASSERT_TRUE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), m_buf.size()));
 
   m_req_head.m_flags = LEVIN_PACKET_END;
+  prepare_buf();
+
+  ASSERT_FALSE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), m_buf.size()));
+}
+
+TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, rejects_orphaned_fragment)
+{
+  m_req_head.m_cb = 1;
+  m_req_head.m_flags = LEVIN_PACKET_END;
+  m_req_head.m_command = 0;
+  m_in_data.resize(1);
   prepare_buf();
 
   ASSERT_FALSE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), m_buf.size()));

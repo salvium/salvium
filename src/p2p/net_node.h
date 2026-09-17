@@ -29,6 +29,7 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #pragma once
+#include "peer_penalties.h"
 #include <array>
 #include <atomic>
 #include <boost/asio/io_context.hpp>
@@ -63,6 +64,8 @@ DISABLE_VS_WARNINGS(4355)
 
 namespace nodetool
 {
+  epee::net_utils::ssl_options_t get_p2p_ssl_options(const boost::program_options::variables_map& vm);
+
   struct proxy
   {
     proxy()
@@ -287,11 +290,15 @@ namespace nodetool
     void change_max_in_public_peers(size_t count);
     uint32_t get_max_in_public_peers() const;
     virtual bool block_host(epee::net_utils::network_address address, time_t seconds = P2P_IP_BLOCKTIME, bool add_only = false);
+    bool block_host_automatically(epee::net_utils::network_address address, time_t seconds = P2P_IP_BLOCKTIME, bool add_only = false)
+    { return block_host_impl(address, seconds, add_only, true); }
+    bool block_host_impl(epee::net_utils::network_address address, time_t seconds, bool add_only, bool automatic);
+    void prune_peer_penalties(time_t now);
     virtual bool unblock_host(const epee::net_utils::network_address &address);
     virtual bool block_subnet(const epee::net_utils::ipv4_network_subnet &subnet, time_t seconds = P2P_IP_BLOCKTIME);
     virtual bool unblock_subnet(const epee::net_utils::ipv4_network_subnet &subnet);
     virtual bool is_host_blocked(const epee::net_utils::network_address &address, time_t *seconds) { CRITICAL_REGION_LOCAL(m_blocked_hosts_lock); return !is_remote_host_allowed(address, seconds); }
-    virtual std::map<std::string, time_t> get_blocked_hosts() { CRITICAL_REGION_LOCAL(m_blocked_hosts_lock); return m_blocked_hosts; }
+    virtual std::map<std::string, time_t> get_blocked_hosts() { CRITICAL_REGION_LOCAL(m_blocked_hosts_lock); auto result = m_auto_penalties.bans(time(nullptr)); for (const auto& ban : m_blocked_hosts) if (ban.second > time(nullptr)) result[ban.first] = std::max(result[ban.first], ban.second); return result; }
     virtual std::map<epee::net_utils::ipv4_network_subnet, time_t> get_blocked_subnets() { CRITICAL_REGION_LOCAL(m_blocked_hosts_lock); return m_blocked_subnets; }
 
     virtual void add_used_stripe_peer(const typename t_payload_net_handler::connection_context &context);
@@ -504,8 +511,8 @@ namespace nodetool
     std::map<std::string, time_t> m_blocked_hosts;
     std::map<epee::net_utils::ipv4_network_subnet, time_t> m_blocked_subnets;
 
-    epee::critical_section m_host_fails_score_lock;
-    std::map<std::string, uint64_t> m_host_fails_score;
+    peer_penalties m_auto_penalties;
+    time_t m_last_penalty_prune = 0;
 
     boost::mutex m_used_stripe_peers_mutex;
     std::array<std::list<epee::net_utils::network_address>, 1 << CRYPTONOTE_PRUNING_LOG_STRIPES> m_used_stripe_peers;
@@ -523,6 +530,11 @@ namespace nodetool
 
     const int64_t default_limit_up = P2P_DEFAULT_LIMIT_RATE_UP;      // kB/s
     const int64_t default_limit_down = P2P_DEFAULT_LIMIT_RATE_DOWN;  // kB/s
+    extern const command_line::arg_descriptor<std::string> arg_p2p_ssl;
+    extern const command_line::arg_descriptor<std::string> arg_p2p_ssl_private_key;
+    extern const command_line::arg_descriptor<std::string> arg_p2p_ssl_certificate;
+    extern const command_line::arg_descriptor<std::string> arg_p2p_ssl_ca_certificates;
+    extern const command_line::arg_descriptor<std::vector<std::string>> arg_p2p_ssl_allowed_fingerprints;
     extern const command_line::arg_descriptor<std::string> arg_p2p_bind_ip;
     extern const command_line::arg_descriptor<std::string> arg_p2p_bind_ipv6_address;
     extern const command_line::arg_descriptor<std::string, false, true, 2> arg_p2p_bind_port;

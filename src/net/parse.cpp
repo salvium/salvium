@@ -27,6 +27,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "net/host.h"
 #include "parse.h"
 
 #include "net/tor_address.h"
@@ -72,6 +73,7 @@ namespace net
         bool ipv6 = false;
 
         get_network_address_host_and_port(std::string(address), host_str, port_str);
+        net::canonicalize_host(host_str);
 
         boost::string_ref host_str_ref(host_str);
         boost::string_ref port_str_ref(port_str);

@@ -85,22 +85,22 @@ struct CarrotPaymentProposalVerifiableSelfSendV1
     /// Fee to miner
     rct::xmr_amount fee;
     /// transaction type, e.g.
-    cryptonote::transaction_type tx_type;
+    cryptonote::transaction_type tx_type = cryptonote::transaction_type::UNSET;
     /// how much money tx burns
-    rct::xmr_amount amount_burnt;
+    rct::xmr_amount amount_burnt = 0;
 
     /// used if this is a CREATE_TOKEN transaction
-    cryptonote::token_metadata_t token;
+    cryptonote::token_metadata_t token{};
 
     /// This field is truly "extra". It should contain only tx.extra fields that aren't present in a
     /// normal Carrot transaction, i.e. NOT ephemeral pubkeys nor encrypted PIDs
     std::vector<std::uint8_t> extra;
 
     /// Used if this is a TOKEN_TRANSFER or ROLLUP transaction
-    carrot::rollup_binding_tag_t rollup_binding_tag;
+    carrot::rollup_binding_tag_t rollup_binding_tag{};
 
     /// Used if this is a ROLLUP transaction
-    cryptonote::layer2_rollup_data_t layer2_rollup_data;
+    cryptonote::layer2_rollup_data_t layer2_rollup_data{};
   };
   
 } //namespace carrot

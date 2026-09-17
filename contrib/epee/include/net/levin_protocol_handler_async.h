@@ -30,7 +30,9 @@
 #include <boost/unordered_map.hpp>
 #include <boost/smart_ptr/make_shared.hpp>
 
+#include <algorithm>
 #include <atomic>
+#include <cstring>
 #include <deque>
 
 #include "levin_base.h"
@@ -134,6 +136,7 @@ template<class t_connection_context = net_utils::connection_context_base>
 class async_protocol_handler
 {
   std::string m_fragment_buffer;
+  bool m_fragment_active;
 
   bool send_message(byte_slice message)
   {
@@ -303,6 +306,7 @@ public:
   async_protocol_handler(net_utils::i_service_endpoint* psnd_hndlr, 
     config_type& config, 
     t_connection_context& conn_context):
+            m_fragment_active(false),
             m_current_head(bucket_head2()),
             m_pservice_endpoint(psnd_hndlr), 
             m_config(config), 
@@ -447,7 +451,7 @@ public:
               //async call scenario
               boost::shared_ptr<invoke_response_handler_base> response_handler = m_invoke_response_handlers.front();
               response_handler->reset_timer();
-              MDEBUG(m_connection_context << "LEVIN_PACKET partial msg received. len=" << cb << ", current total " << m_cache_in_buffer.size() << "/" << m_current_head.m_cb << " (" << (100.0f * m_cache_in_buffer.size() / (m_current_head.m_cb ? m_current_head.m_cb : 1)) << "%)");
+              MTRACE(m_connection_context << "LEVIN_PACKET partial msg received. len=" << cb << ", current total " << m_cache_in_buffer.size() << "/" << m_current_head.m_cb << " (" << (100.0f * m_cache_in_buffer.size() / (m_current_head.m_cb ? m_current_head.m_cb : 1)) << "%)");
             }
           }
           break;
@@ -467,11 +471,21 @@ public:
               break; // noise message, skip to next message
 
             if (m_current_head.m_flags & LEVIN_PACKET_BEGIN)
+            {
               m_fragment_buffer.clear();
+              m_fragment_active = true;
+            }
+            else if (!m_fragment_active)
+            {
+              MERROR(m_connection_context << "Orphaned LEVIN fragment, connection will be closed");
+              return false;
+            }
 
             m_fragment_buffer.append(reinterpret_cast<const char*>(buff_to_invoke.data()), buff_to_invoke.size());
             if (!(m_current_head.m_flags & LEVIN_PACKET_END))
               break; // skip to next message
+
+            m_fragment_active = false;
 
             if (m_fragment_buffer.size() < sizeof(bucket_head2))
             {
@@ -482,6 +496,20 @@ public:
             temp = std::move(m_fragment_buffer);
             m_fragment_buffer.clear();
             std::memcpy(std::addressof(m_current_head), std::addressof(temp[0]), sizeof(bucket_head2));
+#if BYTE_ORDER != LITTLE_ENDIAN
+            m_current_head.m_signature = SWAP64LE(m_current_head.m_signature);
+            m_current_head.m_cb = SWAP64LE(m_current_head.m_cb);
+            m_current_head.m_command = SWAP32LE(m_current_head.m_command);
+            m_current_head.m_return_code = SWAP32LE(m_current_head.m_return_code);
+            m_current_head.m_flags = SWAP32LE(m_current_head.m_flags);
+            m_current_head.m_protocol_version = SWAP32LE(m_current_head.m_protocol_version);
+#endif
+            if (m_current_head.m_signature != LEVIN_SIGNATURE ||
+                !(m_current_head.m_flags & (LEVIN_PACKET_REQUEST | LEVIN_PACKET_RESPONSE)))
+            {
+              MERROR(m_connection_context << "Invalid inner LEVIN fragment header, connection will be closed");
+              return false;
+            }
             const size_t max_bytes = m_connection_context.get_max_bytes(m_current_head.m_command);
             if(m_current_head.m_cb > std::min<size_t>(max_packet_size, max_bytes))
             {
@@ -491,6 +519,14 @@ public:
               return false;
             }
             buff_to_invoke = {reinterpret_cast<const uint8_t*>(temp.data()) + sizeof(bucket_head2), temp.size() - sizeof(bucket_head2)};
+            if (m_current_head.m_cb > buff_to_invoke.size() ||
+                std::any_of(buff_to_invoke.begin() + m_current_head.m_cb,
+                            buff_to_invoke.end(), [](const uint8_t byte) { return byte != 0; }))
+            {
+              MERROR(m_connection_context << "Fragmented LEVIN body size or padding does not match inner header, connection will be closed");
+              return false;
+            }
+            buff_to_invoke = {buff_to_invoke.data(), static_cast<std::size_t>(m_current_head.m_cb)};
           }
 
           bool is_response = (m_oponent_protocol_ver == LEVIN_PROTOCOL_VER_1 && m_current_head.m_flags&LEVIN_PACKET_RESPONSE);
@@ -566,7 +602,10 @@ public:
         {
           if(m_cache_in_buffer.size() < sizeof(bucket_head2))
           {
-            if(m_cache_in_buffer.size() >= sizeof(uint64_t) && *((uint64_t*)m_cache_in_buffer.span(8).data()) != SWAP64LE(LEVIN_SIGNATURE))
+            uint64_t signature = 0;
+            if (m_cache_in_buffer.size() >= sizeof(signature))
+              std::memcpy(std::addressof(signature), m_cache_in_buffer.span(sizeof(signature)).data(), sizeof(signature));
+            if(m_cache_in_buffer.size() >= sizeof(signature) && signature != SWAP64LE(LEVIN_SIGNATURE))
             {
               MWARNING(m_connection_context << "Signature mismatch, connection will be closed");
               return false;
@@ -575,10 +614,9 @@ public:
             break;
           }
 
-#if BYTE_ORDER == LITTLE_ENDIAN
-          bucket_head2& phead = *(bucket_head2*)m_cache_in_buffer.span(sizeof(bucket_head2)).data();
-#else
-          bucket_head2 phead = *(bucket_head2*)m_cache_in_buffer.span(sizeof(bucket_head2)).data();
+          bucket_head2 phead;
+          std::memcpy(std::addressof(phead), m_cache_in_buffer.span(sizeof(phead)).data(), sizeof(phead));
+#if BYTE_ORDER != LITTLE_ENDIAN
           phead.m_signature = SWAP64LE(phead.m_signature);
           phead.m_cb = SWAP64LE(phead.m_cb);
           phead.m_command = SWAP32LE(phead.m_command);

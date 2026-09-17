@@ -38,3 +38,20 @@ FIND_PATH(UNBOUND_INCLUDE_DIR
 )
 
 find_library(UNBOUND_LIBRARIES unbound)
+
+# Native macOS packages can enable HTTP/2 and other optional dependencies.
+# Their static archives require the private libraries listed by pkg-config.
+if(APPLE AND STATIC AND NOT DEPENDS)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(UNBOUND_PC REQUIRED libunbound)
+  foreach(_unbound_dependency IN LISTS UNBOUND_PC_STATIC_LIBRARIES)
+    if(NOT _unbound_dependency STREQUAL "unbound")
+      find_library(UNBOUND_${_unbound_dependency}_LIBRARY
+        NAMES ${_unbound_dependency}
+        HINTS ${UNBOUND_PC_STATIC_LIBRARY_DIRS}
+        REQUIRED)
+      list(APPEND UNBOUND_LIBRARIES ${UNBOUND_${_unbound_dependency}_LIBRARY})
+    endif()
+  endforeach()
+  list(APPEND UNBOUND_LIBRARIES ${UNBOUND_PC_STATIC_LDFLAGS_OTHER})
+endif()

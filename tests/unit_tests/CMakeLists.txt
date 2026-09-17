@@ -54,6 +54,7 @@ set(unit_tests_sources
   decompose_amount_into_digits.cpp
   device.cpp
   difficulty.cpp
+  download.cpp
   dns_resolver.cpp
   epee_boosted_tcp_server.cpp
   epee_levin_protocol_handler_async.cpp
@@ -68,6 +69,7 @@ set(unit_tests_sources
   hashchain.cpp
   hmac_keccak.cpp
   http.cpp
+  http_client_limits.cpp
   keccak.cpp
   levin.cpp
   logging.cpp
@@ -91,6 +93,7 @@ set(unit_tests_sources
   rolling_median.cpp
   scaling_2021.cpp
   serialization.cpp
+  transaction_limits.cpp
   sha256.cpp
   slow_memmem.cpp
   subaddress.cpp
@@ -98,10 +101,13 @@ set(unit_tests_sources
   test_peerlist.cpp
   test_protocol_pack.cpp
   threadpool.cpp
+  peer_penalties.cpp
+  txpool_validation_budget.cpp
   tx_construction_helpers.cpp
   tx_proof.cpp
   hardfork.cpp
   unbound.cpp
+  updates.cpp
   uri.cpp
   varint.cpp
   ver_rct_non_semantics_simple_cached.cpp
@@ -111,6 +117,8 @@ set(unit_tests_sources
   ringdb.cpp
   wallet_scanning.cpp
   wallet_storage.cpp
+  wallet_refresh.cpp
+  wallet_yield.cpp
   wallet_tx_builder.cpp
   wipeable_string.cpp
   is_hdd.cpp
@@ -168,6 +176,51 @@ add_test(
   NAME    unit_tests
   COMMAND unit_tests --data-dir "${TEST_DATA_DIR}")
 
+# SalChat security and protocol tests are isolated from the legacy aggregate
+# suite so they can be built and run directly without entering production builds.
+monero_add_minimal_executable(salchat_unit_tests
+  main.cpp
+  salchat.cpp
+  salchat_wallet.cpp)
+target_link_libraries(salchat_unit_tests
+  PRIVATE
+    ringct
+    carrot_core
+    carrot_impl
+    cryptonote_protocol
+    cryptonote_core
+    daemon_messages
+    daemon_rpc_server
+    wallet
+    rpc
+    net
+    common
+    epee
+    device
+    version
+    cncrypto
+    ${Boost_CHRONO_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ${GTEST_LIBRARIES}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${EXTRA_LIBRARIES}
+    ${ZMQ_LIB})
+set_property(TARGET salchat_unit_tests PROPERTY FOLDER "tests")
+if (NOT MSVC)
+  set_property(TARGET salchat_unit_tests APPEND_STRING PROPERTY
+    COMPILE_FLAGS " -Wno-undef -Wno-sign-compare")
+endif ()
+add_test(
+  NAME salchat_unit_tests
+  COMMAND salchat_unit_tests --data-dir "${TEST_DATA_DIR}")
+
 monero_add_minimal_executable(test_notifier test_notifier.cpp)
 target_link_libraries(test_notifier ${EXTRA_LIBRARIES})
 set_property(TARGET test_notifier PROPERTY FOLDER "tests")
+add_dependencies(unit_tests test_notifier)
+
+monero_add_minimal_executable(threadpool_allocation_failure threadpool_allocation_failure.cpp)
+target_link_libraries(threadpool_allocation_failure PRIVATE common epee
+  ${Boost_THREAD_LIBRARY} ${Boost_CHRONO_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${EXTRA_LIBRARIES})
+add_test(NAME threadpool_allocation_failure COMMAND threadpool_allocation_failure)
+set_tests_properties(threadpool_allocation_failure PROPERTIES TIMEOUT 15)

@@ -42,10 +42,10 @@ namespace epee
   {
     //-----------------------------------------------------------------------------------------------------------
     template<class t_struct>
-    bool load_t_from_json(t_struct& out, const std::string& json_buff)
+    bool load_t_from_json(t_struct& out, const std::string& json_buff, const portable_storage::limits_t *limits = nullptr)
     {
       portable_storage ps;
-      bool rs = ps.load_from_json(json_buff);
+      bool rs = ps.load_from_json(json_buff, limits);
       if(!rs)
         return false;
 

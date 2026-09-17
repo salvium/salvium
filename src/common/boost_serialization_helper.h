@@ -34,10 +34,23 @@
 #include <boost/archive/portable_binary_oarchive.hpp>
 #include <boost/archive/portable_binary_iarchive.hpp>
 #include <boost/filesystem/operations.hpp>
+#include <cstring>
+#include <string_view>
 
 
 namespace tools
 {
+  inline bool has_native_binary_archive_signature(std::string_view data)
+  {
+    // Boost's native archive reads this length into a string before checking
+    // the signature. Reject unrelated cache formats without allocating it.
+    const char *signature = boost::archive::BOOST_ARCHIVE_SIGNATURE();
+    const std::size_t signature_size = std::strlen(signature);
+    return data.size() >= sizeof(signature_size) + signature_size
+      && std::memcmp(data.data(), &signature_size, sizeof(signature_size)) == 0
+      && std::memcmp(data.data() + sizeof(signature_size), signature, signature_size) == 0;
+  }
+
   template<class t_object>
   bool serialize_obj_to_file(t_object& obj, const std::string& file_path)
   {

@@ -53,11 +53,11 @@ class URITest():
         except: pass
         seed = 'velvet lymph giddy number token physics poetry unquoted nibs useful sabotage limits benches lifestyle eden nitrogen anvil fewest avoid batch vials washing fences goat unquoted'
         res = wallet.restore_deterministic_wallet(seed = seed)
-        assert res.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+        assert wallet.get_carrot_address() == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
         assert res.seed == seed
 
     def test_monero_uri(self):
-        print('Testing monero: URI')
+        print('Testing salvium: URI')
         wallet = Wallet()
 
         utf8string = [u'えんしゅう', u'あまやかす']
@@ -77,12 +77,12 @@ class URITest():
         assert ok
 
         for address in [
-            '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm',
-            '4BxSHvcgTwu25WooY4BVmgdcKwZu5EksVZSZkDd6ooxSVVqQ4ubxXkhLF6hEqtw96i9cf3cVfLw8UWe95bdDKfRQeYtPwLm1Jiw7AKt2LY',
-            '8AsN91rznfkBGTY8psSNkJBg9SZgxxGGRUhGwRptBhgr5XSQ1XzmA9m8QAnoxydecSh5aLJXdrgXwTDMMZ1AuXsN1EX5Mtm'
+            'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB',
+            'SaLvdTfLFUK1LuPhZbqYYiLwmDEw4zTeChBU8Vbz4rw1U1bbDiyUtsZ9iYSE7AsekiSRpwAQt7qmNZ2MtE5hi2nMLG2Zwbb2rwH',
+            'SaLvs6zXaGBcBKkztRcNev8q1WuusrW5wd6JPScD2HFL3CUCoEYpv952Saeut7byKuZdYJEhsCMApNg8Wz1K5Bbs1pWWHw27pXb'
         ]:
             res = wallet.make_uri(address = address)
-            assert res.uri == 'monero:' + address
+            assert res.uri == 'salvium:' + address
             res = wallet.parse_uri(res.uri)
             assert res.uri.address == address
             assert res.uri.payment_id == ''
@@ -91,7 +91,7 @@ class URITest():
             assert res.uri.recipient_name == ''
             assert not 'unknown_parameters' in res or len(res.unknown_parameters) == 0
             res = wallet.make_uri(address = address, amount = 11000000000)
-            assert res.uri == 'monero:' + address + '?tx_amount=0.011' or res.uri == 'monero:' + address + '?tx_amount=0.011000000000'
+            assert res.uri == 'salvium:' + address + '?tx_amount=110.00000000'
             res = wallet.parse_uri(res.uri)
             assert res.uri.address == address
             assert res.uri.payment_id == ''
@@ -100,10 +100,10 @@ class URITest():
             assert res.uri.recipient_name == ''
             assert not 'unknown_parameters' in res or len(res.unknown_parameters) == 0
 
-        address = '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+        address = 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
 
         res = wallet.make_uri(address = address, tx_description = utf8string[0])
-        assert res.uri == 'monero:' + address + '?tx_description=' + quoted_utf8string[0]
+        assert res.uri == 'salvium:' + address + '?tx_description=' + quoted_utf8string[0]
         res = wallet.parse_uri(res.uri)
         assert res.uri.address == address
         assert res.uri.payment_id == ''
@@ -113,7 +113,7 @@ class URITest():
         assert not 'unknown_parameters' in res or len(res.unknown_parameters) == 0
 
         res = wallet.make_uri(address = address, recipient_name = utf8string[0])
-        assert res.uri == 'monero:' + address + '?recipient_name=' + quoted_utf8string[0]
+        assert res.uri == 'salvium:' + address + '?recipient_name=' + quoted_utf8string[0]
         res = wallet.parse_uri(res.uri)
         assert res.uri.address == address
         assert res.uri.payment_id == ''
@@ -123,7 +123,7 @@ class URITest():
         assert not 'unknown_parameters' in res or len(res.unknown_parameters) == 0
 
         res = wallet.make_uri(address = address, recipient_name = utf8string[0], tx_description = utf8string[1])
-        assert res.uri == 'monero:' + address + '?recipient_name=' + quoted_utf8string[0] + '&tx_description=' + quoted_utf8string[1]
+        assert res.uri == 'salvium:' + address + '?recipient_name=' + quoted_utf8string[0] + '&tx_description=' + quoted_utf8string[1]
         res = wallet.parse_uri(res.uri)
         assert res.uri.address == address
         assert res.uri.payment_id == ''
@@ -133,7 +133,7 @@ class URITest():
         assert not 'unknown_parameters' in res or len(res.unknown_parameters) == 0
 
         res = wallet.make_uri(address = address, recipient_name = utf8string[0], tx_description = utf8string[1], amount = 1000000000000)
-        assert res.uri == 'monero:' + address + '?tx_amount=1.000000000000&recipient_name=' + quoted_utf8string[0] + '&tx_description=' + quoted_utf8string[1]
+        assert res.uri == 'salvium:' + address + '?tx_amount=10000.00000000&recipient_name=' + quoted_utf8string[0] + '&tx_description=' + quoted_utf8string[1]
         res = wallet.parse_uri(res.uri)
         assert res.uri.address == address
         assert res.uri.payment_id == ''
@@ -150,7 +150,7 @@ class URITest():
 
         # spaces must be encoded as %20
         res = wallet.make_uri(address = address, tx_description = ' ' + utf8string[1] + ' ' + utf8string[0] + ' ', amount = 1000000000000)
-        assert res.uri == 'monero:' + address + '?tx_amount=1.000000000000&tx_description=%20' + quoted_utf8string[1] + '%20' + quoted_utf8string[0] + '%20'
+        assert res.uri == 'salvium:' + address + '?tx_amount=10000.00000000&tx_description=%20' + quoted_utf8string[1] + '%20' + quoted_utf8string[0] + '%20'
         res = wallet.parse_uri(res.uri)
         assert res.uri.address == address
         assert res.uri.payment_id == ''
@@ -160,9 +160,9 @@ class URITest():
         assert not 'unknown_parameters' in res or len(res.unknown_parameters) == 0
 
         # the example from the docs
-        res = wallet.parse_uri('monero:46BeWrHpwXmHDpDEUmZBWZfoQpdc6HaERCNmx1pEYL2rAcuwufPN9rXHHtyUA4QVy66qeFQkn6sfK8aHYjA3jk3o1Bv16em?tx_amount=239.39014&tx_description=donation')
-        assert res.uri.address == '46BeWrHpwXmHDpDEUmZBWZfoQpdc6HaERCNmx1pEYL2rAcuwufPN9rXHHtyUA4QVy66qeFQkn6sfK8aHYjA3jk3o1Bv16em'
-        assert res.uri.amount == 239390140000000
+        res = wallet.parse_uri('salvium:' + address + '?tx_amount=239.39014&tx_description=donation')
+        assert res.uri.address == address
+        assert res.uri.amount == 23939014000
         assert res.uri.tx_description == 'donation'
         assert res.uri.recipient_name == ''
         assert res.uri.payment_id == ''
@@ -173,33 +173,33 @@ class URITest():
             '',
             ':',
             'monero',
-            'notmonero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm',
-            'MONERO:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm',
-            'MONERO::42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm',
-            'monero:',
-            'monero:badaddress',
-            'monero:tx_amount=10',
-            'monero:?tx_amount=10',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm?tx_amount=-1',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm?tx_amount=1e12',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm?tx_amount=+12',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm?tx_amount=1+2',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm?tx_amount=A',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm?tx_amount=0x2',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm?tx_amount=222222222222222222222',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDn?tx_amount=10',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm&',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm&tx_amount',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm&tx_amount=',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm&tx_amount=10=',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm&tx_amount=10=&',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm&tx_amount=10=&foo=bar',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm?tx_amount=10&tx_amount=20',
-            'monero:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm?tx_payment_id=1111111111111111',
-            'monero:4BxSHvcgTwu25WooY4BVmgdcKwZu5EksVZSZkDd6ooxSVVqQ4ubxXkhLF6hEqtw96i9cf3cVfLw8UWe95bdDKfRQeYtPwLm1Jiw7AKt2LY?tx_payment_id=' + '1' * 64,
-            'monero:9ujeXrjzf7bfeK3KZdCqnYaMwZVFuXemPU8Ubw335rj2FN1CdMiWNyFV3ksEfMFvRp9L9qum5UxkP5rN9aLcPxbH1au4WAB',
-            'monero:5K8mwfjumVseCcQEjNbf59Um6R9NfVUNkHTLhhPCmNvgDLVS88YW5tScnm83rw9mfgYtchtDDTW5jEfMhygi27j1QYphX38hg6m4VMtN29',
-            'monero:7A1Hr63MfgUa8pkWxueD5xBqhQczkusYiCMYMnJGcGmuQxa7aDBxN1G7iCuLCNB3VPeb2TW7U9FdxB27xKkWKfJ8VhUZthF',
+            'notsalvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB',
+            'SALVIUM:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB',
+            'SALVIUM::SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB',
+            'salvium:',
+            'salvium:badaddress',
+            'salvium:tx_amount=10',
+            'salvium:?tx_amount=10',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB?tx_amount=-1',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB?tx_amount=1e12',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB?tx_amount=+12',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB?tx_amount=1+2',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB?tx_amount=A',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB?tx_amount=0x2',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB?tx_amount=222222222222222222222',
+            'salvium:42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDn?tx_amount=10',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB&',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB&tx_amount',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB&tx_amount=',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB&tx_amount=10=',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB&tx_amount=10=&',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB&tx_amount=10=&foo=bar',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB?tx_amount=10&tx_amount=20',
+            'salvium:SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB?tx_payment_id=1111111111111111',
+            'salvium:4BxSHvcgTwu25WooY4BVmgdcKwZu5EksVZSZkDd6ooxSVVqQ4ubxXkhLF6hEqtw96i9cf3cVfLw8UWe95bdDKfRQeYtPwLm1Jiw7AKt2LY?tx_payment_id=' + '1' * 64,
+            'salvium:9ujeXrjzf7bfeK3KZdCqnYaMwZVFuXemPU8Ubw335rj2FN1CdMiWNyFV3ksEfMFvRp9L9qum5UxkP5rN9aLcPxbH1au4WAB',
+            'salvium:5K8mwfjumVseCcQEjNbf59Um6R9NfVUNkHTLhhPCmNvgDLVS88YW5tScnm83rw9mfgYtchtDDTW5jEfMhygi27j1QYphX38hg6m4VMtN29',
+            'salvium:7A1Hr63MfgUa8pkWxueD5xBqhQczkusYiCMYMnJGcGmuQxa7aDBxN1G7iCuLCNB3VPeb2TW7U9FdxB27xKkWKfJ8VhUZthF',
         ]:
             ok = False
             try: res = wallet.parse_uri(uri)
@@ -207,21 +207,21 @@ class URITest():
             assert ok, res
 
         # unknown parameters but otherwise valid
-        res = wallet.parse_uri('monero:' + address + '?tx_amount=239.39014&foo=bar')
+        res = wallet.parse_uri('salvium:' + address + '?tx_amount=239.39014&foo=bar')
         assert res.uri.address == address
-        assert res.uri.amount == 239390140000000
+        assert res.uri.amount == 23939014000
         assert res.unknown_parameters == ['foo=bar'], res
-        res = wallet.parse_uri('monero:' + address + '?tx_amount=239.39014&foo=bar&baz=quux')
+        res = wallet.parse_uri('salvium:' + address + '?tx_amount=239.39014&foo=bar&baz=quux')
         assert res.uri.address == address
-        assert res.uri.amount == 239390140000000
+        assert res.uri.amount == 23939014000
         assert res.unknown_parameters == ['foo=bar', 'baz=quux'], res
-        res = wallet.parse_uri('monero:' + address + '?tx_amount=239.39014&%20=%20')
+        res = wallet.parse_uri('salvium:' + address + '?tx_amount=239.39014&%20=%20')
         assert res.uri.address == address
-        assert res.uri.amount == 239390140000000
+        assert res.uri.amount == 23939014000
         assert res.unknown_parameters == ['%20=%20'], res
-        res = wallet.parse_uri('monero:' + address + '?tx_amount=239.39014&unknown=' + quoted_utf8string[0])
+        res = wallet.parse_uri('salvium:' + address + '?tx_amount=239.39014&unknown=' + quoted_utf8string[0])
         assert res.uri.address == address
-        assert res.uri.amount == 239390140000000
+        assert res.uri.amount == 23939014000
         assert res.unknown_parameters == [u'unknown=' + quoted_utf8string[0]], res
 
 

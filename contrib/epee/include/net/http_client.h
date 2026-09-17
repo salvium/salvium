@@ -36,6 +36,9 @@
 #include <algorithm>
 #include <cctype>
 #include <functional>
+#include <charconv>
+#include <chrono>
+#include <limits>
 
 #include "net_helper.h"
 #include "http_client_base.h"
@@ -141,6 +144,9 @@ namespace net_utils
 			chunked_state m_chunked_state;
 			std::string m_chunked_cache;
 			bool m_auto_connect;
+			size_t m_max_response_bytes = 256 * 1024 * 1024;
+			size_t m_max_header_bytes = 64 * 1024;
+			bool m_total_response_timeout = true;
 			critical_section m_lock;
 
 		public:
@@ -164,6 +170,23 @@ namespace net_utils
 
 			const std::string &get_host() const { return m_host_buff; };
 			const std::string &get_port() const { return m_port; };
+
+      // In-memory RPC responses are bounded by default. File download clients
+      // can explicitly opt into larger responses while retaining header limits.
+      void set_response_limits(size_t body_bytes, size_t header_bytes = 64 * 1024)
+      {
+        CRITICAL_REGION_LOCAL(m_lock);
+        m_max_response_bytes = body_bytes;
+        m_max_header_bytes = header_bytes;
+      }
+
+      // Streaming downloads retain an idle timeout between reads; ordinary
+      // RPC clients use a deadline for the entire response.
+      void set_total_response_timeout(bool enabled)
+      {
+        CRITICAL_REGION_LOCAL(m_lock);
+        m_total_response_timeout = enabled;
+      }
 
 			using abstract_http_client::set_server;
 
@@ -210,6 +233,12 @@ namespace net_utils
 			virtual bool handle_target_data(std::string& piece_of_transfer) override
 			{
 				CRITICAL_REGION_LOCAL(m_lock);
+        if (m_response_info.m_body.size() > m_max_response_bytes ||
+            piece_of_transfer.size() > m_max_response_bytes - m_response_info.m_body.size())
+        {
+          m_state = reciev_machine_state_error;
+          return false;
+        }
 				m_response_info.m_body += piece_of_transfer;
         piece_of_transfer.clear();
 				return true;
@@ -272,6 +301,7 @@ namespace net_utils
 					CHECK_AND_ASSERT_MES(res, false, "HTTP_CLIENT: Failed to SEND");
 
 					m_response_info.clear();
+					m_chunked_cache.clear();
 					m_state = reciev_machine_state_header;
 					if (!handle_reciev(timeout))
 						return false;
@@ -310,6 +340,8 @@ namespace net_utils
 			{
 				CRITICAL_REGION_LOCAL(m_lock);
 				m_net_client.set_test_data(s);
+				m_response_info.clear();
+				m_chunked_cache.clear();
 				m_state = reciev_machine_state_header;
 				return handle_reciev(timeout);
 			}
@@ -337,11 +369,20 @@ namespace net_utils
 				bool keep_handling = true;
 				bool need_more_data = true;
 				std::string recv_buffer;
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
 				while(keep_handling)
 				{
 					if(need_more_data)
 					{
-						if(!m_net_client.recv(recv_buffer, timeout))
+            const auto now = std::chrono::steady_clock::now();
+            if (m_total_response_timeout && now >= deadline)
+            {
+              m_state = reciev_machine_state_error;
+              break;
+            }
+            const auto remaining = m_total_response_timeout
+              ? std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now) : timeout;
+						if(!m_net_client.recv(recv_buffer, remaining))
 						{
 							MERROR("Unexpected recv fail");
 							m_state = reciev_machine_state_error;
@@ -380,7 +421,7 @@ namespace net_utils
 
 				}
 				m_header_cache.clear();
-				if(m_state != reciev_machine_state_error)
+				if(m_state == reciev_machine_state_done)
 				{
 					if(m_response_info.m_header_info.m_connection.size() && !string_tools::compare_no_case("close", m_response_info.m_header_info.m_connection))
 						disconnect();
@@ -390,6 +431,9 @@ namespace net_utils
 				else
                 {
                   LOG_PRINT_L3("Returning false because of wrong state machine. state: " << m_state);
+                  m_chunked_cache.clear();
+                  m_response_info.clear();
+                  disconnect();
                   return false;
                 }
 			}
@@ -409,16 +453,25 @@ namespace net_utils
 				m_header_cache += recv_buff;
 				recv_buff.clear();
 				std::string::size_type pos = m_header_cache.find("\r\n\r\n");
+        if ((pos == std::string::npos ? m_header_cache.size() : pos + 4) > m_max_header_bytes)
+        {
+          m_state = reciev_machine_state_error;
+          return false;
+        }
 				if(pos != std::string::npos)
 				{
 					recv_buff.assign(m_header_cache.begin()+pos+4, m_header_cache.end());
 					m_header_cache.erase(m_header_cache.begin()+pos+4, m_header_cache.end());
 
-					analize_cached_header_and_invoke_state();
+          if (!analize_cached_header_and_invoke_state())
+          {
+            m_state = reciev_machine_state_error;
+            return false;
+          }
           if (!on_header(m_response_info))
           {
             MDEBUG("Connection cancelled by on_header");
-            m_state = reciev_machine_state_done;
+            m_state = reciev_machine_state_error;
             return false;
           }
 					m_header_cache.clear();
@@ -445,7 +498,7 @@ namespace net_utils
 				m_len_in_remain -= recv_buff.size();
 				if (!m_pcontent_encoding_handler->update_in(recv_buff))
 				{
-					m_state = reciev_machine_state_done;
+					m_state = reciev_machine_state_error;
 					return false;
 				}
 
@@ -467,7 +520,11 @@ namespace net_utils
 					return true;
 				}
         need_more_data = true;
-				m_pcontent_encoding_handler->update_in(recv_buff);
+        if (!m_pcontent_encoding_handler->update_in(recv_buff))
+        {
+          m_state = reciev_machine_state_error;
+          return false;
+        }
 
 
 				return true;
@@ -497,6 +554,9 @@ namespace net_utils
 				bool get_chunk_head(std::string& buff, size_t& chunk_size, bool& is_matched)
 			{
 				is_matched = false;
+        const auto newline = buff.find('\n');
+        if ((newline == std::string::npos ? buff.size() : newline + 1) > m_max_header_bytes)
+          return false;
 				size_t offset = 0;
 				for(std::string::iterator it = buff.begin(); it!= buff.end(); it++, offset++)
 				{
@@ -585,7 +645,7 @@ namespace net_utils
 						}
 						if(!get_chunk_head(m_chunked_cache, m_len_in_remain, is_matched))
 						{
-							LOG_ERROR("http_stream_filter::handle_chunked(*) Failed to get length from chunked head:" << m_chunked_cache);
+							LOG_ERROR("http_stream_filter::handle_chunked(*) Failed to get length from chunked head (" << m_chunked_cache.size() << " bytes)");
 							m_state = reciev_machine_state_error;
 							return false;
 						}
@@ -596,6 +656,12 @@ namespace net_utils
 							return true;
 						}else
 						{
+							if (m_response_info.m_body.size() > m_max_response_bytes ||
+                  m_len_in_remain > m_max_response_bytes - m_response_info.m_body.size())
+              {
+                m_state = reciev_machine_state_error;
+                return false;
+              }
 							m_chunked_state = http_chunked_state_chunk_body;
 							if(m_len_in_remain == 0)
 							{//last chunk, let stop the stream and fix the chunk queue.
@@ -655,27 +721,27 @@ namespace net_utils
 						++ptr;
 					// an identifier composed of letters or -
 					const char *key_pos = ptr;
-					while (isalnum(*ptr) || *ptr == '_' || *ptr == '-')
+					while (isalnum(static_cast<unsigned char>(*ptr)) || *ptr == '_' || *ptr == '-')
 						++ptr;
 					const char *key_end = ptr;
 					// optional space (not in RFC, but in previous code)
 					if (*ptr == ' ')
 						++ptr;
-					CHECK_AND_ASSERT_MES(*ptr == ':', true, "http_stream_filter::parse_cached_header() invalid header in: " << m_cache_to_process);
+					CHECK_AND_ASSERT_MES(*ptr == ':', false, "http_stream_filter::parse_cached_header() invalid header (" << m_cache_to_process.size() << " bytes)");
 					++ptr;
 					// optional whitespace, but not newlines - line folding is obsolete, let's ignore it
-					while (isblank(*ptr))
+					while (isblank(static_cast<unsigned char>(*ptr)))
 						++ptr;
 					const char *value_pos = ptr;
 					while (*ptr != '\r' && *ptr != '\n')
 						++ptr;
 					const char *value_end = ptr;
 					// optional trailing whitespace
-					while (value_end > value_pos && isblank(*(value_end-1)))
+					while (value_end > value_pos && isblank(static_cast<unsigned char>(*(value_end-1))))
 						--value_end;
 					if (*ptr == '\r')
 						++ptr;
-					CHECK_AND_ASSERT_MES(*ptr == '\n', true, "http_stream_filter::parse_cached_header() invalid header in: " << m_cache_to_process);
+					CHECK_AND_ASSERT_MES(*ptr == '\n', false, "http_stream_filter::parse_cached_header() invalid header (" << m_cache_to_process.size() << " bytes)");
 					++ptr;
 
 					const std::string key = std::string(key_pos, key_end - key_pos);
@@ -713,25 +779,25 @@ namespace net_utils
 			{
 				//First line response, look like this:	"HTTP/1.1 200 OK"
 				const char *ptr = m_header_cache.c_str();
-				CHECK_AND_ASSERT_MES(!memcmp(ptr, "HTTP/", 5), false, "Invalid first response line: " + m_header_cache);
+				CHECK_AND_ASSERT_MES(!memcmp(ptr, "HTTP/", 5), false, "Invalid first response line (" << m_header_cache.size() << " header bytes)");
 				ptr += 5;
-				CHECK_AND_ASSERT_MES(epee::misc_utils::parse::isdigit(*ptr), false, "Invalid first response line: " + m_header_cache);
+				CHECK_AND_ASSERT_MES(epee::misc_utils::parse::isdigit(*ptr), false, "Invalid first response line (" << m_header_cache.size() << " header bytes)");
 				unsigned long ul;
 				char *end;
 				ul = strtoul(ptr, &end, 10);
-				CHECK_AND_ASSERT_MES(ul <= INT_MAX && *end =='.', false, "Invalid first response line: " + m_header_cache);
+				CHECK_AND_ASSERT_MES(ul <= INT_MAX && *end =='.', false, "Invalid first response line (" << m_header_cache.size() << " header bytes)");
 				m_response_info.m_http_ver_hi = ul;
 				ptr = end + 1;
-				CHECK_AND_ASSERT_MES(epee::misc_utils::parse::isdigit(*ptr), false, "Invalid first response line: " + m_header_cache + ", ptr: " << ptr);
+				CHECK_AND_ASSERT_MES(epee::misc_utils::parse::isdigit(*ptr), false, "Invalid first response line (" << m_header_cache.size() << " header bytes)");
 				ul = strtoul(ptr, &end, 10);
-				CHECK_AND_ASSERT_MES(ul <= INT_MAX && isblank(*end), false, "Invalid first response line: " + m_header_cache + ", ptr: " << ptr);
+				CHECK_AND_ASSERT_MES(ul <= INT_MAX && isblank(static_cast<unsigned char>(*end)), false, "Invalid first response line (" << m_header_cache.size() << " header bytes)");
 				m_response_info.m_http_ver_lo = ul;
 				ptr = end + 1;
-				while (isblank(*ptr))
+				while (isblank(static_cast<unsigned char>(*ptr)))
 					++ptr;
-				CHECK_AND_ASSERT_MES(epee::misc_utils::parse::isdigit(*ptr), false, "Invalid first response line: " + m_header_cache);
+				CHECK_AND_ASSERT_MES(epee::misc_utils::parse::isdigit(*ptr), false, "Invalid first response line (" << m_header_cache.size() << " header bytes)");
 				ul = strtoul(ptr, &end, 10);
-				CHECK_AND_ASSERT_MES(ul >= 100 && ul <= 999 && isspace(*end), false, "Invalid first response line: " + m_header_cache);
+				CHECK_AND_ASSERT_MES(ul >= 100 && ul <= 999 && isspace(static_cast<unsigned char>(*end)), false, "Invalid first response line (" << m_header_cache.size() << " header bytes)");
 				m_response_info.m_response_code = ul;
 				ptr = end;
 				// ignore the optional text, till the end
@@ -739,7 +805,7 @@ namespace net_utils
 					++ptr;
 				if (*ptr == '\r')
 					++ptr;
-				CHECK_AND_ASSERT_MES(*ptr == '\n', false, "Invalid first response line: " << m_header_cache);
+				CHECK_AND_ASSERT_MES(*ptr == '\n', false, "Invalid first response line (" << m_header_cache.size() << " header bytes)");
 				++ptr;
 
 				m_header_cache.erase(0, ptr - m_header_cache.c_str());
@@ -767,18 +833,26 @@ namespace net_utils
 				bool analize_cached_header_and_invoke_state()
 			{
 				m_response_info.clear();
-				analize_first_response_line();
+        if (!analize_first_response_line())
+          return false;
 				std::string fake_str; //gcc error workaround
 
 				bool res = parse_header(m_response_info.m_header_info, m_header_cache);
-				CHECK_AND_ASSERT_MES(res, false, "http_stream_filter::analize_cached_reply_header_and_invoke_state(): failed to anilize reply header: " << m_header_cache);
+				CHECK_AND_ASSERT_MES(res, false, "http_stream_filter::analize_cached_reply_header_and_invoke_state(): failed to anilize reply header (" << m_header_cache.size() << " bytes)");
 
-				set_reply_content_encoder();
+        if (!set_reply_content_encoder())
+          return false;
 
 				m_len_in_summary = 0;
 				bool content_len_valid = false;
-				if(m_response_info.m_header_info.m_content_length.size())
-					content_len_valid = string_tools::get_xtype_from_string(m_len_in_summary, m_response_info.m_header_info.m_content_length);
+        const auto& length = m_response_info.m_header_info.m_content_length;
+        if (!length.empty())
+        {
+          const auto parsed = std::from_chars(length.data(), length.data() + length.size(), m_len_in_summary);
+          content_len_valid = parsed.ec == std::errc{} && parsed.ptr == length.data() + length.size();
+          if (!content_len_valid || m_len_in_summary > m_max_response_bytes)
+            return false;
+        }
 
 
 
@@ -793,7 +867,7 @@ namespace net_utils
 					string_tools::trim(m_response_info.m_header_info.m_transfer_encoding);
 					if(string_tools::compare_no_case(m_response_info.m_header_info.m_transfer_encoding, "chunked"))
 					{
-						LOG_ERROR("Wrong Transfer-Encoding:" << m_response_info.m_header_info.m_transfer_encoding);
+						LOG_ERROR("Wrong Transfer-Encoding (" << m_response_info.m_header_info.m_transfer_encoding.size() << " bytes)");
 						m_state = reciev_machine_state_error;
 						return false;
 					}
@@ -806,7 +880,7 @@ namespace net_utils
 					//In the response header the length was specified
 					if(!content_len_valid)
 					{
-						LOG_ERROR("http_stream_filter::analize_cached_reply_header_and_invoke_state(): Failed to get_len_from_content_lenght();, m_query_info.m_content_length="<<m_response_info.m_header_info.m_content_length);
+						LOG_ERROR("http_stream_filter::analize_cached_reply_header_and_invoke_state(): Failed to get_len_from_content_lenght() (" << m_response_info.m_header_info.m_content_length.size() << " bytes)");
 						m_state = reciev_machine_state_error;
 						return false;
 					}
@@ -824,6 +898,7 @@ namespace net_utils
 				}else if(!m_response_info.m_header_info.m_connection.empty() && is_connection_close_field(m_response_info.m_header_info.m_connection))
 				{   //By indirect signs we suspect that data transfer will end with a connection break
 					m_state = reciev_machine_state_body_connection_close;
+          return true;
 				}else if(is_multipart_body(m_response_info.m_header_info, fake_str))
 				{
 					m_state = reciev_machine_state_error;
@@ -832,7 +907,7 @@ namespace net_utils
 				}else
 				{   //Apparently there are no signs of the form of transfer, will receive data until the connection is closed
 					m_state = reciev_machine_state_error;
-					MERROR("Undefined transfer type, consider http_body_transfer_connection_close method. header: " << m_header_cache);
+					MERROR("Undefined transfer type, consider http_body_transfer_connection_close method (" << m_header_cache.size() << " header bytes)");
 					return false;
 				} 
 				return false;
@@ -863,7 +938,7 @@ namespace net_utils
 						boundary = result[7];
 					else 
 					{
-						LOG_ERROR("Failed to match boundary in content-type=" << head_info.m_content_type);
+						LOG_ERROR("Failed to match boundary in content-type (" << head_info.m_content_type.size() << " bytes)");
 						return false;
 					}
 					return true;

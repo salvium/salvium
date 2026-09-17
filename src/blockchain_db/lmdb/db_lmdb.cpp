@@ -168,8 +168,9 @@ int BlockchainLMDB::compare_uint64(const MDB_val *a, const MDB_val *b)
 
 int BlockchainLMDB::compare_hash32(const MDB_val *a, const MDB_val *b)
 {
-  uint32_t *va = (uint32_t*) a->mv_data;
-  uint32_t *vb = (uint32_t*) b->mv_data;
+  uint32_t va[8], vb[8];
+  memcpy(va, a->mv_data, sizeof(va));
+  memcpy(vb, b->mv_data, sizeof(vb));
   for (int n = 7; n >= 0; n--)
   {
     if (va[n] == vb[n])
@@ -734,18 +735,13 @@ bool BlockchainLMDB::need_resize(uint64_t threshold_size) const
   float resize_percent = RESIZE_PERCENT;
   MDEBUG(boost::format("Percent used: %.04f  Percent threshold: %.04f") % (100.*size_used/mei.me_mapsize) % (100.*resize_percent));
 
-  if (threshold_size > 0)
+  if (threshold_size > 0 && mei.me_mapsize - size_used <= threshold_size)
   {
-    if (mei.me_mapsize - size_used < threshold_size)
-    {
-      MINFO("Threshold met (size-based)");
-      return true;
-    }
-    else
-      return false;
+    MINFO("Threshold met (size-based)");
+    return true;
   }
 
-  if ((double)size_used / mei.me_mapsize  > resize_percent)
+  if ((double)size_used / mei.me_mapsize >= resize_percent)
   {
     MINFO("Threshold met (percent-based)");
     return true;
@@ -856,7 +852,7 @@ estim:
   MDEBUG("estimated average block size for batch: " << avg_block_size);
 
   // bigger safety margin on smaller block sizes
-  if (batch_fudge_factor < 5000.0)
+  if (!batch_bytes && batch_fudge_factor < 5000.0)
     batch_fudge_factor = 5000.0;
   threshold_size = avg_block_size * db_expand_factor * batch_fudge_factor;
   return threshold_size;
@@ -3942,8 +3938,29 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
     throw0(DB_ERROR(lmdb_error("Failed to retrieve or create pruning seed: ", result).c_str()));
   }
 
+  MDB_val_str(pruning_progress_key, "pruning_progress");
+  crypto::hash pruning_progress{};
+  bool resume_pruning = false;
+  if (mode != prune_mode_check)
+  {
+    result = mdb_get(txn, m_properties, &pruning_progress_key, &v);
+    if (result == 0)
+    {
+      if (v.mv_size != sizeof(pruning_progress))
+        throw0(DB_ERROR("Failed to retrieve pruning progress: unexpected value size"));
+      memcpy(&pruning_progress, v.mv_data, sizeof(pruning_progress));
+      resume_pruning = true;
+    }
+    else if (result != MDB_NOTFOUND)
+    {
+      throw0(DB_ERROR(lmdb_error("Failed to retrieve pruning progress: ", result).c_str()));
+    }
+  }
+
   if (mode == prune_mode_check)
     MINFO("Checking blockchain pruning...");
+  else if (resume_pruning)
+    MINFO("Resuming interrupted blockchain pruning...");
   else
     MINFO("Pruning blockchain...");
 
@@ -3959,7 +3976,7 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
     throw0(DB_ERROR(lmdb_error("Failed to open a cursor for txs_prunable_tip: ", result).c_str()));
   const uint64_t blockchain_height = height();
 
-  if (prune_tip_table)
+  if (prune_tip_table || resume_pruning)
   {
     MDB_cursor_op op = MDB_FIRST;
     while (1)
@@ -4020,13 +4037,25 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
       }
     }
   }
-  else
+  // A resumed operation still needs the historical pass after pruning newly matured tip records.
+  if (!prune_tip_table || resume_pruning)
   {
     MDB_cursor *c_tx_indices;
     result = mdb_cursor_open(txn, m_tx_indices, &c_tx_indices);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to open a cursor for tx_indices: ", result).c_str()));
     MDB_cursor_op op = MDB_FIRST;
+    if (resume_pruning)
+    {
+      MDB_val_set(progress, pruning_progress);
+      result = mdb_cursor_get(c_tx_indices, (MDB_val*)&zerokval, &progress, MDB_GET_BOTH);
+      if (result == 0)
+        op = MDB_NEXT;
+      else if (result == MDB_NOTFOUND)
+        MWARNING("Pruning progress transaction not found, restarting from the beginning");
+      else
+        throw0(DB_ERROR(lmdb_error("Failed to restore pruning progress: ", result).c_str()));
+    }
     while (1)
     {
       int ret = mdb_cursor_get(c_tx_indices, &k, &v, op);
@@ -4107,6 +4136,11 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
       if (mode != prune_mode_check && commit_counter >= 4096)
       {
         MDEBUG("Committing txn at checkpoint...");
+        // Commit the cursor position with the deletions so a restart cannot skip uncommitted work.
+        MDB_val_set(progress, ti.key);
+        result = mdb_put(txn, m_properties, &pruning_progress_key, &progress, 0);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to save pruning progress: ", result).c_str()));
         txn.commit();
         result = mdb_txn_begin(m_env, NULL, 0, txn);
         if (result)
@@ -4133,6 +4167,13 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
       }
     }
     mdb_cursor_close(c_tx_indices);
+
+    if (mode != prune_mode_check)
+    {
+      result = mdb_del(txn, m_properties, &pruning_progress_key, NULL);
+      if (result && result != MDB_NOTFOUND)
+        throw0(DB_ERROR(lmdb_error("Failed to clear pruning progress: ", result).c_str()));
+    }
   }
 
   if ((result = mdb_stat(txn, m_txs_prunable, &db_stats)))
@@ -4503,7 +4544,8 @@ std::pair<std::vector<uint64_t>, uint64_t> BlockchainLMDB::get_block_cumulative_
     //  throw0(BLOCK_DNE(std::string("Attempt to get rct distribution failed - '" + asset_type + "' not found").c_str()));
     res.push_back(rct_count_info[asset_type_id]);
 
-    if (height == heights[heights.size() - CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE])
+    if (heights.size() >= CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE &&
+        height == heights[heights.size() - CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE])
       num_spendable_global_outs = rct_count_info[asset_type_id];
 
   }
@@ -5944,9 +5986,7 @@ std::vector<std::vector<std::pair<uint64_t, uint64_t>>> BlockchainLMDB::get_tx_a
   {
     int result = mdb_cursor_get(m_cur_tx_outputs, &k_tx_id, &v, op);
     if (result == MDB_NOTFOUND)
-      LOG_PRINT_L0("WARNING: Unexpected: tx has no amount indices stored in "
-          "tx_outputs, but it should have an empty entry even if it's a tx without "
-          "outputs");
+      throw0(DB_ERROR("Unexpected: tx has no amount indices stored in tx_outputs, but it should have an empty entry even if it's a tx without outputs"));
     else if (result)
       throw0(DB_ERROR(lmdb_error("DB error attempting to get data for tx_outputs[tx_index]", result).c_str()));
 

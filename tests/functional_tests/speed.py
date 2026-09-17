@@ -29,6 +29,8 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+from __future__ import print_function
+
 """Test speed of various procedures
 
 Test the following RPCs:
@@ -41,7 +43,6 @@ Test the following RPCs:
 
 import time
 from time import sleep
-from __future__ import print_function
 
 from framework.daemon import Daemon
 from framework.wallet import Wallet
@@ -53,7 +54,7 @@ class SpeedTest():
         daemon = Daemon()
         res = daemon.get_height()
         daemon.pop_blocks(res.height - 1)
-        daemon.flush_txpool()
+        daemon.flush_txpool(confirm_all=True)
 
     def run_test(self):
         self.reset()
@@ -68,7 +69,7 @@ class SpeedTest():
 
         destinations = []
         for i in range(3):
-            destinations.append({"amount":1,"address":'888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H'})
+            destinations.append({"amount":1,"address":'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'})
 
         self._test_speed_generateblocks(daemon=daemon, blocks=70)
         for i in range(1, 10):
@@ -82,7 +83,7 @@ class SpeedTest():
         print('Test speed of block generation')
         start = time.time()
 
-        res = daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', blocks)
+        res = daemon.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', blocks)
 
         print('generating ', blocks, 'blocks took: ', time.time() - start, 'seconds')
 
@@ -90,7 +91,7 @@ class SpeedTest():
         print('Test speed of transfer')
         start = time.time()
 
-        destinations = [{"amount":1,"address":'888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H'}]
+        destinations = [{"amount":1,"address":'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'}]
         res = wallet.transfer_split(destinations)
 
         print('generating tx took: ', time.time() - start, 'seconds')

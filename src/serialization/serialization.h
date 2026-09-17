@@ -198,6 +198,14 @@ inline auto do_serialize(Archive &ar, T &v, Args&&... args)
     if (!r || !ar.good()) return false;			\
   } while(0);
 
+// Enforce the element limit before reserving or reading a container.
+#define CONTAINER_FIELD_CAPPED(f, c)                    \
+  do {                                                 \
+    ar.tag(#f);                                        \
+    bool r = do_serialize_container(ar, f, c);           \
+    if (!r || !ar.good()) return false;                 \
+  } while(0);
+
 /*! \macro FIELD_F(f)
  *
  * \brief tags the field with the variable name and then serializes it (for use in a free function)

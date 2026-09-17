@@ -31,6 +31,7 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
 #include <cstddef>
+#include <atomic>
 #include <deque>
 #include <functional>
 #include <utility>
@@ -62,13 +63,14 @@ public:
     boost::condition_variable cv;
     threadpool &pool;
     int num;
-    bool error_flag;
+    std::atomic<bool> error_flag;
     public:
+    int get_num();
     void inc();
     void dec();
     bool wait();  //! Wait for a set of tasks to finish, returns false iff any error
-    void set_error() noexcept { error_flag = true; }
-    bool error() const noexcept { return error_flag; }
+    void set_error() noexcept { error_flag.store(true, std::memory_order_relaxed); }
+    bool error() const noexcept { return error_flag.load(std::memory_order_relaxed); }
     waiter(threadpool &pool) : pool(pool), num(0), error_flag(false) {}
     ~waiter();
   };
@@ -101,7 +103,7 @@ public:
     unsigned int active;
     unsigned int max;
     bool running;
-    void run(bool flush = false);
+    void run(waiter *flush_waiter);
 };
 
 }

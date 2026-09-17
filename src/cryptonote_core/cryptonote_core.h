@@ -42,6 +42,7 @@
 #include "cryptonote_protocol/enums.h"
 #include "common/download.h"
 #include "common/command_line.h"
+#include "common/verification_work_limiter.h"
 #include "blockchain_and_pool.h"
 #include "cryptonote_basic/miner.h"
 #include "cryptonote_basic/connection_context.h"
@@ -126,6 +127,16 @@ namespace cryptonote
       * @return true if the transaction was accepted, false otherwise
       */
      bool handle_incoming_tx(const tx_blob_entry& tx_blob, tx_verification_context& tvc, relay_method tx_relay, bool relayed);
+
+     /**
+      * Handles transaction submission from a non-loopback RPC transport under
+      * a shared measured-work budget. P2P and block validation use independent
+      * paths, so neither can consume this budget.
+      *
+      * @param busy set when the work budget rejected the request before parsing
+      */
+     bool handle_incoming_tx_rpc(const tx_blob_entry& tx_blob,
+       tx_verification_context& tvc, relay_method tx_relay, bool& busy);
 
      /**
       * @brief handles a list of incoming transactions
@@ -802,6 +813,9 @@ namespace cryptonote
       */
      size_t get_block_sync_size(uint64_t height) const;
 
+     /** Maximum plausible serialized response for a requested block span. */
+     size_t get_block_sync_response_size(size_t count) const;
+
      /**
       * @brief get the sum of coinbase tx amounts between blocks
       *
@@ -1104,6 +1118,7 @@ namespace cryptonote
      i_cryptonote_protocol* m_pprotocol; //!< cryptonote protocol instance
 
      epee::critical_section m_incoming_tx_lock; //!< incoming transaction lock
+     tools::verification_work_limiter m_rpc_tx_verification_limiter;
 
      //m_miner and m_miner_addres are probably temporary here
      miner m_miner; //!< miner instance

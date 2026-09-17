@@ -41,8 +41,10 @@ namespace misc_utils
   {
     std::string transform_to_escape_sequence(const std::string& src)
     {
-      static const char escaped[] = "\b\f\n\r\t\v\"\\/";
-      std::string::const_iterator it = std::find_first_of(src.begin(), src.end(), escaped, escaped + sizeof(escaped));
+      const auto needs_escape = [](unsigned char c) {
+        return c < 0x20 || c == '"' || c == '\\' || c == '/';
+      };
+      std::string::const_iterator it = std::find_if(src.begin(), src.end(), needs_escape);
       if (it == src.end())
         return src;
 
@@ -64,7 +66,7 @@ namespace misc_utils
         case '\t':  //Tab
           res+="\\t"; break;
         case '\v':  //Vertical tab
-          res+="\\v"; break;
+          res+="\\u000b"; break;
         //case '\'':  //Apostrophe or single quote
         //  res+="\\'"; break;
         case '"':  //Double quote
@@ -74,7 +76,16 @@ namespace misc_utils
         case '/':  //Backslash caracter
           res+="\\/"; break;
         default:
-          res.push_back(*it);
+          if (static_cast<unsigned char>(*it) < 0x20)
+          {
+            static constexpr char hex[] = "0123456789abcdef";
+            const unsigned char c = static_cast<unsigned char>(*it);
+            res += "\\u00";
+            res.push_back(hex[c >> 4]);
+            res.push_back(hex[c & 0x0f]);
+          }
+          else
+            res.push_back(*it);
         }
       }
       return res;
@@ -129,7 +140,7 @@ namespace misc_utils
             case '/':  //Slash character
               val.push_back('/');break;
             case 'u':  //Unicode code point
-              if (buf_end - it < 4)
+              if (buf_end - it < 5)
               {
                 ASSERT_MES_AND_THROW("Invalid Unicode escape sequence");
               }
@@ -165,8 +176,7 @@ namespace misc_utils
               }
               break;
             default:
-              val.push_back(*it);
-              LOG_PRINT_L0("Unknown escape sequence :\"\\" << *it << "\"");
+              ASSERT_MES_AND_THROW("Invalid escape sequence in JSON string");
             }
             escape_mode = false;
           }else if(*it == '"')
@@ -176,13 +186,13 @@ namespace misc_utils
           }else if(*it == '\\')
           {
             escape_mode = true;
-          }          
+          }
           else
           {
             val.push_back(*it); 
           }
         }
-        ASSERT_MES_AND_THROW("Failed to match string in json entry: " << std::string(star_end_string, buf_end));
+        ASSERT_MES_AND_THROW("Unterminated JSON string");
       }
       void match_number2(std::string::const_iterator& star_end_string, std::string::const_iterator buf_end, boost::string_ref& val, bool& is_float_val, bool& is_signed_val)
       {
@@ -215,10 +225,10 @@ namespace misc_utils
               return;
             }
             else 
-              ASSERT_MES_AND_THROW("wrong number in json entry: " << std::string(star_end_string, buf_end));
+              ASSERT_MES_AND_THROW("Invalid number in JSON entry");
           }
         }
-        ASSERT_MES_AND_THROW("wrong number in json entry: " << std::string(star_end_string, buf_end));
+        ASSERT_MES_AND_THROW("Invalid number in JSON entry");
       }
       void match_word2(std::string::const_iterator& star_end_string, std::string::const_iterator buf_end, boost::string_ref& val)
       {
@@ -233,11 +243,11 @@ namespace misc_utils
             {
               star_end_string = --it;
               return;
-            }else 
-              ASSERT_MES_AND_THROW("failed to match word number in json entry: " << std::string(star_end_string, buf_end));
+            }else
+              ASSERT_MES_AND_THROW("Invalid word in JSON entry");
           }
         }
-        ASSERT_MES_AND_THROW("failed to match word number in json entry: " << std::string(star_end_string, buf_end));
+        ASSERT_MES_AND_THROW("Invalid word in JSON entry");
       }
   }
 }

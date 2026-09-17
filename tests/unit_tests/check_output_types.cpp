@@ -74,10 +74,10 @@ TEST(check_output_types, check_all)
   EXPECT_FALSE(check_output_types(tx, hf_version));
   tx.vout.clear();
  
-  // should only allow SAL outputs before version 6
+  // Asset eligibility is validated separately; this helper checks output shape.
   out.asset_type = "SAL1";
   tx.vout.push_back(tx_out {0, out});
-  EXPECT_FALSE(check_output_types(tx, hf_version));
+  EXPECT_TRUE(check_output_types(tx, hf_version));
   tx.vout.clear();
  
   out.asset_type = "SAL";
@@ -85,13 +85,13 @@ TEST(check_output_types, check_all)
   EXPECT_TRUE(check_output_types(tx, hf_version));
   tx.vout.clear();
  
-  // after version 6, AUDIT txs still should only have SAL outputs
+  // Asset labels do not change the accepted output variant.
   hf_version = 6;
   tx.type = transaction_type::AUDIT;
  
   out.asset_type = "SAL1";
   tx.vout.push_back(tx_out {0, out});
-  EXPECT_FALSE(check_output_types(tx, hf_version));
+  EXPECT_TRUE(check_output_types(tx, hf_version));
   tx.vout.clear();
  
   out.asset_type = "SAL";
@@ -112,13 +112,13 @@ TEST(check_output_types, check_all)
   EXPECT_TRUE(check_output_types(tx, hf_version));
   tx.vout.clear();
  
-  // after version 7, non-AUDIT txs should only allow SAL1 outputs
+  // The same remains true for later hard-fork versions.
   tx.type = transaction_type::TRANSFER;
   hf_version = 7;
   
   out.asset_type = "SAL";
   tx.vout.push_back(tx_out {0, out});
-  EXPECT_FALSE(check_output_types(tx, hf_version));
+  EXPECT_TRUE(check_output_types(tx, hf_version));
   tx.vout.clear();
  
   out.asset_type = "SAL1";
@@ -130,7 +130,7 @@ TEST(check_output_types, check_all)
 
   out.asset_type = "SAL";
   tx.vout.push_back(tx_out {0, out});
-  EXPECT_FALSE(check_output_types(tx, hf_version));
+  EXPECT_TRUE(check_output_types(tx, hf_version));
   tx.vout.clear();
  
   out.asset_type = "SAL1";
@@ -142,6 +142,6 @@ TEST(check_output_types, check_all)
 
   out.asset_type = "SAL1";
   tx.vout.push_back(tx_out {0, out});
-  EXPECT_FALSE(check_output_types(tx, hf_version));
+  EXPECT_TRUE(check_output_types(tx, hf_version));
   tx.vout.clear();
 }

@@ -37,6 +37,7 @@
 #include "cryptonote_protocol/cryptonote_protocol_handler.inl"
 #include "unit_tests_utils.h"
 #include <condition_variable>
+#include <boost/filesystem.hpp>
 
 #define MAKE_IPV4_ADDRESS(a,b,c,d) epee::net_utils::ipv4_network_address{MAKE_IP(a,b,c,d),0}
 #define MAKE_IPV4_ADDRESS_PORT(a,b,c,d,e) epee::net_utils::ipv4_network_address{MAKE_IP(a,b,c,d),e}
@@ -76,6 +77,12 @@ public:
   bool update_checkpoints(const bool skip_dns = false) { return true; }
   uint64_t get_target_blockchain_height() const { return 1; }
   size_t get_block_sync_size(uint64_t height) const { return BLOCKS_SYNCHRONIZING_DEFAULT_COUNT; }
+  size_t get_block_sync_response_size(size_t count) const
+  {
+    const size_t block_weight_limit = 2 * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5;
+    return count * block_weight_limit * CRYPTONOTE_BLOCK_SYNC_WIRE_WEIGHT_MULTIPLIER
+      + CRYPTONOTE_BLOCK_SYNC_RESPONSE_OVERHEAD;
+  }
   virtual void on_transactions_relayed(epee::span<const cryptonote::blobdata> tx_blobs, cryptonote::relay_method tx_relay) {}
   cryptonote::network_type get_nettype() const { return cryptonote::MAINNET; }
   bool get_pool_transaction(const crypto::hash& id, cryptonote::blobdata& tx_blob, cryptonote::relay_category tx_category) const { return false; }
@@ -100,6 +107,34 @@ public:
   crypto::hash get_block_id_by_height(uint64_t height) const { return crypto::null_hash; }
   void stop() {}
 };
+
+TEST(cryptonote_protocol_handler, p2p_transaction_work_budget_is_global_and_refills)
+{
+  using limiter = cryptonote::detail::p2p_tx_verification_limiter;
+  limiter::clock::time_point now{};
+  limiter budget(std::chrono::seconds(1), 2, [&] { return now; });
+
+  bool executed = false;
+  ASSERT_TRUE(budget.run([&] {
+    executed = true;
+    now += std::chrono::seconds(2);
+  }));
+  EXPECT_TRUE(executed);
+
+  executed = false;
+  EXPECT_FALSE(budget.run([&] { executed = true; }));
+  EXPECT_FALSE(executed);
+
+  now += std::chrono::seconds(4);
+  EXPECT_TRUE(budget.run([&] { executed = true; }));
+  EXPECT_TRUE(executed);
+}
+
+TEST(node_server, inbound_connections_are_bounded_by_default)
+{
+  EXPECT_EQ(static_cast<int64_t>(P2P_DEFAULT_IN_CONNECTIONS_COUNT), nodetool::arg_in_peers.default_value);
+  EXPECT_GT(nodetool::arg_in_peers.default_value, 0);
+}
 
 typedef nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<test_core>> Server;
 
@@ -233,6 +268,9 @@ TEST(ban, limit)
 
 TEST(ban, subnet)
 {
+  const auto data_dir = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path("salvium-ban-%%%%-%%%%");
+  boost::filesystem::create_directories(data_dir);
+  auto cleanup = epee::misc_utils::create_scope_leave_handler([&] { boost::filesystem::remove_all(data_dir); });
   time_t seconds;
   test_core pr_core;
   cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol(pr_core, NULL);
@@ -242,12 +280,13 @@ TEST(ban, subnet)
     Server::init_options(opts);
     cryptonote::core::init_options(opts);
 
-    char** args = nullptr;
     boost::program_options::variables_map vm;
     boost::program_options::store(
-      boost::program_options::parse_command_line(0, args, opts), vm
+      boost::program_options::command_line_parser(std::vector<std::string>{}).options(opts).run(), vm
     );
-    server.init(vm);
+    vm.find(cryptonote::arg_offline.name)->second = boost::program_options::variable_value(true, false);
+    vm.find(cryptonote::arg_data_dir.name)->second = boost::program_options::variable_value(data_dir.string(), false);
+    ASSERT_TRUE(server.init(vm));
   }
   cprotocol.set_p2p_endpoint(&server);
 
@@ -319,6 +358,7 @@ TEST(ban, file_banlist)
     boost::program_options::command_line_parser({
       "--data-dir",
       node_dir.string(),
+      "--offline",
       "--ban-list",
       (unit_test::data_dir / "node" / "banlist_1.txt").string()
     }).options([]{
@@ -370,9 +410,12 @@ TEST(node_server, bind_same_p2p_port)
     test_core pr_core;
     cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol;
     std::unique_ptr<Server> server;
+    boost::filesystem::path data_dir = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path("salvium-bind-%%%%-%%%%");
+    ~test_data_t() { server.reset(); boost::filesystem::remove_all(data_dir); }
 
     test_data_t(): cprotocol(pr_core, NULL)
     {
+      boost::filesystem::create_directories(data_dir);
       server.reset(new Server(cprotocol));
       cprotocol.set_p2p_endpoint(server.get());
     }
@@ -406,6 +449,7 @@ TEST(node_server, bind_same_p2p_port)
     For Mac OSX, set the following alias, before running the test, or else it will fail:
     sudo ifconfig lo0 alias 127.0.0.2
     */
+    vm.find(cryptonote::arg_data_dir.name)->second = boost::program_options::variable_value(server->data_dir.string(), false);
     vm.find(nodetool::arg_p2p_bind_ip.name)->second   = boost::program_options::variable_value(std::string("127.0.0.2"), false);
     vm.find(nodetool::arg_p2p_bind_port.name)->second = boost::program_options::variable_value(std::string(port), false);
 
@@ -763,6 +807,14 @@ TEST(cryptonote_protocol_handler, race_condition)
           }).options([]{
             options_description_t options_description{};
             cryptonote::core::init_options(options_description);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_enabled);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_packet_bytes);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_cache_bytes);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_cache_messages);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_ttl);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_relay_fanout);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_peer_kbps);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_global_kbps);
             return options_description;
           }()).run(),
           options
@@ -790,6 +842,14 @@ TEST(cryptonote_protocol_handler, race_condition)
           }).options([]{
             options_description_t options_description{};
             cryptonote::core::init_options(options_description);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_enabled);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_packet_bytes);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_cache_bytes);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_cache_messages);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_ttl);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_relay_fanout);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_peer_kbps);
+            command_line::add_arg(options_description, cryptonote::arg_salchat_max_global_kbps);
             return options_description;
           }()).run(),
           options
@@ -812,6 +872,13 @@ TEST(cryptonote_protocol_handler, race_condition)
       io_context.run();
     });
   }
+  const auto stop_workers = epee::misc_utils::create_scope_leave_handler([&]{
+    work.reset();
+    io_context.stop();
+    for (auto& worker: workers)
+      if (worker.joinable())
+        worker.join();
+  });
 
   connection_t::set_rate_up_limit(std::numeric_limits<int64_t>::max());
   connection_t::set_rate_down_limit(std::numeric_limits<int64_t>::max());
@@ -922,6 +989,13 @@ TEST(cryptonote_protocol_handler, race_condition)
         check.io_context.run();
       });
     }
+    const auto stop_check_workers = epee::misc_utils::create_scope_leave_handler([&]{
+      check.work.reset();
+      check.io_context.stop();
+      for (auto& worker: check.workers)
+        if (worker.joinable())
+          worker.join();
+    });
     while (daemon.main.conn.size() < 1) {
       daemon.main.conn.emplace_back(new connection_t(check.io_context, daemon.main.shared_state, {}, {}));
       daemon.alt.conn.emplace_back(new connection_t(io_context, daemon.alt.shared_state, {}, {}));
@@ -954,7 +1028,7 @@ TEST(cryptonote_protocol_handler, race_condition)
     events.prepare.wait();
     daemon.main.core->get_blockchain_storage().add_block_notify(
       [&events](height_t height, span::blocks blocks){
-        if (height >= CRYPTONOTE_PRUNING_STRIPE_SIZE)
+        if (height + blocks.size() >= CRYPTONOTE_PRUNING_STRIPE_SIZE)
           events.sync.raise();
       }
     );
@@ -1017,13 +1091,15 @@ TEST(cryptonote_protocol_handler, race_condition)
     daemon.alt.core.reset();
     check.work.reset();
     for (auto& w: check.workers) {
-      w.join();
+      if (w.joinable())
+        w.join();
     }
   }
 
   work.reset();
   for (auto& w: workers) {
-    w.join();
+    if (w.joinable())
+      w.join();
   }
   remove_tree(dir);
 }
@@ -1289,3 +1365,44 @@ TEST(node_server, race_condition)
 
 namespace nodetool { template class node_server<cryptonote::t_cryptonote_protocol_handler<test_core>>; }
 namespace cryptonote { template class t_cryptonote_protocol_handler<test_core>; }
+
+TEST(p2p_tls, default_fallback_and_pinning)
+{
+  boost::program_options::options_description options;
+  Server::init_options(options);
+  auto parse = [&](const std::vector<std::string>& args) {
+    boost::program_options::variables_map vm;
+    boost::program_options::store(boost::program_options::command_line_parser(args).options(options).run(), vm);
+    return nodetool::get_p2p_ssl_options(vm);
+  };
+  using namespace epee::net_utils;
+  EXPECT_EQ(ssl_support_t::e_ssl_support_autodetect, parse({}).support);
+  EXPECT_EQ(ssl_support_t::e_ssl_support_enabled, parse({"--p2p-ssl=enabled"}).support);
+  EXPECT_EQ(ssl_support_t::e_ssl_support_disabled, parse({"--p2p-ssl=disabled"}).support);
+  const std::string fingerprint = "--p2p-ssl-allowed-fingerprints=" + std::string(64, 'a');
+  EXPECT_EQ(ssl_support_t::e_ssl_support_enabled, parse({fingerprint}).support);
+  EXPECT_THROW(parse({fingerprint, "--p2p-ssl=autodetect"}), std::exception);
+  EXPECT_THROW(parse({"--p2p-ssl=invalid"}), std::exception);
+}
+
+TEST(ban, automatic_eviction_preserves_operator_ban)
+{
+  test_core core;
+  cryptonote::t_cryptonote_protocol_handler<test_core> protocol(core, nullptr);
+  Server server(protocol);
+  const auto manual = MAKE_IPV4_ADDRESS(10,0,0,1);
+  ASSERT_TRUE(server.block_host(manual, 10000));
+  for (unsigned i = 1; i <= nodetool::peer_penalties::default_capacity + 1; ++i)
+    ASSERT_TRUE(server.block_host_automatically(epee::net_utils::ipv4_network_address{i, 0}, 10000));
+  EXPECT_TRUE(server.is_host_blocked(manual, nullptr));
+  EXPECT_LE(server.get_blocked_hosts().size(), nodetool::peer_penalties::default_capacity + 1);
+}
+
+TEST(ban, expired_last_subnet_can_be_removed)
+{
+  test_core core;
+  cryptonote::t_cryptonote_protocol_handler<test_core> protocol(core, nullptr);
+  Server server(protocol);
+  ASSERT_TRUE(server.block_subnet(MAKE_IPV4_SUBNET(10,20,30,0,24), 0));
+  EXPECT_FALSE(server.is_host_blocked(MAKE_IPV4_ADDRESS(10,20,30,1), nullptr));
+}

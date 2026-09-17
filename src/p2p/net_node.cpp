@@ -42,6 +42,7 @@
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "net_node.h"
+#include "hex.h"
 #include "net/net_utils_base.h"
 #include "net/socks.h"
 #include "net/parse.h"
@@ -111,6 +112,39 @@ namespace
 
 namespace nodetool
 {
+    const command_line::arg_descriptor<std::string> arg_p2p_ssl = {"p2p-ssl", "P2P TLS mode: autodetect (TLS first, plaintext fallback), enabled (required), disabled", "autodetect"};
+    const command_line::arg_descriptor<std::string> arg_p2p_ssl_private_key = {"p2p-ssl-private-key", "Path to PEM P2P private key", ""};
+    const command_line::arg_descriptor<std::string> arg_p2p_ssl_certificate = {"p2p-ssl-certificate", "Path to PEM P2P certificate", ""};
+    const command_line::arg_descriptor<std::string> arg_p2p_ssl_ca_certificates = {"p2p-ssl-ca-certificates", "Require peer certificates signed by this PEM CA", ""};
+    const command_line::arg_descriptor<std::vector<std::string>> arg_p2p_ssl_allowed_fingerprints = {"p2p-ssl-allowed-fingerprints", "Require one of these SHA-256 peer certificate fingerprints"};
+    epee::net_utils::ssl_options_t get_p2p_ssl_options(const boost::program_options::variables_map& vm)
+    {
+      using namespace epee::net_utils;
+      ssl_options_t options{ssl_support_t::e_ssl_support_enabled};
+      CHECK_AND_ASSERT_THROW_MES(ssl_support_from_string(options.support, command_line::get_arg(vm, arg_p2p_ssl)), "Invalid p2p-ssl mode");
+      // Public peers have no central certificate authority. Operators can pin
+      // certificates or use a private CA for authenticated peer networks.
+      options.verification = ssl_verification_t::none;
+      const auto ca = command_line::get_arg(vm, arg_p2p_ssl_ca_certificates);
+      std::vector<std::vector<uint8_t>> fingerprints;
+      for (const auto& value : command_line::get_arg(vm, arg_p2p_ssl_allowed_fingerprints))
+      {
+        auto fingerprint = epee::from_hex_locale::to_vector(value);
+        CHECK_AND_ASSERT_THROW_MES(fingerprint.size() == 32, "P2P certificate fingerprint must be SHA-256 (32 bytes)");
+        fingerprints.push_back(std::move(fingerprint));
+      }
+      if (!ca.empty() || !fingerprints.empty())
+      {
+        CHECK_AND_ASSERT_THROW_MES(command_line::is_arg_defaulted(vm, arg_p2p_ssl) || options.support == ssl_support_t::e_ssl_support_enabled, "P2P certificate verification requires p2p-ssl=enabled");
+        options = ssl_options_t{std::move(fingerprints), ca};
+        if (!ca.empty())
+          options.verification = ssl_verification_t::user_ca;
+      }
+      options.auth = {command_line::get_arg(vm, arg_p2p_ssl_private_key), command_line::get_arg(vm, arg_p2p_ssl_certificate)};
+      CHECK_AND_ASSERT_THROW_MES(options.auth.private_key_path.empty() == options.auth.certificate_path.empty(), "P2P key and certificate must both be specified");
+      return options;
+    }
+
     const command_line::arg_descriptor<std::string> arg_p2p_bind_ip        = {"p2p-bind-ip", "Interface for p2p network protocol (IPv4)", "0.0.0.0"};
     const command_line::arg_descriptor<std::string> arg_p2p_bind_ipv6_address        = {"p2p-bind-ipv6-address", "Interface for p2p network protocol (IPv6)", "::"};
     const command_line::arg_descriptor<std::string, false, true, 2> arg_p2p_bind_port = {
@@ -159,7 +193,7 @@ namespace nodetool
     const command_line::arg_descriptor<bool>        arg_p2p_use_ipv6  = {"p2p-use-ipv6", "Enable IPv6 for p2p", false};
     const command_line::arg_descriptor<bool>        arg_p2p_ignore_ipv4  = {"p2p-ignore-ipv4", "Ignore unsuccessful IPv4 bind for p2p", false};
     const command_line::arg_descriptor<int64_t>     arg_out_peers = {"out-peers", "set max number of out peers", -1};
-    const command_line::arg_descriptor<int64_t>     arg_in_peers = {"in-peers", "set max number of in peers", -1};
+    const command_line::arg_descriptor<int64_t>     arg_in_peers = {"in-peers", "set max number of in peers", P2P_DEFAULT_IN_CONNECTIONS_COUNT};
     const command_line::arg_descriptor<int> arg_tos_flag = {"tos-flag", "set TOS flag", -1};
 
     const command_line::arg_descriptor<int64_t> arg_limit_rate_up = {"limit-rate-up", "set limit-rate-up [kB/s]", P2P_DEFAULT_LIMIT_RATE_UP};

@@ -153,6 +153,13 @@ namespace daemon_args
   , "Print the genesis transaction"
   };
 
+  const command_line::arg_descriptor<unsigned int> arg_zmq_curve = {
+    "zmq-curve", "Encrypt ZMQ RPC and publications with CURVE (1=on, 0=plaintext)", 1
+  };
+  const command_line::arg_descriptor<std::string> arg_zmq_curve_secret_key_file = {
+    "zmq-curve-secret-key-file", "ZMQ CURVE secret key path (default: data-dir/zmq-curve.key); public key is saved beside it as .pub", ""
+  };
+
   const command_line::arg_descriptor<bool> arg_zmq_rpc_disabled = {
     "no-zmq"
   , "Disable ZMQ RPC server"

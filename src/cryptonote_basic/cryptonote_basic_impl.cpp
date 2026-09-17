@@ -28,6 +28,8 @@
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
+#include <cstring>
+
 #include "include_base_utils.h"
 using namespace epee;
 
@@ -299,7 +301,8 @@ namespace cryptonote {
         return false;
       }
 
-      public_address_outer_blob blob = *reinterpret_cast<const public_address_outer_blob*>(buff.data());
+      public_address_outer_blob blob;
+      std::memcpy(std::addressof(blob), buff.data(), sizeof(blob));
 
 
       if(blob.m_ver > CRYPTONOTE_PUBLIC_ADDRESS_TEXTBLOB_VER)

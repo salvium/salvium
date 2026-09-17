@@ -173,6 +173,11 @@ namespace cryptonote
     END_SERIALIZE()
   };
 
+  void classify_addresses(const std::vector<tx_destination_entry>& destinations,
+      const boost::optional<account_public_address>& change_addr, size_t& num_stdaddresses,
+      size_t& num_subaddresses, account_public_address& single_dest_subaddress);
+
+
   //---------------------------------------------------------------
 
   struct tx_block_template_backlog_entry

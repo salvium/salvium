@@ -27,6 +27,7 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 set(TREZOR_PROTOB_H
+        trezor/messages/options.pb.h
         trezor/messages/messages.pb.h
         trezor/messages/messages-common.pb.h
         trezor/messages/messages-management.pb.h
@@ -34,6 +35,7 @@ set(TREZOR_PROTOB_H
 )
 
 set(TREZOR_PROTOB_CPP
+        trezor/messages/options.pb.cc
         trezor/messages/messages.pb.cc
         trezor/messages/messages-common.pb.cc
         trezor/messages/messages-management.pb.cc
@@ -90,7 +92,7 @@ if(DEVICE_TREZOR_READY)
             common
             ${SODIUM_LIBRARY}
             ${Boost_CHRONO_LIBRARY}
-            ${Protobuf_LIBRARY}
+            ${TREZOR_PROTOBUF_LIBRARIES}
             ${TREZOR_LIBUSB_LIBRARIES}
             PRIVATE
             ${EXTRA_LIBRARIES})

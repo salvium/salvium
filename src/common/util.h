@@ -150,8 +150,11 @@ namespace tools
    *  (ensure-directory-exists): greenspun's tenth rule in action!
    */
   bool create_directories_if_necessary(const std::string& path);
-  /*! \brief std::rename wrapper for nix and something strange for windows.
-   */
+  // Flush directory metadata for a newly created or renamed file. A failure
+  // does not undo the directory operation that has already occurred.
+  std::error_code sync_parent_directory(const std::string& filename);
+  // Atomically replace and flush the containing directory. On an error after
+  // rename the replacement remains installed; callers must not roll it back.
   std::error_code replace_file(const std::string& old_name, const std::string& new_name);
 
   bool sanitize_locale();

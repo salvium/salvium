@@ -62,7 +62,6 @@ src/blockchain_utilities/blockchain_audit.cpp
 
 # Executables
 *.exe
-!install-depenencies.exe
 *.out
 *.app
 
@@ -124,3 +123,17 @@ nbproject
 __pycache__/
 *.pyc
 *.log
+
+# Generated unit-test wallet outputs
+tests/data/wallet_SaLvTyL.unportable
+tests/data/wallet_change_export_format
+tests/data/wallet_change_export_format.keys
+tests/data/wallet_change_password_mem2file
+tests/data/wallet_change_password_mem2file.keys
+tests/data/wallet_gen_ascii_format
+tests/data/wallet_gen_ascii_format.keys
+tests/data/wallet_mem2file
+tests/data/wallet_mem2file.keys
+
+# Generated Trezor protobuf sources
+/src/device_trezor/trezor/messages/

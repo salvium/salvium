@@ -35,6 +35,7 @@
 #include <vector>
 
 #include "tx_pool.h"
+#include "txpool_validation_budget.h"
 
 #include "tx_rules_engine.h"
 #include "tx_rules_adapters.h"
@@ -314,7 +315,12 @@ namespace cryptonote
     // HERE BE DRAGONS!!!
     // Check that CREATE_TOKEN txs are unique in the pool
     if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
-      // TODO: ...scan the existing entries - requires either a registry of CREATE_TOKEN TXs, or to interatively process the pool
+      if (have_pending_create_token(tx.token_metadata.asset_type, id))
+      {
+        MERROR("CREATE_TOKEN for ticker '" << tx.token_metadata.asset_type << "' already exists in txpool");
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
     }
     // LAND AHOY!!!
     
@@ -369,7 +375,29 @@ namespace cryptonote
         tvc.m_added_to_pool = true;
       }else
       {
-        LOG_PRINT_L1("tx used wrong inputs, rejected");
+        std::ostringstream in_diag;
+        in_diag << "tx used wrong inputs, rejected"
+          << " type=" << static_cast<uint64_t>(tx.type)
+          << " vin_count=" << tx.vin.size()
+          << " source_asset='" << tx.source_asset_type
+          << "' dest_asset='" << tx.destination_asset_type << "'";
+        for (size_t vin_idx = 0; vin_idx < tx.vin.size(); ++vin_idx)
+        {
+          if (tx.vin[vin_idx].type() == typeid(cryptonote::txin_to_key))
+          {
+            const auto &in = boost::get<cryptonote::txin_to_key>(tx.vin[vin_idx]);
+            in_diag << " vin[" << vin_idx << "]:asset='" << in.asset_type
+              << "' ki=" << epee::string_tools::pod_to_hex(in.k_image)
+              << " key_offsets=" << in.key_offsets.size();
+            if (!in.key_offsets.empty())
+              in_diag << " first=" << in.key_offsets.front() << " last=" << in.key_offsets.back();
+          }
+          else
+          {
+            in_diag << " vin[" << vin_idx << "]:non-txin_to_key";
+          }
+        }
+        MWARNING(in_diag.str());
         tvc.m_verifivation_failed = true;
         tvc.m_invalid_input = true;
         return false;
@@ -899,7 +927,6 @@ namespace cryptonote
 
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
-    LockedTXN lock(m_blockchain.get_db());
     txs.reserve(m_blockchain.get_txpool_tx_count());
     m_blockchain.for_all_txpool_txes([this, now, &txs, &change_timestamps, &next_check](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata_ref *){
       // 0 fee transactions are never relayed
@@ -948,16 +975,32 @@ namespace cryptonote
       return true;
     }, false, relay_category::relayable);
 
-    for (auto& elem : change_timestamps)
+    if (!change_timestamps.empty())
     {
-      /* These transactions are still in forward or stem state, so the field
-         represents the next time a relay should be attempted. Will be
-         overwritten when the state is upgraded to stem, fluff or block. This
-         function is only called every ~2 minutes, so this resetting should be
-         unnecessary, but is primarily a precaution against potential changes
-	 to the callback routines. */
-      elem.second.last_relayed_time = now + get_relay_delay(elem.second.last_relayed_time, elem.second.receive_time);
-      m_blockchain.update_txpool_tx(elem.first, elem.second);
+      LockedTXN db_lock(m_blockchain.get_db());
+      bool made_an_update = false;
+      for (auto& elem : change_timestamps)
+      {
+        /* These transactions are still in forward or stem state, so the field
+          represents the next time a relay should be attempted. Will be
+          overwritten when the state is upgraded to stem, fluff or block. This
+          function is only called every ~2 minutes, so this resetting should be
+          unnecessary, but is primarily a precaution against potential changes
+          to the callback routines. */
+        elem.second.last_relayed_time = now + get_relay_delay(elem.second.last_relayed_time, elem.second.receive_time);
+        try
+        {
+          m_blockchain.update_txpool_tx(elem.first, elem.second);
+          made_an_update = true;
+        }
+        catch (...)
+        {
+          MDEBUG("Got an exception while updating txpool meta for relayable tx " << elem.first << ", ignoring...");
+          continue;
+        }
+      }
+      if (made_an_update)
+        db_lock.commit();
     }
 
     m_next_check = time_t(next_check);
@@ -1138,7 +1181,8 @@ namespace cryptonote
     const relay_category category = include_sensitive ? relay_category::all : relay_category::broadcasted;
     backlog.reserve(m_blockchain.get_txpool_tx_count(include_sensitive));
     m_blockchain.for_all_txpool_txes([&backlog, now](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata_ref *bd){
-      backlog.push_back({meta.weight, meta.fee, meta.receive_time - now});
+      const uint64_t age = now >= meta.receive_time ? now - meta.receive_time : 0;
+      backlog.push_back({meta.weight, meta.fee, age});
       return true;
     }, false, category);
   }
@@ -1589,6 +1633,25 @@ namespace cryptonote
     return is_transaction_ready_to_go(txd, txid, cryptonote::blobdata_ref{txblob.data(), txblob.size()}, tx);
   }
   //---------------------------------------------------------------------------------
+  bool tx_memory_pool::have_pending_create_token(const std::string &ticker, const crypto::hash &ignore_txid) const
+  {
+    bool found = false;
+    m_blockchain.for_all_txpool_txes([&found, &ticker, &ignore_txid](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata_ref *bd) {
+      if (found || txid == ignore_txid || meta.pruned || bd == nullptr)
+        return !found;
+
+      cryptonote::transaction tx;
+      if (!cryptonote::parse_and_validate_tx_from_blob(*bd, tx))
+        return true;
+
+      if (tx.type == cryptonote::transaction_type::CREATE_TOKEN && tx.token_metadata.asset_type == ticker)
+        found = true;
+
+      return !found;
+    }, true, relay_category::all);
+    return found;
+  }
+  //---------------------------------------------------------------------------------
   bool tx_memory_pool::have_key_images(const std::unordered_set<crypto::key_image>& k_images, const transaction_prefix& tx)
   {
     for(size_t i = 0; i!= tx.vin.size(); i++)
@@ -1896,6 +1959,14 @@ namespace cryptonote
   //---------------------------------------------------------------------------------
   size_t tx_memory_pool::validate(uint8_t version)
   {
+    return validate(version, std::chrono::steady_clock::duration::max(),
+      std::numeric_limits<size_t>::max());
+  }
+  //---------------------------------------------------------------------------------
+  size_t tx_memory_pool::validate(uint8_t version,
+      const std::chrono::steady_clock::duration max_validation_time,
+      const size_t max_validation_txs)
+  {
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
 
@@ -1923,8 +1994,33 @@ namespace cryptonote
       return true;
     }, false, relay_category::all);
 
+    const bool bounded = max_validation_time != std::chrono::steady_clock::duration::max() ||
+      max_validation_txs != std::numeric_limits<size_t>::max();
+    if (bounded)
+    {
+      const auto priority = [](const txpool_tx_meta_t& meta) {
+        if (meta.kept_by_block)
+          return 0;
+        const relay_method method = meta.get_relay_method();
+        if (method == relay_method::local || method == relay_method::none)
+          return 1;
+        return 2;
+      };
+      std::stable_sort(txes.begin(), txes.end(), [&](const tx_entry_t& left, const tx_entry_t& right) {
+        const int left_priority = priority(left.meta);
+        const int right_priority = priority(right.meta);
+        if (left_priority != right_priority)
+          return left_priority < right_priority;
+        if (left.meta.receive_time != right.meta.receive_time)
+          return left.meta.receive_time < right.meta.receive_time;
+        return std::memcmp(left.txid.data, right.txid.data, sizeof(left.txid.data)) < 0;
+      });
+    }
+
     // take them all out and add them back in, some might fail
     size_t added = 0;
+    size_t budget_dropped = 0;
+    txpool_validation_budget validation_budget{max_validation_time, max_validation_txs};
     for (auto &e: txes)
     {
       try
@@ -1934,8 +2030,18 @@ namespace cryptonote
         cryptonote::transaction tx;
         cryptonote::blobdata blob;
         bool relayed, do_not_relay, double_spend_seen, pruned;
+        const bool validate_entry = !bounded || validation_budget.consume(e.meta.weight);
         if (!take_tx(e.txid, tx, blob, weight, fee, relayed, do_not_relay, double_spend_seen, pruned))
+        {
           MERROR("Failed to get tx " << e.txid << " from txpool for re-validation");
+          continue;
+        }
+
+        if (!validate_entry)
+        {
+          ++budget_dropped;
+          continue;
+        }
 
         cryptonote::tx_verification_context tvc{};
         relay_method tx_relay = e.meta.get_relay_method();
@@ -1955,6 +2061,14 @@ namespace cryptonote
     }
 
     lock.commit();
+
+    if (budget_dropped != 0)
+    {
+      MWARNING("Startup txpool validation work limit reached after " <<
+        validation_budget.transactions() << " transactions / " <<
+        validation_budget.weight() << " weight; discarded " << budget_dropped <<
+        " excess persisted cache entries");
+    }
 
     const size_t n_removed = txes.size() - added;
     if (n_removed > 0)

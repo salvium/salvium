@@ -31,8 +31,9 @@
 #pragma once
 
 #include <atomic>
+#include <mutex>
 
-#include <boost/asio/io_service.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
 #include "include_base_utils.h"
@@ -154,6 +155,7 @@ namespace net_load_tests
 
     bool handle_new_connection(const boost::uuids::uuid& connection_id, bool ignore_close_fails = false)
     {
+      const std::lock_guard<std::mutex> lock(m_connections_mutex);
       size_t idx = m_next_opened_conn_idx.fetch_add(1, std::memory_order_relaxed);
       if (idx >= m_connections.size())
       {
@@ -165,7 +167,7 @@ namespace net_load_tests
       size_t prev_connection_count = m_opened_connection_count.fetch_add(1, std::memory_order_relaxed);
       if (m_max_opened_connection_count <= prev_connection_count)
       {
-        return close_next_connection(ignore_close_fails);
+        return close_next_connection_unlocked(ignore_close_fails);
       }
 
       return true;
@@ -173,10 +175,15 @@ namespace net_load_tests
 
     void close_remaining_connections()
     {
-      while (close_next_connection(false));
+      const std::lock_guard<std::mutex> lock(m_connections_mutex);
+      while (m_opened_connection_count.load(std::memory_order_relaxed) != 0)
+        close_next_connection_unlocked(true);
     }
 
-    bool close_next_connection(bool ignore_close_fails)
+    size_t opened_connection_count() const { return m_opened_connection_count.load(std::memory_order_relaxed); }
+
+  private:
+    bool close_next_connection_unlocked(bool ignore_close_fails)
     {
       size_t idx = m_next_closed_conn_idx.fetch_add(1, std::memory_order_relaxed);
       if (m_next_opened_conn_idx.load(std::memory_order_relaxed) <= idx)
@@ -189,29 +196,24 @@ namespace net_load_tests
         LOG_PRINT_L0("Connection isn't opened");
         return false;
       }
-      if (!m_tcp_server.get_config_object().close(m_connections[idx]))
+      const bool close_requested = m_tcp_server.get_config_object().close(m_connections[idx]);
+      if (!close_requested)
       {
         LOG_PRINT_L0("Close connection error: " << m_connections[idx]);
-        if (!ignore_close_fails)
-        {
-          return false;
-        }
       }
 
       m_connections[idx] = boost::uuids::nil_uuid();
       m_opened_connection_count.fetch_sub(1, std::memory_order_relaxed);
-      return true;
+      return close_requested || ignore_close_fails;
     }
 
-    size_t opened_connection_count() const { return m_opened_connection_count.load(std::memory_order_relaxed); }
-
-  private:
     test_tcp_server& m_tcp_server;
     size_t m_max_opened_connection_count;
     std::atomic<size_t> m_opened_connection_count;
     std::atomic<size_t> m_next_opened_conn_idx;
     std::atomic<size_t> m_next_closed_conn_idx;
     std::vector<boost::uuids::uuid> m_connections;
+    std::mutex m_connections_mutex;
   };
 
   const unsigned int min_thread_count = 2;

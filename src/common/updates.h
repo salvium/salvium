@@ -29,9 +29,14 @@
 #pragma once 
 
 #include <string>
+#include <vector>
 
 namespace tools
 {
   bool check_updates(const std::string &software, const std::string &buildtag, std::string &version, std::string &hash);
+  // Select the newest matching record and return its hash in lowercase hex.
+  // Records must be authenticated by the caller; check_updates uses DNSSEC.
+  bool parse_update_records(const std::vector<std::string> &records, const std::string &software,
+      const std::string &buildtag, std::string &version, std::string &hash);
   std::string get_update_url(const std::string &software, const std::string &subdir, const std::string &buildtag, const std::string &version, bool user);
 }

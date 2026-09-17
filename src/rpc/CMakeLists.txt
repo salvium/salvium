@@ -41,6 +41,12 @@ set(rpc_sources
   rpc_version_str.cpp
   instanciations.cpp)
 
+# GCC 15 can ICE while compiling this translation unit at higher optimization.
+# Keep this workaround narrow to avoid impacting overall release performance.
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 15)
+  set_source_files_properties(core_rpc_server.cpp PROPERTIES COMPILE_OPTIONS "-O1")
+endif()
+
 set(daemon_messages_sources
   message.cpp
   daemon_messages.cpp)

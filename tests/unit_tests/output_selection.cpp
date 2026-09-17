@@ -218,3 +218,12 @@ TEST(select_outputs, same_distribution)
   MDEBUG("avg_dev: " << avg_dev);
   ASSERT_LT(avg_dev, 0.02);
 }
+
+TEST(select_outputs, gamma_rejects_empty_recent_window)
+{
+  const size_t blocks_in_a_year = 86400 * 365 / DIFFICULTY_TARGET_V2;
+  std::vector<uint64_t> offsets(blocks_in_a_year + 1, 10);
+  EXPECT_THROW(tools::gamma_picker{offsets}, tools::error::wallet_internal_error);
+  offsets.back() = 11;
+  EXPECT_NO_THROW(tools::gamma_picker{offsets});
+}

@@ -27,15 +27,21 @@
 
 #include "gtest/gtest.h"
 
+#include "carrot_core/account.h"
 #include "carrot_core/account_secrets.h"
 #include "carrot_core/address_utils.h"
+#include "carrot_core/carrot_enote_types.h"
+#include "carrot_core/core_types.h"
 #include "carrot_core/enote_utils.h"
 #include "carrot_core/output_set_finalization.h"
 #include "carrot_core/payment_proposal.h"
 #include "carrot_core/scan.h"
+#include "carrot_core/scan_unsafe.h"
 #include "crypto/crypto.h"
 #include "crypto/generators.h"
 #include "ringct/rctOps.h"
+
+#include <cstring>
 
 #include "carrot_mock_helpers.h"
 
@@ -169,4 +175,225 @@ TEST(carrot_return_index, payment_channel_multiple_returns)
 
     // Final verification: Alice's total matches Bob's total
     EXPECT_EQ(alice_total_received, bob_total_sent);
+}
+
+// a valid (non-colliding) return output is recovered through the return-map path, with the right
+// amount. This exercises return-map scanning; collision handling is covered separately.
+TEST(carrot_return_index, return_output_detected)
+{
+    carrot::carrot_and_legacy_account recipient;
+    recipient.generate();
+
+    const crypto::key_image origin_ki = rct::rct2ki(rct::pkGen());
+    const input_context_t origin_input_context = make_carrot_input_context(origin_ki);
+    const crypto::public_key K_o = rct::rct2pk(rct::pkGen());
+    const crypto::public_key K_change = rct::rct2pk(rct::pkGen());
+
+    crypto::secret_key k_return;
+    recipient.s_view_balance_dev.make_internal_return_privkey(origin_input_context, K_o, k_return);
+    crypto::public_key K_return;
+    crypto::secret_key_to_public_key(k_return, K_return);
+
+    const crypto::key_image return_ki = rct::rct2ki(rct::pkGen());
+    const input_context_t return_input_context = make_carrot_input_context(return_ki);
+
+    const janus_anchor_t anchor = gen_janus_anchor();
+    crypto::secret_key d_e;
+    make_carrot_enote_ephemeral_privkey(anchor, return_input_context, K_change, null_payment_id, d_e);
+    mx25519_pubkey D_e;
+    make_carrot_enote_ephemeral_pubkey(d_e, K_change, /*is_subaddress=*/false, D_e);
+    mx25519_pubkey s_unctx;
+    ASSERT_TRUE(make_carrot_uncontextualized_shared_key_sender(d_e, K_return, s_unctx));
+    crypto::hash s_sr;
+    make_carrot_sender_receiver_secret(s_unctx.data, D_e, return_input_context, s_sr);
+
+    // real return address K_r = K_return + K_change
+    const crypto::public_key K_r = rct::rct2pk(rct::addKeys(rct::pk2rct(K_return), rct::pk2rct(K_change)));
+
+    const rct::xmr_amount amount = 1337;
+    crypto::secret_key k_a;
+    make_carrot_amount_blinding_factor(s_sr, amount, K_change, carrot::CarrotEnoteType::PAYMENT, k_a);
+
+    carrot::CarrotEnoteV1 enote{};
+    enote.onetime_address = K_r;
+    enote.amount_commitment = rct::commit(amount, rct::sk2rct(k_a));
+    enote.amount_enc = encrypt_carrot_amount(amount, s_sr, K_r);
+    enote.anchor_enc = encrypt_carrot_anchor(anchor, s_sr, K_r);
+    make_carrot_view_tag(s_unctx.data, return_input_context, K_r, enote.view_tag);
+    enote.enote_ephemeral_pubkey = D_e;
+    enote.tx_first_key_image = return_ki;
+    enote.asset_type = "SAL1";
+
+    recipient.insert_return_output_info({{K_r, carrot::return_output_info_t(
+        origin_input_context, K_o, K_change, K_change,
+        crypto::key_image{}, crypto::secret_key{}, crypto::secret_key{})}});
+
+    crypto::secret_key ext_g, ext_t, abf;
+    crypto::public_key spend_pubkey, return_address;
+    rct::xmr_amount scanned_amount = 0;
+    carrot::CarrotEnoteType etype;
+    janus_anchor_t internal_msg;
+    bool is_return = false;
+    const bool r = carrot::try_scan_carrot_enote_internal_receiver(enote, recipient,
+        ext_g, ext_t, spend_pubkey, scanned_amount, abf, etype, internal_msg,
+        return_address, is_return);
+
+    ASSERT_TRUE(r);
+    EXPECT_TRUE(is_return);
+    EXPECT_EQ(amount, scanned_amount);
+    EXPECT_EQ(K_change, spend_pubkey);
+    EXPECT_EQ(K_r, return_address);
+}
+
+// Synthetic scanner boundary test: forces a real 24-bit view-tag collision and inserts
+// a matching return-map fixture. K_r is varied independently of K_return + K_change,
+// so this does not represent a spendable on-chain return or test map population.
+// The regular return test above preserves that address relationship.
+// Brute-forces ~2^24 candidates; run explicitly with --gtest_also_run_disabled_tests.
+TEST(carrot_return_index, DISABLED_view_tag_collision_return_still_detected)
+{
+    carrot::carrot_and_legacy_account recipient;
+    recipient.generate();
+
+    // origin tx whose change we own (what populates the return map in production)
+    const crypto::key_image origin_ki = rct::rct2ki(rct::pkGen());
+    const input_context_t origin_input_context = make_carrot_input_context(origin_ki);
+    const crypto::public_key K_o = rct::rct2pk(rct::pkGen());      // an origin output key
+    const crypto::public_key K_change = rct::rct2pk(rct::pkGen()); // our change onetime address
+
+    // k_return for this origin output, K_return = k_return G
+    crypto::secret_key k_return;
+    recipient.s_view_balance_dev.make_internal_return_privkey(origin_input_context, K_o, k_return);
+    crypto::public_key K_return;
+    crypto::secret_key_to_public_key(k_return, K_return);
+
+    // the return tx that pays us back
+    const crypto::key_image return_ki = rct::rct2ki(rct::pkGen());
+    const input_context_t return_input_context = make_carrot_input_context(return_ki);
+
+    // sender-side ephemeral material over our change address, fixed across the search
+    const janus_anchor_t anchor = gen_janus_anchor();
+    crypto::secret_key d_e;
+    make_carrot_enote_ephemeral_privkey(anchor, return_input_context, K_change, null_payment_id, d_e);
+    mx25519_pubkey D_e;
+    make_carrot_enote_ephemeral_pubkey(d_e, K_change, /*is_subaddress=*/false, D_e);
+    mx25519_pubkey s_unctx;
+    ASSERT_TRUE(make_carrot_uncontextualized_shared_key_sender(d_e, K_return, s_unctx));
+    crypto::hash s_sr;
+    make_carrot_sender_receiver_secret(s_unctx.data, D_e, return_input_context, s_sr);
+
+    // find a K_r where the return view tag equals our internal nominal tag (real 24-bit collision).
+    // K_r must stay a valid curve point so the internal scan's curve ops don't fault, so we step
+    // by a fixed point rather than incrementing raw bytes; only cheap hashes gate the match.
+    rct::key Kr_acc = rct::pkGen();
+    const rct::key Kr_step = rct::pkGen();
+    crypto::public_key K_r{};
+    view_tag_t collided_vt{};
+    bool found = false;
+    for (std::uint64_t i = 0; i < (1ull << 28); ++i)
+    {
+        K_r = rct::rct2pk(Kr_acc);
+        view_tag_t return_vt, internal_vt;
+        make_carrot_view_tag(s_unctx.data, return_input_context, K_r, return_vt);
+        recipient.s_view_balance_dev.make_internal_view_tag(return_input_context, K_r, internal_vt);
+        if (std::memcmp(return_vt.bytes, internal_vt.bytes, VIEW_TAG_BYTES) == 0)
+        {
+            collided_vt = return_vt;
+            found = true;
+            break;
+        }
+        Kr_acc = rct::addKeys(Kr_acc, Kr_step);
+    }
+    ASSERT_TRUE(found) << "no view-tag collision found within search budget";
+
+    // Build an authenticated scanner fixture at the collided K_r (see scope above).
+    const rct::xmr_amount amount = 1337;
+    crypto::secret_key k_a;
+    make_carrot_amount_blinding_factor(s_sr, amount, K_change, carrot::CarrotEnoteType::PAYMENT, k_a);
+
+    carrot::CarrotEnoteV1 enote{};
+    enote.onetime_address = K_r;
+    enote.amount_commitment = rct::commit(amount, rct::sk2rct(k_a));
+    enote.amount_enc = encrypt_carrot_amount(amount, s_sr, K_r);
+    enote.anchor_enc = encrypt_carrot_anchor(anchor, s_sr, K_r);
+    enote.view_tag = collided_vt;
+    enote.enote_ephemeral_pubkey = D_e;
+    enote.tx_first_key_image = return_ki;
+    enote.asset_type = "SAL1";
+
+    // Insert the synthetic return-map fixture directly.
+    recipient.insert_return_output_info({{K_r, carrot::return_output_info_t(
+        origin_input_context, K_o, K_change, K_change,
+        crypto::key_image{}, crypto::secret_key{}, crypto::secret_key{})}});
+
+    // the collision really does make the internal nominal tag match the enote's tag
+    view_tag_t internal_vt_check;
+    recipient.s_view_balance_dev.make_internal_view_tag(return_input_context, K_r, internal_vt_check);
+    ASSERT_EQ(0, std::memcmp(internal_vt_check.bytes, enote.view_tag.bytes, VIEW_TAG_BYTES));
+
+    // must still be detected as a return despite the collision
+    crypto::secret_key ext_g, ext_t, abf;
+    crypto::public_key spend_pubkey, return_address;
+    rct::xmr_amount scanned_amount = 0;
+    carrot::CarrotEnoteType etype;
+    janus_anchor_t internal_msg;
+    bool is_return = false;
+    const bool r = carrot::try_scan_carrot_enote_internal_receiver(enote, recipient,
+        ext_g, ext_t, spend_pubkey, scanned_amount, abf, etype, internal_msg,
+        return_address, is_return);
+
+    ASSERT_TRUE(r) << "return output dropped on view-tag collision (F6)";
+    EXPECT_TRUE(is_return);
+    EXPECT_EQ(amount, scanned_amount);
+    EXPECT_EQ(K_change, spend_pubkey);
+    EXPECT_EQ(K_r, return_address);
+}
+
+// A view-tag match and successful internal decryption are insufficient: the
+// recovered spend address must belong to this wallet before return-map insertion.
+TEST(carrot_return_index, internal_candidate_with_foreign_address_is_rejected)
+{
+    carrot_and_legacy_account recipient;
+    recipient.generate();
+    recipient.generate_subaddress_map({1, 1});
+    const crypto::public_key foreign_address = rct::rct2pk(rct::pkGen());
+    ASSERT_EQ(0, recipient.get_subaddress_map_ref().count(foreign_address));
+
+    CarrotPaymentProposalSelfSendV1 proposal{};
+    proposal.destination_address_spend_pubkey = foreign_address;
+    proposal.amount = 1337;
+    proposal.enote_type = CarrotEnoteType::CHANGE;
+    proposal.enote_ephemeral_pubkey = gen_x25519_pubkey();
+    proposal.internal_message = gen_janus_anchor();
+    proposal.asset_type = "SAL1";
+    const crypto::key_image first_key_image = rct::rct2ki(rct::pkGen());
+    RCTOutputEnoteProposal output, return_output;
+    get_output_proposal_internal_v1(proposal, recipient.s_view_balance_dev,
+        first_key_image, std::nullopt, cryptonote::transaction_type::TRANSFER,
+        return_output, output);
+    output.enote.tx_output_keys.push_back(rct::rct2pk(rct::pkGen()));
+
+    const input_context_t input_context = make_carrot_input_context(first_key_image);
+    view_tag_t nominal_view_tag;
+    recipient.s_view_balance_dev.make_internal_view_tag(input_context,
+        output.enote.onetime_address, nominal_view_tag);
+    ASSERT_EQ(nominal_view_tag, output.enote.view_tag);
+
+    crypto::hash sender_receiver_secret;
+    recipient.s_view_balance_dev.make_internal_sender_receiver_secret(
+        output.enote.enote_ephemeral_pubkey, input_context, sender_receiver_secret);
+    crypto::secret_key ext_g{}, ext_t{}, abf{};
+    crypto::public_key spend_pubkey{}, return_address{};
+    rct::xmr_amount amount = 0;
+    CarrotEnoteType type{};
+    janus_anchor_t message{};
+    ASSERT_TRUE(try_scan_carrot_enote_internal_burnt(output.enote,
+        sender_receiver_secret, ext_g, ext_t, spend_pubkey, amount, abf, type, message));
+    ASSERT_EQ(foreign_address, spend_pubkey);
+
+    bool is_return = false;
+    EXPECT_FALSE(try_scan_carrot_enote_internal_receiver(output.enote, recipient,
+        ext_g, ext_t, spend_pubkey, amount, abf, type, message, return_address, is_return));
+    EXPECT_FALSE(is_return);
+    EXPECT_TRUE(recipient.get_return_output_map_ref().empty());
 }

@@ -31,6 +31,7 @@
 
 #pragma once
 
+#include "wallet_file_limits.h"
 #include <memory>
 
 #include <boost/program_options/options_description.hpp>
@@ -403,7 +404,11 @@ private:
 
         const auto additional_pub_keys = cryptonote::get_additional_tx_pub_keys_from_extra(m_tx);
         if (!additional_pub_keys.empty())
+        {
+          THROW_WALLET_EXCEPTION_IF(m_internal_output_index >= additional_pub_keys.size(),
+            error::wallet_internal_error, "Additional public key index is out of range");
           return additional_pub_keys[m_internal_output_index];
+        }
 
         return crypto::null_pkey;
       };
@@ -637,7 +642,7 @@ private:
       std::vector<size_t> selected_transfers;
       std::vector<uint8_t> extra;
       uint64_t unlock_time;
-      cryptonote::transaction_type tx_type;
+      cryptonote::transaction_type tx_type = cryptonote::transaction_type::UNSET;
       bool use_rct;
       rct::RCTConfig rct_config;
       bool use_view_tags;
@@ -648,8 +653,9 @@ private:
       enum construction_flags_ : uint8_t
       {
         _use_rct          = 1 << 0, // 00000001
-        _use_view_tags    = 1 << 1  // 00000010
-        // next flag      = 1 << 2  // 00000100
+        _use_view_tags    = 1 << 1, // 00000010
+        _has_tx_type      = 1 << 2
+        // next flag      = 1 << 3  // 00001000
         // ...
         // final flag     = 1 << 7  // 10000000
       };
@@ -673,7 +679,7 @@ private:
         }
         else
         {
-          construction_flags = 0;
+          construction_flags = _has_tx_type;
           if (use_rct)
             construction_flags ^= _use_rct;
           if (use_view_tags)
@@ -686,6 +692,10 @@ private:
         FIELD(dests)
         FIELD(subaddr_account)
         FIELD(subaddr_indices)
+        if (construction_flags & _has_tx_type)
+        {
+          VARINT_FIELD(tx_type)
+        }
       END_SERIALIZE()
     };
 
@@ -746,10 +756,12 @@ private:
           tx_construction_data,
           carrot::CarrotTransactionProposalV1
         >;
-      tx_reconstruct_variant_t construction_data;
+      // GCC 13 evaluates the nested alternative's default-construction trait
+      // before wallet2 is complete. Construct it explicitly, keeping index 0.
+      tx_reconstruct_variant_t construction_data = tx_construction_data{};
 
       BEGIN_SERIALIZE_OBJECT()
-        VERSION_FIELD(2)
+        VERSION_FIELD(3)
         FIELD(tx)
         FIELD(dust)
         FIELD(fee)
@@ -774,6 +786,42 @@ private:
           FIELD(subaddr_account)
           FIELD(subaddr_indices)
         }
+        // v2 omitted Salvium's Carrot source/type/return/rollup data.
+        // Append it in v3 without changing the old variant encoding.
+        if (version >= 3)
+        {
+          // account_public_address's old encoding omits the Carrot address
+          // flag. Keep it in the versioned pending package, without changing
+          // shared address encodings used elsewhere.
+          FIELD_N("change_is_carrot", change_dts.addr.m_is_carrot)
+          for (auto& destination : dests)
+          {
+            FIELD_N("destination_is_carrot", destination.addr.m_is_carrot)
+          }
+          if (auto* proposal = std::get_if<carrot::CarrotTransactionProposalV1>(&construction_data))
+          {
+            FIELD_N("carrot_sources", proposal->sources)
+            VARINT_FIELD_N("carrot_tx_type", proposal->tx_type)
+            FIELD_N("carrot_amount_burnt", proposal->amount_burnt)
+            FIELD_N("carrot_token", proposal->token)
+            FIELD_N("carrot_rollup_binding_tag", proposal->rollup_binding_tag)
+            FIELD_N("carrot_layer2_rollup_data", proposal->layer2_rollup_data)
+            for (auto& self : proposal->selfsend_payment_proposals)
+            {
+              FIELD_N("selfsend_asset_type", self.proposal.asset_type)
+            }
+            for (auto& source : proposal->sources)
+            {
+              FIELD_N("source_carrot", source.carrot)
+              FIELD_N("source_coinbase", source.coinbase)
+              FIELD_N("source_first_key_image", source.first_rct_key_image)
+              FIELD_N("source_address_spend_pubkey", source.address_spend_pubkey)
+              FIELD_N("source_block_index", source.block_index)
+            }
+          }
+        }
+        else if (auto* legacy = std::get_if<tx_construction_data>(&construction_data))
+          legacy->tx_type = tx.type;
         FIELD(multisig_sigs)
         if (version < 1)
         {
@@ -917,7 +965,7 @@ private:
       bool double_spend_seen;
 
       BEGIN_SERIALIZE_OBJECT()
-        VERSION_FIELD(0)
+        VERSION_FIELD(1)
         VARINT_FIELD(index_in_background_sync_data)
 
         // prune tx; don't need to keep signature data
@@ -925,6 +973,8 @@ private:
           return false;
 
         FIELD(output_indices)
+        if (version >= 1)
+          FIELD(asset_output_indices)
         VARINT_FIELD(height)
         VARINT_FIELD(block_timestamp)
         FIELD(double_spend_seen)
@@ -1180,7 +1230,10 @@ private:
       const std::string &proxy = "");
     bool set_proxy(const std::string &address);
 
-    void stop() { m_run.store(false, std::memory_order_relaxed); m_message_store.stop(); }
+    void stop() { m_run.store(false, std::memory_order_release); m_message_store.stop(); }
+    void suspend_refresh() { m_refresh_suspended.store(true, std::memory_order_release); stop(); }
+    void resume_refresh() { m_refresh_suspended.store(false, std::memory_order_release); }
+    bool refresh_with_status(bool trusted_daemon);
 
     i_wallet2_callback* callback() const { return m_callback; }
     void callback(i_wallet2_callback* callback) { m_callback = callback; }
@@ -1318,6 +1371,9 @@ private:
     std::vector<wallet2::pending_tx> create_transactions_single(const crypto::key_image &ki, const cryptonote::account_public_address &address, const cryptonote::transaction_type tx_type, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra);
     std::vector<wallet2::pending_tx> create_transactions_return(std::vector<size_t> transfers_indices);
     std::vector<wallet2::pending_tx> create_transactions_from(const cryptonote::account_public_address &address, const cryptonote::transaction_type tx_type, const std::string& asset_type, bool is_subaddress, const size_t outputs, std::vector<size_t> unused_transfers_indices, std::vector<size_t> unused_dust_indices, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra);
+    void validate_unsigned_tx(const tx_construction_data& data) const;
+    void validate_pending_tx(const pending_tx& ptx, bool allow_spent = false,
+      const std::vector<crypto::key_image>* imported_key_images = nullptr, bool redacted = false) const;
     bool sanity_check(const std::vector<wallet2::pending_tx> &ptx_vector, const std::vector<cryptonote::tx_destination_entry>& dsts, const unique_index_container& subtract_fee_from_outputs = {}) const;
     void cold_tx_aux_import(const std::vector<pending_tx>& ptx, const std::vector<std::string>& tx_device_aux);
     void cold_sign_tx(const std::vector<pending_tx>& ptx_vector, signed_tx_set &exported_txs, std::vector<cryptonote::address_parse_info> &dsts_info, std::vector<std::string> & tx_device_aux);
@@ -1344,6 +1400,13 @@ private:
     void get_unconfirmed_payments(std::list<std::pair<crypto::hash,wallet2::pool_payment_details>>& unconfirmed_payments, const boost::optional<uint32_t>& subaddr_account = boost::none, const std::set<uint32_t>& subaddr_indices = {}) const;
 
     uint64_t get_blockchain_current_height() const { return m_blockchain.size(); }
+    bool get_blockchain_hash(uint64_t height, crypto::hash &hash) const
+    {
+      if (height < m_blockchain.offset() || height >= m_blockchain.size())
+        return false;
+      hash = m_blockchain[height];
+      return true;
+    }
     void rescan_spent();
     void rescan_blockchain(bool hard, bool refresh = true, bool keep_key_images = false);
     bool is_transfer_unlocked(const transfer_details& td);
@@ -1703,6 +1766,7 @@ private:
     * \brief GUI Address book get/store
     */
     std::vector<address_book_row> get_address_book() const { return m_address_book; }
+    size_t get_address_book_size() const { return m_address_book.size(); }
     bool add_address_book_row(const cryptonote::account_public_address &address, const crypto::hash8 *payment_id, const std::string &description, bool is_subaddress, bool is_carrot);
     bool set_address_book_row(size_t row_id, const cryptonote::account_public_address &address, const crypto::hash8 *payment_id, const std::string &description, bool is_subaddress, bool is_carrot);
     bool delete_address_book_row(std::size_t row_id);
@@ -1928,7 +1992,7 @@ private:
     bool frozen(const multisig_tx_set& txs) const; // does partially signed txset contain frozen enotes?
 
     bool save_to_file(const std::string& path_to_file, const std::string& binary, bool is_printable = false) const;
-    static bool load_from_file(const std::string& path_to_file, std::string& target_str, size_t max_size = 1000000000);
+    static bool load_from_file(const std::string& path_to_file, std::string& target_str, size_t max_size = wallet_file_limits::exchange);
 
     uint64_t get_bytes_sent() const;
     uint64_t get_bytes_received() const;
@@ -2163,6 +2227,8 @@ private:
     uint64_t get_segregation_fork_height() const;
 
     std::map<std::pair<uint64_t, uint64_t>, size_t> create_output_tracker_cache() const;
+    void rebuild_transfer_maps();
+    void commit_imported_outputs(size_t offset, size_t num_outputs, transfer_container staged);
 
     void init_type(hw::device::device_type device_type);
     void setup_new_blockchain();
@@ -2197,6 +2263,7 @@ private:
     serializable_unordered_map<crypto::hash, confirmed_transfer_details> m_confirmed_txs;
     serializable_unordered_multimap<crypto::hash, pool_payment_details> m_unconfirmed_payments;
     serializable_unordered_map<crypto::hash, crypto::secret_key> m_tx_keys;
+    std::unordered_set<crypto::hash> m_validated_redacted_txs;
     cryptonote::checkpoints m_checkpoints;
     serializable_unordered_map<crypto::hash, std::vector<crypto::secret_key>> m_additional_tx_keys;
 
@@ -2221,7 +2288,15 @@ private:
     const std::vector<std::vector<rct::key>> *m_multisig_rescan_k;
     serializable_unordered_map<crypto::public_key, crypto::key_image> m_cold_key_images;
 
+    bool refresh_running() const
+    {
+      return m_run.load(std::memory_order_acquire) && !m_refresh_suspended.load(std::memory_order_acquire);
+    }
+    bool refresh_internal(bool trusted_daemon, uint64_t start_height, uint64_t &blocks_fetched,
+        bool &received_money, bool check_pool, bool try_incremental, uint64_t max_blocks);
+
     std::atomic<bool> m_run;
+    std::atomic<bool> m_refresh_suspended{false};
 
     boost::recursive_mutex m_daemon_rpc_mutex;
 
@@ -2283,6 +2358,7 @@ private:
     bool m_is_initialized;
     NodeRPCProxy m_node_rpc_proxy;
     std::unordered_set<crypto::hash> m_scanned_pool_txs[2];
+    std::deque<crypto::hash> m_scanned_pool_txs_order;
     size_t m_subaddress_lookahead_major, m_subaddress_lookahead_minor;
     std::string m_device_name;
     std::string m_device_derivation_path;
@@ -2359,7 +2435,7 @@ BOOST_CLASS_VERSION(tools::wallet2::signed_tx_set, 1)
 BOOST_CLASS_VERSION(tools::wallet2::tx_construction_data, 4)
 BOOST_CLASS_VERSION(tools::wallet2::pending_tx, 4)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_sig, 1)
-BOOST_CLASS_VERSION(tools::wallet2::background_synced_tx_t, 0)
+BOOST_CLASS_VERSION(tools::wallet2::background_synced_tx_t, 1)
 BOOST_CLASS_VERSION(tools::wallet2::background_sync_data_t, 0)
 
 namespace boost
@@ -2922,6 +2998,8 @@ namespace boost
       a & x.index_in_background_sync_data;
       a & x.tx;
       a & x.output_indices;
+      if (static_cast<unsigned int>(ver) >= 1)
+        a & x.asset_output_indices;
       a & x.height;
       a & x.block_timestamp;
       a & x.double_spend_seen;

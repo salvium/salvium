@@ -26,8 +26,11 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <memory>
 #include <set>
 #include <list>
 #include <vector>
@@ -63,7 +66,7 @@ namespace epee
       if(!stg.get_value(pname, blob, hparent_section))
         return false;
       CHECK_AND_ASSERT_MES(blob.size() == sizeof(d), false, "unserialize_t_val_as_blob: size of " << typeid(t_type).name() << " = " << sizeof(t_type) << ", but stored blod size = " << blob.size() << ", value name = " << pname);
-      d = *(const t_type*)blob.data();
+      std::copy_n(blob.data(), sizeof(d), reinterpret_cast<char*>(std::addressof(d)));
       return true;
     } 
     //-------------------------------------------------------------------------------------------------------------------
@@ -117,11 +120,11 @@ namespace epee
       if(!container.size()) return true;
       std::string mb;
       mb.resize(sizeof(typename stl_container::value_type)*container.size());
-      typename stl_container::value_type* p_elem = (typename stl_container::value_type*)mb.data();
+      char* p_elem = &mb[0];
       BOOST_FOREACH(const typename stl_container::value_type& v, container)
       {
-        *p_elem = v;
-        p_elem++;
+        std::memcpy(p_elem, std::addressof(v), sizeof(v));
+        p_elem += sizeof(v);
       }
       return stg.set_value(pname, std::move(mb), hparent_section);
     }
@@ -135,14 +138,18 @@ namespace epee
       if(res)
       {
         size_t loaded_size = buff.size();
-        typename stl_container::value_type* pelem =  (typename stl_container::value_type*)buff.data();
         CHECK_AND_ASSERT_MES(!(loaded_size%sizeof(typename stl_container::value_type)), 
           false, 
           "size in blob " << loaded_size << " not have not zero modulo for sizeof(value_type) = " << sizeof(typename stl_container::value_type) << ", type " << typeid(typename stl_container::value_type).name());
         size_t count = (loaded_size/sizeof(typename stl_container::value_type));
         hint_resize(container, count);
         for(size_t i = 0; i < count; i++)
-          container.insert(container.end(), *(pelem++));
+        {
+          typename stl_container::value_type element;
+          std::copy_n(buff.data() + i * sizeof(element), sizeof(element),
+            reinterpret_cast<char*>(std::addressof(element)));
+          container.insert(container.end(), std::move(element));
+        }
       }
       return res;
     }

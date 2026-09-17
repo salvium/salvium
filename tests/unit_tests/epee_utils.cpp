@@ -1218,6 +1218,9 @@ TEST(HexLocale, String)
     hex.assign("00:ff 0f:f0");
     EXPECT_EQ(source, epee::from_hex_locale::to_vector(hex));
 
+    hex.assign("0:0 f f 0:f f:0");
+    EXPECT_EQ(source, epee::from_hex_locale::to_vector(hex));
+
     hex.append("f0");
     EXPECT_EQ(source, epee::from_hex_locale::to_vector(boost::string_ref{hex.data(), hex.size() - 2}));
 }
@@ -1819,6 +1822,10 @@ TEST(parsing, unicode)
   EXPECT_THROW(epee::misc_utils::parse::match_string2(si, s.end(), bs), std::runtime_error);
 
   s = "\"\\u123\"";
+  si = s.begin();
+  EXPECT_THROW(epee::misc_utils::parse::match_string2(si, s.end(), bs), std::runtime_error);
+
+  s = "\"\\u123";
   si = s.begin();
   EXPECT_THROW(epee::misc_utils::parse::match_string2(si, s.end(), bs), std::runtime_error);
 

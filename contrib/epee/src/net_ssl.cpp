@@ -241,6 +241,9 @@ ssl_options_t::ssl_options_t(std::vector<std::vector<std::uint8_t>> fingerprints
 
 boost::asio::ssl::context ssl_options_t::create_context() const
 {
+  CHECK_AND_ASSERT_THROW_MES((fingerprints_.empty() && ca_path.empty()) ||
+    (support == ssl_support_t::e_ssl_support_enabled && verification != ssl_verification_t::none),
+    "Certificate pins and custom CAs require TLS with verification; plaintext fallback is not allowed");
   // note: this enables a lot of old and insecure protocols, which we
   // promptly disable below - if the result is actually used
   boost::asio::ssl::context ssl_context{boost::asio::ssl::context::sslv23};
@@ -467,7 +470,7 @@ void ssl_options_t::configure(
     socket.set_verify_mode(boost::asio::ssl::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert);
 
     
-    socket.set_verify_callback([&](const bool preverified, boost::asio::ssl::verify_context &ctx)
+    socket.set_verify_callback([this, host](const bool preverified, boost::asio::ssl::verify_context &ctx)
     {
       // preverified means it passed system or user CA check. System CA is never loaded
       // when fingerprints are whitelisted.
@@ -476,13 +479,14 @@ void ssl_options_t::configure(
 
       if (!verified && !has_fingerprint(ctx))
       {
-        // autodetect will reconnect without SSL - warn and keep connection encrypted
+        // Compatibility mode prefers an unverified encrypted connection to
+        // plaintext. Explicit pins/CAs are only accepted in required TLS mode.
         if (support != ssl_support_t::e_ssl_support_autodetect)
         {
           MERROR("SSL certificate is not in the allowed list, connection dropped");
           return false;
         }
-        MWARNING("SSL peer has not been verified");
+        MDEBUG("TLS peer certificate was not verified in compatibility mode");
       }
       return true;
     });
@@ -582,7 +586,10 @@ bool ssl_options_t::handshake(
 
   if (ec)
   {
-    MERROR("SSL handshake failed, connection dropped: " << ec.message());
+    if (support == ssl_support_t::e_ssl_support_autodetect)
+      MDEBUG("TLS negotiation failed in compatibility mode: " << ec.message());
+    else
+      MERROR("SSL handshake failed, connection dropped: " << ec.message());
     return false;
   }
   MDEBUG("SSL handshake success");

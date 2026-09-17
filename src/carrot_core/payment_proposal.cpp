@@ -101,7 +101,7 @@ static mx25519_pubkey get_enote_ephemeral_pubkey(const janus_anchor_t randomness
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void get_normal_proposal_ecdh_parts(const CarrotPaymentProposalV1 &proposal,
+void get_normal_proposal_ecdh_parts(const CarrotPaymentProposalV1 &proposal,
     const input_context_t &input_context,
     mx25519_pubkey &enote_ephemeral_pubkey_out,
     mx25519_pubkey &s_sender_receiver_unctx_out)
@@ -685,8 +685,7 @@ void get_output_proposal_internal_v1(const CarrotPaymentProposalSelfSendV1 &prop
 //-------------------------------------------------------------------------------------------------------------------
 CarrotPaymentProposalV1 gen_carrot_payment_proposal_v1(const bool is_subaddress,
     const bool has_payment_id,
-    const rct::xmr_amount amount,
-    const std::size_t num_random_memo_elements)
+    const rct::xmr_amount amount)
 {
     CarrotPaymentProposalV1 temp;
 

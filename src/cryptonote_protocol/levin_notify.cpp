@@ -203,10 +203,50 @@ namespace levin
       return out;
     }
 
-    bool make_payload_send_txs(connections& p2p, std::vector<blobdata>&& txs, const boost::uuids::uuid& destination, const bool pad, const bool fluff)
+    bool make_payload_send_tx_batch(connections& p2p, std::vector<blobdata>&& txs,
+                                    const boost::uuids::uuid& destination,
+                                    const bool pad, const bool fluff)
     {
       epee::byte_slice blob = make_tx_message(std::move(txs), pad, fluff).finalize_notify(NOTIFY_NEW_TRANSACTIONS::ID);
       return p2p.send(std::move(blob), destination);
+    }
+
+    bool make_payload_send_txs(connections& p2p, std::vector<blobdata>&& txs,
+                               const boost::uuids::uuid& destination,
+                               const bool pad, const bool fluff)
+    {
+      std::vector<blobdata> batch;
+      std::size_t batch_bytes = 0;
+      bool sent = false;
+      for (auto& tx : txs)
+      {
+        if (!batch.empty() && tx.size() > TX_RELAY_BATCH_MAX_BYTES - batch_bytes)
+        {
+          if (!make_payload_send_tx_batch(p2p, std::move(batch), destination, pad, fluff))
+            return false;
+          sent = true;
+          batch.clear();
+          batch_bytes = 0;
+        }
+
+        // Incoming and locally constructed transactions are independently
+        // bounded by CRYPTONOTE_MAX_TX_SIZE, which is below this frame limit.
+        if (tx.size() > TX_RELAY_BATCH_MAX_BYTES)
+        {
+          MERROR("Refusing to relay an internally oversized transaction blob");
+          return false;
+        }
+        batch_bytes += tx.size();
+        batch.emplace_back(std::move(tx));
+      }
+
+      if (!batch.empty())
+      {
+        if (!make_payload_send_tx_batch(p2p, std::move(batch), destination, pad, fluff))
+          return false;
+        sent = true;
+      }
+      return sent;
     }
 
     /* The current design uses `asio::strand`s. The documentation isn't as clear
@@ -292,6 +332,7 @@ namespace levin
       boost::asio::io_context::strand strand;
       struct context_t {
         std::vector<cryptonote::blobdata> fluff_txs;
+        std::size_t fluff_bytes;
         std::chrono::steady_clock::time_point flush_time;
         bool m_is_income;
       };
@@ -383,6 +424,7 @@ namespace levin
               context.flush_time = std::chrono::steady_clock::time_point::max();
               connections.emplace_back(std::move(context.fluff_txs), id);
               context.fluff_txs.clear();
+              context.fluff_bytes = 0;
             }
             else // not flushing yet
               next_flush = std::min(next_flush, context.flush_time);
@@ -446,12 +488,29 @@ namespace levin
           // When i2p/tor, only fluff to outbound connections
           if (source != id && (zone->nzone == epee::net_utils::zone::public_ || !context.m_is_income))
           {
-            if (context.fluff_txs.empty())
-              context.flush_time = now + (context.m_is_income ? in_duration() : out_duration());
+            for (const auto& tx : txs)
+            {
+              if (!context.fluff_txs.empty() &&
+                  tx.size() > TX_RELAY_BATCH_MAX_BYTES - context.fluff_bytes)
+              {
+                std::sort(context.fluff_txs.begin(), context.fluff_txs.end());
+                context.fluff_txs.erase(
+                  std::unique(context.fluff_txs.begin(), context.fluff_txs.end()),
+                  context.fluff_txs.end());
+                make_payload_send_txs(*zone->p2p, std::move(context.fluff_txs),
+                                      id, zone->pad_txs, true);
+                context.fluff_txs.clear();
+                context.fluff_bytes = 0;
+              }
 
-            next_flush = std::min(next_flush, context.flush_time);
-            context.fluff_txs.reserve(context.fluff_txs.size() + txs.size());
-            context.fluff_txs.insert(context.fluff_txs.end(), txs.begin(), txs.end());
+              if (context.fluff_txs.empty())
+                context.flush_time = now + (context.m_is_income ? in_duration() : out_duration());
+              context.fluff_txs.push_back(tx);
+              context.fluff_bytes += tx.size();
+            }
+
+            if (!context.fluff_txs.empty())
+              next_flush = std::min(next_flush, context.flush_time);
           }
         }
 
@@ -777,6 +836,7 @@ namespace levin
     boost::asio::dispatch(zone_->strand, [zone, id, is_income] {
       zone->contexts[id] = {
         .fluff_txs = {},
+        .fluff_bytes = 0,
         .flush_time = std::chrono::steady_clock::time_point::max(),
         .m_is_income = is_income,
       };

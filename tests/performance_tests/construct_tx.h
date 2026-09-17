@@ -36,11 +36,17 @@
 
 #include "multi_tx_test_base.h"
 
-template<size_t a_in_count, size_t a_out_count, bool a_rct, rct::RangeProofType range_proof_type = rct::RangeProofBorromean, int bp_version = 2>
+template<size_t a_in_count, size_t a_out_count, bool a_rct, rct::RangeProofType range_proof_type = rct::RangeProofPaddedBulletproof, int bp_version = 4>
 class test_construct_tx : private multi_tx_test_base<a_in_count>
 {
   static_assert(0 < a_in_count, "in_count must be greater than 0");
-  static_assert(0 < a_out_count, "out_count must be greater than 0");
+  static_assert(2 <= a_out_count && a_out_count <= BULLETPROOF_MAX_OUTPUTS,
+                "production transfer output count must be between 2 and 16");
+  static_assert(a_rct, "production transfers require RingCT");
+  static_assert(range_proof_type == rct::RangeProofPaddedBulletproof && bp_version == 4,
+                "production pre-HF3 transfers require padded Bulletproof+");
+  static_assert(a_out_count == 2 || a_in_count == 16,
+                "HF2 multi-output transfers require a 16-member ring");
 
 public:
   static const size_t loop_count = (a_in_count + a_out_count < 10) ? (a_rct ? 10 : 200) : (a_in_count + a_out_count) < 100 ? (a_rct ? 5 : 25) : 5;
@@ -62,6 +68,7 @@ public:
     for (size_t i = 0; i < out_count; ++i)
     {
       m_destinations.push_back(tx_destination_entry(this->m_source_amount / out_count, m_alice.get_keys().m_account_address, false));
+      m_destinations.back().asset_type = "SAL";
     }
 
     return true;
@@ -74,9 +81,10 @@ public:
     std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
     subaddresses[this->m_miners[this->real_source_idx].get_keys().m_account_address.m_spend_public_key] = {0,0};
     rct::RCTConfig rct_config{range_proof_type, bp_version};
-    std::string source_asset = "FULM";
-    std::string dest_asset = "FULM";
-    return cryptonote::construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, m_destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_tx, 0, tx_key, additional_tx_keys, rct, rct_config);
+    const std::string source_asset = "SAL";
+    const std::string dest_asset = "SAL";
+    const uint8_t hf_version = out_count == 2 ? HF_VERSION_BULLETPROOF_PLUS : HF_VERSION_ENABLE_N_OUTS;
+    return cryptonote::construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, m_destinations, hf_version, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_tx, 0, tx_key, additional_tx_keys, rct, rct_config);
   }
 
 private:

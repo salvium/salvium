@@ -34,8 +34,12 @@ define $(package)_preprocess_cmds
   echo "using $(boost_toolset_$(host_os)) : : $($(package)_cxx) : <cxxflags>\"$($(package)_cxxflags) $($(package)_cppflags)\" <linkflags>\"$($(package)_ldflags)\" <archiver>\"$(boost_archiver_$(host_os))\" <arflags>\"$($(package)_arflags)\" <striper>\"$(host_STRIP)\"  <ranlib>\"$(host_RANLIB)\" <rc>\"$(host_WINDRES)\" : ;" > user-config.jam
 endef
 
+# b2 runs on the build machine; user-config.jam selects the target compiler
+# separately for the Boost libraries.
 define $(package)_config_cmds
-  ./bootstrap.sh --without-icu --with-libraries=$(boost_config_libraries_$(host_os))
+  ./tools/build/src/engine/build.sh --cxx="$(build_CXX)" --cxxflags="$(build_CXXFLAGS) $(build_LDFLAGS)" &&\
+  cp tools/build/src/engine/b2 ./b2 &&\
+  ./bootstrap.sh --with-bjam=./b2 --without-icu --with-libraries=$(boost_config_libraries_$(host_os))
 endef
 
 define $(package)_build_cmds

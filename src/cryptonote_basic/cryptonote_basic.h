@@ -60,6 +60,15 @@
 
 namespace cryptonote
 {
+  // Chain-wide allocation ceilings, including historical and pruned transactions.
+  // Every spend input and output contains a 32-byte key; each ring member has at
+  // least a 32-byte signature scalar in a complete transaction (CLSAG/TCLSAG).
+  constexpr size_t MAX_VIN_COUNT = CRYPTONOTE_MAX_TX_SIZE / sizeof(crypto::key_image);
+  constexpr size_t MAX_NON_COINBASE_VOUT_COUNT = CRYPTONOTE_MAX_TX_SIZE / sizeof(crypto::public_key);
+  // Miner/protocol payouts can exceed the ordinary transaction size limit.
+  constexpr size_t MAX_COINBASE_VOUT_COUNT = 100000000 / sizeof(crypto::public_key);
+  constexpr size_t MAX_TOTAL_KEY_OFFSETS = CRYPTONOTE_MAX_TX_SIZE / sizeof(crypto::public_key);
+
   typedef std::vector<crypto::signature> ring_signature;
 
 
@@ -102,7 +111,7 @@ namespace cryptonote
   // outputs <= HF_VERSION_VIEW_TAGS
   struct txout_to_key
   {
-    txout_to_key() { }
+    txout_to_key() : key{}, asset_type{}, unlock_time{} { }
     txout_to_key(const crypto::public_key &_key) : key(_key) { }
     txout_to_key(const crypto::public_key &_key, const std::string &_asset_type, const uint64_t _unlock_time) : key(_key), asset_type(_asset_type), unlock_time(_unlock_time) { }
     crypto::public_key key;
@@ -119,7 +128,7 @@ namespace cryptonote
   // outputs >= HF_VERSION_VIEW_TAGS
   struct txout_to_tagged_key
   {
-    txout_to_tagged_key() { }
+    txout_to_tagged_key() : key{}, asset_type{}, unlock_time{}, view_tag{} { }
     txout_to_tagged_key(const crypto::public_key &_key, const std::string &_asset_type, const uint64_t _unlock_time, const crypto::view_tag &_view_tag) : key(_key), asset_type(_asset_type), unlock_time(_unlock_time), view_tag(_view_tag) { }
     crypto::public_key key;
     std::string asset_type;
@@ -174,7 +183,7 @@ namespace cryptonote
     BEGIN_SERIALIZE_OBJECT()
       VARINT_FIELD(amount)
       FIELD(asset_type)
-      FIELD(key_offsets)
+      CONTAINER_FIELD_CAPPED(key_offsets, MAX_TOTAL_KEY_OFFSETS)
       FIELD(k_image)
     END_SERIALIZE()
   };
@@ -346,8 +355,25 @@ namespace cryptonote
       VARINT_FIELD(version)
       if(version == 0 || CURRENT_TRANSACTION_VERSION < version) return false;
       VARINT_FIELD(unlock_time)
-      FIELD(vin)
-      FIELD(vout)
+      if constexpr (W)
+      {
+        FIELD(vin)
+        FIELD(vout)
+      }
+      else
+      {
+        ar.tag("vin");
+        if (!deserialize_vin(ar))
+        {
+          ar.set_fail();
+          return false;
+        }
+        // Empty vin is used by stored wallet prefixes and the genesis protocol
+        // transaction. Both miner and protocol payouts use a single txin_gen.
+        const bool generated = vin.size() == 1 && vin.front().type() == typeid(txin_gen);
+        const size_t max_outputs = (generated || vin.empty()) ? MAX_COINBASE_VOUT_COUNT : MAX_NON_COINBASE_VOUT_COUNT;
+        CONTAINER_FIELD_CAPPED(vout, max_outputs)
+      }
       FIELD(extra)
       VARINT_FIELD(type)
       if (type != cryptonote::transaction_type::UNSET &&
@@ -384,6 +410,47 @@ namespace cryptonote
         FIELD(layer2_rollup_data)
       }
     END_SERIALIZE()
+
+  private:
+    template<template <bool> class Archive>
+    bool deserialize_vin(Archive<false> &ar)
+    {
+      size_t count = 0;
+      ar.begin_array(count);
+      if (!ar.good())
+        return false;
+      vin.clear();
+      if (count > MAX_VIN_COUNT || ar.remaining_bytes() < count)
+        return false;
+      vin.reserve(count);
+
+      size_t total_key_offsets = 0;
+      for (size_t i = 0; i < count; ++i)
+      {
+        if (i > 0)
+          ar.delimit_array();
+        txin_v input;
+        if (!::serialization::detail::serialize_container_element(ar, input) || !ar.good())
+          return false;
+        if (input.type() == typeid(txin_gen))
+        {
+          if (count != 1)
+            return false;
+        }
+        else
+        {
+          if (input.type() != typeid(txin_to_key))
+            return false;
+          const size_t offsets = boost::get<txin_to_key>(input).key_offsets.size();
+          if (offsets > MAX_TOTAL_KEY_OFFSETS - total_key_offsets)
+            return false;
+          total_key_offsets += offsets;
+        }
+        vin.emplace_back(std::move(input));
+      }
+      ar.end_array();
+      return ar.good();
+    }
 
   public:
     transaction_prefix(){ set_null(); }

@@ -28,6 +28,7 @@
 
 #include <boost/optional/optional.hpp>
 #include <boost/utility/value_init.hpp>
+#include <cstring>
 #include "include_base_utils.h"
 #include "cryptonote_config.h"
 #include "wallet_rpc_helpers.h"
@@ -131,7 +132,7 @@ bool wallet2::search_for_rpc_payment(uint64_t credits_target, uint32_t n_threads
         return true;
     }
     catch (const std::exception &e) { return false; }
-    if (hashing_blob.empty())
+    if (hashing_blob.size() < 43)
     {
       MERROR("Bad hashing blob from daemon");
       if (errorfunc)
@@ -151,9 +152,11 @@ bool wallet2::search_for_rpc_payment(uint64_t credits_target, uint32_t n_threads
     for (size_t i = 0; i < n_threads; i++)
     {
       tpool.submit(&waiter, [&, i] {
-        *(uint32_t*)(hashing_blob.data() + 39) = SWAP32LE(local_nonce-i);
+        cryptonote::blobdata worker_hashing_blob = hashing_blob;
+        const uint32_t wire_nonce = SWAP32LE(local_nonce - i);
+        std::memcpy(&worker_hashing_blob[39], &wire_nonce, sizeof(wire_nonce));
         // const uint8_t major_version = hashing_blob[0];
-        crypto::rx_slow_hash(seed_hash.data, hashing_blob.data(), hashing_blob.size(), hash[i].data);
+        crypto::rx_slow_hash(seed_hash.data, worker_hashing_blob.data(), worker_hashing_blob.size(), hash[i].data);
       });
     }
     waiter.wait();

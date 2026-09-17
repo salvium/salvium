@@ -97,10 +97,17 @@ namespace tools
       {
       public:
         download_client(download_async_handle control, std::ofstream &f, uint64_t offset = 0):
-          control(control), f(f), content_length(-1), total(0), offset(offset) {}
+          control(control), f(f), content_length(-1), total(0), offset(offset)
+        {
+          // Downloads stream to disk instead of accumulating an RPC body.
+          set_response_limits(std::numeric_limits<size_t>::max());
+          set_total_response_timeout(false);
+        }
         virtual ~download_client() { f.close(); }
         virtual bool on_header(const epee::net_utils::http::http_response_info &headers)
         {
+          if (headers.m_response_code != 200 && headers.m_response_code != 206)
+            return false;
           for (const auto &kv: headers.m_header_info.m_etc_fields)
             MDEBUG("Header: " << kv.first << ": " << kv.second);
           ssize_t length;
@@ -114,7 +121,8 @@ namespace tools
               boost::filesystem::space_info si = boost::filesystem::space(path);
               if (si.available < (size_t)content_length)
               {
-                const uint64_t avail = (si.available + 1023) / 1024, needed = (content_length + 1023) / 1024;
+                const uint64_t avail = si.available / 1024 + (si.available % 1024 != 0);
+                const uint64_t needed = content_length / 1024 + (content_length % 1024 != 0);
                 MERROR("Not enough space to download " << needed << " kB to " << path << " (" << avail << " kB available)");
                 return false;
               }
@@ -125,20 +133,28 @@ namespace tools
           {
             // we requested a range, so check if we're getting it, otherwise truncate
             bool got_range = false;
-            const std::string prefix = "bytes=" + std::to_string(offset) + "-";
+            const std::string prefix = "bytes " + std::to_string(offset) + "-";
             for (const auto &kv: headers.m_header_info.m_etc_fields)
             {
-              if (kv.first == "Content-Range" && strncmp(kv.second.c_str(), prefix.c_str(), prefix.size()))
+              if (!epee::string_tools::compare_no_case(kv.first, "Content-Range") &&
+                  kv.second.compare(0, prefix.size(), prefix) == 0)
               {
                 got_range = true;
                 break;
               }
             }
-            if (!got_range)
+            if (headers.m_response_code == 206 && !got_range)
+            {
+              MERROR("Download response does not match the requested byte range");
+              return false;
+            }
+            if (headers.m_response_code == 200)
             {
               MWARNING("We did not get the requested range, downloading from start");
               f.close();
               f.open(control->path, std::ios_base::out | std::ios_base::binary | std::ios_base::trunc);
+              if (!f.good())
+                return false;
             }
           }
           return true;
@@ -245,9 +261,10 @@ namespace tools
       }
       client.disconnect();
       f.close();
-      MDEBUG("Download complete");
       lock.lock();
-      control->success = true;
+      control->success = !f.fail();
+      if (control->success) MDEBUG("Download complete");
+      else MERROR("Failed to finish writing download");
       control->result_cb(control->path, control->uri, control->success);
       return;
     }

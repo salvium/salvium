@@ -43,14 +43,31 @@ namespace epee
   {
     namespace json
     {
-#define CHECK_ISSPACE()  if(!epee::misc_utils::parse::isspace(*it)){ ASSERT_MES_AND_THROW("Wrong JSON character at: " << std::string(it, buf_end));}
+// Shared across recursive sections so splitting a response into many
+      // individually small objects cannot bypass the allocation budget.
+      struct parse_budget
+      {
+        size_t objects, fields, strings;
+        template<class Limits>
+        explicit parse_budget(const Limits *limits)
+          : objects(limits ? limits->n_objects : SIZE_MAX),
+            fields(limits ? limits->n_fields : SIZE_MAX),
+            strings(limits ? limits->n_strings : SIZE_MAX) {}
+        static void consume(size_t &remaining)
+        {
+          CHECK_AND_ASSERT_THROW_MES(remaining != 0, "JSON allocation limit exceeded");
+          --remaining;
+        }
+      };
+
+#define CHECK_ISSPACE()  if(!epee::misc_utils::parse::isspace(*it)){ ASSERT_MES_AND_THROW("Unexpected character in JSON data");}
 
       /*inline void parse_error()
       {
         ASSERT_MES_AND_THROW("json parse error");
       }*/
       template<class t_storage>
-      inline void run_handler(typename t_storage::hsection current_section, std::string::const_iterator& sec_buf_begin, std::string::const_iterator buf_end, t_storage& stg, unsigned int recursion)
+      inline void run_handler(typename t_storage::hsection current_section, std::string::const_iterator& sec_buf_begin, std::string::const_iterator buf_end, t_storage& stg, unsigned int recursion, parse_budget &budget)
       {
         CHECK_AND_ASSERT_THROW_MES(recursion < EPEE_JSON_RECURSION_LIMIT_INTERNAL, "Wrong JSON data: recursion limitation (" << EPEE_JSON_RECURSION_LIMIT_INTERNAL << ") exceeded");
 
@@ -94,6 +111,7 @@ namespace epee
             switch(*it)
             {
             case '"':
+              parse_budget::consume(budget.fields);
               match_string2(it, buf_end, name);
               state = match_state_waiting_separator;
               break;
@@ -115,6 +133,7 @@ namespace epee
             if(*it == '"')
             {//just a named string value started
               std::string val;
+              parse_budget::consume(budget.strings);
               match_string2(it, buf_end, val);
               //insert text value 
               stg.set_value(name, std::move(val), current_section);
@@ -167,9 +186,10 @@ namespace epee
             }else if(*it == '{')
             {
               //sub section here
+              parse_budget::consume(budget.objects);
               typename t_storage::hsection new_sec = stg.open_section(name, current_section, true);
-              CHECK_AND_ASSERT_THROW_MES(new_sec, "Failed to insert new section in json: " << std::string(it, buf_end));
-              run_handler(new_sec, it, buf_end, stg, recursion + 1);
+              CHECK_AND_ASSERT_THROW_MES(new_sec, "Failed to insert new section in JSON data");
+              run_handler(new_sec, it, buf_end, stg, recursion + 1, budget);
               state = match_state_wonder_after_value;
             }else if(*it == '[')
             {//array of something
@@ -195,16 +215,18 @@ namespace epee
             if(*it == '{')
             {
               //mean array of sections
+              parse_budget::consume(budget.objects);
               typename t_storage::hsection new_sec = nullptr;
               h_array = stg.insert_first_section(name, new_sec, current_section);
               CHECK_AND_ASSERT_THROW_MES(h_array&&new_sec, "failed to create new section");
-              run_handler(new_sec, it, buf_end, stg, recursion + 1);
+              run_handler(new_sec, it, buf_end, stg, recursion + 1, budget);
               state = match_state_array_after_value;
               array_md = array_mode_sections;
             }else if(*it == '"')
             {
               //mean array of strings
               std::string val;
+              parse_budget::consume(budget.strings);
               match_string2(it, buf_end, val);
               h_array = stg.insert_first_value(name, std::move(val), current_section);
               CHECK_AND_ASSERT_THROW_MES(h_array, " failed to insert values entry");
@@ -282,10 +304,11 @@ namespace epee
             case array_mode_sections:
               if(*it == '{')
               {
+                parse_budget::consume(budget.objects);
                 typename t_storage::hsection new_sec = NULL;
                 bool res = stg.insert_next_section(h_array, new_sec);
                 CHECK_AND_ASSERT_THROW_MES(res&&new_sec, "failed to insert next section");
-                run_handler(new_sec, it, buf_end, stg, recursion + 1);
+                run_handler(new_sec, it, buf_end, stg, recursion + 1, budget);
                 state = match_state_array_after_value;
               }else CHECK_ISSPACE();
               break;
@@ -293,6 +316,7 @@ namespace epee
               if(*it == '"')
               {
                 std::string val;
+                parse_budget::consume(budget.strings);
                 match_string2(it, buf_end, val);
                 bool res = stg.insert_next_value(h_array, std::move(val));
                 CHECK_AND_ASSERT_THROW_MES(res, "failed to insert values");
@@ -362,6 +386,7 @@ namespace epee
             ASSERT_MES_AND_THROW("WRONG JSON STATE");
           }
         }
+        ASSERT_MES_AND_THROW("Unexpected end of JSON object");
       }
 /*
 {
@@ -393,17 +418,22 @@ namespace epee
 }
 */
       template<class t_storage>
-      inline bool load_from_json(const std::string& buff_json, t_storage& stg)
+      inline bool load_from_json(const std::string& buff_json, t_storage& stg, const typename t_storage::limits_t *limits = nullptr)
       {
         std::string::const_iterator sec_buf_begin  = buff_json.begin();
         try
         {
-          run_handler(nullptr, sec_buf_begin, buff_json.end(), stg, 0);
+          parse_budget budget(limits);
+          parse_budget::consume(budget.objects);
+          run_handler(nullptr, sec_buf_begin, buff_json.end(), stg, 0, budget);
+          for (++sec_buf_begin; sec_buf_begin != buff_json.end(); ++sec_buf_begin)
+            CHECK_AND_ASSERT_THROW_MES(epee::misc_utils::parse::isspace(*sec_buf_begin),
+              "Unexpected trailing JSON data");
           return true;
         }
         catch(const std::exception& ex)
         {
-          MERROR("Failed to parse json, what: " << ex.what());
+          MERROR("Failed to parse json, what: " << misc_utils::parse::transform_to_escape_sequence(ex.what()));
           return false;
         }
         catch(...)

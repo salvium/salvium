@@ -44,7 +44,7 @@ struct gen_rct_tx_validation_base : public test_chain_unit_base
   bool check_tx_verification_context(const cryptonote::tx_verification_context& tvc, bool tx_added, size_t event_idx, const cryptonote::transaction& /*tx*/)
   {
     if (m_invalid_tx_index == event_idx)
-      return tvc.m_verifivation_failed;
+      return tvc.m_verifivation_failed || tvc.m_verifivation_impossible;
     else
       return !tvc.m_verifivation_failed && tx_added;
   }
@@ -85,18 +85,18 @@ private:
 
 template<>
 struct get_test_options<gen_rct_tx_validation_base> {
-  const std::pair<uint8_t, uint64_t> hard_forks[4] = {std::make_pair(1, 0), std::make_pair(2, 1), std::make_pair(4, 65), std::make_pair(0, 0)};
+  const std::pair<uint8_t, uint64_t> hard_forks[3] = {std::make_pair(1, 0), std::make_pair(HF_VERSION_SALVIUM_ONE_PROOFS, 1), std::make_pair(0, 0)};
   const cryptonote::test_options test_options = {
     hard_forks, 0
   };
 };
 
 // valid
-struct gen_rct_tx_valid_from_pre_rct : public gen_rct_tx_validation_base
+struct gen_rct_tx_valid_from_coinbase : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_valid_from_pre_rct>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_valid_from_coinbase>: public get_test_options<gen_rct_tx_validation_base> {};
 
 struct gen_rct_tx_valid_from_rct : public gen_rct_tx_validation_base
 {
@@ -111,29 +111,29 @@ struct gen_rct_tx_valid_from_mixed : public gen_rct_tx_validation_base
 template<> struct get_test_options<gen_rct_tx_valid_from_mixed>: public get_test_options<gen_rct_tx_validation_base> {};
 
 // altered commitment/dest
-struct gen_rct_tx_pre_rct_bad_real_dest : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_bad_real_dest : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_bad_real_dest>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_bad_real_dest>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_pre_rct_bad_real_mask : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_bad_real_mask : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_bad_real_mask>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_bad_real_mask>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_pre_rct_bad_fake_dest : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_bad_fake_dest : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_bad_fake_dest>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_bad_fake_dest>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_pre_rct_bad_fake_mask : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_bad_fake_mask : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_bad_fake_mask>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_bad_fake_mask>: public get_test_options<gen_rct_tx_validation_base> {};
 
 struct gen_rct_tx_rct_bad_real_dest : public gen_rct_tx_validation_base
 {
@@ -166,11 +166,11 @@ struct gen_rct_tx_rct_spend_with_zero_commit : public gen_rct_tx_validation_base
 template<> struct get_test_options<gen_rct_tx_rct_spend_with_zero_commit>: public get_test_options<gen_rct_tx_validation_base> {};
 
 // altered amounts
-struct gen_rct_tx_pre_rct_zero_vin_amount : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_zero_vin_amount : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_zero_vin_amount>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_zero_vin_amount>: public get_test_options<gen_rct_tx_validation_base> {};
 
 struct gen_rct_tx_rct_non_zero_vin_amount : public gen_rct_tx_validation_base
 {
@@ -185,11 +185,11 @@ struct gen_rct_tx_non_zero_vout_amount : public gen_rct_tx_validation_base
 template<> struct get_test_options<gen_rct_tx_non_zero_vout_amount>: public get_test_options<gen_rct_tx_validation_base> {};
 
 // key image
-struct gen_rct_tx_pre_rct_duplicate_key_image : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_duplicate_key_image : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_duplicate_key_image>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_duplicate_key_image>: public get_test_options<gen_rct_tx_validation_base> {};
 
 struct gen_rct_tx_rct_duplicate_key_image : public gen_rct_tx_validation_base
 {
@@ -197,11 +197,11 @@ struct gen_rct_tx_rct_duplicate_key_image : public gen_rct_tx_validation_base
 };
 template<> struct get_test_options<gen_rct_tx_rct_duplicate_key_image>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_pre_rct_wrong_key_image : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_wrong_key_image : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_wrong_key_image>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_wrong_key_image>: public get_test_options<gen_rct_tx_validation_base> {};
 
 struct gen_rct_tx_rct_wrong_key_image : public gen_rct_tx_validation_base
 {
@@ -210,11 +210,11 @@ struct gen_rct_tx_rct_wrong_key_image : public gen_rct_tx_validation_base
 template<> struct get_test_options<gen_rct_tx_rct_wrong_key_image>: public get_test_options<gen_rct_tx_validation_base> {};
 
 // fee
-struct gen_rct_tx_pre_rct_wrong_fee : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_wrong_fee : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_wrong_fee>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_wrong_fee>: public get_test_options<gen_rct_tx_validation_base> {};
 
 struct gen_rct_tx_rct_wrong_fee : public gen_rct_tx_validation_base
 {
@@ -222,18 +222,18 @@ struct gen_rct_tx_rct_wrong_fee : public gen_rct_tx_validation_base
 };
 template<> struct get_test_options<gen_rct_tx_rct_wrong_fee>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_pre_rct_increase_vin_and_fee : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_increase_vin_and_fee : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_increase_vin_and_fee>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_increase_vin_and_fee>: public get_test_options<gen_rct_tx_validation_base> {};
 
 // modify vin/vout
-struct gen_rct_tx_pre_rct_remove_vin : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_remove_vin : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_remove_vin>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_remove_vin>: public get_test_options<gen_rct_tx_validation_base> {};
 
 struct gen_rct_tx_rct_remove_vin : public gen_rct_tx_validation_base
 {
@@ -241,11 +241,11 @@ struct gen_rct_tx_rct_remove_vin : public gen_rct_tx_validation_base
 };
 template<> struct get_test_options<gen_rct_tx_rct_remove_vin>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_pre_rct_add_vout : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_add_vout : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_add_vout>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_add_vout>: public get_test_options<gen_rct_tx_validation_base> {};
 
 struct gen_rct_tx_rct_add_vout : public gen_rct_tx_validation_base
 {
@@ -254,11 +254,11 @@ struct gen_rct_tx_rct_add_vout : public gen_rct_tx_validation_base
 template<> struct get_test_options<gen_rct_tx_rct_add_vout>: public get_test_options<gen_rct_tx_validation_base> {};
 
 // extra
-struct gen_rct_tx_pre_rct_altered_extra : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_altered_extra : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_altered_extra>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_altered_extra>: public get_test_options<gen_rct_tx_validation_base> {};
 
 struct gen_rct_tx_rct_altered_extra : public gen_rct_tx_validation_base
 {
@@ -266,80 +266,60 @@ struct gen_rct_tx_rct_altered_extra : public gen_rct_tx_validation_base
 };
 template<> struct get_test_options<gen_rct_tx_rct_altered_extra>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_pre_rct_has_no_view_tag_before_hf_view_tags : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_untagged_output_accepted_hf6_immediate : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_has_no_view_tag_before_hf_view_tags>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_untagged_output_accepted_hf6_immediate>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_pre_rct_has_no_view_tag_from_hf_view_tags : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_untagged_output_accepted_hf6_after_rewind : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_has_no_view_tag_from_hf_view_tags> {
-  const std::pair<uint8_t, uint64_t> hard_forks[5] = {std::make_pair(1, 0), std::make_pair(2, 1), std::make_pair(4, 65), std::make_pair(HF_VERSION_VIEW_TAGS, 69), std::make_pair(0, 0)};
-  const cryptonote::test_options test_options = {
-    hard_forks, 0
-  };
-};
+template<> struct get_test_options<gen_rct_tx_coinbase_untagged_output_accepted_hf6_after_rewind>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_pre_rct_has_view_tag_before_hf_view_tags : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_tagged_output_accepted_hf6_immediate : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_has_view_tag_before_hf_view_tags>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_coinbase_tagged_output_accepted_hf6_immediate>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_pre_rct_has_view_tag_from_hf_view_tags : public gen_rct_tx_validation_base
+struct gen_rct_tx_coinbase_tagged_output_accepted_hf6_after_rewind : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_pre_rct_has_view_tag_from_hf_view_tags> {
-  const std::pair<uint8_t, uint64_t> hard_forks[5] = {std::make_pair(1, 0), std::make_pair(2, 1), std::make_pair(4, 65), std::make_pair(HF_VERSION_VIEW_TAGS, 69), std::make_pair(0, 0)};
-  const cryptonote::test_options test_options = {
-    hard_forks, 0
-  };
-};
+template<> struct get_test_options<gen_rct_tx_coinbase_tagged_output_accepted_hf6_after_rewind>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_rct_has_no_view_tag_before_hf_view_tags : public gen_rct_tx_validation_base
+struct gen_rct_tx_rct_untagged_output_rejected_while_locked_hf6 : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_rct_has_no_view_tag_before_hf_view_tags>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_rct_untagged_output_rejected_while_locked_hf6>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_rct_has_no_view_tag_from_hf_view_tags : public gen_rct_tx_validation_base
+struct gen_rct_tx_rct_untagged_output_accepted_hf6_after_rewind : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_rct_has_no_view_tag_from_hf_view_tags> {
-  const std::pair<uint8_t, uint64_t> hard_forks[5] = {std::make_pair(1, 0), std::make_pair(2, 1), std::make_pair(4, 65), std::make_pair(HF_VERSION_VIEW_TAGS+1, 69), std::make_pair(0, 0)};
-  const cryptonote::test_options test_options = {
-    hard_forks, 0
-  };
-};
+template<> struct get_test_options<gen_rct_tx_rct_untagged_output_accepted_hf6_after_rewind>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_rct_has_view_tag_before_hf_view_tags : public gen_rct_tx_validation_base
+struct gen_rct_tx_rct_tagged_output_rejected_while_locked_hf6 : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_rct_has_view_tag_before_hf_view_tags>: public get_test_options<gen_rct_tx_validation_base> {};
+template<> struct get_test_options<gen_rct_tx_rct_tagged_output_rejected_while_locked_hf6>: public get_test_options<gen_rct_tx_validation_base> {};
 
-struct gen_rct_tx_rct_has_view_tag_from_hf_view_tags : public gen_rct_tx_validation_base
+struct gen_rct_tx_rct_tagged_output_accepted_hf6_after_rewind : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_rct_tx_rct_has_view_tag_from_hf_view_tags> {
-  const std::pair<uint8_t, uint64_t> hard_forks[5] = {std::make_pair(1, 0), std::make_pair(2, 1), std::make_pair(4, 65), std::make_pair(HF_VERSION_VIEW_TAGS, 69), std::make_pair(0, 0)};
-  const cryptonote::test_options test_options = {
-    hard_forks, 0
-  };
-};
+template<> struct get_test_options<gen_rct_tx_rct_tagged_output_accepted_hf6_after_rewind>: public get_test_options<gen_rct_tx_validation_base> {};
 
 struct gen_rct_tx_uses_output_too_early : public gen_rct_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
 template<> struct get_test_options<gen_rct_tx_uses_output_too_early> {
-  const std::pair<uint8_t, uint64_t> hard_forks[5] = {std::make_pair(1, 0), std::make_pair(2, 1), std::make_pair(4, 65), std::make_pair(12, 69), std::make_pair(0, 0)};
+  const std::pair<uint8_t, uint64_t> hard_forks[3] = {std::make_pair(1, 0), std::make_pair(HF_VERSION_SALVIUM_ONE_PROOFS, 1), std::make_pair(0, 0)};
   const cryptonote::test_options test_options = {
     hard_forks, 0
   };

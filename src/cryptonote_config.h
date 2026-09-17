@@ -121,6 +121,10 @@
 #define BLOCKS_SYNCHRONIZING_DEFAULT_COUNT_PRE_V4       100    //by default, blocks count in blocks downloading
 #define BLOCKS_SYNCHRONIZING_DEFAULT_COUNT              20     //by default, blocks count in blocks downloading
 #define BLOCKS_SYNCHRONIZING_MAX_COUNT                  2048   //must be a power of 2, greater than 128, equal to SEEDHASH_EPOCH_BLOCKS
+#define CURRENCY_PROTOCOL_MAX_OBJECT_REQUEST_COUNT 100
+static_assert(CURRENCY_PROTOCOL_MAX_OBJECT_REQUEST_COUNT >= BLOCKS_SYNCHRONIZING_DEFAULT_COUNT_PRE_V4, "Invalid CURRENCY_PROTOCOL_MAX_OBJECT_REQUEST_COUNT");
+#define CRYPTONOTE_BLOCK_SYNC_WIRE_WEIGHT_MULTIPLIER    2 // block response repeats transaction hashes and adds framing
+#define CRYPTONOTE_BLOCK_SYNC_RESPONSE_OVERHEAD         (64 * 1024) // portable-storage and block-vector framing allowance
 
 #define CRYPTONOTE_MEMPOOL_TX_LIVETIME                    (86400*3) //seconds, three days
 #define CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME     604800 //seconds, one week
@@ -150,6 +154,7 @@
 
 #define COMMAND_RPC_GET_BLOCKS_FAST_MAX_BLOCK_COUNT     1000
 #define COMMAND_RPC_GET_BLOCKS_FAST_MAX_TX_COUNT        20000
+#define MAX_BLOCKCHAIN_SUPPLEMENT_HASHES                 1000
 #define DEFAULT_RPC_MAX_CONNECTIONS_PER_PUBLIC_IP       3
 #define DEFAULT_RPC_MAX_CONNECTIONS_PER_PRIVATE_IP      25
 #define DEFAULT_RPC_MAX_CONNECTIONS                     100
@@ -160,6 +165,7 @@
 #define P2P_LOCAL_GRAY_PEERLIST_LIMIT                   5000
 
 #define P2P_DEFAULT_CONNECTIONS_COUNT                   12
+#define P2P_DEFAULT_IN_CONNECTIONS_COUNT                32
 #define P2P_DEFAULT_HANDSHAKE_INTERVAL                  60           //secondes
 #define P2P_DEFAULT_PACKET_MAX_SIZE                     50000000     //50000000 bytes maximum packet size
 #define P2P_DEFAULT_PEERS_IN_HANDSHAKE                  250
@@ -181,7 +187,16 @@
 #define P2P_IDLE_CONNECTION_KILL_INTERVAL               (5*60) //5 minutes
 
 #define P2P_SUPPORT_FLAG_FLUFFY_BLOCKS                  0x01
+#define P2P_SUPPORT_FLAG_SALCHAT_V4                     0x02
 #define P2P_SUPPORT_FLAGS                               P2P_SUPPORT_FLAG_FLUFFY_BLOCKS
+
+static_assert((P2P_SUPPORT_FLAG_FLUFFY_BLOCKS & P2P_SUPPORT_FLAG_SALCHAT_V4) == 0,
+              "SALCHAT P2P capability bit collides with an existing capability");
+
+inline constexpr uint32_t get_p2p_support_flags(const bool salchat_enabled) noexcept
+{
+  return P2P_SUPPORT_FLAGS | (salchat_enabled ? P2P_SUPPORT_FLAG_SALCHAT_V4 : 0);
+}
 
 #define RPC_IP_FAILS_BEFORE_BLOCK                       3
 

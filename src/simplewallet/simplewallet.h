@@ -36,7 +36,9 @@
  */
 #pragma once
 
+#include <deque>
 #include <memory>
+#include <unordered_set>
 
 #include <boost/optional/optional.hpp>
 #include <boost/program_options/variables_map.hpp>
@@ -268,6 +270,8 @@ namespace cryptonote
     bool submit_multisig_main(const std::vector<std::string>& args, bool called_by_mms);
     bool export_raw_multisig(const std::vector<std::string>& args);
     bool mms(const std::vector<std::string>& args);
+    bool salchat(const std::vector<std::string>& args);
+    bool salchat_unlocked(const std::vector<std::string>& args);
     bool print_ring(const std::vector<std::string>& args);
     bool set_ring(const std::vector<std::string>& args);
     bool unset_ring(const std::vector<std::string>& args);
@@ -360,6 +364,7 @@ namespace cryptonote
     bool check_inactivity();
     bool check_refresh();
     bool check_mms();
+    bool check_salchat(bool redraw_prompt = true);
     bool check_rpc_payment();
 
     void handle_transfer_exception(const std::exception_ptr &e, bool trusted_daemon);
@@ -481,7 +486,10 @@ namespace cryptonote
     epee::math_helper::once_a_time_seconds<1> m_inactivity_checker;
     epee::math_helper::once_a_time_seconds_range<get_random_interval<80 * 1000000, 100 * 1000000>> m_refresh_checker;
     epee::math_helper::once_a_time_seconds_range<get_random_interval<90 * 1000000, 110 * 1000000>> m_mms_checker;
+    epee::math_helper::once_a_time_seconds_range<get_random_interval<9 * 1000000, 11 * 1000000>> m_salchat_checker;
     epee::math_helper::once_a_time_seconds_range<get_random_interval<90 * 1000000, 115 * 1000000>> m_rpc_payment_checker;
+    std::unordered_set<std::string> m_salchat_notified_messages;
+    std::deque<std::string> m_salchat_notification_order;
     
     std::atomic<bool> m_need_payment;
     boost::posix_time::ptime m_last_rpc_payment_mining_time;

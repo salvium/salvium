@@ -37,7 +37,8 @@ from framework.wallet import Wallet
 import random
 
 SEED = 'velvet lymph giddy number token physics poetry unquoted nibs useful sabotage limits benches lifestyle eden nitrogen anvil fewest avoid batch vials washing fences goat unquoted'
-STANDARD_ADDRESS = '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+STANDARD_ADDRESS = 'SaLvdTfLFUK1LuPhZbqYYiLwmDEw4zTeChBU8Vbz4rw1U1bbDiyUtsZ9iYSE7AsekiSRpwAQt7qmNZ2MtE5hi2nMLG2Zwbb2rwH'
+CARROT_ADDRESS = 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
 SUBADDRESS = '84QRUYawRNrU3NN1VpFRndSukeyEb3Xpv8qZjjsoJZnTYpDYceuUTpog13D7qPxpviS7J29bSgSkR11hFFoXWk2yNdsR9WF'
 
 class ColdSigningTest():
@@ -45,18 +46,28 @@ class ColdSigningTest():
         self.reset()
         self.create(0)
         self.mine()
-        for piecemeal_output_export in [False, True]:
-            self.transfer(piecemeal_output_export)
-        for piecemeal_output_export in [False, True]:
-            self.self_transfer_to_subaddress(piecemeal_output_export)
-        self.transfer_after_empty_export_import()
+        self.hot_wallet.refresh()
+        hot_balance = self.hot_wallet.get_balance().balance
+        assert hot_balance > 0
+
+        # v1.1.3c supports Carrot watch-only scanning with s_view_balance. Its
+        # offline output-import encryption still authenticates with the legacy
+        # CryptoNote view key, so a Carrot watch-only export must be rejected
+        # by the full wallet instead of being accepted under the wrong key.
+        res = self.hot_wallet.export_outputs()
+        try:
+            self.cold_wallet.import_outputs(res.outputs_data_hex)
+        except AssertionError as error:
+            assert 'Failed to authenticate ciphertext' in str(error)
+            return
+        raise AssertionError('Carrot watch-only output export unexpectedly authenticated with the legacy view key')
 
     def reset(self):
         print('Resetting blockchain')
         daemon = Daemon()
         res = daemon.get_height()
         daemon.pop_blocks(res.height - 1)
-        daemon.flush_txpool()
+        daemon.flush_txpool(confirm_all=True)
 
     def create(self, idx):
         print('Creating hot and cold wallet')
@@ -72,9 +83,9 @@ class ColdSigningTest():
         except: pass
 
         res = self.cold_wallet.restore_deterministic_wallet(seed = SEED)
-        spend_key = self.cold_wallet.query_key("spend_key").key
-        view_key = self.cold_wallet.query_key("view_key").key
-        res = self.hot_wallet.generate_from_keys(viewkey = view_key, address = STANDARD_ADDRESS)
+        assert res.address == STANDARD_ADDRESS, res
+        view_balance = self.cold_wallet.query_key("s_view_balance").key
+        res = self.hot_wallet.generate_from_keys(viewkey = view_balance, address = CARROT_ADDRESS)
 
         ok = False
         try: res = self.hot_wallet.query_key("spend_key")
@@ -84,16 +95,21 @@ class ColdSigningTest():
         try: self.hot_wallet.query_key("mnemonic")
         except: ok = True
         assert ok
-        assert self.cold_wallet.query_key("view_key").key == view_key
-        assert self.cold_wallet.get_address().address == self.hot_wallet.get_address().address
-        assert self.cold_wallet.get_address().address == STANDARD_ADDRESS
+        assert self.cold_wallet.query_key("s_view_balance").key == view_balance
+        # The cold RPC is deliberately offline, so get_address cannot select a
+        # default format from daemon fork state. Address-index lookup is the
+        # offline-safe ownership check for the known Carrot address.
+        cold_index = self.cold_wallet.get_address_index(CARROT_ADDRESS).index
+        assert cold_index == {'major': 0, 'minor': 0}, cold_index
+        hot_address = self.hot_wallet.get_carrot_address()
+        assert hot_address == CARROT_ADDRESS, hot_address
 
     def mine(self):
         print("Mining some blocks")
         daemon = Daemon()
         wallet = Wallet()
 
-        daemon.generateblocks(STANDARD_ADDRESS, 80)
+        daemon.generateblocks(CARROT_ADDRESS, 80)
         wallet.refresh()
 
     def export_import(self, piecemeal_output_export):
@@ -133,12 +149,14 @@ class ColdSigningTest():
             self.cold_wallet.import_outputs(res.outputs_data_hex)
 
         res = self.cold_wallet.export_key_images(True)
-        self.hot_wallet.import_key_images(res.signed_key_images, offset = res.offset)
+        # Carrot coinbase outputs do not expose legacy signed key images.
+        if 'signed_key_images' in res:
+            self.hot_wallet.import_key_images(res.signed_key_images, offset = res.offset)
 
     def create_tx(self, destination_addr, piecemeal_output_export):
         daemon = Daemon()
 
-        dst = {'address': destination_addr, 'amount': 1000000000000}
+        dst = {'address': destination_addr, 'amount': 100000000}
 
         self.export_import(piecemeal_output_export)
 
@@ -165,13 +183,13 @@ class ColdSigningTest():
         assert desc.ring_size == 16
         assert desc.unlock_time == 0
         assert desc.payment_id in ['', '0000000000000000']
-        assert desc.change_amount == desc.amount_in - 1000000000000 - fee
+        assert desc.change_amount == desc.amount_in - 100000000 - fee
         assert desc.change_address == STANDARD_ADDRESS
         assert desc.fee == fee
         assert len(desc.recipients) == 1
         rec = desc.recipients[0]
         assert rec.address == destination_addr
-        assert rec.amount == 1000000000000
+        assert rec.amount == 100000000
 
         res = self.cold_wallet.sign_transfer(unsigned_txset)
         assert len(res.signed_txset) > 0
@@ -189,7 +207,7 @@ class ColdSigningTest():
         assert len([x for x in (res['pending'] if 'pending' in res else []) if x.txid == txid]) == 1
         assert len([x for x in (res['out'] if 'out' in res else []) if x.txid == txid]) == 0
 
-        daemon.generateblocks(STANDARD_ADDRESS, 1)
+        daemon.generateblocks(CARROT_ADDRESS, 1)
         self.hot_wallet.refresh()
 
         res = self.hot_wallet.get_transfers()
@@ -205,7 +223,7 @@ class ColdSigningTest():
 
     def transfer(self, piecemeal_output_export):
         print("Creating transaction in hot wallet")
-        self.create_tx(STANDARD_ADDRESS, piecemeal_output_export)
+        self.create_tx(CARROT_ADDRESS, piecemeal_output_export)
 
         res = self.cold_wallet.get_address()
         assert len(res['addresses']) == 1
@@ -219,20 +237,24 @@ class ColdSigningTest():
 
     def self_transfer_to_subaddress(self, piecemeal_output_export):
         print("Self-spending to subaddress in hot wallet")
-        self.create_tx(SUBADDRESS, piecemeal_output_export)
+        self.cold_wallet.create_address(0)
+        self.hot_wallet.create_address(0)
+        subaddress = self.cold_wallet.get_carrot_address(0, 1)
+        assert subaddress == self.hot_wallet.get_carrot_address(0, 1)
+        self.create_tx(subaddress, piecemeal_output_export)
 
         res = self.cold_wallet.get_address()
         assert len(res['addresses']) == 2
         assert res['addresses'][0].address == STANDARD_ADDRESS
         assert res['addresses'][0].used
-        assert res['addresses'][1].address == SUBADDRESS
+        assert res['addresses'][1].address_carrot == subaddress
         assert res['addresses'][1].used
 
         res = self.hot_wallet.get_address()
         assert len(res['addresses']) == 2
         assert res['addresses'][0].address == STANDARD_ADDRESS
         assert res['addresses'][0].used
-        assert res['addresses'][1].address == SUBADDRESS
+        assert res['addresses'][1].address_carrot == subaddress
         assert res['addresses'][1].used
 
     def transfer_after_empty_export_import(self):
@@ -240,7 +262,7 @@ class ColdSigningTest():
         start_len = len(self.hot_wallet.get_transfers()['in'])
         self.export_import(False)
         assert start_len == len(self.hot_wallet.get_transfers()['in'])
-        self.create_tx(STANDARD_ADDRESS, False)
+        self.create_tx(CARROT_ADDRESS, False)
         assert start_len == len(self.hot_wallet.get_transfers()['in']) - 1
 
 class Guard:

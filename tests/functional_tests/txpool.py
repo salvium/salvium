@@ -36,6 +36,10 @@ from __future__ import print_function
 from framework.daemon import Daemon
 from framework.wallet import Wallet
 from framework.zmq import Zmq
+import struct
+import time
+import json
+import requests
 
 class TransferTest():
     def run_test(self):
@@ -49,7 +53,7 @@ class TransferTest():
         daemon = Daemon()
         res = daemon.get_height()
         daemon.pop_blocks(res.height - 1)
-        daemon.flush_txpool()
+        daemon.flush_txpool(confirm_all=True)
 
     def create(self):
         print('Creating wallet')
@@ -65,7 +69,7 @@ class TransferTest():
         daemon = Daemon()
         wallet = Wallet()
 
-        daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 80)
+        daemon.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 80)
         wallet.refresh()
 
     def create_txes(self, address, ntxes):
@@ -74,7 +78,7 @@ class TransferTest():
         daemon = Daemon()
         wallet = Wallet()
 
-        dst = {'address': address, 'amount': 1000000000000}
+        dst = {'address': address, 'amount': 100000000}
 
         txes = {}
         for i in range(ntxes):
@@ -117,7 +121,7 @@ class TransferTest():
 
         self.check_empty_pool()
 
-        txes = self.create_txes('46r4nYSevkfBUMhuykdK3gQ98XDqDTYW1hNLaXNvjpsJaSbNtdXh1sKMsdVgqkaihChAzEy29zEDPMR3NHQvGoZCLGwTerK', 5)
+        txes = self.create_txes(wallet.get_carrot_address(), 5)
 
         res = daemon.get_info()
         assert res.tx_pool_size == txpool_size + 5
@@ -177,6 +181,32 @@ class TransferTest():
         assert res.pool_stats.num_not_relayed == 0
         assert res.pool_stats.num_double_spends == 0
 
+        print('Checking transaction age and restricted backlog redaction')
+        # Wait beyond the one-second timestamp resolution, without depending
+        # on the time needed to construct the transactions.
+        time.sleep(2)
+        def backlog_bytes(port):
+            # This legacy RPC returns packed POD bytes in a JSON string.
+            # Decode byte-for-byte, as the native client does, rather than
+            # letting requests replace non-UTF-8 bytes before unpacking.
+            response = requests.post(
+                'http://127.0.0.1:%d/json_rpc' % port,
+                json={'jsonrpc': '2.0', 'id': '0', 'method': 'get_txpool_backlog'},
+                timeout=30)
+            response.raise_for_status()
+            reply = json.loads(response.content.decode('latin1'))
+            assert 'error' not in reply, reply
+            return reply['result']['backlog'].encode('latin1')
+        public_backlog = backlog_bytes(18180)
+        restricted_backlog = backlog_bytes(18580)
+        public_entries = list(struct.iter_unpack('=QQQ', public_backlog))
+        restricted_entries = list(struct.iter_unpack('=QQQ', restricted_backlog))
+        assert len(public_entries) == len(txes)
+        assert len(restricted_entries) == len(txes)
+        assert all(1 <= age < 3600 for weight, fee, age in public_entries)
+        assert all(age == 0 for weight, fee, age in restricted_entries)
+        assert sorted((w, f) for w, f, _ in public_entries) == sorted((w, f) for w, f, _ in restricted_entries)
+
         print('Flushing 2 transactions')
         txes_keys = list(txes.keys())
         daemon.flush_txpool([txes_keys[1], txes_keys[3]])
@@ -234,7 +264,7 @@ class TransferTest():
         assert len(res.transactions) == txpool_size - 2
 
         print('Mining transactions')
-        daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 1)
+        daemon.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 1)
         res = daemon.get_transaction_pool()
         assert not 'transactions' in res or len(res.transactions) == txpool_size - 5
         res = daemon.get_transaction_pool_hashes()
@@ -272,7 +302,7 @@ class TransferTest():
         assert res.txs[0].in_pool
         assert res.txs[0].relayed
 
-        daemon.flush_txpool()
+        daemon.flush_txpool(confirm_all=True)
         self.check_empty_pool()
 
 

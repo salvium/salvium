@@ -53,6 +53,21 @@
 namespace carrot
 {
 /**
+ * Recover the destination data needed by wallet input construction from a
+ * Carrot output and its sender/receiver secret.
+ */
+void scan_carrot_dest_info(const crypto::public_key &onetime_address,
+    const rct::key &amount_commitment,
+    const encrypted_janus_anchor_t &encrypted_janus_anchor,
+    const std::optional<encrypted_payment_id_t> &encrypted_payment_id,
+    const crypto::hash &s_sender_receiver,
+    crypto::secret_key &sender_extension_g_out,
+    crypto::secret_key &sender_extension_t_out,
+    crypto::public_key &address_spend_pubkey_out,
+    payment_id_t &nominal_payment_id_out,
+    janus_anchor_t &nominal_janus_anchor_out);
+
+/**
  * brief: try_scan_carrot_coinbase_enote_no_janus - attempt scan process on coinbase enote w/o Janus protection
  * param: enote -
  * param: s_sender_receiver_unctx - s_sr

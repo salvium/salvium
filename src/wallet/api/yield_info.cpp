@@ -46,8 +46,6 @@ using namespace std;
 
 namespace Monero {
 
-  YieldInfo::~YieldInfo() {}
-
   YieldInfoImpl::YieldInfoImpl(WalletImpl &wallet)
     : m_wallet(wallet)
   {
@@ -78,7 +76,7 @@ namespace Monero {
   std::string YieldInfoImpl::period() const
   {
     // Calculate the number of entries as a human-readable time period
-    uint64_t ts = m_num_entries * 120;
+    uint64_t ts = (m_num_entries > 0 ? m_num_entries - 1 : 0) * DIFFICULTY_TARGET_V2;
     std::string result;
     stringstream ss;
     ss << std::setfill('0') << std::setw(2) << (ts / 86400)
@@ -90,8 +88,38 @@ namespace Monero {
 
   bool YieldInfoImpl::update()
   {
+    boost::lock_guard<boost::mutex> guard(m_wallet.m_refreshMutex2);
+    m_errorString.clear();
+    try
+    {
+      m_blockchain_height = m_wallet.m_wallet->get_blockchain_current_height();
+      m_stake_lock_period = cryptonote::get_config(m_wallet.m_wallet->nettype()).STAKE_LOCK_PERIOD;
+      if (m_wallet.m_wallet->get_yield_summary_info(m_burnt, m_supply, m_locked,
+          m_yield, m_yield_per_stake, m_num_entries, m_payouts) &&
+          tools::summarize_yield(m_payouts, m_blockchain_height, m_stake_lock_period, m_totals))
+      {
+        m_status = Status_Ok;
+        return true;
+      }
+    }
+    catch (const std::exception&)
+    {
+      // Keep the API failure recoverable, including a disconnected daemon.
+    }
+    m_status = Status_Error;
+    m_errorString = "Failed to retrieve valid yield information from daemon";
+    m_burnt = m_supply = m_locked = m_yield = m_yield_per_stake = m_num_entries = 0;
+    m_blockchain_height = m_stake_lock_period = 0;
+    m_totals = {};
+    m_payouts.clear();
     return false;
   }
+
+  uint64_t YieldInfoImpl::total_accrued_from_past_completions() const { return m_totals.completed; }
+  uint64_t YieldInfoImpl::currently_staked() const { return m_totals.staked; }
+  uint64_t YieldInfoImpl::accrued_from_current_stake() const { return m_totals.accrued; }
+  uint64_t YieldInfoImpl::blockchain_height() const { return m_blockchain_height; }
+  uint64_t YieldInfoImpl::stake_lock_period() const { return m_stake_lock_period; }
 
   uint64_t YieldInfoImpl::burnt() const
   {

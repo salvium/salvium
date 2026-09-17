@@ -57,7 +57,7 @@ uint32_t get_aux_slot(const crypto::hash &id, uint32_t nonce, uint32_t n_aux_cha
 
   crypto::hash res;
   tools::sha256sum(buf, sizeof(buf), res);
-  v = *((const uint32_t*)&res);
+  memcpy(&v, &res, sizeof(v));
   return SWAP32LE(v) % n_aux_chains;
 }
 //---------------------------------------------------------------

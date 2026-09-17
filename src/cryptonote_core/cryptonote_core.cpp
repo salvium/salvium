@@ -402,6 +402,14 @@ namespace cryptonote
 
     epee::debug::g_test_dbg_lock_sleep() = command_line::get_arg(vm, arg_test_dbg_lock_sleep);
 
+    block_sync_size = command_line::get_arg(vm, arg_block_sync_size);
+    if (block_sync_size > CURRENCY_PROTOCOL_MAX_OBJECT_REQUEST_COUNT)
+    {
+      MERROR("Error --block-sync-size cannot be greater than " << CURRENCY_PROTOCOL_MAX_OBJECT_REQUEST_COUNT);
+      return false;
+    }
+
+
     return true;
   }
   //-----------------------------------------------------------------------------------------------
@@ -692,15 +700,16 @@ namespace cryptonote
 
     // now that we have a valid m_blockchain_storage, we can clean out any
     // transactions in the pool that do not conform to the current fork
-    m_mempool.validate(m_blockchain_storage.get_current_hard_fork_version());
+    // The persisted transaction pool is a replaceable cache. Bound only this
+    // startup revalidation so an overloaded cache cannot keep P2P and RPC
+    // offline indefinitely. Runtime fork transitions remain unbounded.
+    m_mempool.validate(m_blockchain_storage.get_current_hard_fork_version(),
+      TXPOOL_STARTUP_VALIDATION_MAX_TIME, TXPOOL_STARTUP_VALIDATION_MAX_TXS);
 
     bool show_time_stats = command_line::get_arg(vm, arg_show_time_stats) != 0;
     m_blockchain_storage.set_show_time_stats(show_time_stats);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize blockchain storage");
 
-    block_sync_size = command_line::get_arg(vm, arg_block_sync_size);
-    if (block_sync_size > BLOCKS_SYNCHRONIZING_MAX_COUNT)
-      MERROR("Error --block-sync-size cannot be greater than " << BLOCKS_SYNCHRONIZING_MAX_COUNT);
 
     MGINFO("Loading checkpoints");
 
@@ -1182,6 +1191,21 @@ namespace cryptonote
     return handle_incoming_txs({std::addressof(tx_blob), 1}, {std::addressof(tvc), 1}, tx_relay, relayed);
   }
   //-----------------------------------------------------------------------------------------------
+  bool core::handle_incoming_tx_rpc(const tx_blob_entry& tx_blob,
+      tx_verification_context& tvc, const relay_method tx_relay, bool& busy)
+  {
+    busy = false;
+    bool accepted = false;
+    if (!m_rpc_tx_verification_limiter.run([&] {
+          accepted = handle_incoming_tx(tx_blob, tvc, tx_relay, false);
+        }))
+    {
+      busy = true;
+      return false;
+    }
+    return accepted;
+  }
+  //-----------------------------------------------------------------------------------------------
   bool core::check_tx_semantic(const transaction& tx, bool keeped_by_block) const
   {
     if(!tx.vin.size())
@@ -1325,6 +1349,23 @@ namespace cryptonote
       res = max_block_size;
     }
     return res;
+  }
+  //-----------------------------------------------------------------------------------------------
+  size_t core::get_block_sync_response_size(const size_t count) const
+  {
+    const size_t block_weight_limit = std::max<size_t>(
+        m_blockchain_storage.get_current_cumulative_block_weight_limit(),
+        2 * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5);
+    if (count == 0 || block_weight_limit == 0)
+      return 0;
+
+    const size_t maximum = std::numeric_limits<size_t>::max();
+    if (block_weight_limit > maximum / CRYPTONOTE_BLOCK_SYNC_WIRE_WEIGHT_MULTIPLIER)
+      return maximum;
+    const size_t wire_block_limit = block_weight_limit * CRYPTONOTE_BLOCK_SYNC_WIRE_WEIGHT_MULTIPLIER;
+    if (count > (maximum - CRYPTONOTE_BLOCK_SYNC_RESPONSE_OVERHEAD) / wire_block_limit)
+      return maximum;
+    return count * wire_block_limit + CRYPTONOTE_BLOCK_SYNC_RESPONSE_OVERHEAD;
   }
   //-----------------------------------------------------------------------------------------------
   bool core::are_key_images_spent_in_pool(const std::vector<crypto::key_image>& key_im, std::vector<bool> &spent) const

@@ -60,7 +60,8 @@ namespace epee
     template<> struct ps_min_bytes<int8_t> { static constexpr const size_t strict = 1; };
     template<> struct ps_min_bytes<double> { static constexpr const size_t strict = 8; };
     template<> struct ps_min_bytes<bool> { static constexpr const size_t strict = 1; };
-    template<> struct ps_min_bytes<std::string> { static constexpr const size_t strict = 2; };
+    // An empty string consists only of its one-byte zero-length varint.
+    template<> struct ps_min_bytes<std::string> { static constexpr const size_t strict = 1; };
     template<> struct ps_min_bytes<section> { static constexpr const size_t strict = 1; };
     template<> struct ps_min_bytes<array_entry> { static constexpr const size_t strict = 1; };
 

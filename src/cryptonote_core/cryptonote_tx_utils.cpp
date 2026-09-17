@@ -177,9 +177,7 @@ namespace cryptonote
                           hw::device& hwdev                                    // hardware device to use (usually a software dev)
                           ) {
 
-    LOG_ERROR("Cryptonote::" << __func__ << ":" << __LINE__);
-    LOG_ERROR("Break here");
-    
+
     // Now generate the return address EC point
     // F = (y^-1).a.P_change
 
@@ -699,22 +697,22 @@ namespace cryptonote
     crypto::generate_keys(ephemeral_pk, ephemeral_sk);
     
     // Step 2: Derive shared secret
-    crypto::ec_scalar shared_secret;
-    crypto::key_derivation derivation;
+    tools::scrubbed<crypto::ec_scalar> shared_secret{};
+    tools::scrubbed<crypto::key_derivation> derivation{};
     if (!crypto::generate_key_derivation(PK, ephemeral_sk, derivation)) {
       throw std::runtime_error("Failed to generate key derivation");
     }
     crypto::derivation_to_scalar(derivation, 0, shared_secret);
     
     // Step 3: Symmetric key generation (using Keccak hash)
-    crypto::hash symmetric_key_hash;
+    tools::scrubbed<crypto::hash> symmetric_key_hash{};
     crypto::cn_fast_hash(&shared_secret, sizeof(shared_secret), symmetric_key_hash);
     
     // Step 4: Encrypt the data (AES-256-CBC or ChaCha20)
     std::string ciphertext(sizeof(crypto::secret_key), '\0');
     crypto::chacha_key symmetric_key;
     static_assert(sizeof(symmetric_key) == sizeof(symmetric_key_hash), "chacha_key/hash size mismatch");
-    memcpy(&symmetric_key, &symmetric_key_hash, sizeof(symmetric_key));
+    memcpy(symmetric_key.data(), &symmetric_key_hash, symmetric_key.size());
     crypto::chacha_iv iv = crypto::rand<crypto::chacha_iv>();
     crypto::chacha20(pvk.data, sizeof(crypto::secret_key), symmetric_key, iv, &ciphertext[0]);
     
@@ -729,17 +727,15 @@ namespace cryptonote
   bool decrypt_pvk(const std::string &encrypted_data_hex, const crypto::secret_key &SK, crypto::secret_key &pvk) {
     //std::string decrypt_pvk(const std::string &encrypted_data, const crypto::secret_key &SK) {
     // Step 1: Extract ephemeral_pk, iv, and ciphertext from encrypted_data
-    std::string encrypted_data;
-    for (size_t i = 0; i < encrypted_data_hex.length(); i += 2) {
-      std::istringstream iss(encrypted_data_hex.substr(i, 2));
-      unsigned int byte;
-      iss >> std::hex >> byte;
-      if (iss.fail()) return false;
-      encrypted_data += static_cast<char>(static_cast<uint8_t>(byte));
-    }
-    const char *data_ptr = encrypted_data.data();
-    if (encrypted_data.size() < sizeof(crypto::public_key) + sizeof(crypto::chacha_iv))
+    constexpr std::size_t encrypted_bytes = sizeof(crypto::public_key) +
+      sizeof(crypto::chacha_iv) + sizeof(crypto::secret_key);
+    if (encrypted_data_hex.size() != encrypted_bytes * 2)
       return false;
+    std::string encrypted_data;
+    if (!epee::string_tools::parse_hexstr_to_binbuff(encrypted_data_hex, encrypted_data) ||
+        encrypted_data.size() != encrypted_bytes)
+      return false;
+    const char *data_ptr = encrypted_data.data();
     crypto::public_key ephemeral_pk;
     memcpy(&ephemeral_pk, data_ptr, sizeof(ephemeral_pk));
     data_ptr += sizeof(ephemeral_pk);
@@ -748,28 +744,31 @@ namespace cryptonote
     memcpy(&iv, data_ptr, sizeof(iv));
     data_ptr += sizeof(iv);
     
-    std::string ciphertext(data_ptr, encrypted_data.size() - sizeof(ephemeral_pk) - sizeof(iv));
+    std::string ciphertext(data_ptr, sizeof(crypto::secret_key));
     
     // Step 2: Derive shared secret
-    crypto::ec_scalar shared_secret;
-    crypto::key_derivation derivation;
+    tools::scrubbed<crypto::ec_scalar> shared_secret{};
+    tools::scrubbed<crypto::key_derivation> derivation{};
     if (!crypto::generate_key_derivation(ephemeral_pk, SK, derivation)) {
-      throw std::runtime_error("Failed to generate key derivation");
+      return false;
     }
     crypto::derivation_to_scalar(derivation, 0, shared_secret);
     
     // Step 3: Symmetric key generation (using Keccak hash)
-    crypto::hash symmetric_key_hash;
+    tools::scrubbed<crypto::hash> symmetric_key_hash{};
     crypto::cn_fast_hash(&shared_secret, sizeof(shared_secret), symmetric_key_hash);
     
     // Step 4: Decrypt the data
     std::string plaintext(ciphertext.size(), '\0');
+    const auto wipe_plaintext = epee::misc_utils::create_scope_leave_handler([&]() {
+      if (!plaintext.empty()) memwipe(&plaintext[0], plaintext.size());
+    });
     crypto::chacha_key symmetric_key;
     static_assert(sizeof(symmetric_key) == sizeof(symmetric_key_hash), "chacha_key/hash size mismatch");
-    memcpy(&symmetric_key, &symmetric_key_hash, sizeof(symmetric_key));
+    memcpy(symmetric_key.data(), &symmetric_key_hash, symmetric_key.size());
     crypto::chacha20(ciphertext.data(), ciphertext.size(), symmetric_key, iv, &plaintext[0]);
 
-    memcpy(pvk.data, &plaintext[0], sizeof(crypto::secret_key));
+    memcpy(pvk.data, plaintext.data(), sizeof(crypto::secret_key));
     return true;
   }
   //---------------------------------------------------------------
@@ -1139,7 +1138,8 @@ namespace cryptonote
         // Now generate the return address (and TX pubkey, although we will discard that)
         crypto::public_key F = crypto::null_pkey;
         crypto::public_key F_txpubkey = crypto::null_pkey;
-        CHECK_AND_ASSERT_MES(get_return_address(tx.version, tx.type, y, sender_account_keys, P_change, additional_tx_public_keys[op_index], F, F_txpubkey, hwdev), false, "Failed to get return_address");
+        const auto& output_tx_pubkey = additional_tx_public_keys.empty() ? txkey_pub : additional_tx_public_keys.at(op_index);
+        CHECK_AND_ASSERT_MES(get_return_address(tx.version, tx.type, y, sender_account_keys, P_change, output_tx_pubkey, F, F_txpubkey, hwdev), false, "Failed to get return_address");
 
         // Push the F point into the TX vector of F points
         tx.return_address_list.push_back(F);

@@ -40,10 +40,17 @@
 
 #include "multi_tx_test_base.h"
 
-template<size_t a_ring_size, size_t a_outputs, bool a_rct, rct::RangeProofType range_proof_type = rct::RangeProofBorromean, int bp_version = 2>
+template<size_t a_ring_size, size_t a_outputs, bool a_rct, rct::RangeProofType range_proof_type = rct::RangeProofPaddedBulletproof, int bp_version = 4>
 class test_check_tx_signature : private multi_tx_test_base<a_ring_size>
 {
   static_assert(0 < a_ring_size, "ring_size must be greater than 0");
+  static_assert(2 <= a_outputs && a_outputs <= BULLETPROOF_MAX_OUTPUTS,
+                "production transfer output count must be between 2 and 16");
+  static_assert(a_rct, "production transfers require RingCT");
+  static_assert(range_proof_type == rct::RangeProofPaddedBulletproof && bp_version == 4,
+                "production pre-HF3 transfers require padded Bulletproof+");
+  static_assert(a_outputs == 2 || a_ring_size == 16,
+                "HF2 multi-output transfers require a 16-member ring");
 
 public:
   static const size_t loop_count = a_rct ? (a_ring_size <= 2 ? 50 : 10) : a_ring_size < 100 ? 100 : 10;
@@ -66,15 +73,18 @@ public:
     destinations.push_back(tx_destination_entry(this->m_source_amount - outputs + 1, m_alice.get_keys().m_account_address, false));
     for (size_t n = 1; n < outputs; ++n)
       destinations.push_back(tx_destination_entry(1, m_alice.get_keys().m_account_address, false));
+    for (tx_destination_entry& destination : destinations)
+      destination.asset_type = "SAL";
 
     crypto::secret_key tx_key;
     std::vector<crypto::secret_key> additional_tx_keys;
     std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
     subaddresses[this->m_miners[this->real_source_idx].get_keys().m_account_address.m_spend_public_key] = {0,0};
     rct::RCTConfig rct_config{range_proof_type, bp_version};
-    std::string source_asset = "FULM";
-    std::string dest_asset = "FULM";
-    if (!construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_tx, 0, tx_key, additional_tx_keys, rct, rct_config))
+    const std::string source_asset = "SAL";
+    const std::string dest_asset = "SAL";
+    const uint8_t hf_version = outputs == 2 ? HF_VERSION_BULLETPROOF_PLUS : HF_VERSION_ENABLE_N_OUTS;
+    if (!construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, destinations, hf_version, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_tx, 0, tx_key, additional_tx_keys, rct, rct_config))
       return false;
 
     get_transaction_prefix_hash(m_tx, m_tx_prefix_hash);
@@ -108,6 +118,10 @@ template<size_t a_ring_size, size_t a_outputs, size_t a_num_txes, size_t extra_o
 class test_check_tx_signature_aggregated_bulletproofs : private multi_tx_test_base<a_ring_size>
 {
   static_assert(0 < a_ring_size, "ring_size must be greater than 0");
+  static_assert(2 <= a_outputs && a_outputs <= BULLETPROOF_MAX_OUTPUTS,
+                "production transfer output count must be between 2 and 16");
+  static_assert(a_outputs == 2 || a_ring_size == 16,
+                "HF2 multi-output transfers require a 16-member ring");
 
 public:
   static const size_t loop_count = a_ring_size <= 2 ? 50 : 10;
@@ -125,13 +139,15 @@ public:
 
     m_alice.generate();
 
-    std::string source_asset = "FULM";
-    std::string dest_asset = "FULM";
+    const std::string source_asset = "SAL";
+    const std::string dest_asset = "SAL";
     
     std::vector<tx_destination_entry> destinations;
     destinations.push_back(tx_destination_entry(this->m_source_amount - outputs + 1, m_alice.get_keys().m_account_address, false));
     for (size_t n = 1; n < outputs; ++n)
       destinations.push_back(tx_destination_entry(1, m_alice.get_keys().m_account_address, false));
+    for (tx_destination_entry& destination : destinations)
+      destination.asset_type = dest_asset;
 
     crypto::secret_key tx_key;
     std::vector<crypto::secret_key> additional_tx_keys;
@@ -139,9 +155,11 @@ public:
     subaddresses[this->m_miners[this->real_source_idx].get_keys().m_account_address.m_spend_public_key] = {0,0};
 
     m_txes.resize(a_num_txes + (extra_outs > 0 ? 1 : 0));
+    const uint8_t hf_version = outputs == 2
+        ? HF_VERSION_BULLETPROOF_PLUS : HF_VERSION_ENABLE_N_OUTS;
     for (size_t n = 0; n < a_num_txes; ++n)
     {
-      if (!construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_txes[n], 0, tx_key, additional_tx_keys, true, {rct::RangeProofPaddedBulletproof, 2}))
+      if (!construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, destinations, hf_version, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_txes[n], 0, tx_key, additional_tx_keys, true, {rct::RangeProofPaddedBulletproof, 4}))
         return false;
     }
 
@@ -151,8 +169,10 @@ public:
       destinations.push_back(tx_destination_entry(this->m_source_amount - extra_outs + 1, m_alice.get_keys().m_account_address, false));
       for (size_t n = 1; n < extra_outs; ++n)
         destinations.push_back(tx_destination_entry(1, m_alice.get_keys().m_account_address, false));
+      for (tx_destination_entry& destination : destinations)
+        destination.asset_type = dest_asset;
 
-      if (!construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, destinations, 1/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_txes.back(), 0, tx_key, additional_tx_keys, true, {rct::RangeProofMultiOutputBulletproof, 2}))
+      if (!construct_tx_and_get_tx_key(this->m_miners[this->real_source_idx].get_keys(), subaddresses, this->m_sources, destinations, HF_VERSION_ENABLE_N_OUTS, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, cryptonote::account_public_address{}, std::vector<uint8_t>(), m_txes.back(), 0, tx_key, additional_tx_keys, true, {rct::RangeProofPaddedBulletproof, 4}))
         return false;
     }
 

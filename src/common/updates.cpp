@@ -28,6 +28,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include "misc_log_ex.h"
+#include "string_tools.h"
 #include "util.h"
 #include "dns_utils.h"
 #include "updates.h"
@@ -37,10 +38,59 @@
 
 namespace tools
 {
+  namespace
+  {
+    bool valid_update_version(const std::string& version)
+    {
+      // Dotted numeric releases, an optional patch letter, and optional
+      // alphanumeric prerelease/build labels, e.g. 1.1.3c or 1.1.0-rc2.
+      if (version.empty() || version.size() > 64)
+        return false;
+      const auto digit = [](char c) { return c >= '0' && c <= '9'; };
+      const auto letter = [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+      };
+      bool numeric = true;
+      unsigned int components = 0;
+      std::size_t start = 0;
+      for (;;)
+      {
+        const auto separator = version.find_first_of(".-", start);
+        const auto end = separator == std::string::npos ? version.size() : separator;
+        if (start == end)
+          return false;
+        std::size_t digits = start;
+        while (digits < end && digit(version[digits]))
+          ++digits;
+        // vercmp converts each field's numeric prefix to int.
+        if (digits - start > 9)
+          return false;
+        if (numeric)
+        {
+          if (++components > 4 || digits == start)
+            return false;
+          if (digits != end && (digits + 1 != end || !letter(version[digits]) ||
+              (separator != std::string::npos && version[separator] == '.')))
+            return false;
+        }
+        else
+        {
+          for (auto i = digits; i < end; ++i)
+            if (!digit(version[i]) && !letter(version[i]))
+              return false;
+        }
+        if (separator == std::string::npos)
+          return components >= 2;
+        if (version[separator] == '-')
+          numeric = false;
+        start = separator + 1;
+      }
+    }
+  }
+
   bool check_updates(const std::string &software, const std::string &buildtag, std::string &version, std::string &hash)
   {
     std::vector<std::string> records;
-    bool found = false;
 
     MDEBUG("Checking updates for " << buildtag << " " << software);
 
@@ -58,6 +108,13 @@ namespace tools
     if (!tools::dns_utils::load_txt_records_from_dns(records, dns_urls))
       return false;
 
+    return parse_update_records(records, software, buildtag, version, hash);
+  }
+
+  bool parse_update_records(const std::vector<std::string> &records, const std::string &software,
+      const std::string &buildtag, std::string &version, std::string &hash)
+  {
+    bool found = false;
     for (const auto& record : records)
     {
       std::vector<std::string> fields;
@@ -71,15 +128,20 @@ namespace tools
       if (software != fields[0] || buildtag != fields[1])
         continue;
 
-      bool alnum = true;
-      for (auto c: fields[3])
-        if (!isalnum(c))
-          alnum = false;
-      if (fields[3].size() != 64 && !alnum)
+      if (!valid_update_version(fields[2]))
+      {
+        MWARNING("Invalid version in update record");
+        continue;
+      }
+
+      crypto::hash digest;
+      if (!epee::string_tools::hex_to_pod(fields[3], digest))
       {
         MWARNING("Invalid hash: " << fields[3]);
         continue;
       }
+      // Download verification compares against the lowercase SHA-256 encoding.
+      fields[3] = epee::string_tools::pod_to_hex(digest);
 
       // use highest version
       if (found)

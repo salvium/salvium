@@ -36,6 +36,8 @@
 
 #include <boost/utility/string_ref.hpp>
 
+#include <cstring>
+#include <memory>
 #include <string>
 #include <sstream>
 
@@ -77,10 +79,10 @@ namespace serialization
       CATCH_ENTRY("portable_storage::dump_as_json", false)
     }
 
-    bool portable_storage::load_from_json(const std::string& source)
+    bool portable_storage::load_from_json(const std::string& source, const limits_t *limits)
     {
       TRY_ENTRY();
-      return json::load_from_json(source, *this);
+      return json::load_from_json(source, *this, limits);
       CATCH_ENTRY("portable_storage::load_from_json", false)
     }
 
@@ -92,17 +94,18 @@ namespace serialization
         LOG_ERROR("portable_storage: wrong binary format, packet size = " << source.size() << " less than expected sizeof(storage_block_header)=" << sizeof(storage_block_header));
         return false;
       }
-      storage_block_header* pbuff = (storage_block_header*)source.data();
-      if(pbuff->m_signature_a != SWAP32LE(PORTABLE_STORAGE_SIGNATUREA) ||
-        pbuff->m_signature_b != SWAP32LE(PORTABLE_STORAGE_SIGNATUREB)
+      storage_block_header header;
+      std::memcpy(std::addressof(header), source.data(), sizeof(header));
+      if(header.m_signature_a != SWAP32LE(PORTABLE_STORAGE_SIGNATUREA) ||
+        header.m_signature_b != SWAP32LE(PORTABLE_STORAGE_SIGNATUREB)
         )
       {
         LOG_ERROR("portable_storage: wrong binary format - signature mismatch");
         return false;
       }
-      if(pbuff->m_ver != PORTABLE_STORAGE_FORMAT_VER)
+      if(header.m_ver != PORTABLE_STORAGE_FORMAT_VER)
       {
-        LOG_ERROR("portable_storage: wrong binary format - unknown format ver = " << pbuff->m_ver);
+        LOG_ERROR("portable_storage: wrong binary format - unknown format ver = " << header.m_ver);
         return false;
       }
       TRY_ENTRY();

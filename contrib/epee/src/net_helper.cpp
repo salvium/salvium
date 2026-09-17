@@ -67,12 +67,15 @@ namespace net_utils
 
 
 		const auto shared = std::make_shared<new_connection>(MONERO_GET_EXECUTOR(timeout));
-		timeout.async_wait([shared] (boost::system::error_code error)
+		timeout.async_wait([shared] (boost::system::error_code)
 		{
-			if (error != boost::system::errc::operation_canceled && shared && shared->socket_.is_open())
+			// Cancellation also abandons an in-flight connect. On success the
+			// socket has already moved into the client before the timer is cancelled.
+			if (shared->socket_.is_open())
 			{
-				shared->socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both);
-				shared->socket_.close();
+				boost::system::error_code ignored;
+				shared->socket_.cancel(ignored);
+				shared->socket_.close(ignored);
 			}
 		});
 		shared->socket_.async_connect(*results.begin(), [shared] (boost::system::error_code error)
@@ -89,4 +92,3 @@ namespace net_utils
 	}
 }
 }
-

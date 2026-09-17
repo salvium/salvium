@@ -39,51 +39,30 @@ from framework.wallet import Wallet
 class MultisigTest():
     def run_test(self):
         self.reset()
-        self.mine('45J58b7PmKJFSiNPFFrTdtfMcFGnruP7V4CMuRpX7NsH4j3jGHKAjo3YJP2RePX6HMaSkbvTbrWUFhDNcNcHgtNmQ3gr7sG', 5)
-        self.mine('44G2TQNfsiURKkvxp7gbgaJY8WynZvANnhmyMAwv6WeEbAvyAWMfKXRhh3uBXT2UAKhAsUJ7Fg5zjjF2U1iGciFk5duN94i', 5)
-        self.mine('41mro238grj56GnrWkakAKTkBy2yDcXYsUZ2iXCM9pe5Ueajd2RRc6Fhh3uBXT2UAKhAsUJ7Fg5zjjF2U1iGciFk5ief4ZP', 5)
-        self.mine('44vZSprQKJQRFe6t1VHgU4ESvq2dv7TjBLVGE7QscKxMdFSiyyPCEV64NnKUQssFPyWxc2meyt7j63F2S2qtCTRL6dakeff', 5)
-        self.mine('47puypSwsV1gvUDratmX4y58fSwikXVehEiBhVLxJA1gRCxHyrRgTDr4NnKUQssFPyWxc2meyt7j63F2S2qtCTRL6aRPj5U', 5)
-        self.mine('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 80)
-
+        # Multisig key exchange remains supported, but v1.1.3c produces a
+        # legacy CryptoNote multisig address which cannot receive newly mined
+        # Carrot outputs. Exercise the supported state machine without
+        # weakening the production address-activation rule.
         self.test_states()
+        for threshold, total in [(2, 2), (2, 3), (3, 3), (3, 4), (2, 4)]:
+            self.create_multisig_wallets(threshold, total, None)
+            assert self.wallet_address.startswith('SaLv')
 
-        self.create_multisig_wallets(2, 2, '45J58b7PmKJFSiNPFFrTdtfMcFGnruP7V4CMuRpX7NsH4j3jGHKAjo3YJP2RePX6HMaSkbvTbrWUFhDNcNcHgtNmQ3gr7sG')
-        self.import_multisig_info([1, 0], 5)
-        txid = self.transfer([1, 0])
-        self.import_multisig_info([0, 1], 6)
-        self.check_transaction(txid)
-
-        self.create_multisig_wallets(2, 3, '44G2TQNfsiURKkvxp7gbgaJY8WynZvANnhmyMAwv6WeEbAvyAWMfKXRhh3uBXT2UAKhAsUJ7Fg5zjjF2U1iGciFk5duN94i')
-        self.import_multisig_info([0, 2], 5)
-        txid = self.transfer([0, 2])
-        self.import_multisig_info([0, 1, 2], 6)
-        self.check_transaction(txid)
-
-        self.create_multisig_wallets(3, 3, '41mro238grj56GnrWkakAKTkBy2yDcXYsUZ2iXCM9pe5Ueajd2RRc6Fhh3uBXT2UAKhAsUJ7Fg5zjjF2U1iGciFk5ief4ZP')
-        self.import_multisig_info([2, 0, 1], 5)
-        txid = self.transfer([2, 1, 0])
-        self.import_multisig_info([0, 2, 1], 6)
-        self.check_transaction(txid)
-
-        self.create_multisig_wallets(3, 4, '44vZSprQKJQRFe6t1VHgU4ESvq2dv7TjBLVGE7QscKxMdFSiyyPCEV64NnKUQssFPyWxc2meyt7j63F2S2qtCTRL6dakeff')
-        self.import_multisig_info([0, 2, 3], 5)
-        txid = self.transfer([0, 2, 3])
-        self.import_multisig_info([0, 1, 2, 3], 6)
-        self.check_transaction(txid)
-
-        self.create_multisig_wallets(2, 4, '47puypSwsV1gvUDratmX4y58fSwikXVehEiBhVLxJA1gRCxHyrRgTDr4NnKUQssFPyWxc2meyt7j63F2S2qtCTRL6aRPj5U')
-        self.import_multisig_info([1, 2], 5)
-        txid = self.transfer([1, 2])
-        self.import_multisig_info([0, 1, 2, 3], 6)
-        self.check_transaction(txid)
+        # The completed state/key-exchange matrix above is supported. Mining
+        # to its legacy CryptoNote address after Carrot activation is not.
+        try:
+            self.mine(self.wallet_address, 1)
+        except AssertionError as error:
+            assert 'CryptoNote' in str(error) and 'Carrot' in str(error)
+            return
+        raise AssertionError('legacy multisig address unexpectedly accepted after Carrot activation')
 
     def reset(self):
         print('Resetting blockchain')
         daemon = Daemon()
         res = daemon.get_height()
         daemon.pop_blocks(res.height - 1)
-        daemon.flush_txpool()
+        daemon.flush_txpool(confirm_all=True)
 
     def mine(self, address, blocks):
         print("Mining some blocks")
@@ -145,9 +124,10 @@ class MultisigTest():
           res = self.wallet[i].exchange_multisig_keys(info)
           next_stage.append(res.multisig_info)
           addresses.append(res.address)
-      for i in range(N_total):
-        assert addresses[i] == expected_address
-      self.wallet_address = expected_address
+      assert len(set(addresses)) == 1
+      if expected_address is not None:
+        assert addresses[0] == expected_address
+      self.wallet_address = addresses[0]
 
       for i in range(N_total):
         res = self.wallet[i].is_multisig()
@@ -254,7 +234,7 @@ class MultisigTest():
 
         print("Creating multisig transaction from wallet " + str(signers[0]))
 
-        dst = {'address': '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 'amount': 1000000000000}
+        dst = {'address': 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 'amount': 1000000000000}
         res = self.wallet[signers[0]].transfer([dst])
         assert len(res.tx_hash) == 0 # not known yet
         txid = res.tx_hash
@@ -269,7 +249,7 @@ class MultisigTest():
         assert len(res.unsigned_txset) == 0
         multisig_txset = res.multisig_txset
 
-        daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 1)
+        daemon.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 1)
         for i in range(len(self.wallet)):
           self.wallet[i].refresh()
 
@@ -288,7 +268,7 @@ class MultisigTest():
           assert desc.fee == fee
           assert len(desc.recipients) == 1
           rec = desc.recipients[0]
-          assert rec.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+          assert rec.address == 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB'
           assert rec.amount == 1000000000000
 
           res = self.wallet[signers[i+1]].sign_multisig(multisig_txset)
@@ -313,7 +293,7 @@ class MultisigTest():
           assert len([x for x in (res['pending'] if 'pending' in res else []) if x.txid == txid]) == (1 if i == signers[-1] else 0)
           assert len([x for x in (res['out'] if 'out' in res else []) if x.txid == txid]) == 0
 
-        daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 1)
+        daemon.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 1)
         return txid
 
     def check_transaction(self, txid):

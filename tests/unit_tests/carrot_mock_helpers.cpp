@@ -354,25 +354,42 @@ void mock_scan_enote_set(const std::vector<CarrotEnoteV1> &enotes,
     }
 
     // internal scans
+    carrot::carrot_and_legacy_account internal_account;
+    cryptonote::account_public_address internal_address{};
+    internal_address.m_spend_public_key = keys.carrot_account_spend_pubkey;
+    internal_address.m_view_public_key = keys.carrot_account_view_pubkey;
+    internal_account.create_from_svb_key(internal_address, keys.s_view_balance);
+    internal_account.insert_subaddresses(keys.subaddress_map);
     for (size_t output_index = 0; output_index < enotes.size(); ++output_index)
     {
         const CarrotEnoteV1 &enote = enotes.at(output_index);
 
         mock_scan_result_t scan_result{};
-        carrot::carrot_and_legacy_account account;
         crypto::public_key return_address_out;
         bool is_return_out;
-        const bool r = try_scan_carrot_enote_internal_receiver(enote,
-            account,
-            scan_result.sender_extension_g,
-            scan_result.sender_extension_t,
-            scan_result.address_spend_pubkey,
-            scan_result.amount,
-            scan_result.amount_blinding_factor,
-            scan_result.enote_type,
-            scan_result.internal_message,
-            return_address_out,
-            is_return_out);
+        bool r = false;
+        try
+        {
+            r = try_scan_carrot_enote_internal_receiver(enote,
+                internal_account,
+                scan_result.sender_extension_g,
+                scan_result.sender_extension_t,
+                scan_result.address_spend_pubkey,
+                scan_result.amount,
+                scan_result.amount_blinding_factor,
+                scan_result.enote_type,
+                scan_result.internal_message,
+                return_address_out,
+                is_return_out);
+        }
+        catch (const std::exception &exc)
+        {
+            // A legacy self-send can decrypt far enough to identify its old
+            // spend key, but it is not an internal Carrot output. The external
+            // pass above is authoritative for that output.
+            if (std::string{exc.what()}.find("not a Carrot address") == std::string::npos)
+                throw;
+        }
 
         scan_result.output_index = output_index;
 

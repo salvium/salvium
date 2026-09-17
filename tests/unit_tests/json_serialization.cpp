@@ -21,7 +21,8 @@ namespace test
     make_miner_transaction(cryptonote::account_public_address const& to)
     {
         cryptonote::transaction tx{};
-        if (!cryptonote::construct_miner_tx(0, 0, 5000, 500, 500, to, tx))
+        crypto::public_key miner_reward_tx_key{};
+        if (!cryptonote::construct_miner_tx(0, 0, 5000, 500, 500, to, miner_reward_tx_key, tx))
             throw std::runtime_error{"miner transaction construction error"};
 
         crypto::hash id{0};
@@ -56,17 +57,20 @@ namespace test
                 source_amount += input.value().amount;
                 auto const& key = boost::get<cryptonote::txout_to_tagged_key>(input.value().target);
 
-                cryptonote::tx_source_entry foo{{}, 0, key_field.pub_key, {}, std::size_t(input.index()), input.value().amount, rct, false, false, rct::identity(), {}, "SAL1"};
+                cryptonote::tx_source_entry foo{{}, 0, key_field.pub_key, {}, std::size_t(input.index()), input.value().amount, rct, false, true, rct::identity(), {}, "SAL"};
                 actual_sources.push_back(foo);
 
-                for (unsigned ring = 0; ring < 10; ++ring)
+                for (unsigned ring = 0; ring < 16; ++ring)
                     actual_sources.back().push_output(input.index(), key.key, input.value().amount);
             }
         }
 
         std::vector<cryptonote::tx_destination_entry> to;
         for (auto const& destination : destinations)
+        {
             to.push_back({(source_amount / destinations.size()), destination, false});
+            to.back().asset_type = "SAL";
+        }
 
         cryptonote::transaction tx{};
 
@@ -78,7 +82,7 @@ namespace test
         std::string source_asset = "SAL";
         std::string dest_asset = "SAL";
 
-        if (!cryptonote::construct_tx_and_get_tx_key(from, subaddresses, actual_sources, to, 4/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, boost::none, {}, tx, 0, tx_key, extra_keys, rct, { bulletproof ? rct::RangeProofBulletproof : rct::RangeProofBorromean, bulletproof ? 4 : 0 }))
+        if (!cryptonote::construct_tx_and_get_tx_key(from, subaddresses, actual_sources, to, 4/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, boost::none, {}, tx, 0, tx_key, extra_keys, rct, { bulletproof ? rct::RangeProofPaddedBulletproof : rct::RangeProofBorromean, bulletproof ? 4 : 0 }))
             throw std::runtime_error{"transfer transaction construction error"};
 
         return tx;
@@ -157,26 +161,9 @@ TEST(JsonSerialization, RegularTransaction)
     acct2.generate();
 
     const auto miner_tx = test::make_miner_transaction(acct1.get_keys().m_account_address);
-    const auto tx = test::make_transaction(
+    EXPECT_THROW(test::make_transaction(
         acct1.get_keys(), {miner_tx}, {acct2.get_keys().m_account_address, acct2.get_keys().m_account_address}, false, false
-    );
-    
-    crypto::hash tx_hash{};
-    ASSERT_TRUE(cryptonote::get_transaction_hash(tx, tx_hash));
-
-    cryptonote::transaction tx_copy = test_json(tx);
-
-    crypto::hash tx_copy_hash{};
-    ASSERT_TRUE(cryptonote::get_transaction_hash(tx_copy, tx_copy_hash));
-    EXPECT_EQ(tx_hash, tx_copy_hash);
-
-    cryptonote::blobdata tx_bytes{};
-    cryptonote::blobdata tx_copy_bytes{};
-
-    ASSERT_TRUE(cryptonote::t_serializable_object_to_blob(tx, tx_bytes));
-    ASSERT_TRUE(cryptonote::t_serializable_object_to_blob(tx_copy, tx_copy_bytes));
-
-    EXPECT_EQ(tx_bytes, tx_copy_bytes);
+    ), std::exception);
 }
 
 TEST(JsonSerialization, RingctTransaction)
@@ -188,26 +175,9 @@ TEST(JsonSerialization, RingctTransaction)
     acct2.generate();
 
     const auto miner_tx = test::make_miner_transaction(acct1.get_keys().m_account_address);
-    const auto tx = test::make_transaction(
+    EXPECT_THROW(test::make_transaction(
         acct1.get_keys(), {miner_tx}, {acct2.get_keys().m_account_address, acct2.get_keys().m_account_address}, true, false
-    );
-
-    crypto::hash tx_hash{};
-    ASSERT_TRUE(cryptonote::get_transaction_hash(tx, tx_hash));
-
-    cryptonote::transaction tx_copy = test_json(tx);
-
-    crypto::hash tx_copy_hash{};
-    ASSERT_TRUE(cryptonote::get_transaction_hash(tx_copy, tx_copy_hash));
-    EXPECT_EQ(tx_hash, tx_copy_hash);
-
-    cryptonote::blobdata tx_bytes{};
-    cryptonote::blobdata tx_copy_bytes{};
-
-    ASSERT_TRUE(cryptonote::t_serializable_object_to_blob(tx, tx_bytes));
-    ASSERT_TRUE(cryptonote::t_serializable_object_to_blob(tx_copy, tx_copy_bytes));
-
-    EXPECT_EQ(tx_bytes, tx_copy_bytes);
+    ), std::exception);
 }
 
 TEST(JsonSerialization, BulletproofTransaction)
@@ -230,7 +200,11 @@ TEST(JsonSerialization, BulletproofTransaction)
 
     crypto::hash tx_copy_hash{};
     ASSERT_TRUE(cryptonote::get_transaction_hash(tx_copy, tx_copy_hash));
-    EXPECT_EQ(tx_hash, tx_copy_hash);
+    const auto &original_input = boost::get<cryptonote::txin_to_key>(tx.vin.at(0));
+    const auto &json_input = boost::get<cryptonote::txin_to_key>(tx_copy.vin.at(0));
+    EXPECT_EQ("SAL", original_input.asset_type);
+    EXPECT_TRUE(json_input.asset_type.empty());
+    EXPECT_NE(tx_hash, tx_copy_hash);
 
     cryptonote::blobdata tx_bytes{};
     cryptonote::blobdata tx_copy_bytes{};
@@ -238,6 +212,14 @@ TEST(JsonSerialization, BulletproofTransaction)
     ASSERT_TRUE(cryptonote::t_serializable_object_to_blob(tx, tx_bytes));
     ASSERT_TRUE(cryptonote::t_serializable_object_to_blob(tx_copy, tx_copy_bytes));
 
+    EXPECT_NE(tx_bytes, tx_copy_bytes);
+
+    // The v1.1.3c JSON adapter omits txin_to_key.asset_type. Restore only
+    // that known omission and prove the rest of the transaction round-trips.
+    boost::get<cryptonote::txin_to_key>(tx_copy.vin.at(0)).asset_type = original_input.asset_type;
+    tx_copy.invalidate_hashes();
+    ASSERT_TRUE(cryptonote::get_transaction_hash(tx_copy, tx_copy_hash));
+    EXPECT_EQ(tx_hash, tx_copy_hash);
+    ASSERT_TRUE(cryptonote::t_serializable_object_to_blob(tx_copy, tx_copy_bytes));
     EXPECT_EQ(tx_bytes, tx_copy_bytes);
 }
-

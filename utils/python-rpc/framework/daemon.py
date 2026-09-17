@@ -39,6 +39,21 @@ class Daemon(object):
         self.port = port
         self.rpc = JSONRPC('{protocol}://{host}:{port}'.format(protocol=protocol, host=host, port=port if port else base+idx))
 
+    def _json_rpc(self, method, **params):
+        request = {'method': method, 'jsonrpc': '2.0', 'id': '0'}
+        if params:
+            request['params'] = params
+        return self.rpc.send_json_rpc_request(request)
+
+    def get_supply_info(self, **params): return self._json_rpc('get_supply_info', **params)
+    def get_yield_info(self, **params): return self._json_rpc('get_yield_info', **params)
+    def get_tokens(self, **params): return self._json_rpc('get_tokens', **params)
+    def get_token_info(self, **params): return self._json_rpc('get_token_info', **params)
+    def salchat_submit_envelope(self, **params): return self._json_rpc('salchat_submit_envelope', **params)
+    def salchat_poll_envelopes(self, **params): return self._json_rpc('salchat_poll_envelopes', **params)
+    def salchat_ack_envelope(self, **params): return self._json_rpc('salchat_ack_envelope', **params)
+    def salchat_get_status(self, **params): return self._json_rpc('salchat_get_status', **params)
+
     def getblocktemplate(self, address, prev_block = "", client = ""):
         getblocktemplate = {
             'method': 'getblocktemplate',
@@ -277,11 +292,14 @@ class Daemon(object):
         }
         return self.rpc.send_request('/get_transaction_pool_stats', get_transaction_pool_stats)
 
-    def flush_txpool(self, txids = []):
+    def flush_txpool(self, txids = None, confirm_all = False):
+        if txids is None:
+            txids = []
         flush_txpool = {
             'method': 'flush_txpool',
             'params': {
-                'txids': txids
+                'txids': txids,
+                'confirm_all': confirm_all,
             },
             'jsonrpc': '2.0',
             'id': '0'
@@ -354,11 +372,12 @@ class Daemon(object):
         return self.rpc.send_request('/get_transactions', get_transactions)
     gettransactions = get_transactions
 
-    def get_outs(self, outputs = [], get_txid = False, client = ""):
+    def get_outs(self, outputs = [], get_txid = False, asset_type = 'SAL1', client = ""):
         get_outs = {
             'client': client,
             'outputs': outputs,
             'get_txid': get_txid,
+            'asset_type': asset_type,
         }
         return self.rpc.send_request('/get_outs', get_outs)
 
@@ -375,7 +394,7 @@ class Daemon(object):
         }
         return self.rpc.send_json_rpc_request(get_coinbase_tx_sum)
 
-    def get_output_distribution(self, amounts = [], from_height = 0, to_height = 0, cumulative = False, binary = False, compress = False, client = ""):
+    def get_output_distribution(self, amounts = [], from_height = 0, to_height = 0, cumulative = False, binary = False, compress = False, rct_asset_type = 'SAL1', client = ""):
         get_output_distribution = {
             'method': 'get_output_distribution',
             'params': {
@@ -386,6 +405,7 @@ class Daemon(object):
                 'cumulative': cumulative,
                 'binary': binary,
                 'compress': compress,
+                'rct_asset_type': rct_asset_type,
             },
             'jsonrpc': '2.0',
             'id': '0'
@@ -493,11 +513,14 @@ class Daemon(object):
         }
         return self.rpc.send_request('/set_limit', set_limit)
 
-    def out_peers(self, out_peers):
+    def out_peers(self, out_peers, force = False):
         out_peers = {
             'out_peers': out_peers,
+            'force': force,
         }
-        return self.rpc.send_request('/out_peers', out_peers)
+        response = self.rpc.send_request('/out_peers', out_peers)
+        assert response.status == 'OK', response
+        return response
 
     def in_peers(self, in_peers):
         in_peers = {

@@ -43,6 +43,16 @@ namespace tools
 {
 namespace wallet
 {
+namespace tx_builder_detail
+{
+carrot::CarrotDestinationV1 make_carrot_destination(
+    const cryptonote::tx_destination_entry& destination, cryptonote::network_type nettype);
+}
+
+void encrypt_change_index(const std::vector<carrot::CarrotPaymentProposalV1>&,
+    const std::vector<carrot::CarrotPaymentProposalSelfSendV1>&, const crypto::key_image&, size_t,
+    const std::vector<std::pair<bool, size_t>>&, std::vector<uint8_t>&);
+
 std::unordered_map<crypto::key_image, size_t> collect_non_burned_transfers_by_key_image(
     const wallet2::transfer_container &transfers);
 
@@ -145,7 +155,8 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const std::set<uint32_t> &subaddr_indices);
 wallet2::pending_tx make_pending_carrot_tx(const carrot::CarrotTransactionProposalV1 &tx_proposal,
     const wallet2::transfer_container &transfers,
-    const carrot::carrot_and_legacy_account &account);
+    const carrot::carrot_and_legacy_account &account,
+    cryptonote::network_type nettype = cryptonote::MAINNET);
 
 cryptonote::transaction finalize_all_proofs_from_transfer_details(
     const carrot::CarrotTransactionProposalV1 &tx_proposal,

@@ -29,6 +29,8 @@
 #pragma once
 
 #include <boost/optional/optional.hpp>
+#include <cstring>
+#include <memory>
 #include <stddef.h>
 #include <vector>
 #include <string>
@@ -93,7 +95,7 @@ namespace epee
       return false;
     if (blob->size() != sizeof(T))
       return false;
-    pod = *(const T*)blob->data();
+    std::memcpy(std::addressof(pod), blob->data(), sizeof(pod));
     return true;
   }
 }

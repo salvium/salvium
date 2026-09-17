@@ -113,11 +113,12 @@ namespace trezor
   }
 
   messages::MessageType MessageMapper::get_message_wire_number(const google::protobuf::Message * msg){
-    return MessageMapper::get_message_wire_number(msg->GetDescriptor()->name());
+    return MessageMapper::get_message_wire_number(*msg);
   }
 
   messages::MessageType MessageMapper::get_message_wire_number(const google::protobuf::Message & msg){
-    return MessageMapper::get_message_wire_number(msg.GetDescriptor()->name());
+    const auto &name = msg.GetDescriptor()->name();
+    return MessageMapper::get_message_wire_number(std::string(name.data(), name.size()));
   }
 
   messages::MessageType MessageMapper::get_message_wire_number(const std::string & msg_name){

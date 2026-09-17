@@ -70,6 +70,7 @@ bool stake_transaction_test(std::string& working_folder,
     // flush tx pool to make sure of the start state
     COMMAND_RPC_FLUSH_TRANSACTION_POOL::request flush_req = AUTO_VAL_INIT(flush_req);
     COMMAND_RPC_FLUSH_TRANSACTION_POOL::response flush_rsp = AUTO_VAL_INIT(flush_rsp);
+    flush_req.confirm_all = true;
     r = net_utils::invoke_http_json_rpc("/json_rpc", "flush_txpool", flush_req, flush_rsp, http_client, std::chrono::seconds(10));
     CHECK_AND_ASSERT_MES(r, false, "failed to flush tx pool");
 

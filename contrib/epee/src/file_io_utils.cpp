@@ -26,12 +26,18 @@
 
 #include "file_io_utils.h"
 
+#include <algorithm>
 #include <fstream>
 #include <boost/filesystem/path.hpp>
 #include <boost/filesystem/operations.hpp>
 #ifdef _WIN32
 #include <windows.h>
 #include "string_tools.h"
+#else
+#include <cerrno>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 // On Windows there is a problem with non-ASCII characters in path and file names
@@ -73,31 +79,68 @@ namespace file_io_utils
 #ifdef _WIN32
                 std::wstring wide_path;
                 try { wide_path = string_tools::utf8_to_utf16(path_to_file); } catch (...) { return false; }
-                HANDLE file_handle = CreateFileW(wide_path.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+                HANDLE file_handle = CreateFileW(wide_path.c_str(), GENERIC_WRITE, 0, NULL, OPEN_ALWAYS,
+                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
                 if (file_handle == INVALID_HANDLE_VALUE)
                     return false;
-                DWORD bytes_written;
-                DWORD bytes_to_write = (DWORD)str.size();
-                BOOL result = WriteFile(file_handle, str.data(), bytes_to_write, &bytes_written, NULL);
-                CloseHandle(file_handle);
-                if (bytes_written != bytes_to_write)
+                BY_HANDLE_FILE_INFORMATION info;
+                if (!GetFileInformationByHandle(file_handle, &info) ||
+                    (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) ||
+                    (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+                    info.nNumberOfLinks != 1)
+                {
+                    CloseHandle(file_handle);
+                    return false;
+                }
+                LARGE_INTEGER zero{};
+                if (!SetFilePointerEx(file_handle, zero, NULL, FILE_BEGIN) || !SetEndOfFile(file_handle))
+                {
+                    CloseHandle(file_handle);
+                    return false;
+                }
+                size_t offset = 0;
+                BOOL result = TRUE;
+                while (offset < str.size())
+                {
+                    const DWORD bytes_to_write = static_cast<DWORD>(std::min<size_t>(str.size() - offset, MAXDWORD));
+                    DWORD bytes_written = 0;
+                    if (!WriteFile(file_handle, str.data() + offset, bytes_to_write, &bytes_written, NULL) || bytes_written == 0)
+                    {
+                        result = FALSE;
+                        break;
+                    }
+                    offset += bytes_written;
+                }
+                if (!FlushFileBuffers(file_handle))
                     result = FALSE;
-                return result;
+                CloseHandle(file_handle);
+                return result && offset == str.size();
 #else
-		try
+		const int fd = open(path_to_file.c_str(), O_WRONLY | O_CREAT | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR);
+		if (fd < 0)
+			return false;
+		struct stat st;
+		if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != getuid() || st.st_nlink != 1 || fchmod(fd, S_IRUSR | S_IWUSR) != 0 || ftruncate(fd, 0) != 0)
 		{
-			std::ofstream fstream;
-			fstream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-			fstream.open(path_to_file, std::ios_base::binary | std::ios_base::out | std::ios_base::trunc);
-			fstream << str;
-			fstream.close();
-			return true;
-		}
-
-		catch(...)
-		{
+			close(fd);
 			return false;
 		}
+		size_t offset = 0;
+		while (offset < str.size())
+		{
+			const ssize_t written = write(fd, str.data() + offset, str.size() - offset);
+			if (written < 0 && errno == EINTR)
+				continue;
+			if (written <= 0)
+			{
+				close(fd);
+				return false;
+			}
+			offset += static_cast<size_t>(written);
+		}
+		const bool flushed = fsync(fd) == 0;
+		const bool closed = close(fd) == 0;
+		return flushed && closed;
 #endif
 	}
 

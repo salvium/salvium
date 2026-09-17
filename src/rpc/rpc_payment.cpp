@@ -28,6 +28,7 @@
 
 #include <boost/archive/portable_binary_iarchive.hpp>
 #include <boost/filesystem.hpp>
+#include <cstring>
 #include "cryptonote_config.h"
 #include "include_base_utils.h"
 #include "string_tools.h"
@@ -233,7 +234,8 @@ namespace cryptonote
     }
 
     block = is_current ? info.block : info.previous_block;
-    *(uint32_t*)(hashing_blob.data() + 39) = SWAP32LE(nonce);
+    const uint32_t wire_nonce = SWAP32LE(nonce);
+    std::memcpy(&hashing_blob[39], &wire_nonce, sizeof(wire_nonce));
     const crypto::hash &seed_hash = is_current ? info.seed_hash : info.previous_seed_hash;
     crypto::rx_slow_hash(seed_hash.data, hashing_blob.data(), hashing_blob.size(), hash.data);
     if (!check_hash(hash, m_diff))

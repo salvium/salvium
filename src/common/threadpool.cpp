@@ -34,6 +34,17 @@
 static __thread int depth = 0;
 static __thread bool is_leaf = false;
 
+namespace
+{
+  struct execution_scope
+  {
+    const int previous_depth = depth;
+    const bool previous_leaf = is_leaf;
+    explicit execution_scope(bool leaf) { ++depth; is_leaf = leaf; }
+    ~execution_scope() { depth = previous_depth; is_leaf = previous_leaf; }
+  };
+}
+
 namespace tools
 {
 threadpool::threadpool(unsigned int max_threads) : running(true), active(0) {
@@ -78,7 +89,7 @@ void threadpool::create(unsigned int max_threads) {
   size_t i = max ? max - 1 : 0;
   running = true;
   while(i--) {
-    threads.push_back(boost::thread(attrs, boost::bind(&threadpool::run, this, false)));
+    threads.push_back(boost::thread(attrs, boost::bind(&threadpool::run, this, nullptr)));
   }
 }
 
@@ -89,18 +100,23 @@ void threadpool::submit(waiter *obj, std::function<void()> f, bool leaf) {
     // if all available threads are already running
     // and there's work waiting, just run in current thread
     lock.unlock();
-    ++depth;
-    is_leaf = leaf;
+    const execution_scope execution(leaf);
     f();
-    --depth;
-    is_leaf = false;
   } else {
     if (obj)
       obj->inc();
-    if (leaf)
-      queue.push_front({obj, f, leaf});
-    else
-      queue.push_back({obj, f, leaf});
+    try
+    {
+      if (leaf)
+        queue.push_front({obj, std::move(f), leaf});
+      else
+        queue.push_back({obj, std::move(f), leaf});
+    }
+    catch (...)
+    {
+      if (obj) obj->dec();
+      throw;
+    }
     has_work.notify_one();
   }
 }
@@ -129,11 +145,16 @@ threadpool::waiter::~waiter()
 }
 
 bool threadpool::waiter::wait() {
-  pool.run(true);
+  pool.run(this);
   boost::unique_lock<boost::mutex> lock(mt);
   while(num)
     cv.wait(lock);
   return !error();
+}
+
+int threadpool::waiter::get_num() {
+  const boost::lock_guard lock(mt);
+  return num;
 }
 
 void threadpool::waiter::inc() {
@@ -148,28 +169,37 @@ void threadpool::waiter::dec() {
     cv.notify_all();
 }
 
-void threadpool::run(bool flush) {
+void threadpool::run(waiter *flush_waiter) {
   boost::unique_lock<boost::mutex> lock(mutex);
   while (running) {
     entry e;
     while(queue.empty() && running)
     {
-      if (flush)
+      if (flush_waiter)
         return;
       has_work.wait(lock);
     }
     if (!running) break;
+    if (flush_waiter && flush_waiter->get_num() == 0) break;
 
     active++;
     e = std::move(queue.front());
     queue.pop_front();
     lock.unlock();
-    ++depth;
-    is_leaf = e.leaf;
-    try { e.f(); }
-    catch (const std::exception &ex) { e.wo->set_error(); try { MERROR("Exception in threadpool job: " << ex.what()); } catch (...) {} }
-    --depth;
-    is_leaf = false;
+    {
+      const execution_scope execution(e.leaf);
+      try { e.f(); }
+      catch (const std::exception &ex)
+      {
+        if (e.wo) e.wo->set_error();
+        try { MERROR("Exception in threadpool job: " << ex.what()); } catch (...) {}
+      }
+      catch (...)
+      {
+        if (e.wo) e.wo->set_error();
+        try { MERROR("Unknown exception in threadpool job"); } catch (...) {}
+      }
+    }
 
     if (e.wo)
       e.wo->dec();

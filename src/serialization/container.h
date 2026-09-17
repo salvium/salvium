@@ -28,6 +28,8 @@
 // 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
+#include <limits>
+
 namespace serialization
 {
   namespace detail
@@ -63,7 +65,7 @@ namespace serialization
 }
 
 template <template <bool> class Archive, typename C>
-bool do_serialize_container(Archive<false> &ar, C &v)
+bool do_serialize_container(Archive<false> &ar, C &v, size_t max_cnt = std::numeric_limits<size_t>::max())
 {
   size_t cnt;
   ar.begin_array(cnt);
@@ -72,7 +74,7 @@ bool do_serialize_container(Archive<false> &ar, C &v)
   v.clear();
 
   // very basic sanity check
-  if (ar.remaining_bytes() < cnt) {
+  if (cnt > max_cnt || ar.remaining_bytes() < cnt) {
     ar.set_fail();
     return false;
   }
@@ -94,9 +96,13 @@ bool do_serialize_container(Archive<false> &ar, C &v)
 }
 
 template <template <bool> class Archive, typename C>
-bool do_serialize_container(Archive<true> &ar, C &v)
+bool do_serialize_container(Archive<true> &ar, C &v, size_t max_cnt = std::numeric_limits<size_t>::max())
 {
   size_t cnt = v.size();
+  if (cnt > max_cnt) {
+    ar.set_fail();
+    return false;
+  }
   ar.begin_array(cnt);
   for (auto i = v.begin(); i != v.end(); ++i)
   {

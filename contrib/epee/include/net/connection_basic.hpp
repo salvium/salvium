@@ -131,11 +131,24 @@ class connection_basic { // not-templated base class for rapid developmet of som
 		ssl_support_t get_ssl_support() const { return m_ssl_support; }
 		void disable_ssl() { m_ssl_support = epee::net_utils::ssl_support_t::e_ssl_support_disabled; }
 
-		bool handshake(boost::asio::ssl::stream_base::handshake_type type, boost::asio::const_buffer buffer = {})
+		bool handshake(boost::asio::ssl::stream_base::handshake_type type, boost::asio::const_buffer buffer = {}, const std::string& host = {})
 		{
 			//m_state != nullptr verified in constructor
-			return m_state->ssl_options().handshake(strand_.context(), socket_, type, buffer);
+			const bool ok = m_state->ssl_options().handshake(strand_.context(), socket_, type, buffer, host);
+            if (ok) m_ssl_support = ssl_support_t::e_ssl_support_enabled;
+            return ok;
 		}
+
+        template<typename Handler>
+        void async_handshake(const std::string& host, Handler handler)
+        {
+            m_state->ssl_options().configure(socket_, boost::asio::ssl::stream_base::client, host);
+            socket_.async_handshake(boost::asio::ssl::stream_base::client,
+                [this, handler](const boost::system::error_code& ec) {
+                    if (!ec) m_ssl_support = ssl_support_t::e_ssl_support_enabled;
+                    handler(ec);
+                });
+        }
 
 		template<typename MutableBufferSequence, typename ReadHandler>
 		void async_read_some(const MutableBufferSequence &buffers, ReadHandler &&handler)

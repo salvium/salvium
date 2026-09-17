@@ -67,7 +67,7 @@ namespace epee
         return false;
       }
 
-      return serialization::load_t_from_json(result_struct, pri->m_body);
+      return serialization::load_t_from_json(result_struct, pri->m_body, &default_http_bin_limits);
     }
 
 
@@ -98,11 +98,6 @@ namespace epee
         return false;
       }
 
-      static const constexpr epee::serialization::portable_storage::limits_t default_http_bin_limits = {
-        65536 * 3, // objects
-        65536 * 3, // fields
-        65536 * 3, // strings
-      };
       return serialization::load_t_from_binary(result_struct, epee::strspan<uint8_t>(pri->m_body), &default_http_bin_limits);
     }
 
@@ -120,10 +115,17 @@ namespace epee
         error_struct = {};
         return false;
       }
+      const auto *response_id = boost::get<std::string>(&resp_t.id);
+      if (resp_t.jsonrpc != "2.0" || !response_id || *response_id != req_id)
+      {
+        error_struct = {};
+        LOG_ERROR("JSON-RPC response does not match the request");
+        return false;
+      }
       if(resp_t.error.code || resp_t.error.message.size())
       {
         error_struct = resp_t.error;
-        LOG_ERROR("RPC call of \"" << req_t.method << "\" returned error: " << resp_t.error.code << ", message: " << resp_t.error.message);
+        LOG_ERROR("RPC call of \"" << req_t.method << "\" returned error: " << resp_t.error.code << ", message: " << misc_utils::parse::transform_to_escape_sequence(resp_t.error.message));
         return false;
       }
       result_struct = resp_t.result;

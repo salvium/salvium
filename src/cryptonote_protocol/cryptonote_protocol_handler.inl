@@ -75,7 +75,7 @@
 #define DROP_ON_SYNC_WEDGE_THRESHOLD (30 * 1000000000ull) // nanoseconds
 #define LAST_ACTIVITY_STALL_THRESHOLD (2.0f) // seconds
 #define DROP_PEERS_ON_SCORE -2
-static constexpr size_t MAX_TX_NOTIFY_COUNT = 1000;
+static constexpr size_t MAX_TX_NOTIFY_COUNT = 100;
 static constexpr size_t MAX_TXPOOL_COMPLEMENT_HASHES = 50000;
 
 namespace cryptonote
@@ -114,9 +114,140 @@ namespace cryptonote
 
     m_block_download_max_size = command_line::get_arg(vm, cryptonote::arg_block_download_max_size);
     m_sync_pruned_blocks = command_line::get_arg(vm, cryptonote::arg_sync_pruned_blocks);
+    salchat_config salchat;
+    const unsigned int salchat_enabled = command_line::get_arg(vm, arg_salchat_enabled);
+    if (!valid_salchat_enabled_setting(salchat_enabled))
+    {
+      MERROR("Invalid --salchat-enabled value (expected 0 or 1)");
+      return false;
+    }
+    salchat.enabled = salchat_enabled_from_setting(salchat_enabled);
+    salchat.max_packet_bytes = command_line::get_arg(vm, arg_salchat_max_packet_bytes);
+    salchat.max_cache_bytes = command_line::get_arg(vm, arg_salchat_max_cache_bytes);
+    salchat.max_cache_messages = command_line::get_arg(vm, arg_salchat_max_cache_messages);
+    salchat.max_ttl = command_line::get_arg(vm, arg_salchat_max_ttl);
+    salchat.relay_fanout = command_line::get_arg(vm, arg_salchat_relay_fanout);
+    salchat.max_peer_kbps = command_line::get_arg(vm, arg_salchat_max_peer_kbps);
+    salchat.max_global_kbps = command_line::get_arg(vm, arg_salchat_max_global_kbps);
+    if (salchat.max_packet_bytes == 0 || salchat.max_packet_bytes > SALCHAT_MAX_PACKET_BYTES ||
+        salchat.max_cache_bytes < SALCHAT_MAX_PACKET_BYTES || salchat.max_cache_bytes > 1024ull * 1024 * 1024 ||
+        salchat.max_cache_messages == 0 || salchat.max_cache_messages > 100000 ||
+        salchat.max_ttl == 0 || salchat.max_ttl > SALCHAT_MAX_TTL_SECONDS ||
+        salchat.relay_fanout == 0 || salchat.relay_fanout > 16 ||
+        salchat.max_peer_kbps == 0 || salchat.max_peer_kbps > 1024 * 1024 ||
+        salchat.max_global_kbps < salchat.max_peer_kbps || salchat.max_global_kbps > 1024 * 1024)
+    {
+      MERROR("Invalid Salchat resource limit configuration");
+      return false;
+    }
+    m_salchat.reset(new salchat_relay{salchat});
 
     return true;
   }
+  //------------------------------------------------------------------------------------------------------------------------
+  template<class t_core>
+  int t_cryptonote_protocol_handler<t_core>::handle_notify_salchat_envelope(int, NOTIFY_SALCHAT_ENVELOPE::request& arg, cryptonote_connection_context& context)
+  {
+    if (!salchat_enabled())
+      return 1;
+    bool negotiated = false;
+    m_p2p->for_connection(context.m_connection_id, [&](connection_context&, nodetool::peerid_type, uint32_t flags) {
+      negotiated = (flags & P2P_SUPPORT_FLAG_SALCHAT_V4) != 0; return true;
+    });
+    if (!negotiated)
+      return 1;
+    epee::byte_slice wire;
+    if (!epee::serialization::store_t_to_binary(arg, wire) || wire.size() > m_salchat->config().max_packet_bytes)
+    {
+      hit_score(context, 1);
+      return 1;
+    }
+    // Key the bucket to the source host, not the short-lived connection UUID,
+    // so reconnecting cannot reset packet/byte limits before signature checks.
+    const std::string peer_key = "p2p:" + context.m_remote_address.host_str();
+    if (!m_salchat->allow_peer_packet(peer_key, wire.size()))
+      return 1;
+    std::string error;
+    const auto result = m_salchat->insert(arg, static_cast<std::uint64_t>(std::time(nullptr)),
+      m_core.get_current_blockchain_height(), error);
+    if (result == salchat_result::accepted)
+    {
+      MCDEBUG("net.salchat", "Accepted P2P envelope " <<
+        epee::string_tools::pod_to_hex(arg.message_id) << " (" << wire.size() <<
+        " bytes, hop " << unsigned(arg.hop_count) << "/" << unsigned(arg.hop_limit) << ")");
+      relay_salchat_envelope(arg, context.m_connection_id);
+    }
+    else if (result == salchat_result::malformed)
+    {
+      MCDEBUG("net.salchat", "Rejected malformed P2P envelope: " << error);
+      hit_score(context, 1);
+    }
+    return 1;
+  }
+
+  template<class t_core>
+  bool t_cryptonote_protocol_handler<t_core>::relay_salchat_envelope(const salchat_p2p_envelope& envelope, const boost::uuids::uuid& source)
+  {
+    if (envelope.hop_count >= envelope.hop_limit) return true;
+    salchat_p2p_envelope relayed = envelope; ++relayed.hop_count;
+    epee::levin::message_writer out{SALCHAT_MAX_PACKET_BYTES};
+    if (!epee::serialization::store_t_to_binary(relayed, out.buffer)) return false;
+    std::vector<std::pair<epee::net_utils::zone, boost::uuids::uuid>> peers;
+    m_p2p->for_each_connection([&](connection_context& ctx, nodetool::peerid_type peer_id, uint32_t flags) {
+      if (ctx.m_connection_id != source && peer_id &&
+          ctx.m_remote_address.get_zone() == epee::net_utils::zone::public_ &&
+          ctx.m_state == connection_context::state_normal && (flags & P2P_SUPPORT_FLAG_SALCHAT_V4))
+        peers.emplace_back(ctx.m_remote_address.get_zone(), ctx.m_connection_id);
+      return true;
+    });
+    std::shuffle(peers.begin(), peers.end(), crypto::random_device{});
+    if (peers.size() > m_salchat->config().relay_fanout)
+      peers.resize(m_salchat->config().relay_fanout);
+    if (!peers.empty() && !m_salchat->allow_global_bytes(out.buffer.size() * peers.size()))
+      return false;
+    return peers.empty() || m_p2p->relay_notify_to_list(NOTIFY_SALCHAT_ENVELOPE::ID, std::move(out), std::move(peers));
+  }
+
+  template<class t_core>
+  salchat_result t_cryptonote_protocol_handler<t_core>::submit_salchat_envelope(const salchat_p2p_envelope& e, std::string& error)
+  {
+    if (!m_salchat) return salchat_result::disabled;
+    const auto result = m_salchat->insert(e, static_cast<std::uint64_t>(std::time(nullptr)),
+      m_core.get_current_blockchain_height(), error);
+    if (result == salchat_result::accepted)
+    {
+      MCDEBUG("net.salchat", "Accepted wallet envelope " <<
+        epee::string_tools::pod_to_hex(e.message_id));
+      relay_salchat_envelope(e, boost::uuids::nil_uuid());
+    }
+    return result;
+  }
+
+  template<class t_core>
+  std::vector<salchat_p2p_envelope> t_cryptonote_protocol_handler<t_core>::poll_salchat_envelopes(const std::vector<crypto::hash>& tags, std::size_t limit)
+  {
+    auto result = m_salchat ? m_salchat->poll(tags, std::min<std::size_t>(limit, 100),
+      static_cast<std::uint64_t>(std::time(nullptr)), m_core.get_current_blockchain_height()) :
+      std::vector<salchat_p2p_envelope>{};
+    if (!result.empty())
+      MCDEBUG("net.salchat", "Wallet poll returned " << result.size() <<
+        (result.size() == 1 ? " envelope" : " envelopes"));
+    return result;
+  }
+
+  template<class t_core>
+  bool t_cryptonote_protocol_handler<t_core>::ack_salchat_envelope(
+      const crypto::hash& id, const crypto::hash& ack_token)
+  {
+    const bool removed = m_salchat && m_salchat->ack(id, ack_token);
+    MCDEBUG("net.salchat", (removed ? "Acknowledged and removed envelope " :
+      "Rejected acknowledgement for envelope ") << epee::string_tools::pod_to_hex(id));
+    return removed;
+  }
+
+  template<class t_core>
+  salchat_statistics t_cryptonote_protocol_handler<t_core>::get_salchat_statistics() const
+  { return m_salchat ? m_salchat->statistics() : salchat_statistics{}; }
   //------------------------------------------------------------------------------------------------------------------------
   template<class t_core>
   bool t_cryptonote_protocol_handler<t_core>::deinit()
@@ -157,6 +288,7 @@ namespace cryptonote
             context.m_expect_response = 0;
             context.m_expect_height = 0;
             context.m_requested_objects.clear();
+            context.m_expected_response_max_bytes = 0;
             context.m_state = cryptonote_connection_context::state_standby; // we'll go back to adding, then (if we can't), download
           }
           else
@@ -688,8 +820,8 @@ namespace cryptonote
         {
           LOG_ERROR_CCONTEXT
           (
-            "sent wrong tx: failed to parse and validate transaction: "
-            << epee::string_tools::buff_to_hex_nodelimer(tx_blob.blob)
+            "sent wrong tx: failed to parse and validate transaction ("
+            << tx_blob.blob.size() << " bytes)"
             << ", dropping connection"
           );
             
@@ -837,8 +969,8 @@ namespace cryptonote
     {
       LOG_ERROR_CCONTEXT
       (
-        "sent wrong block: failed to parse and validate block: "
-        << epee::string_tools::buff_to_hex_nodelimer(arg.b.block) 
+        "sent wrong block: failed to parse and validate block ("
+        << arg.b.block.size() << " bytes)"
         << ", dropping connection"
       );
         
@@ -861,7 +993,6 @@ namespace cryptonote
       drop_connection(context, false, false);
       return 1;
     }
-    
     std::vector<std::pair<cryptonote::blobdata, block>> local_blocks;
     std::vector<cryptonote::blobdata> local_txs;
 
@@ -1055,31 +1186,47 @@ namespace cryptonote
     else
       stem_txs.reserve(arg.txs.size());
 
-    for (auto& tx : arg.txs)
+    bool invalid_tx_offense = false;
+    const bool verification_allowed = m_tx_verification_limiter.run([&]()
     {
-      tx_verification_context tvc{};
-      if (!m_core.handle_incoming_tx({tx, crypto::null_hash}, tvc, tx_relay, true) && !tvc.m_no_drop_offense)
+      for (auto& tx : arg.txs)
       {
-        LOG_PRINT_CCONTEXT_L1("Tx verification failed, dropping connection");
-        drop_connection(context, false, false);
-        return 1;
-      }
+        tx_verification_context tvc{};
+        if (!m_core.handle_incoming_tx({tx, crypto::null_hash}, tvc, tx_relay, true) && !tvc.m_no_drop_offense)
+        {
+          invalid_tx_offense = true;
+          return;
+        }
 
-      switch (tvc.m_relay)
-      {
-        case relay_method::local:
-        case relay_method::stem:
-          stem_txs.push_back(std::move(tx));
-          break;
-        case relay_method::block:
-        case relay_method::fluff:
-          fluff_txs.push_back(std::move(tx));
-          break;
-        default:
-        case relay_method::forward: // not supposed to happen here
-        case relay_method::none:
-          break;
+        switch (tvc.m_relay)
+        {
+          case relay_method::local:
+          case relay_method::stem:
+            stem_txs.push_back(std::move(tx));
+            break;
+          case relay_method::block:
+          case relay_method::fluff:
+            fluff_txs.push_back(std::move(tx));
+            break;
+          default:
+          case relay_method::forward: // not supposed to happen here
+          case relay_method::none:
+            break;
+        }
       }
+    });
+
+    if (!verification_allowed)
+    {
+      LOG_PRINT_CCONTEXT_L1("P2P transaction verification work budget exhausted, dropping connection");
+      drop_connection(context, false, false);
+      return 1;
+    }
+    if (invalid_tx_offense)
+    {
+      LOG_PRINT_CCONTEXT_L1("Tx verification failed, dropping connection");
+      drop_connection(context, true, false);
+      return 1;
     }
 
     if (!stem_txs.empty())
@@ -1167,6 +1314,7 @@ namespace cryptonote
       return 1;
     }
     context.m_expect_response = 0;
+    context.m_expected_response_max_bytes = 0;
 
     // calculate size of request
     size_t size = 0;
@@ -1238,16 +1386,16 @@ namespace cryptonote
       crypto::hash block_hash;
       if(!parse_and_validate_block_from_blob(arg.blocks[i].block, b, block_hash))
       {
-        LOG_ERROR_CCONTEXT("sent wrong block: failed to parse and validate block: "
-          << epee::string_tools::buff_to_hex_nodelimer(arg.blocks[i].block) << ", dropping connection");
+        LOG_ERROR_CCONTEXT("sent wrong block: failed to parse and validate block ("
+          << arg.blocks[i].block.size() << " bytes), dropping connection");
         drop_connection(context, false, false);
         ++m_sync_bad_spans_downloaded;
         return 1;
       }
       if (b.miner_tx.vin.size() != 1 || b.miner_tx.vin.front().type() != typeid(txin_gen))
       {
-        LOG_ERROR_CCONTEXT("sent wrong block: block: miner tx does not have exactly one txin_gen input"
-          << epee::string_tools::buff_to_hex_nodelimer(arg.blocks[i].block) << ", dropping connection");
+        LOG_ERROR_CCONTEXT("sent wrong block: miner tx does not have exactly one txin_gen input ("
+          << arg.blocks[i].block.size() << " block bytes), dropping connection");
         drop_connection(context, false, false);
         ++m_sync_bad_spans_downloaded;
         return 1;
@@ -1594,6 +1742,7 @@ namespace cryptonote
           if (!m_core.prepare_handle_incoming_blocks(blocks, pblocks))
           {
             LOG_ERROR_CCONTEXT("Failure in prepare_handle_incoming_blocks");
+            m_block_queue.flush_spans(span_connection_id, true);
             drop_connections(span_origin);
             return 1;
           }
@@ -1940,6 +2089,13 @@ skip:
       drop_connection(context, false, false);
       return 1;
     }
+    if (arg.block_ids.size() > MAX_BLOCKCHAIN_SUPPLEMENT_HASHES)
+    {
+      LOG_ERROR_CCONTEXT("Oversized chain request (" << arg.block_ids.size()
+        << " hashes), dropping connection");
+      drop_connection(context, false, false);
+      return 1;
+    }
     NOTIFY_RESPONSE_CHAIN_ENTRY::request r;
     if(!m_core.find_blockchain_supplement(arg.block_ids, !arg.prune, r))
     {
@@ -1984,16 +2140,9 @@ skip:
       if (!filled)
       {
         const long dt = (now - request_time).total_microseconds();
-        if (dt >= REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD)
-        {
-          MDEBUG(context << " we should download it as it's not been received yet after " << dt/1e6);
-          return true;
-        }
-
-        // in standby, be ready to double download early since we're idling anyway
-        // let the fastest peer trigger first
-        const double dl_speed = context.m_max_speed_down;
-        if (standby && dt >= REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY && dl_speed > 0)
+        // Duplicate a scheduled span only when its assigned peer has stopped
+        // delivering bytes. Racing active responses amplifies congestion.
+        if (standby && dt >= REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY)
         {
           bool download = false;
           if (m_p2p->for_connection(connection_id, [&](cryptonote_connection_context& ctx, nodetool::peerid_type peer_id, uint32_t f)->bool{
@@ -2008,26 +2157,6 @@ skip:
               return true;
             }
 
-            // estimate the standby peer can give us 80% of its max speed
-            // and let it download if that speed is > N times as fast as the current one
-            // N starts at 10 after REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY,
-            // decreases to 1.25 at REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD,
-            // so that at times goes without the download being done, a retry becomes easier
-            const float max_multiplier = 10.f;
-            const float min_multiplier = 1.25f;
-            float multiplier = max_multiplier;
-            if (dt >= REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY)
-            {
-              multiplier = max_multiplier - (dt-REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY) * (max_multiplier - min_multiplier) / (REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD - REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY);
-              multiplier = std::min(max_multiplier, std::max(min_multiplier, multiplier));
-            }
-            if (dl_speed * .8f > ctx.m_current_speed_down * multiplier)
-            {
-              MDEBUG(context << " we should download it as we are substantially faster (" << dl_speed << " vs "
-                  << ctx.m_current_speed_down << ", multiplier " << multiplier << " after " << dt/1e6 << " seconds)");
-              download = true;
-              return true;
-            }
             return true;
           }))
           {
@@ -2430,6 +2559,7 @@ skip:
         context.m_last_request_time = boost::posix_time::microsec_clock::universal_time();
         context.m_expect_height = span.first;
         context.m_expect_response = NOTIFY_RESPONSE_GET_OBJECTS::ID;
+        context.m_expected_response_max_bytes = m_core.get_block_sync_response_size(req.blocks.size());
         MLOG_P2P_MESSAGE("-->>NOTIFY_REQUEST_GET_OBJECTS: blocks.size()=" << req.blocks.size()
             << "requested blocks count=" << count << " / " << count_limit << " from " << span.first << ", first hash " << req.blocks.front());
         //epee::net_utils::network_throttle_manager::get_global_throttle_inreq().logger_handle_net("log/dr-monero/net/req-all.data", sec, get_avg_block_size());
@@ -2468,13 +2598,13 @@ skip:
       const boost::unique_lock<boost::mutex> sync{m_sync_lock, boost::try_to_lock};
       if (sync.owns_lock())
       {
-        uint64_t start_height;
-        std::vector<cryptonote::block_complete_entry> blocks;
+        bool filled = false;
+        boost::posix_time::ptime request_time;
         boost::uuids::uuid span_connection_id;
-        epee::net_utils::network_address span_origin;
-        if (m_block_queue.get_next_span(start_height, blocks, span_connection_id, span_origin, true))
+        const uint64_t blockchain_height = m_core.get_current_blockchain_height();
+        if (m_block_queue.has_next_span(blockchain_height, filled, request_time, span_connection_id) && filled)
         {
-          LOG_DEBUG_CC(context, "No other thread is adding blocks, resuming");
+          LOG_DEBUG_CC(context, "No other thread is adding blocks, and the next required span is ready, resuming");
           MLOG_PEER_STATE("will try to add blocks next");
           context.m_state = cryptonote_connection_context::state_standby;
           ++context.m_callback_request_count;
@@ -2635,6 +2765,7 @@ skip:
       return 1;
     }
     context.m_expect_response = 0;
+    context.m_expected_response_max_bytes = 0;
     if (arg.start_height + 1 > context.m_expect_height) // we expect an overlapping block
     {
       LOG_ERROR_CCONTEXT("Got NOTIFY_RESPONSE_CHAIN_ENTRY past expected height, dropping connection");
@@ -2982,6 +3113,7 @@ skip:
   template<class t_core>
   void t_cryptonote_protocol_handler<t_core>::drop_connection(const boost::uuids::uuid& id)
   {
+    m_block_queue.flush_spans(id, true);
     m_p2p->for_connection(id, [this](cryptonote_connection_context& context, nodetool::peerid_type peer_id, uint32_t f)->bool{
       // This _could be_ outside of strand, so careful on actions
       drop_connection(context, true, false);

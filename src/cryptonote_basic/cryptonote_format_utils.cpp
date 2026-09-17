@@ -31,6 +31,7 @@
 
 #include <atomic>
 #include <csignal>
+#include <cstring>
 #include <map>
 #include <boost/algorithm/string.hpp>
 #include "wipeable_string.h"
@@ -754,10 +755,10 @@ namespace cryptonote
     {
       tx_extra_field field;
       bool r = ::do_serialize(ar, field);
-      CHECK_AND_NO_ASSERT_MES_L1(r, false, "failed to deserialize extra field. extra = " << string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(tx_extra.data()), tx_extra.size())));
+      CHECK_AND_NO_ASSERT_MES_L1(r, false, "failed to deserialize tx extra (" << tx_extra.size() << " bytes)");
       tx_extra_fields.push_back(field);
     } while (!ar.eof());
-    CHECK_AND_NO_ASSERT_MES_L1(::serialization::check_stream_state(ar), false, "failed to deserialize extra field. extra = " << string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(tx_extra.data()), tx_extra.size())));
+    CHECK_AND_NO_ASSERT_MES_L1(::serialization::check_stream_state(ar), false, "failed to deserialize tx extra (" << tx_extra.size() << " bytes)");
 
     return true;
   }
@@ -796,7 +797,7 @@ namespace cryptonote
       bool r = ::do_serialize(ar, field);
       if (!r)
       {
-        MWARNING("failed to deserialize extra field. extra = " << string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(tx_extra.data()), tx_extra.size())));
+        MWARNING("failed to deserialize tx extra (" << tx_extra.size() << " bytes)");
         if (!allow_partial)
           return false;
         break;
@@ -806,7 +807,7 @@ namespace cryptonote
     } while (!ar.eof());
     if (!::serialization::check_stream_state(ar))
     {
-      MWARNING("failed to deserialize extra field. extra = " << string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(tx_extra.data()), tx_extra.size())));
+      MWARNING("failed to deserialize tx extra (" << tx_extra.size() << " bytes)");
       if (!allow_partial)
         return false;
     }
@@ -876,7 +877,8 @@ namespace cryptonote
   {
     tx_extra.resize(tx_extra.size() + 1 + sizeof(crypto::public_key));
     tx_extra[tx_extra.size() - 1 - sizeof(crypto::public_key)] = TX_EXTRA_TAG_PUBKEY;
-    *reinterpret_cast<crypto::public_key*>(&tx_extra[tx_extra.size() - sizeof(crypto::public_key)]) = tx_pub_key;
+    std::memcpy(&tx_extra[tx_extra.size() - sizeof(tx_pub_key)],
+      std::addressof(tx_pub_key), sizeof(tx_pub_key));
     return true;
   }
   //---------------------------------------------------------------
@@ -966,11 +968,11 @@ namespace cryptonote
     {
       tx_extra_field field;
       bool r = ::do_serialize(ar, field);
-      CHECK_AND_NO_ASSERT_MES_L1(r, false, "failed to deserialize extra field. extra = " << string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(tx_extra.data()), tx_extra.size())));
+      CHECK_AND_NO_ASSERT_MES_L1(r, false, "failed to deserialize tx extra (" << tx_extra.size() << " bytes)");
       if (field.type() != type)
         ::do_serialize(newar, field);
     } while (!ar.eof());
-    CHECK_AND_NO_ASSERT_MES_L1(::serialization::check_stream_state(ar), false, "failed to deserialize extra field. extra = " << string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(tx_extra.data()), tx_extra.size())));
+    CHECK_AND_NO_ASSERT_MES_L1(::serialization::check_stream_state(ar), false, "failed to deserialize tx extra (" << tx_extra.size() << " bytes)");
     tx_extra.clear();
     std::string s = oss.str();
     tx_extra.reserve(s.size());
@@ -1000,7 +1002,7 @@ namespace cryptonote
       return false;
     if(TX_EXTRA_NONCE_PAYMENT_ID != extra_nonce[0])
       return false;
-    payment_id = *reinterpret_cast<const crypto::hash*>(extra_nonce.data() + 1);
+    std::memcpy(std::addressof(payment_id), extra_nonce.data() + 1, sizeof(payment_id));
     return true;
   }
   //---------------------------------------------------------------
@@ -1010,7 +1012,7 @@ namespace cryptonote
       return false;
     if (TX_EXTRA_NONCE_ENCRYPTED_PAYMENT_ID != extra_nonce[0])
       return false;
-    payment_id = *reinterpret_cast<const crypto::hash8*>(extra_nonce.data() + 1);
+    std::memcpy(std::addressof(payment_id), extra_nonce.data() + 1, sizeof(payment_id));
     return true;
   }
   //---------------------------------------------------------------

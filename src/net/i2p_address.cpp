@@ -26,6 +26,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "net/host.h"
 #include "i2p_address.h"
 
 #include <algorithm>
@@ -105,10 +106,16 @@ namespace net
     expect<i2p_address> i2p_address::make(const boost::string_ref address)
     {
         boost::string_ref host = address.substr(0, address.rfind(':'));
-        MONERO_CHECK(host_check(host));
+        const auto port = address.substr(host.size() + (host.size() == address.size() ? 0 : 1));
+        std::uint16_t port_number = 0;
+        if (!port.empty() && !epee::string_tools::get_xtype_from_string(port_number, std::string{port}))
+            return {net::error::invalid_port};
+        std::string normalized_host{host};
+        net::canonicalize_host(normalized_host);
+        MONERO_CHECK(host_check(normalized_host));
 
         static_assert(b32_length + sizeof(tld) == sizeof(i2p_address::host_), "bad internal host size");
-        return i2p_address{host};
+        return i2p_address{normalized_host};
     }
 
     bool i2p_address::_load(epee::serialization::portable_storage& src, epee::serialization::section* hparent)

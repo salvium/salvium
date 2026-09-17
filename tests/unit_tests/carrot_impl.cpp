@@ -168,12 +168,36 @@ static void subtest_multi_account_transfer_over_transaction(const unittest_trans
         "SAL1",
         tx_proposal);
 
-    // make unsigned transaction
-    cryptonote::transaction tx;
-    make_pruned_transaction_from_proposal_v1(tx_proposal,
+    // Production wallet construction attaches source metadata after input
+    // selection.  The unit helper must mirror that stage before serializing.
+    tx_proposal.sources.resize(tx_proposal.key_images_sorted.size());
+    for (auto &source : tx_proposal.sources)
+        source.asset_type = "SAL1";
+
+    // Exercise the same output-building and transaction-serialization stages
+    // used by the production wallet.
+    std::vector<RCTOutputEnoteProposal> built_output_proposals;
+    encrypted_payment_id_t built_encrypted_payment_id;
+    get_output_enote_proposals_from_proposal_v1(tx_proposal,
         &ss_keys.s_view_balance_dev,
         &ss_keys.k_view_incoming_dev,
-        tx);
+        built_output_proposals,
+        built_encrypted_payment_id);
+    std::vector<CarrotEnoteV1> built_enotes;
+    for (const auto &proposal : built_output_proposals)
+        built_enotes.push_back(proposal.enote);
+    cryptonote::transaction tx = store_carrot_to_transaction_v1(
+        built_enotes,
+        tx_proposal.key_images_sorted,
+        tx_proposal.sources,
+        tx_proposal.fee,
+        tx_proposal.tx_type,
+        tx_proposal.amount_burnt,
+        std::vector<uint8_t>(built_enotes.size(), 0),
+        tx_proposal.token,
+        {},
+        built_encrypted_payment_id,
+        10);
 
     // calculate acceptable fee margin between proposed amount and actual amount for subtractable outputs
     const size_t num_subtractable = subtractable_normal_payment_proposals.size() +
@@ -192,6 +216,17 @@ static void subtest_multi_account_transfer_over_transaction(const unittest_trans
         parsed_key_images,
         parsed_fee,
         parsed_encrypted_payment_id));
+    ASSERT_EQ(parsed_enotes.size(), tx.return_address_list.size());
+    for (size_t i = 0; i < parsed_enotes.size(); ++i)
+    {
+        // The transaction parser intentionally loads the receiver-scannable
+        // fields only. Internal sender scanning receives K_return from the
+        // transaction's parallel return-address vector.
+        EXPECT_EQ(parsed_enotes[i].return_enc, encrypted_return_pubkey_t{});
+        memcpy(parsed_enotes[i].return_enc.bytes,
+            tx.return_address_list[i].data,
+            sizeof(parsed_enotes[i].return_enc));
+    }
     ASSERT_TRUE(parsed_encrypted_payment_id);
 
     // collect modified selfsend payment proposal cores
@@ -224,7 +259,20 @@ static void subtest_multi_account_transfer_over_transaction(const unittest_trans
     ASSERT_EQ(parsed_enotes.size(), rederived_output_enote_proposals.size());
     for (size_t enote_idx = 0; enote_idx < parsed_enotes.size(); ++enote_idx)
     {
-        EXPECT_EQ(parsed_enotes.at(enote_idx), rederived_output_enote_proposals.at(enote_idx).enote);
+        const auto &parsed = parsed_enotes.at(enote_idx);
+        const auto &rederived = rederived_output_enote_proposals.at(enote_idx).enote;
+        EXPECT_EQ(parsed.onetime_address, rederived.onetime_address);
+        EXPECT_EQ(parsed.amount_commitment, rederived.amount_commitment);
+        EXPECT_EQ(parsed.asset_type, rederived.asset_type);
+        EXPECT_EQ(parsed.amount_enc, rederived.amount_enc);
+        EXPECT_EQ(parsed.anchor_enc, rederived.anchor_enc);
+        // The encrypted return key is intentionally freshly randomized when
+        // proposals are rebuilt.  Check its transaction round trip against
+        // the enote that was actually serialized, not a second derivation.
+        EXPECT_EQ(parsed.return_enc, built_enotes.at(enote_idx).return_enc);
+        EXPECT_EQ(parsed.view_tag, rederived.view_tag);
+        EXPECT_EQ(parsed.enote_ephemeral_pubkey, rederived.enote_ephemeral_pubkey);
+        EXPECT_EQ(parsed.tx_first_key_image, rederived.tx_first_key_image);
     }
 
     // collect accounts
@@ -293,7 +341,7 @@ static void subtest_multi_account_transfer_over_transaction(const unittest_trans
     // check that the scan results for the selfsend account match the corresponding payment
     // proposals. also check that the accounts can each open their corresponding onetime outut pubkeys
     const std::vector<mock::mock_scan_result_t> &account_scan_results = scan_results.at(tx_preproposal.self_sender_index);
-    ASSERT_EQ(selfsend_payment_proposals.size() + 1, account_scan_results.size());
+    ASSERT_EQ(tx_proposal.selfsend_payment_proposals.size(), account_scan_results.size());
     std::set<size_t> matched_payment_proposals;
     const mock::mock_scan_result_t* implicit_change_scan_res = nullptr;
     // for each scan result assigned to the self-sender account...
@@ -361,6 +409,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_1)
     normal_payment_proposal = CarrotPaymentProposalV1{
         .destination = acc0.cryptonote_address(),
         .amount = crypto::rand_idx((rct::xmr_amount) 1ull << 63),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -399,6 +448,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_2)
     acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -406,6 +456,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_2)
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -413,6 +464,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_2)
     acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -448,6 +500,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_3)
     acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc0.second.push_back(acc0.second.front());
@@ -457,6 +510,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_3)
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc1.second.push_back(acc1.second.front());
@@ -466,6 +520,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_3)
     acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -501,6 +556,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_4)
     acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc0.second.push_back(acc0.second.front());
@@ -510,6 +566,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_4)
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc1.second.push_back(acc1.second.front());
@@ -519,6 +576,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_4)
     acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -527,17 +585,19 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_4)
         .destination_address_spend_pubkey = acc2.first.carrot_account_spend_pubkey,
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .enote_type = CarrotEnoteType::PAYMENT,
-        .internal_message = gen_janus_anchor()
+        .internal_message = gen_janus_anchor(),
+    .asset_type = "SAL1",
     };
 
     // 1 subaddress selfsend
     tx_proposal.explicit_selfsend_proposals.emplace_back().first = CarrotPaymentProposalVerifiableSelfSendV1{
         .proposal = CarrotPaymentProposalSelfSendV1{
-            .destination_address_spend_pubkey = acc2.first.subaddress({{4, 19}}).address_spend_pubkey,
+            .destination_address_spend_pubkey = acc2.first.subaddress({{4, 19}, AddressDeriveType::Carrot}).address_spend_pubkey,
             .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
-            .enote_type = CarrotEnoteType::CHANGE
+            .enote_type = CarrotEnoteType::CHANGE,
+        .asset_type = "SAL1",
         },
-        .subaddr_index = {{4, 19}}
+        .subaddr_index = {{4, 19}, AddressDeriveType::Carrot}
     };
 
     // specify fee per weight
@@ -566,6 +626,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_5)
     normal_payment_proposal = CarrotPaymentProposalV1{
         .destination = acc0.cryptonote_address(),
         .amount = crypto::rand_idx((rct::xmr_amount) 1ull << 63),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -581,7 +642,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_5)
 //----------------------------------------------------------------------------------------------------------------------
 TEST(carrot_impl, multi_account_transfer_over_transaction_6)
 {
-    // four accounts, all legacy
+    // Carrot self-sender with three legacy recipient accounts
     // 1/4 tx
     // 1 normal payment to main address, integrated address, and subaddress each
     // 0 explicit selfsend payments
@@ -604,6 +665,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_6)
     acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -611,6 +673,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_6)
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -618,6 +681,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_6)
     acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -643,7 +707,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_7)
     auto &acc3 = tx_proposal.per_account_payments[3];
     acc0.first.generate(AddressDeriveType::PreCarrot);
     acc1.first.generate(AddressDeriveType::PreCarrot);
-    acc2.first.generate(AddressDeriveType::PreCarrot);
+    acc2.first.generate(AddressDeriveType::Carrot);
     acc3.first.generate(AddressDeriveType::PreCarrot);
 
     // specify self-sender
@@ -653,6 +717,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_7)
     acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc0.second.push_back(acc0.second.front());
@@ -662,6 +727,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_7)
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc1.second.push_back(acc1.second.front());
@@ -671,6 +737,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_7)
     acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -706,6 +773,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_8)
     acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc0.second.push_back(acc0.second.front());
@@ -715,6 +783,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_8)
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc1.second.push_back(acc1.second.front());
@@ -724,6 +793,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_8)
     acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -733,16 +803,18 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_8)
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .enote_type = CarrotEnoteType::PAYMENT,
         // no internal messages for legacy self-sends
+        .asset_type = "SAL1",
     };
 
     // 1 subaddress selfsend
     tx_proposal.explicit_selfsend_proposals.emplace_back().first = CarrotPaymentProposalVerifiableSelfSendV1{
         .proposal = CarrotPaymentProposalSelfSendV1{
-            .destination_address_spend_pubkey = acc2.first.subaddress({{4, 19}}).address_spend_pubkey,
+            .destination_address_spend_pubkey = acc2.first.subaddress({{4, 19}, AddressDeriveType::Carrot}).address_spend_pubkey,
             .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
-            .enote_type = CarrotEnoteType::CHANGE
+            .enote_type = CarrotEnoteType::CHANGE,
+        .asset_type = "SAL1",
         },
-        .subaddr_index = {{4, 19}}
+        .subaddr_index = {{4, 19}, AddressDeriveType::Carrot}
     };
 
     // specify fee per weight
@@ -772,6 +844,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_9)
     normal_payment_proposal = CarrotPaymentProposalV1{
         .destination = acc0.cryptonote_address(),
         .amount = crypto::rand_idx((rct::xmr_amount) 1ull << 63),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     tx_proposal.per_account_payments[0].second.back().second = true;
@@ -812,6 +885,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_10)
     acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -819,6 +893,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_10)
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -826,6 +901,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_10)
     acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -862,6 +938,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_11)
     acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc0.second.push_back(acc0.second.front());
@@ -872,6 +949,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_11)
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc1.second.push_back(acc1.second.front());
@@ -882,6 +960,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_11)
     acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -918,6 +997,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_12)
     acc0.second.emplace_back().first =CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc0.second.push_back(acc0.second.front());
@@ -928,6 +1008,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_12)
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc1.second.push_back(acc1.second.front());
@@ -937,6 +1018,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_12)
     acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -945,7 +1027,8 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_12)
         .destination_address_spend_pubkey = acc2.first.carrot_account_spend_pubkey,
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
         .enote_type = CarrotEnoteType::PAYMENT,
-        .internal_message = gen_janus_anchor()
+        .internal_message = gen_janus_anchor(),
+    .asset_type = "SAL1",
     };
 
     // 1 subaddress selfsend (subtractable)
@@ -953,7 +1036,8 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_12)
         .proposal = CarrotPaymentProposalSelfSendV1{
             .destination_address_spend_pubkey = acc2.first.subaddress({{4, 19}}).address_spend_pubkey,
             .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
-            .enote_type = CarrotEnoteType::CHANGE
+            .enote_type = CarrotEnoteType::CHANGE,
+        .asset_type = "SAL1",
         },
         .subaddr_index = {{4, 19}}
     };
@@ -985,6 +1069,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_13)
     normal_payment_proposal = CarrotPaymentProposalV1{
         .destination = acc0.cryptonote_address(),
         .amount = crypto::rand_idx((rct::xmr_amount) 1ull << 63),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     tx_proposal.per_account_payments[0].second.back().second = true;
@@ -1001,7 +1086,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_13)
 //----------------------------------------------------------------------------------------------------------------------
 TEST(carrot_impl, multi_account_transfer_over_transaction_14)
 {
-    // four accounts, all legacy
+    // Carrot self-sender with three legacy recipient accounts
     // 1/4 tx
     // 1 normal payment to main address, integrated address, and subaddress each
     // 0 explicit selfsend payments
@@ -1015,7 +1100,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_14)
     auto &acc3 = tx_proposal.per_account_payments[3];
     acc0.first.generate(AddressDeriveType::PreCarrot);
     acc1.first.generate(AddressDeriveType::PreCarrot);
-    acc2.first.generate(AddressDeriveType::PreCarrot);
+    acc2.first.generate(AddressDeriveType::Carrot);
     acc3.first.generate(AddressDeriveType::PreCarrot);
 
     // specify self-sender
@@ -1025,6 +1110,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_14)
     acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -1032,6 +1118,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_14)
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -1039,6 +1126,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_14)
     acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -1075,6 +1163,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_15)
     acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc0.second.push_back(acc0.second.front());
@@ -1084,6 +1173,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_15)
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc1.second.push_back(acc1.second.front());
@@ -1093,6 +1183,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_15)
     acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -1129,6 +1220,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_16)
     acc0.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc0.first.subaddress({{2, 3}}),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc0.second.push_back(acc0.second.front());
@@ -1138,6 +1230,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_16)
     acc1.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc1.first.cryptonote_address(),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
     acc1.second.push_back(acc1.second.front());
@@ -1147,6 +1240,7 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_16)
     acc3.second.emplace_back().first = CarrotPaymentProposalV1{
         .destination = acc3.first.cryptonote_address(gen_payment_id()),
         .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
+        .asset_type = "SAL1",
         .randomness = gen_janus_anchor()
     };
 
@@ -1155,19 +1249,21 @@ TEST(carrot_impl, multi_account_transfer_over_transaction_16)
         .proposal = CarrotPaymentProposalSelfSendV1{
             .destination_address_spend_pubkey = acc2.first.carrot_account_spend_pubkey,
             .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
-            .enote_type = CarrotEnoteType::PAYMENT,
-            // no internal messages for legacy self-sends
+        .enote_type = CarrotEnoteType::PAYMENT,
+        // no internal messages for legacy self-sends
+        .asset_type = "SAL1",
         }
     }, true};
 
     // 1 subaddress selfsend (subtractable)
     tx_proposal.explicit_selfsend_proposals.emplace_back() = {CarrotPaymentProposalVerifiableSelfSendV1{
         .proposal = CarrotPaymentProposalSelfSendV1{
-            .destination_address_spend_pubkey = acc2.first.subaddress({{4, 19}}).address_spend_pubkey,
+            .destination_address_spend_pubkey = acc2.first.subaddress({{4, 19}, AddressDeriveType::Carrot}).address_spend_pubkey,
             .amount = crypto::rand_idx<rct::xmr_amount>(1000000),
-            .enote_type = CarrotEnoteType::CHANGE
+            .enote_type = CarrotEnoteType::CHANGE,
+        .asset_type = "SAL1",
         },
-        .subaddr_index = {{4, 19}}
+        .subaddr_index = {{4, 19}, AddressDeriveType::Carrot}
     }, true};
 
     // specify fee per weight
@@ -1275,8 +1371,14 @@ TEST(carrot_impl, make_single_transfer_input_selector_not_enough_money_3)
     ASSERT_GT(required_2in, required_1in + 1);
 
     const rct::xmr_amount input_sum_target = (required_2in + required_1in) / 2;
-    const rct::xmr_amount inamount_0 = rct::randXmrAmount(required_1in);
+    // Keep both candidates below the one-input requirement. A random split
+    // could occasionally make one candidate independently sufficient, which
+    // dispatches the deliberately empty policy before this fixture reaches
+    // the intended two-input insufficient-funds path.
+    const rct::xmr_amount inamount_0 = input_sum_target / 2;
     const rct::xmr_amount inamount_1 = input_sum_target - inamount_0;
+    ASSERT_LT(inamount_0, required_1in);
+    ASSERT_LT(inamount_1, required_1in);
 
     const std::vector<InputCandidate> input_candidates = {
         InputCandidate {

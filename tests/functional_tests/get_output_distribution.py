@@ -46,7 +46,7 @@ class GetOutputDistributionTest():
         daemon = Daemon()
         res = daemon.get_height()
         daemon.pop_blocks(res.height - 1)
-        daemon.flush_txpool()
+        daemon.flush_txpool(confirm_all=True)
 
     def create(self):
         self.wallet = Wallet()
@@ -69,7 +69,7 @@ class GetOutputDistributionTest():
         assert len(d.distribution) == 1
         assert d.distribution[0] == 0
 
-        res = daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 1)
+        res = daemon.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 1)
 
         res = daemon.get_output_distribution([0], 0, 0)
         assert len(res.distributions) == 1
@@ -79,7 +79,8 @@ class GetOutputDistributionTest():
         assert d.binary == False
         assert len(d.distribution) == 2
         assert d.distribution[0] == 0
-        assert d.distribution[1] == 1
+        # Each production block adds one miner and one protocol SAL1 output.
+        assert d.distribution[1] == 2, d.distribution
 
         res = daemon.pop_blocks(1)
 
@@ -92,7 +93,7 @@ class GetOutputDistributionTest():
         assert len(d.distribution) == 1
         assert d.distribution[0] == 0
 
-        res = daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 3)
+        res = daemon.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 3)
 
         res = daemon.get_output_distribution([0], 0, 0, cumulative = True)
         assert len(res.distributions) == 1
@@ -102,12 +103,12 @@ class GetOutputDistributionTest():
         assert d.binary == False
         assert len(d.distribution) == 4
         assert d.distribution[0] == 0
-        assert d.distribution[1] == 1
-        assert d.distribution[2] == 2
-        assert d.distribution[3] == 3
+        assert d.distribution[1] == 2
+        assert d.distribution[2] == 4
+        assert d.distribution[3] == 6
 
         # extend
-        res = daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 80)
+        res = daemon.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 80)
 
         res = daemon.get_output_distribution([0], 0, 0, cumulative = True)
         assert len(res.distributions) == 1
@@ -117,16 +118,16 @@ class GetOutputDistributionTest():
         assert d.binary == False
         assert len(d.distribution) == 84
         for h in range(len(d.distribution)):
-            assert d.distribution[h] == h
+            assert d.distribution[h] == 2 * h
 
         # pop and replace, this will do through the "trim and extend" path
         res = daemon.pop_blocks(2)
         self.wallet.refresh()
-        dst = {'address': '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 'amount': 1000000000000}
+        dst = {'address': 'SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 'amount': 100000000}
         self.wallet.transfer([dst])
-        res = daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 1)
-        for step in range(3): # the second will be cached, the third will also be cached, but we get it in non-cumulative mode
-            res = daemon.get_output_distribution([0], 0, 0, cumulative = step < 3)
+        res = daemon.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 1)
+        for step in range(3): # the second is cached; the third requests non-cumulative data from that cache
+            res = daemon.get_output_distribution([0], 0, 0, cumulative = step < 2)
             assert len(res.distributions) == 1
             d = res.distributions[0]
             assert d.amount == 0
@@ -134,7 +135,9 @@ class GetOutputDistributionTest():
             assert d.binary == False
             assert len(d.distribution) == 83
             for h in range(len(d.distribution)):
-                assert d.distribution[h] == (h if step < 3 else 1) + (2 if h == len(d.distribution) - 1 else 0)
+                baseline = 2 * h if step < 2 else (0 if h == 0 else 2)
+                expected = baseline + (2 if h == len(d.distribution) - 1 else 0)
+                assert d.distribution[h] == expected, (step, h, d.distribution[h], expected, d.distribution)
 
         # start at 0, end earlier
         res = daemon.get_output_distribution([0], 0, 40, cumulative = True)
@@ -145,21 +148,32 @@ class GetOutputDistributionTest():
         assert d.binary == False
         assert len(d.distribution) == 41
         for h in range(len(d.distribution)):
-            assert d.distribution[h] == h
+            assert d.distribution[h] == 2 * h
 
         # start after 0, end earlier
         res = daemon.get_output_distribution([0], 10, 20, cumulative = True)
         assert len(res.distributions) == 1
         d = res.distributions[0]
         assert d.amount == 0
-        assert d.base == 9
+        assert d.base == 18
         assert d.binary == False
         assert len(d.distribution) == 11
         for h in range(len(d.distribution)):
-            assert d.distribution[h] == 10 + h
+            assert d.distribution[h] == 2 * (10 + h)
 
         # straddling up
         res = daemon.get_output_distribution([0], 15, 25, cumulative = True)
+        assert len(res.distributions) == 1
+        d = res.distributions[0]
+        assert d.amount == 0
+        assert d.base == 28
+        assert d.binary == False
+        assert len(d.distribution) == 11
+        for h in range(len(d.distribution)):
+            assert d.distribution[h] == 2 * (15 + h)
+
+        # straddling down
+        res = daemon.get_output_distribution([0], 8, 18, cumulative = True)
         assert len(res.distributions) == 1
         d = res.distributions[0]
         assert d.amount == 0
@@ -167,39 +181,28 @@ class GetOutputDistributionTest():
         assert d.binary == False
         assert len(d.distribution) == 11
         for h in range(len(d.distribution)):
-            assert d.distribution[h] == 15 + h
-
-        # straddling down
-        res = daemon.get_output_distribution([0], 8, 18, cumulative = True)
-        assert len(res.distributions) == 1
-        d = res.distributions[0]
-        assert d.amount == 0
-        assert d.base == 7
-        assert d.binary == False
-        assert len(d.distribution) == 11
-        for h in range(len(d.distribution)):
-            assert d.distribution[h] == 8 + h
+            assert d.distribution[h] == 2 * (8 + h)
 
         # encompassing
         res = daemon.get_output_distribution([0], 5, 20, cumulative = True)
         assert len(res.distributions) == 1
         d = res.distributions[0]
         assert d.amount == 0
-        assert d.base == 4
+        assert d.base == 8
         assert d.binary == False
         assert len(d.distribution) == 16
         for h in range(len(d.distribution)):
-            assert d.distribution[h] == 5 + h
+            assert d.distribution[h] == 2 * (5 + h)
 
         # single
         res = daemon.get_output_distribution([0], 2, 2, cumulative = True)
         assert len(res.distributions) == 1
         d = res.distributions[0]
         assert d.amount == 0
-        assert d.base == 1
+        assert d.base == 2
         assert d.binary == False
         assert len(d.distribution) == 1
-        assert d.distribution[0] == 2
+        assert d.distribution[0] == 4
 
         # a non existent amount
         res = daemon.get_output_distribution([1], 0, 0)

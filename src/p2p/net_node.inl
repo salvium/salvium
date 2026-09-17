@@ -60,9 +60,9 @@
 #include "cryptonote_core/cryptonote_core.h"
 #include "net/parse.h"
 
-#include <miniupnp/miniupnpc/miniupnpc.h>
-#include <miniupnp/miniupnpc/upnpcommands.h>
-#include <miniupnp/miniupnpc/upnperrors.h>
+#include <miniupnpc.h>
+#include <upnpcommands.h>
+#include <upnperrors.h>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "net.p2p"
@@ -103,6 +103,11 @@ namespace nodetool
   template<class t_payload_net_handler>
   void node_server<t_payload_net_handler>::init_options(boost::program_options::options_description& desc)
   {
+    command_line::add_arg(desc, arg_p2p_ssl);
+    command_line::add_arg(desc, arg_p2p_ssl_private_key);
+    command_line::add_arg(desc, arg_p2p_ssl_certificate);
+    command_line::add_arg(desc, arg_p2p_ssl_ca_certificates);
+    command_line::add_arg(desc, arg_p2p_ssl_allowed_fingerprints);
     command_line::add_arg(desc, arg_p2p_bind_ip);
     command_line::add_arg(desc, arg_p2p_bind_ipv6_address);
     command_line::add_arg(desc, arg_p2p_bind_port, false);
@@ -200,6 +205,8 @@ namespace nodetool
       }
     }
 
+    if (m_auto_penalties.blocked(address.host_str(), now, t)) return false;
+
     // manually loop in subnets
     if (address.get_type_id() == epee::net_utils::address_type::ipv4)
     {
@@ -209,8 +216,9 @@ namespace nodetool
       {
         if (now >= it->second)
         {
+          const std::string expired_subnet = it->first.host_str();
           it = m_blocked_subnets.erase(it);
-          MCLOG_CYAN(el::Level::Info, "global", "Subnet " << it->first.host_str() << " unblocked.");
+          MCLOG_CYAN(el::Level::Info, "global", "Subnet " << expired_subnet << " unblocked.");
           continue;
         }
         if (it->first.matches(ipv4_address))
@@ -250,6 +258,12 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::block_host(epee::net_utils::network_address addr, time_t seconds, bool add_only)
   {
+    return block_host_impl(addr, seconds, add_only, false);
+  }
+  template<class t_payload_net_handler>
+  bool node_server<t_payload_net_handler>::block_host_impl(epee::net_utils::network_address addr, time_t seconds, bool add_only, bool automatic)
+  {
+    if (seconds < 0) return false;
     if(!addr.is_blockable())
       return false;
 
@@ -263,30 +277,39 @@ namespace nodetool
     else
       limit = now + seconds;
     const std::string host_str = addr.host_str();
-    auto it = m_blocked_hosts.find(host_str);
-    if (it == m_blocked_hosts.end())
+    if (automatic)
     {
-      m_blocked_hosts[host_str] = limit;
-
-      // if the host was already blocked due to being in a blocked subnet, let it be silent
-      bool matches_blocked_subnet = false;
-      if (addr.get_type_id() == epee::net_utils::address_type::ipv4)
+      added = !m_auto_penalties.blocked(host_str, now);
+      m_auto_penalties.ban(host_str, seconds, add_only, now);
+    }
+    else
+    {
+      auto it = m_blocked_hosts.find(host_str);
+      if (it == m_blocked_hosts.end())
       {
-        auto ipv4_address = addr.template as<epee::net_utils::ipv4_network_address>();
-        for (auto jt = m_blocked_subnets.begin(); jt != m_blocked_subnets.end(); ++jt)
+        m_blocked_hosts[host_str] = limit;
+
+        // if the host was already blocked due to being in a blocked subnet, let it be silent
+        bool matches_blocked_subnet = false;
+        if (addr.get_type_id() == epee::net_utils::address_type::ipv4)
         {
-          if (jt->first.matches(ipv4_address))
+          auto ipv4_address = addr.template as<epee::net_utils::ipv4_network_address>();
+          for (auto jt = m_blocked_subnets.begin(); jt != m_blocked_subnets.end(); ++jt)
           {
-            matches_blocked_subnet = true;
-            break;
+            if (jt->first.matches(ipv4_address))
+            {
+              matches_blocked_subnet = true;
+              break;
+            }
           }
         }
+        if (!matches_blocked_subnet)
+          added = true;
       }
-      if (!matches_blocked_subnet)
-        added = true;
+      else if (it->second < limit || !add_only)
+        it->second = limit;
+
     }
-    else if (it->second < limit || !add_only)
-      it->second = limit;
 
     // drop any connection to that address. This should only have to look into
     // the zone related to the connection, but really make sure everything is
@@ -334,10 +357,9 @@ namespace nodetool
   bool node_server<t_payload_net_handler>::unblock_host(const epee::net_utils::network_address &address)
   {
     CRITICAL_REGION_LOCAL(m_blocked_hosts_lock);
-    auto i = m_blocked_hosts.find(address.host_str());
-    if (i == m_blocked_hosts.end())
+    const bool automatic = m_auto_penalties.erase(address.host_str());
+    if (m_blocked_hosts.erase(address.host_str()) == 0 && !automatic)
       return false;
-    m_blocked_hosts.erase(i);
     MCLOG_CYAN(el::Level::Info, "global", "Host " << address.host_str() << " unblocked.");
     return true;
   }
@@ -345,6 +367,7 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::block_subnet(const epee::net_utils::ipv4_network_subnet &subnet, time_t seconds)
   {
+    if (seconds < 0) return false;
     const time_t now = time(nullptr);
 
     CRITICAL_REGION_LOCAL(m_blocked_hosts_lock);
@@ -411,16 +434,12 @@ namespace nodetool
     if(!address.is_blockable())
       return false;
 
-    CRITICAL_REGION_LOCAL(m_host_fails_score_lock);
-    uint64_t fails = m_host_fails_score[address.host_str()] += score;
-    MDEBUG("Host " << address.host_str() << " fail score=" << fails);
-    if(fails > P2P_IP_FAILS_BEFORE_BLOCK)
+    bool block;
     {
-      auto it = m_host_fails_score.find(address.host_str());
-      CHECK_AND_ASSERT_MES(it != m_host_fails_score.end(), false, "internal error");
-      it->second = P2P_IP_FAILS_BEFORE_BLOCK/2;
-      block_host(address);
+      CRITICAL_REGION_LOCAL(m_blocked_hosts_lock);
+      block = m_auto_penalties.add_failure(address.host_str(), score, P2P_IP_FAILS_BEFORE_BLOCK, time(nullptr));
     }
+    if (block) block_host_automatically(address);
     return true;
   }
   //-----------------------------------------------------------------------------------
@@ -949,6 +968,9 @@ namespace nodetool
 
     res = init_config();
     CHECK_AND_ASSERT_MES(res, false, "Failed to init config.");
+    const auto salchat = vm.find("salchat-enabled");
+    const bool salchat_enabled = salchat == vm.end() || salchat->second.as<unsigned int>() != 0;
+    public_zone.m_config.m_support_flags = get_p2p_support_flags(salchat_enabled);
 
     for (auto& zone : m_network_zones)
     {
@@ -966,16 +988,20 @@ namespace nodetool
 
     public_zone.m_net_server.set_threads_prefix("P2P"); // all zones use these threads/asio::io_service
 
+    const auto ssl_options = get_p2p_ssl_options(vm);
+    m_ssl_support = ssl_options.support;
+
     // from here onwards, it's online stuff
     if (m_offline)
       return res;
 
     //try to bind
-    m_ssl_support = epee::net_utils::ssl_support_t::e_ssl_support_disabled;
+    MINFO("P2P TLS mode: " << command_line::get_arg(vm, arg_p2p_ssl));
     for (auto& zone : m_network_zones)
     {
       zone.second.m_net_server.get_config_object().set_handler(this);
       zone.second.m_net_server.get_config_object().m_invoke_timeout = P2P_DEFAULT_INVOKE_TIMEOUT;
+      zone.second.m_net_server.get_config_object().m_max_packet_size = zone.second.m_config.m_net_config.packet_max_size;
 
       if (!zone.second.m_bind_ip.empty())
       {
@@ -990,9 +1016,11 @@ namespace nodetool
           ipv6_port = zone.second.m_port_ipv6;
           MINFO("Binding (IPv6) on " << zone.second.m_bind_ipv6_address << ":" << zone.second.m_port_ipv6);
         }
-        res = zone.second.m_net_server.init_server(zone.second.m_port, zone.second.m_bind_ip, ipv6_port, ipv6_addr, m_use_ipv6, m_require_ipv4, epee::net_utils::ssl_support_t::e_ssl_support_disabled);
+        res = zone.second.m_net_server.init_server(zone.second.m_port, zone.second.m_bind_ip, ipv6_port, ipv6_addr, m_use_ipv6, m_require_ipv4, ssl_options);
         CHECK_AND_ASSERT_MES(res, false, "Failed to bind server");
       }
+      else
+        zone.second.m_net_server.configure_ssl(ssl_options);
     }
 
     m_listening_port = public_zone.m_net_server.get_binded_port();
@@ -1098,7 +1126,11 @@ namespace nodetool
         zone.second.m_net_server.deinit_server();
       // remove UPnP port mapping
       if(m_igd == igd)
-        delete_upnp_port_mapping(m_listening_port);
+      {
+        delete_upnp_port_mapping_v4(m_listening_port);
+        if (m_use_ipv6)
+          delete_upnp_port_mapping_v6(m_listening_port_ipv6);
+      }
     }
     return store_config();
   }
@@ -2024,8 +2056,22 @@ namespace nodetool
   }
   //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
+  void node_server<t_payload_net_handler>::prune_peer_penalties(time_t now)
+  {
+    CRITICAL_REGION_LOCAL(m_blocked_hosts_lock);
+    if (now >= m_last_penalty_prune && now - m_last_penalty_prune < 60) return;
+    m_last_penalty_prune = now;
+    m_auto_penalties.prune(now);
+    for (auto it = m_blocked_hosts.begin(); it != m_blocked_hosts.end(); )
+      if (it->second <= now) it = m_blocked_hosts.erase(it); else ++it;
+    for (auto it = m_blocked_subnets.begin(); it != m_blocked_subnets.end(); )
+      if (it->second <= now) it = m_blocked_subnets.erase(it); else ++it;
+  }
+
+  template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::idle_worker()
   {
+    prune_peer_penalties(time(nullptr));
     m_peer_handshake_idle_maker_interval.do_call(boost::bind(&node_server<t_payload_net_handler>::peer_sync_idle_maker, this));
     m_connections_maker_interval.do_call(boost::bind(&node_server<t_payload_net_handler>::connections_maker, this));
     m_gray_peerlist_housekeeping_interval.do_call(boost::bind(&node_server<t_payload_net_handler>::gray_peerlist_housekeeping, this));
@@ -2069,7 +2115,7 @@ namespace nodetool
         const expect<epee::net_utils::network_address> parsed_addr = net::get_network_address(ip, 0);
         if (parsed_addr)
         {
-          block_host(*parsed_addr, DNS_BLOCKLIST_LIFETIME, true);
+          block_host_automatically(*parsed_addr, DNS_BLOCKLIST_LIFETIME, true);
           ++good;
           continue;
         }
@@ -2535,9 +2581,9 @@ namespace nodetool
       return 1;
     }
 
-    if(context.peer_id)
+    if(context.handshake_complete())
     {
-      LOG_WARNING_CC(context, "COMMAND_HANDSHAKE came, but seems that connection already have associated peer_id (double COMMAND_HANDSHAKE?)");
+      LOG_WARNING_CC(context, "COMMAND_HANDSHAKE came, but connection already completed a handshake (double COMMAND_HANDSHAKE?)");
       drop_connection(context);
       return 1;
     }
@@ -2755,7 +2801,11 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::set_max_in_peers(network_zone& zone, int64_t max)
   {
-    zone.m_config.m_net_config.max_in_connection_count = max;
+    if (max < -1 || (max >= 0 && static_cast<uint64_t>(max) > std::numeric_limits<uint32_t>::max()))
+      return false;
+    zone.m_config.m_net_config.max_in_connection_count = max < 0
+      ? std::numeric_limits<uint32_t>::max()
+      : static_cast<uint32_t>(max);
     return true;
   }
 
@@ -2983,7 +3033,12 @@ namespace nodetool
     UPNPUrls urls;
     IGDdatas igdData;
     char lanAddress[64];
+#if MINIUPNPC_API_VERSION >= 21
+    char wanAddress[64];
+    result = UPNP_GetValidIGD(deviceList, &urls, &igdData, lanAddress, sizeof lanAddress, wanAddress, sizeof wanAddress);
+#else
     result = UPNP_GetValidIGD(deviceList, &urls, &igdData, lanAddress, sizeof lanAddress);
+#endif
     freeUPNPDevlist(deviceList);
     if (result > 0) {
       if (result == 1) {
@@ -3051,7 +3106,12 @@ namespace nodetool
     UPNPUrls urls;
     IGDdatas igdData;
     char lanAddress[64];
+#if MINIUPNPC_API_VERSION >= 21
+    char wanAddress[64];
+    result = UPNP_GetValidIGD(deviceList, &urls, &igdData, lanAddress, sizeof lanAddress, wanAddress, sizeof wanAddress);
+#else
     result = UPNP_GetValidIGD(deviceList, &urls, &igdData, lanAddress, sizeof lanAddress);
+#endif
     freeUPNPDevlist(deviceList);
     if (result > 0) {
       if (result == 1) {
@@ -3108,6 +3168,8 @@ namespace nodetool
       p2p_connection_context context{};
       if (zone.m_net_server.add_connection(context, std::move(*result), remote, ssl_support))
         return {std::move(context)};
+      if (ssl_support == epee::net_utils::ssl_support_t::e_ssl_support_autodetect)
+        return socks_connect(zone, remote, epee::net_utils::ssl_support_t::e_ssl_support_disabled);
     }
     return boost::none;
   }

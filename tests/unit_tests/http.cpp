@@ -624,6 +624,7 @@ TEST(HTTP_Client_Auth, MD5)
 
   auto response = make_response({
     {
+      {u8"algorithm", quoted(u8"MD5")},
       {u8"domain", quoted("ignored")},
       {u8"nonce", quoted(nonce)},
       {u8"REALM", quoted(realm)}
@@ -636,42 +637,14 @@ TEST(HTTP_Client_Auth, MD5)
     },
   });
 
-  EXPECT_EQ(http::http_client_auth::kSuccess, auth.handle_401(response));
-  const auto auth_field = auth.get_auth_field(method, uri);
-  ASSERT_TRUE(bool(auth_field));
-
-  const auto parsed = parse_fields(auth_field->second);
-  EXPECT_STREQ(u8"Authorization", auth_field->first.c_str());
-  EXPECT_EQ(parsed.end(), parsed.find(u8"opaque"));
-  EXPECT_EQ(parsed.end(), parsed.find(u8"qop"));
-  EXPECT_EQ(parsed.end(), parsed.find(u8"nc"));
-  EXPECT_STREQ(u8"MD5", parsed.at(u8"algorithm").c_str());
-  EXPECT_STREQ(nonce, parsed.at(u8"nonce").c_str());
-  EXPECT_STREQ(uri, parsed.at(u8"uri").c_str());
-  EXPECT_EQ(user.username, parsed.at(u8"username"));
-  EXPECT_STREQ(realm, parsed.at(u8"realm").c_str());
-
-  const std::string a1 = get_a1(user, parsed);
-  const std::string a2 = get_a2(uri);
-  const std::string auth_code = md5_hex(
-    boost::join(std::vector<std::string>{md5_hex(a1), nonce, md5_hex(a2)}, u8":")
-  );
-  EXPECT_TRUE(boost::iequals(auth_code, parsed.at(u8"response")));
-  {
-    const auto auth_field_dup = auth.get_auth_field(method, uri);
-    ASSERT_TRUE(bool(auth_field_dup));
-    EXPECT_EQ(*auth_field, *auth_field_dup);
-  }
-
-
-  EXPECT_EQ(http::http_client_auth::kBadPassword, auth.handle_401(response));
-  response.m_header_info.m_etc_fields.front().second.append(u8"," + write_fields({{u8"stale", u8"TRUE"}}));
-  EXPECT_EQ(http::http_client_auth::kSuccess, auth.handle_401(response));
+  // Production accepts Digest MD5 only with qop=auth; RFC 2069's
+  // superseded no-qop form must not produce an Authorization field.
+  EXPECT_EQ(http::http_client_auth::kParseFailure, auth.handle_401(response));
+  EXPECT_FALSE(bool(auth.get_auth_field(method, uri)));
 }
 
 TEST(HTTP_Client_Auth, MD5_auth)
 {
-  constexpr char cnonce[] = "";
   constexpr char method[] = "NOP";
   constexpr char nonce[] = "some crazy nonce";
   constexpr char opaque[] = "this is the opaque";
@@ -723,7 +696,7 @@ TEST(HTTP_Client_Auth, MD5_auth)
     const std::string a1 = get_a1(user, parsed);
     const std::string a2 = get_a2(uri);
     const std::string auth_code = md5_hex(
-      boost::join(std::vector<std::string>{md5_hex(a1), nonce, nc, cnonce, u8"auth", md5_hex(a2)}, u8":")
+      boost::join(std::vector<std::string>{md5_hex(a1), nonce, nc, parsed.at(u8"cnonce"), u8"auth", md5_hex(a2)}, u8":")
     );
     EXPECT_TRUE(boost::iequals(auth_code, parsed.at(u8"response")));
   }

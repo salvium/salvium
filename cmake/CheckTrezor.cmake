@@ -50,7 +50,7 @@ function(_trezor_protobuf_fix_vars)
 endfunction()
 
 macro(trezor_fatal_msg msg)
-    if ($ENV{USE_DEVICE_TREZOR_MANDATORY})
+    if (USE_DEVICE_TREZOR_MANDATORY)
         message(FATAL_ERROR
                 "${msg}\n"
                 "==========================================================================\n"
@@ -72,21 +72,36 @@ endmacro()
 
 # Use Trezor master switch
 if (USE_DEVICE_TREZOR)
-    # Protobuf is required to build protobuf messages for Trezor
-    include(FindProtobuf OPTIONAL)
+    # The upstream package exports Abseil and utf8_range dependencies needed
+    # by modern Protobuf. Keep the module fallback for older installations.
+    # Protobuf declares this with option(). A cache entry also works when the
+    # parent project uses the pre-CMP0077 policy and clears normal variables.
+    set(protobuf_MODULE_COMPATIBLE TRUE CACHE BOOL "Enable FindProtobuf compatibility" FORCE)
+    find_package(Protobuf CONFIG QUIET)
+    if(NOT Protobuf_FOUND)
+        find_package(Protobuf MODULE QUIET)
+    endif()
+
+    # Some cross-built Abseil packages omit this Windows system dependency
+    # from their exports. Keep it after symbolize's archive at final link.
+    if(MINGW AND TARGET absl::symbolize)
+        set_property(TARGET absl::symbolize APPEND PROPERTY INTERFACE_LINK_LIBRARIES dbghelp)
+    endif()
 
     # PkgConfig works better with new Protobuf
     find_package(PkgConfig QUIET)
     pkg_check_modules(PROTOBUF protobuf)
 
-    if (NOT Protobuf_FOUND)
-        FIND_PACKAGE(Protobuf CONFIG)
-    endif()
-    if (NOT Protobuf_FOUND)
-        FIND_PACKAGE(Protobuf)
+    if(NOT Protobuf_INCLUDE_DIR AND Protobuf_INCLUDE_DIRS)
+        list(GET Protobuf_INCLUDE_DIRS 0 Protobuf_INCLUDE_DIR)
     endif()
 
     _trezor_protobuf_fix_vars()
+
+    set(TREZOR_PROTOBUF_LIBRARIES ${Protobuf_LIBRARY})
+    if(TARGET protobuf::libprotobuf)
+        set(TREZOR_PROTOBUF_LIBRARIES protobuf::libprotobuf)
+    endif()
 
     # Early fail for optional Trezor support
     if(NOT Protobuf_FOUND AND NOT Protobuf_LIBRARY AND NOT Protobuf_PROTOC_EXECUTABLE AND NOT Protobuf_INCLUDE_DIR)
@@ -156,12 +171,6 @@ if(Protobuf_FOUND AND USE_DEVICE_TREZOR AND TREZOR_PYTHON)
     endif()
 
     if(USE_DEVICE_TREZOR_PROTOBUF_TEST)
-        if(PROTOBUF_LDFLAGS)
-            set(PROTOBUF_TRYCOMPILE_LINKER "${PROTOBUF_LDFLAGS}")
-        else()
-            set(PROTOBUF_TRYCOMPILE_LINKER "${Protobuf_LIBRARY}")
-        endif()
-        
         try_compile(Protobuf_COMPILE_TEST_PASSED
             "${CMAKE_BINARY_DIR}"
             SOURCES
@@ -171,7 +180,7 @@ if(Protobuf_FOUND AND USE_DEVICE_TREZOR AND TREZOR_PYTHON)
             CMAKE_EXE_LINKER_FLAGS ${CMAKE_TRY_COMPILE_LINKER_FLAGS}
             "-DINCLUDE_DIRECTORIES=${Protobuf_INCLUDE_DIR};${CMAKE_BINARY_DIR}"
             "-DCMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD}"
-            LINK_LIBRARIES "${PROTOBUF_TRYCOMPILE_LINKER}" ${CMAKE_TRY_COMPILE_LINK_LIBRARIES}
+            LINK_LIBRARIES ${TREZOR_PROTOBUF_LIBRARIES} ${CMAKE_TRY_COMPILE_LINK_LIBRARIES}
             OUTPUT_VARIABLE OUTPUT
         )
         if(NOT Protobuf_COMPILE_TEST_PASSED)
@@ -193,9 +202,7 @@ if(Protobuf_FOUND AND USE_DEVICE_TREZOR AND TREZOR_PYTHON)
     
     execute_process(COMMAND ${TREZOR_PYTHON} tools/build_protob.py ${TREZOR_PROTOBUF_PARAMS} WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/../src/device_trezor/trezor RESULT_VARIABLE RET OUTPUT_VARIABLE OUT ERROR_VARIABLE ERR)
     if(RET)
-        trezor_fatal_msg("Trezor: protobuf messages could not be regenerated (err=${RET}, python ${PYTHON})."
-                "OUT: ${OUT}, ERR: ${ERR}."
-                "Please read src/device_trezor/trezor/tools/README.md")
+        trezor_fatal_msg("Trezor: protobuf messages could not be regenerated (err=${RET}, python ${TREZOR_PYTHON}).\nOUT: ${OUT}\nERR: ${ERR}\nPlease read src/device_trezor/trezor/tools/README.md")
     endif()
 
     message(STATUS "Trezor: protobuf messages regenerated out: \"${OUT}.\"")
@@ -213,7 +220,8 @@ if(Protobuf_FOUND AND USE_DEVICE_TREZOR AND TREZOR_PYTHON)
     endif()
 
     if (Protobuf_INCLUDE_DIR)
-        include_directories(${Protobuf_INCLUDE_DIR})
+        # Core object libraries also include generated Protobuf headers.
+        include_directories(${Protobuf_INCLUDE_DIR} ${PROTOBUF_INCLUDE_DIRS})
     endif()
 
     # LibUSB support, check for particular version
@@ -242,7 +250,7 @@ if(Protobuf_FOUND AND USE_DEVICE_TREZOR AND TREZOR_PYTHON)
         set(TREZOR_DEP_LINKER "")
 
         if (Protobuf_LIBRARY)
-            list(APPEND TREZOR_DEP_LIBS ${Protobuf_LIBRARY})
+            list(APPEND TREZOR_DEP_LIBS ${TREZOR_PROTOBUF_LIBRARIES})
             string(APPEND TREZOR_DEP_LINKER " -lprotobuf")
         endif()
 

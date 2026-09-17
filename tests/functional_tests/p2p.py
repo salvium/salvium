@@ -51,7 +51,7 @@ class P2PTest():
         daemon = Daemon()
         res = daemon.get_height()
         daemon.pop_blocks(res.height - 1)
-        daemon.flush_txpool()
+        daemon.flush_txpool(confirm_all=True)
 
     def create(self):
         print('Creating wallet')
@@ -70,7 +70,7 @@ class P2PTest():
         daemon = Daemon(idx = 2)
 
         # generate blocks
-        res_generateblocks = daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', blocks)
+        res_generateblocks = daemon.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', blocks)
 
     def test_p2p_reorg(self):
         print('Testing P2P reorg')
@@ -91,11 +91,11 @@ class P2PTest():
         assert res.top_block_hash == top_block_hash
 
         # disconnect daemons and mine separately on both
-        daemon2.out_peers(0)
-        daemon3.out_peers(0)
+        daemon2.out_peers(0, force=True)
+        daemon3.out_peers(0, force=True)
 
-        res = daemon2.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 2)
-        res = daemon3.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 3)
+        res = daemon2.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 2)
+        res = daemon3.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 3)
 
         res = daemon2.get_info()
         assert res.height == height + 2
@@ -116,11 +116,11 @@ class P2PTest():
         assert res.top_block_hash == daemon3_top_block_hash
 
         # disconect, mine on daemon2 again more than daemon3
-        daemon2.out_peers(0)
-        daemon3.out_peers(0)
+        daemon2.out_peers(0, force=True)
+        daemon3.out_peers(0, force=True)
 
-        res = daemon2.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 3)
-        res = daemon3.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 2)
+        res = daemon2.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 3)
+        res = daemon3.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 2)
 
         res = daemon2.get_info()
         assert res.height == height + 6
@@ -141,9 +141,9 @@ class P2PTest():
         assert res.top_block_hash == daemon2_top_block_hash
 
         # disconnect and mine a lot on daemon3
-        daemon2.out_peers(0)
-        daemon3.out_peers(0)
-        res = daemon3.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 500)
+        daemon2.out_peers(0, force=True)
+        daemon3.out_peers(0, force=True)
+        res = daemon3.generateblocks('SC11pP3tKp5e5UJwTeTNhXQpv4UsbpmvTDSKRn22X1gLVTfJKyfJMbG6apw15backjJxGgi8pVT1sJA5p1etwT232pL2xUbKUB', 500)
 
         # reconnect and wait for sync
         daemon2.out_peers(8)
@@ -171,17 +171,21 @@ class P2PTest():
         self.wallet.refresh()
         res = self.wallet.get_balance()
 
-        dst = {'address': '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 'amount': 1000000000000}
+        dst = {'address': self.wallet.get_carrot_address(), 'amount': 100000000}
         res = self.wallet.transfer([dst])
         assert len(res.tx_hash) == 32*2
         txid = res.tx_hash
 
-        time.sleep(5)
-
+        deadline = time.monotonic() + 30
         for daemon in [daemon2, daemon3]:
-            res = daemon.get_transaction_pool_hashes()
-            assert len(res.tx_hashes) == 1
-            assert res.tx_hashes[0] == txid
+            while True:
+                res = daemon.get_transaction_pool_hashes()
+                tx_hashes = res.tx_hashes if 'tx_hashes' in res else []
+                if txid in tx_hashes:
+                    assert tx_hashes == [txid]
+                    break
+                assert time.monotonic() < deadline, (txid, tx_hashes)
+                time.sleep(1)
 
 
 if __name__ == '__main__':
