@@ -14,6 +14,8 @@
 namespace {
 uint64_t rpc_candidate_height = 100;
 uint64_t rpc_opening_height = 0;
+uint64_t rpc_activation_height = 10;
+size_t rpc_key_image_queries = 0;
 void check(bool condition, const char* message)
 {
   if (!condition) throw std::runtime_error(message);
@@ -45,14 +47,16 @@ public:
       result = epee::serialization::store_t_to_json(info);
     } else if (method == "get_lineage_audit_status") {
       cryptonote::COMMAND_RPC_LINEAGE_AUDIT_STATUS::response status{};
-      status.status = "OK"; status.activation_height = 10; status.candidate_height = rpc_candidate_height;
+      status.status = "OK"; status.activation_height = rpc_activation_height; status.candidate_height = rpc_candidate_height;
       status.opening_height = rpc_opening_height;
       const auto& params = request["params"];
-      if (params.HasMember("key_images"))
+      if (params.HasMember("key_images")) {
+        rpc_key_image_queries += params["key_images"].Size();
         // Even an incorrect positive daemon response must not let incomplete
         // inventory disappear or become good in the wallet's report.
         for (rapidjson::SizeType i = 0; i < params["key_images"].Size(); ++i)
           status.entries.push_back({"AUDIT_PASSED", 20, 30});
+      }
       result = epee::serialization::store_t_to_json(status);
     } else throw std::runtime_error("Unexpected native RPC: " + method);
     response_.m_response_code = 200;
@@ -125,7 +129,7 @@ public:
     wallet.m_watch_only = watch;
     wallet.m_multisig = multisig;
   }
-  static void conversion_proofs(tools::wallet2& wallet)
+  static void conversion_review(tools::wallet2& wallet)
   {
     wallet.m_transfers.clear();
     wallet.m_account.generate({}, false, false, carrot::AddressDeriveType::PreCarrot);
@@ -192,25 +196,15 @@ public:
     auto token = wallet.m_transfers.back();
     token.asset_type = "OTHER";
     wallet.m_transfers.push_back(token);
-    const auto prepared = wallet.audit(false, true, 0, {}, true);
-    check(prepared.outputs.size() == 3 && prepared.proofs.size() == 1,
-        "Bare audit omitted conversion receipts or enrolled SAL/unsupported-asset context");
-    std::string raw;
-    cryptonote::lineage_enrollment enrollment;
-    check(epee::string_tools::parse_hexstr_to_binbuff(prepared.proofs.front(), raw) &&
-        serialization::parse_binary(raw, enrollment) && enrollment.outputs.size() == 3,
-        "Conversion proof batch malformed");
-    for (size_t i = 0; i < enrollment.outputs.size(); ++i) {
-      const auto& receipt = wallet.m_transfers[2 * i + 1];
-      const auto& proof = enrollment.outputs[i];
-      check(proof.transaction == receipt.m_txid && proof.output_index == 1 &&
-          proof.image == receipt.m_key_image && !proof.stake_return &&
-          cryptonote::verify_lineage_output_proof(enrollment, proof, receipt.get_public_key(),
-              rct::commit(receipt.amount(), receipt.m_mask)), "Legacy conversion ownership proof failed");
-    }
+    const auto prepared = wallet.audit(true, true, 0, {}, true);
+    check(prepared.state == "REVIEW_REQUIRED" && prepared.outputs.size() == 3 && prepared.proofs.empty(),
+        "Private conversion review omitted receipts or created public ownership proofs");
+    for (const auto& output : prepared.outputs)
+      check(output.state == "REVIEW" && output.key_image.empty(),
+          "Private conversion review exported a key image or automatic verdict");
     check(prepared.outputs[1].subaddress == 1 && prepared.outputs[2].account == 1,
-        "Conversion proof scope lost exchange account/subaddress");
-    std::cout << "WALLET_CONVERSION_PROOFS_PASS: three legacy conversion receipts, nonzero output index, all accounts/subaddresses, SAL/unsupported-asset context excluded\n";
+        "Conversion review scope lost exchange account/subaddress");
+    std::cout << "WALLET_CONVERSION_REVIEW_PASS: three receipts, all accounts/subaddresses, no proofs or key images published\n";
   }
   static void token_inventory(tools::wallet2& wallet)
   {
@@ -223,25 +217,25 @@ public:
     token.m_amount = 1700000000;
     wallet.m_transfers.push_back(token);
     const auto pending = wallet.audit(false);
-    check(pending.state == "UNRESOLVED" && pending.good == 1500000000 && pending.unresolved == 0 &&
+    check(pending.state == "REVIEW_REQUIRED" && pending.good == 0 && pending.unresolved == 1500000000 &&
         pending.outputs.size() == 4 && pending.balances.size() == 2,
         "Token inventory omitted, mixed into SAL1 units, or ignored by overall state");
     const auto& balance = pending.balances.back();
     check(balance.asset_type == "salYAHU" && balance.unresolved == token.m_amount && balance.unresolved_count == 1,
         "Token unresolved balance or asset identity lost");
-    check(!wallet.is_transfer_unlocked(wallet.m_transfers.back()), "Unenrolled token became signable");
+    check(wallet.is_transfer_unlocked(wallet.m_transfers.back()), "Review-only token was isolated from spending");
     wallet.m_transfers.back().m_key_image_known = true;
     wallet.update_lineage_audit_status();
     check(wallet.is_transfer_unlocked(wallet.m_transfers.back()), "Cleared mature token remained locked");
     const auto good = wallet.audit(false);
-    check(good.state == "AUDIT_PASSED" && good.good == pending.good &&
-        good.balances.back().good == token.m_amount && good.outputs.back().asset_type == "salYAHU",
-        "Good token was not reported separately from SAL1");
+    check(good.state == "REVIEW_REQUIRED" && good.unresolved == pending.unresolved &&
+        good.balances.back().unresolved == token.m_amount && good.outputs.back().asset_type == "salYAHU" &&
+        good.outputs.back().key_image.empty(), "Review-only token was not reported privately and separately from SAL1");
     rpc_candidate_height = 101;
     wallet.update_lineage_audit_status();
-    check(!wallet.is_transfer_unlocked(wallet.m_transfers.back()), "Stale token status allowed signing");
+    check(wallet.is_transfer_unlocked(wallet.m_transfers.back()), "Daemon status re-enabled lineage isolation");
     rpc_candidate_height = 100;
-    std::cout << "WALLET_TOKEN_INVENTORY_PASS: token scope, separate units, missing key image, clearance and stale-status signing gates\n";
+    std::cout << "WALLET_TOKEN_REVIEW_PASS: token scope, separate units, private review and no signing gate\n";
   }
 
 };
@@ -259,59 +253,67 @@ int main()
     const auto genesis_hash = cryptonote::get_block_hash(genesis);
     wallet.import_blockchain({0, genesis_hash, std::vector<crypto::hash>(100, genesis_hash)});
     wallet_accessor_test::inventory(wallet);
-    check(!wallet.is_transfer_unlocked(wallet.get_transfer_details(3)),
-        "Restored post-activation inventory was signable before its first audit-status refresh");
+    check(wallet.is_transfer_unlocked(wallet.get_transfer_details(3)),
+        "Review-only inventory was isolated before its first status refresh");
     const auto all = wallet.audit(false);
-    check(all.state == "AUDIT_PASSED" && all.outputs.size() == 4, "Complete inventory status failed");
-    check(all.good == 1600000000 && all.good_count == 3 && !all.bad_count, "Good inventory control failed");
-    check(all.unresolved == 0 && all.unresolved_count == 0, "Verified older SAL1 not counted");
+    check(all.state == "REVIEW_REQUIRED" && all.outputs.size() == 4, "Complete private inventory failed");
+    check(all.good == 0 && all.unresolved == 1600000000 && all.unresolved_count == 3 && !all.bad_count,
+        "Review inventory control failed");
+    for (const auto& output : all.outputs) check(output.key_image.empty(), "Private inventory exported a key image");
+    wallet.set_attribute("sal1-audit-v2", "withdrawn-public-proof-must-not-be-decoded\n");
+    wallet.set_lineage_regtest_height(0);
+    rpc_activation_height = 0;
+    const auto unscheduled = wallet.audit(true, true, 0, {}, true);
+    check(unscheduled.activation_height == 0 && unscheduled.state == "REVIEW_REQUIRED" &&
+        unscheduled.proofs.empty(), "Local review incorrectly required an enrollment epoch or decoded a saved v2 proof");
+    wallet.set_lineage_regtest_height(10);
+    rpc_activation_height = 10;
     check(all.spent == 900000000 && all.spent_count == 1, "Spent legacy history double counted");
     rpc_opening_height = 5;
     const auto opening = wallet.audit(false);
-    check(opening.opening_height == 5 && opening.outputs.size() == 3 && opening.spent_count == 0 && opening.good == all.good,
+    check(opening.opening_height == 5 && opening.outputs.size() == 3 && opening.spent_count == 0 &&
+        opening.unresolved == all.unresolved,
         "Previous-audit spent history included or opening balance lost");
     wallet_accessor_test::spent_height(wallet, 6);
     check(wallet.audit(false).spent == 900000000, "Post-boundary spend excluded from ancestry inventory");
     wallet_accessor_test::spent_height(wallet, 0);
     rpc_opening_height = 0;
     const auto legacy = wallet.audit(false, false, 0, {0});
-    check(legacy.unresolved == 0 && legacy.good == 1100000000 && legacy.outputs.size() == 3, "Legacy scope failed");
+    check(legacy.unresolved == 1100000000 && legacy.good == 0 && legacy.outputs.size() == 3, "Legacy scope failed");
     const auto carrot = wallet.audit(false, false, 1, {0});
-    check(carrot.state == "AUDIT_PASSED" && carrot.good == 500000000 && carrot.unresolved == 0 && carrot.outputs.size() == 1,
+    check(carrot.state == "REVIEW_REQUIRED" && carrot.unresolved == 500000000 && carrot.good == 0 && carrot.outputs.size() == 1,
         "Supported account control failed");
     wallet.update_lineage_audit_status();
     check(wallet.is_transfer_unlocked(wallet.get_transfer_details(3)), "Refreshed good output control remained locked");
     check(wallet.is_transfer_unlocked(wallet.get_transfer_details(0)), "Verified legacy output remained locked");
     rpc_candidate_height = 101;
     wallet.update_lineage_audit_status();
-    check(!wallet.is_transfer_unlocked(wallet.get_transfer_details(3)), "Unrefreshed chain tip granted signing clearance");
+    check(wallet.is_transfer_unlocked(wallet.get_transfer_details(3)), "Chain tip change re-enabled lineage isolation");
     rpc_candidate_height = 100;
     wallet.update_lineage_audit_status();
     check(wallet.is_transfer_unlocked(wallet.get_transfer_details(3)), "Refreshed chain tip did not restore clearance");
     for (bool watch : {false, true}) {
       wallet_accessor_test::signing_mode(wallet, watch, !watch);
-      check(wallet.audit(false).state == "AUDIT_PASSED", "Read-only wallet status unavailable");
-      bool rejected = false;
-      try { wallet.audit(false, true, 0, {}, true); }
-      catch (const std::exception&) { rejected = true; }
-      check(rejected, "Wallet without full signing keys created ownership proofs");
+      check(wallet.audit(false).state == "REVIEW_REQUIRED", "Read-only wallet review unavailable");
+      const auto prepared = wallet.audit(false, true, 0, {}, true);
+      check(prepared.proofs.empty(), "Wallet without full signing keys created ownership proofs");
     }
     wallet_accessor_test::signing_mode(wallet, false, false);
     wallet_accessor_test::long_lock(wallet);
     const auto locked = wallet.audit(false);
-    check(locked.state == "MATURING" && locked.immature == 400000000, "Custom output maturity was ignored");
+    check(locked.state == "REVIEW_REQUIRED" && locked.immature == 400000000, "Custom output maturity was ignored");
     wallet_accessor_test::incomplete(wallet);
     const auto incomplete = wallet.audit(false);
-    check(incomplete.state == "UNRESOLVED" && incomplete.outputs.size() == 5, "Incomplete stake inventory disappeared");
-    check(incomplete.unresolved == 1100000000 && incomplete.stake_unresolved == 1200000000,
-        "Incomplete inventory became good");
-    check(incomplete.outputs[0].state == "KEY_IMAGE_UNAVAILABLE" && incomplete.outputs[1].state == "KEY_IMAGE_UNAVAILABLE" &&
-        incomplete.outputs[4].state == "MISSING_RETURN_CONTEXT", "Missing recovery explanation");
+    check(incomplete.state == "BAD_ORIGIN_FOUND" && incomplete.outputs.size() == 5, "Incomplete stake inventory disappeared");
+    check(incomplete.unresolved == 1100000000 && incomplete.bad == 500000000 && incomplete.stake_bad == 1200000000,
+        "Direct malformed stake origin was not kept distinct from review-only inventory");
+    for (const auto& output : incomplete.outputs) check(output.key_image.empty(), "Incomplete inventory exported a key image");
     wallet.update_lineage_audit_status();
-    check(!wallet.is_transfer_unlocked(wallet.get_transfer_details(1)), "Partial key image became signable");
-    wallet_accessor_test::conversion_proofs(wallet);
+    check(wallet.is_transfer_unlocked(wallet.get_transfer_details(1)), "Partial key image triggered lineage isolation");
+    wallet_accessor_test::conversion_review(wallet);
     wallet_accessor_test::token_inventory(wallet);
-    std::cout << "WALLET_AUDIT_INVENTORY_PASS: legacy, scope, spent history, missing/partial key images, missing stake context, custom maturity and signing gates\n";
+    check(rpc_key_image_queries == 0, "Wallet sent deterministic key images to the daemon");
+    std::cout << "WALLET_AUDIT_REVIEW_PASS: local inventory, direct-origin distinction, no proofs, no key-image queries, no lineage signing gate\n";
     return 0;
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';

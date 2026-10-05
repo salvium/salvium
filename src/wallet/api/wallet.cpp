@@ -1767,7 +1767,7 @@ PendingTransaction *WalletImpl::createAuditTransaction(
 ) {
     if (m_wallet->get_current_hard_fork() >= 14) {
         auto transaction = new PendingTransactionImpl(*this);
-        setStatusError("SAL1 enrollment uses Wallet::audit(); it does not create a SAL migration transaction");
+        setStatusError("SAL1 provenance review uses Wallet::audit(); it does not create a SAL migration transaction");
         statusWithErrorString(transaction->m_status, transaction->m_errorString);
         return transaction;
     }

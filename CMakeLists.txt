@@ -597,6 +597,17 @@ include_directories(${OPENSSL_INCLUDE_DIR})
 if(STATIC AND NOT IOS)
   if(UNIX)
     set(OPENSSL_LIBRARIES "${OPENSSL_LIBRARIES};${CMAKE_DL_LIBS};${CMAKE_THREAD_LIBS_INIT}")
+    # Some OpenSSL 3 static packages expose optional compression and entropy
+    # providers through libcrypto.a without carrying their private link
+    # dependencies through CMake's FindOpenSSL module.
+    find_library(OPENSSL_JITTERENTROPY_LIBRARY NAMES jitterentropy)
+    find_library(OPENSSL_ZSTD_LIBRARY NAMES zstd)
+    if(OPENSSL_JITTERENTROPY_LIBRARY)
+      list(APPEND OPENSSL_LIBRARIES ${OPENSSL_JITTERENTROPY_LIBRARY})
+    endif()
+    if(OPENSSL_ZSTD_LIBRARY)
+      list(APPEND OPENSSL_LIBRARIES ${OPENSSL_ZSTD_LIBRARY})
+    endif()
   endif()
 endif()
 

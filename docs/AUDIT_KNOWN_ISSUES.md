@@ -1,5 +1,12 @@
 # Recovery audit: known issue coverage
 
+> **Historical prototype record (superseded).** The enrollment, freezing,
+> blacklist and C + 10 behavior described below belongs to the withdrawn v2
+> quarantine design. Current policy isolates only a confirmed malformed origin;
+> every descendant (including proven exchange flow) is report-only and requires
+> human review. Public ownership proofs and consensus lineage enforcement are
+> disabled. See `audit.md` for the current policy.
+
 Scope: SAL1 and token outputs in legacy and Carrot formats from block 154750 through
 558799. The chain through 154749 supplies context. Canonical SAL-to-SAL1
 conversion payouts from both completed audits are accepted good origins;

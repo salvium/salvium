@@ -38,6 +38,7 @@
 
 #include "tx_rules_engine.h"
 #include "tx_rules_adapters.h"
+#include "lineage_audit_policy.h"
 
 #include "cryptonote_tx_utils.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
@@ -1717,7 +1718,8 @@ namespace cryptonote
     size_t max_total_weight_v5 = 2 * median_weight - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
     size_t max_total_weight = version >= 5 ? max_total_weight_v5 : max_total_weight_pre_v5;
     const uint64_t audit_height = m_blockchain.lineage_audit_activation();
-    if (audit_height && m_blockchain.get_current_blockchain_height() >= audit_height)
+    if (lineage_policy::public_enrollment && audit_height &&
+        m_blockchain.get_current_blockchain_height() >= audit_height)
       max_total_weight -= std::min<size_t>(max_total_weight, 2308);
     std::unordered_set<crypto::key_image> k_images;
 

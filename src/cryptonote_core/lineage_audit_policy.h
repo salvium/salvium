@@ -17,6 +17,17 @@
 #define SALVIUM_LINEAGE_AUDIT_STAGENET_OPENING_HEIGHT 0
 namespace cryptonote { namespace lineage_policy {
 constexpr uint8_t fork_version = 14;
+// A public output-by-output enrollment necessarily identifies the canonical
+// output and, in the v2 prototype, publishes its amount and deterministic key
+// image.  It also turns provenance into a consensus allow-list, which can
+// recursively quarantine exchange deposits and unrelated customer funds.
+//
+// Keep the chain analysis available for operator review, but do not publish
+// wallet evidence or use lineage as a spend/payout consensus predicate.  Any
+// future privacy-preserving protocol must be introduced as a new version; v2
+// must never become active by changing only the activation height below.
+constexpr bool public_enrollment = false;
+constexpr bool consensus_enforcement = false;
 constexpr uint64_t duration_blocks = SALVIUM_LINEAGE_AUDIT_DURATION_BLOCKS;
 static_assert(duration_blocks > 0, "Audit enrollment window must be nonzero");
 static_assert(duration_blocks <= UINT64_MAX - 9, "Final audit clearance release height overflow");

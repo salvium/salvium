@@ -686,7 +686,7 @@ void lineage_audit::advance(uint64_t height)
     const auto image = queue_.front(); queue_.pop_front(); queued_.erase(image);
     auto& item = records_.at(image);
     if (item.verdict) continue;
-    bool bad = item.bad_origin, complete = true;
+    bool bad = item.bad_origin, review = false, complete = true;
     for (const auto& dep : *item.inputs) {
       const auto found = records_.find(dep.image);
       if (found == records_.end()) { complete = false; continue; }
@@ -703,15 +703,21 @@ void lineage_audit::advance(uint64_t height)
         complete = false;
         continue;
       }
-      bad |= parent.verdict == 2;
-      complete &= parent.verdict == 1;
+      // Only the transaction that contains the intrinsic defect is BAD.
+      // Downstream ownership can include an exchange sale, pooled custody or
+      // change shared with unrelated deposits.  Preserve that provenance as a
+      // review finding without recursively contaminating the child.
+      review |= parent.verdict == 2 || parent.verdict == 3;
+      complete &= parent.verdict == 1 || parent.verdict == 2 || parent.verdict == 3;
     }
     if (!bad && !complete) continue;
     require(height <= std::numeric_limits<uint64_t>::max() - release_delay, "Audit release height overflow");
     remember_change(item);
-    item.verdict = bad ? 2 : 1;
+    item.verdict = bad ? 2 : review ? 3 : 1;
     item.completion = height;
-    if (!bad && item.stake_return && item.output_height >= activation_) {
+    // REVIEW never owns payout authorization. The ordinary stake path remains
+    // authoritative, so recording provenance cannot move a payout to C + 10.
+    if (!bad && !review && item.stake_return && item.output_height >= activation_) {
       require(height <= std::numeric_limits<uint64_t>::max() - release_delay,
           "Stake audit release height overflow");
       item.payout_height = std::max(item.output_height, height + release_delay);
@@ -871,6 +877,7 @@ lineage_audit::status lineage_audit::get_status(const crypto::key_image& image,
   if (found == records_.end()) return {"UNDISCLOSED", 0, 0};
   const auto& item = found->second;
   if (item.verdict == 2) return {"BAD", 0, 0};
+  if (item.verdict == 3) return {"REVIEW", item.completion, 0};
   if (!item.verdict) return {"PENDING", 0, 0};
   const uint64_t release = item.completion + release_delay;
   return {candidate_height < release ? "MATURING" : "AUDIT_PASSED", item.completion, release};
@@ -917,6 +924,7 @@ bool lineage_audit::output_spendable(const BlockchainDB& db, network_type net, u
   const ring_member member{key, source.first, source.second, origin_height, protocol, origin_height + age};
   for (const auto& image : by_key->second) {
     const auto& item = records_.at(image);
+    if (item.verdict == 3 && matches(item, member)) return true;
     if (item.verdict == 1 && height >= item.completion &&
         height - item.completion >= release_delay && matches(item, member)) return true;
   }
@@ -1033,6 +1041,11 @@ bool lineage_audit::check_window_spend(const BlockchainDB& db, network_type net,
 bool lineage_audit::check_spend(BlockchainDB& db, network_type net,
     const transaction& tx, std::string& reason)
 {
+  // Lineage is report-only.  Rejecting a transaction because any one of its
+  // ring members has suspect ancestry both treats decoys as real inputs and
+  // recursively freezes exchange/customer outputs.  Ordinary consensus input,
+  // key-image, signature and maturity checks remain authoritative.
+  if (!lineage_policy::consensus_enforcement) return true;
   if (!active(db.height())) return true;
   try {
     sync(db, net);

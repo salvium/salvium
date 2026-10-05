@@ -44,11 +44,11 @@ struct lineage_disclosure
   END_SERIALIZE()
 };
 
-// One-member T-CLSAG proves control of the canonical output and its
-// key image, and opens its amount commitment. The transcript binds the epoch,
-// transaction, output index and amount. No wallet viewing/spending key leaves
-// the wallet. A stake proof instead binds its canonical future return key.
-// Legacy SAL1 uses the same verifier with the existing spender's y=0 opening.
+// Withdrawn v2 prototype, retained only for decoding historical test artifacts.
+// It proves control of the canonical output and its key image and opens the
+// amount commitment, which is exactly why policy forbids publishing it. A
+// future enrollment protocol must use a new version rather than re-enable this
+// wire format. Legacy SAL1 used the same verifier with y=0.
 struct lineage_output_proof
 {
   crypto::hash transaction;
@@ -154,7 +154,9 @@ private:
     bool stake_return = false;
     uint64_t completion = 0;
     bool bad_origin = false;
-    // 0 pending, 1 good, 2 bad. Protocol returns retain their stake ancestry.
+    // 0 pending, 1 good, 2 intrinsically bad origin, 3 review-only ancestry.
+    // A descendant is never promoted to BAD: provenance is evidence for a
+    // human review, not an automatic contamination rule.
     uint8_t verdict = 0;
     std::shared_ptr<const std::vector<dependency>> inputs;
     uint64_t payout_height = 0;

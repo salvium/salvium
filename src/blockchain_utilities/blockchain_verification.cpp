@@ -1013,10 +1013,7 @@ namespace
                     << " confidence=" << lineage_confidence_name(confidence)
                     << " matching_members=" << item.second.matching_members
                     << " examined_ring_members=" << item.second.ring_members
-                    << " disposition="
-                    << (confidence == lineage_confidence::PROVEN
-                            ? "PROPOSE_BLACKLIST"
-                            : "REVIEW_ONLY")
+                    << " disposition=REVIEW_ONLY"
                     << '\n';
         }
         if (!tx_candidates.empty())
@@ -1047,7 +1044,7 @@ namespace
     for (const asset_flow_finding& origin : findings)
     {
       ++proposed_blacklist_origins;
-      std::cout << "ASSET_FLOW_BLACKLIST_PROPOSAL tx=" << origin.tx_hash
+      std::cout << "ASSET_FLOW_ORIGIN_ISOLATION_PROPOSAL tx=" << origin.tx_hash
                 << " height=" << origin.height
                 << " confidence=ORIGIN_CONFIRMED"
                 << " disposition=PROPOSE_BLACKLIST"
@@ -1056,20 +1053,16 @@ namespace
     for (const auto& tx_entry : transaction_lineage)
       for (const lineage_candidate& candidate : tx_entry.second)
       {
-        if (candidate.confidence == lineage_confidence::POSSIBLE)
-        {
-          ++review_only_candidates;
-          continue;
-        }
-        ++proposed_blacklist_descendants;
-        std::cout << "ASSET_FLOW_BLACKLIST_PROPOSAL tx=" << tx_entry.first
-                  << " confidence=DESCENDANT_PROVEN"
-                  << " disposition=PROPOSE_BLACKLIST"
+        ++review_only_candidates;
+        std::cout << "ASSET_FLOW_DESCENDANT_REVIEW tx=" << tx_entry.first
+                  << " confidence=" << lineage_confidence_name(candidate.confidence)
+                  << " disposition=HUMAN_REVIEW"
+                  << " automatic_isolation=no"
                   << " origin_tx=" << findings[candidate.origin].tx_hash
                   << " depth=" << candidate.depth << '\n';
       }
     std::cout << "ASSET_FLOW_BLACKLIST_SUMMARY"
-              << " policy=ORIGIN_CONFIRMED_OR_DESCENDANT_PROVEN"
+              << " policy=CONFIRMED_ORIGIN_ONLY"
               << " proposed_origins=" << proposed_blacklist_origins
               << " proposed_descendants=" << proposed_blacklist_descendants
               << " review_only_candidates=" << review_only_candidates
@@ -2241,7 +2234,8 @@ int main(int argc, const char* argv[])
 
       std::cout << "LINEAGE_CONFIG traversal=FORWARD_RECURSIVE"
                 << " confidence_classes=ROOT_CONFIRMED,DEFINITE_RING_SET,POSSIBLE_RING_REFERENCE"
-                << " blacklist_policy=ROOT_AND_DEFINITE_ONLY"
+                << " isolation_policy=CONFIRMED_ORIGIN_ONLY"
+                << " descendant_policy=HUMAN_REVIEW"
                 << " decoy_attribution=FORBIDDEN\n";
       for (uint64_t height = start_height; height <= tip_height; ++height)
       {
@@ -2339,7 +2333,8 @@ int main(int argc, const char* argv[])
                     << " matching_members=" << matching_members
                     << " definite_members=" << definite_members
                     << " outputs=" << tx.vout.size()
-                    << " blacklist=" << (definite ? "RECOMMENDED" : "REVIEW_ONLY")
+                    << " disposition=REVIEW_ONLY"
+                    << " automatic_isolation=no"
                     << '\n';
 
           std::vector<resolved_lineage_output> tx_outputs;
@@ -2374,16 +2369,16 @@ int main(int argc, const char* argv[])
                       << " output_id=" << output_id
                       << " asset=" << resolved.asset
                       << " asset_index=" << resolved.asset_index
-                      << " blacklist=" << (definite ? "RECOMMENDED" : "REVIEW_ONLY")
+                      << " disposition=REVIEW_ONLY"
+                      << " automatic_isolation=no"
                       << '\n';
-            std::cout << "PROPOSED_BLACKLIST output_id=" << output_id
+            std::cout << "LINEAGE_DESCENDANT_REVIEW output_id=" << output_id
                       << " asset=" << resolved.asset
                       << " asset_index=" << resolved.asset_index
                       << " confidence="
                       << (definite ? "DEFINITE_RING_SET" : "POSSIBLE_RING_REFERENCE")
-                      << " action="
-                      << (definite ? "REJECT_RING_REFERENCE" : "NONE")
-                      << " recommended=" << (definite ? "yes" : "no")
+                      << " action=HUMAN_REVIEW"
+                      << " recommended_isolation=no"
                       << " depth=" << depth
                       << " parent_tx=" << tx_hash_hex << '\n';
           }
@@ -2402,8 +2397,8 @@ int main(int argc, const char* argv[])
               << " max_lineage_depth=" << max_lineage_depth
               << " unresolved_lineage_inputs=" << unresolved_lineage_inputs
               << " later_protocol_return_key_matches=" << later_protocol_return_key_matches
-              << " blacklist_entries=" << (root_outputs + definite_descendant_outputs)
-              << " blacklist_possible_excluded=" << possible_descendant_outputs
+              << " isolation_entries=" << root_outputs
+              << " descendant_review_outputs=" << (definite_descendant_outputs + possible_descendant_outputs)
               << " real_spend_identity=UNKNOWABLE"
               << " confidential_minted_amount=UNKNOWABLE"
               << " wallet_attribution=UNKNOWABLE"

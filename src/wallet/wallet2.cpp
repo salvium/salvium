@@ -7767,6 +7767,10 @@ void wallet2::rescan_blockchain(bool hard, bool refresh, bool keep_key_images)
 //----------------------------------------------------------------------------------------------------
 uint64_t wallet2::resume_audit()
 {
+  // The v2 enrollment encodes canonical output identities, confidential
+  // amounts and deterministic spend key images.  Never relay saved evidence;
+  // retain it only inside the encrypted wallet for an explicit private review.
+  if (!cryptonote::lineage_policy::public_enrollment) return 0;
   for (;;) {
     std::string saved;
     if (!get_attribute("sal1-audit-v2", saved) || saved.empty()) return 0;
@@ -7874,6 +7878,13 @@ wallet2::audit_result wallet2::audit(bool submit, bool all_accounts, uint32_t ac
   CHECK_AND_ASSERT_THROW_MES(all_accounts || account < get_num_subaddress_accounts(), "Invalid audit account");
   if (!all_accounts) for (const auto minor : subaddresses)
     CHECK_AND_ASSERT_THROW_MES(minor < get_num_subaddresses(account), "Invalid audit subaddress");
+  const bool private_review = !cryptonote::lineage_policy::public_enrollment;
+  if (private_review) {
+    // Review stays local.  Do not construct, save, query by, or relay the v2
+    // public proofs even if an older API caller asks for submission.
+    submit = false;
+    prepare_only = false;
+  }
   cryptonote::COMMAND_RPC_LINEAGE_AUDIT_STATUS::request request;
   cryptonote::COMMAND_RPC_LINEAGE_AUDIT_STATUS::response status;
   CHECK_AND_ASSERT_THROW_MES(invoke_http_json_rpc("/json_rpc", "get_lineage_audit_status", request, status) &&
@@ -7892,12 +7903,19 @@ wallet2::audit_result wallet2::audit(bool submit, bool all_accounts, uint32_t ac
     scheduled = m_lineage_regtest_height;
     opening_height = status.opening_height;
   }
-  CHECK_AND_ASSERT_THROW_MES(scheduled && status.activation_height == scheduled && status.candidate_height >= scheduled,
-      "Wallet audit is not active for this network and build");
-  CHECK_AND_ASSERT_THROW_MES(status.opening_height == opening_height && opening_height < scheduled,
-      "Daemon and wallet previous-audit boundaries differ");
-  CHECK_AND_ASSERT_THROW_MES(m_lineage_regtest_height || status.closing_height == scheduled + cryptonote::lineage_policy::duration_blocks,
-      "Daemon and wallet audit closing heights differ");
+  if (private_review) {
+    // A local inventory is useful without a consensus enrollment epoch.  The
+    // daemon supplies only the chain tip and optional prior review boundary.
+    scheduled = status.activation_height;
+    opening_height = status.opening_height;
+  } else {
+    CHECK_AND_ASSERT_THROW_MES(scheduled && status.activation_height == scheduled && status.candidate_height >= scheduled,
+        "Wallet audit is not active for this network and build");
+    CHECK_AND_ASSERT_THROW_MES(status.opening_height == opening_height && opening_height < scheduled,
+        "Daemon and wallet previous-audit boundaries differ");
+    CHECK_AND_ASSERT_THROW_MES(m_lineage_regtest_height || status.closing_height == scheduled + cryptonote::lineage_policy::duration_blocks,
+        "Daemon and wallet audit closing heights differ");
+  }
   CHECK_AND_ASSERT_THROW_MES(get_blockchain_current_height() == status.candidate_height,
       "Refresh wallet to the daemon tip before auditing");
   // Once enrollment closes the same bare command reports the final inventory;
@@ -7928,7 +7946,7 @@ wallet2::audit_result wallet2::audit(bool submit, bool all_accounts, uint32_t ac
   size_t batch_inputs = 0;
   std::istringstream lines(saved);
   std::string line;
-  while (std::getline(lines, line)) {
+  while (!private_review && std::getline(lines, line)) {
     if (line.empty()) continue;
     std::string raw;
     cryptonote::lineage_enrollment existing;
@@ -8040,6 +8058,25 @@ wallet2::audit_result wallet2::audit(bool submit, bool all_accounts, uint32_t ac
       row.state = row.immature ? "MATURING" : "AUDIT_PASSED";
       row.release_height = td.m_block_height + age;
     }
+    if (private_review) {
+      const bool inspect_origin = td.m_tx.type != cryptonote::transaction_type::MINER &&
+          td.m_tx.type != cryptonote::transaction_type::PROTOCOL;
+      // transfer_details retains only the transaction prefix, so it cannot
+      // prove a RingCT cleartext-amount defect. Leave that to the full-chain
+      // forensic pass and classify uncertain wallet evidence as REVIEW.
+      bool bad_origin = false;
+      if (inspect_origin) {
+        for (const auto& output : td.m_tx.vout) {
+          std::string output_asset;
+          bad_origin |= !cryptonote::get_output_asset_type(output, output_asset) ||
+              output_asset != td.m_tx.source_asset_type;
+        }
+      }
+      row.state = bad_origin ? "BAD" : "REVIEW";
+      // The wallet may use the image internally to determine spent state, but
+      // the audit result must not export or pre-publish it.
+      row.key_image.clear();
+    }
     result.outputs.push_back(row);
     if (!row.state.empty()) return;
     const auto identity = std::make_tuple(row.transaction, stake ? uint32_t(0) : uint32_t(td.m_internal_output_index), stake);
@@ -8116,18 +8153,21 @@ wallet2::audit_result wallet2::audit(bool submit, bool all_accounts, uint32_t ac
   };
   std::map<std::string, audit_asset_balance> balances;
   for (size_t offset = 0; offset < result.outputs.size(); offset += 1000) {
-    request = {};
-    for (size_t i = offset; i < std::min(offset + 1000, result.outputs.size()); ++i)
-      request.key_images.push_back(result.outputs[i].key_image);
-    status = {};
-    CHECK_AND_ASSERT_THROW_MES(invoke_http_json_rpc("/json_rpc", "get_lineage_audit_status", request, status) &&
-        status.status == CORE_RPC_STATUS_OK && status.entries.size() == request.key_images.size() && status.activation_height == scheduled &&
-        status.candidate_height == result.candidate_height && status.opening_height == opening_height &&
-        status.closing_height == result.closing_height,
-        "Chain changed or audit status unavailable; saved enrollment will retry on refresh");
-    for (size_t i = 0; i < status.entries.size(); ++i) {
+    const size_t end = std::min(offset + 1000, result.outputs.size());
+    if (cryptonote::lineage_policy::public_enrollment) {
+      request = {};
+      for (size_t i = offset; i < end; ++i)
+        request.key_images.push_back(result.outputs[i].key_image);
+      status = {};
+      CHECK_AND_ASSERT_THROW_MES(invoke_http_json_rpc("/json_rpc", "get_lineage_audit_status", request, status) &&
+          status.status == CORE_RPC_STATUS_OK && status.entries.size() == request.key_images.size() && status.activation_height == scheduled &&
+          status.candidate_height == result.candidate_height && status.opening_height == opening_height &&
+          status.closing_height == result.closing_height,
+          "Chain changed or audit status unavailable; saved enrollment will retry on refresh");
+    }
+    for (size_t i = 0; i < end - offset; ++i) {
       auto& row = result.outputs[offset + i];
-      if (row.state.empty()) {
+      if (cryptonote::lineage_policy::public_enrollment && row.state.empty()) {
         row.state = status.entries[i].state;
         row.completed_height = status.entries[i].completed_height;
         row.release_height = status.entries[i].release_height;
@@ -8167,7 +8207,7 @@ wallet2::audit_result wallet2::audit(bool submit, bool all_accounts, uint32_t ac
       result.unresolved_count = balance.unresolved_count; result.spent_count = balance.spent_count;
     }
   }
-  result.state = bad ? "BAD_FUNDS_FOUND" : unresolved ? "UNRESOLVED" :
+  result.state = bad ? "BAD_ORIGIN_FOUND" : unresolved ? "REVIEW_REQUIRED" :
       result.outputs.empty() ? "EMPTY" : immature ? "MATURING" : "AUDIT_PASSED";
   return result;
 }
@@ -8180,6 +8220,7 @@ void wallet2::update_lineage_audit_status()
   if (scheduled) m_lineage_activation_height = scheduled;
   m_lineage_closing_height = 0;
   m_lineage_release_heights.clear();
+  if (!cryptonote::lineage_policy::consensus_enforcement) return;
   if (m_lineage_regtest_height) {
     m_lineage_activation_height = 1; // Fail closed if pointed at a real network.
     cryptonote::COMMAND_RPC_GET_INFO::request info_req;
@@ -8233,7 +8274,8 @@ bool wallet2::is_transfer_unlocked(const transfer_details& td)
   // isolated test override also stays closed until its network is checked.
   const uint64_t activation = m_lineage_activation_height ? m_lineage_activation_height :
       m_lineage_regtest_height ? 1 : scheduled;
-  if (cryptonote::is_lineage_audit_asset(td.asset_type) && activation && get_blockchain_current_height() >= activation) {
+  if (cryptonote::lineage_policy::consensus_enforcement && cryptonote::is_lineage_audit_asset(td.asset_type) &&
+      activation && get_blockchain_current_height() >= activation) {
     if (!td.m_key_image_known || td.m_key_image_partial) return false;
     const bool new_eligible_output = m_lineage_closing_height && td.m_block_height >= activation;
     if (!new_eligible_output) {
@@ -10122,7 +10164,8 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       }
     }
     
-    const bool audit_population = m_lineage_closing_height && m_lineage_activation_height &&
+    const bool audit_population = cryptonote::lineage_policy::consensus_enforcement &&
+        m_lineage_closing_height && m_lineage_activation_height &&
         get_blockchain_current_height() >= m_lineage_activation_height && cryptonote::is_lineage_audit_asset(rct_asset_type);
     if (audit_population) {
       is_after_segregation_fork = false;

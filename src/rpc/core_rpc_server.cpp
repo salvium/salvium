@@ -49,6 +49,7 @@ using namespace epee;
 #include "cryptonote_config.h"
 #include "cryptonote_basic/merge_mining.h"
 #include "cryptonote_core/tx_sanity_check.h"
+#include "cryptonote_core/lineage_audit_policy.h"
 #include "misc_language.h"
 #include "net/local_ip.h"
 #include "net/parse.h"
@@ -1427,7 +1428,8 @@ namespace cryptonote
     bool ok;
     {
       CRITICAL_REGION_LOCAL(chain);
-      if (chain.lineage_audit_closing_height() && chain.get_current_blockchain_height() >= chain.lineage_audit_activation()) {
+      if (lineage_policy::consensus_enforcement && chain.lineage_audit_closing_height() &&
+          chain.get_current_blockchain_height() >= chain.lineage_audit_activation()) {
         transaction tx;
         ok = parse_and_validate_tx_from_blob(tx_blob, tx) && chain.check_lineage_tx_sanity(tx);
       } else {
@@ -1959,6 +1961,11 @@ namespace cryptonote
   bool core_rpc_server::on_lineage_audit_outputs(const COMMAND_RPC_LINEAGE_AUDIT_OUTPUTS::request& req,
       COMMAND_RPC_LINEAGE_AUDIT_OUTPUTS::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
   {
+    if (!lineage_policy::consensus_enforcement) {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Lineage output allow-lists are disabled; descendants are review-only";
+      return false;
+    }
     if (!req.limit || req.limit > 1000) {
       error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
       error_resp.message = "Audit output page limit must be 1 through 1000";
@@ -1986,6 +1993,11 @@ namespace cryptonote
   bool core_rpc_server::on_lineage_audit_status(const COMMAND_RPC_LINEAGE_AUDIT_STATUS::request& req,
       COMMAND_RPC_LINEAGE_AUDIT_STATUS::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
   {
+    if (!lineage_policy::public_enrollment && (!req.key_images.empty() || !req.disclosure_ids.empty())) {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Public output and key-image audit queries are disabled; use private human review";
+      return false;
+    }
     if (req.key_images.size() + req.disclosure_ids.size() > 1000) {
       error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
       error_resp.message = "At most 1000 audit key images per request";
@@ -2018,12 +2030,14 @@ namespace cryptonote
       res.opening_height = chain.lineage_audit_opening_height();
       res.closing_height = chain.lineage_audit_closing_height();
       res.candidate_height = chain.get_current_blockchain_height();
-      res.max_output_proofs_per_block = lineage_limits::max_outputs;
-      res.max_enrollment_bytes_per_block = lineage_limits::max_bytes;
-      res.work_items_per_block = lineage_limits::work_per_block;
-      for (const auto& item : chain.lineage_status(images))
-        res.entries.push_back({item.state, item.completed_height, item.release_height});
-      res.disclosure_heights = chain.lineage_disclosure_heights(disclosures);
+      res.max_output_proofs_per_block = lineage_policy::public_enrollment ? lineage_limits::max_outputs : 0;
+      res.max_enrollment_bytes_per_block = lineage_policy::public_enrollment ? lineage_limits::max_bytes : 0;
+      res.work_items_per_block = lineage_policy::consensus_enforcement ? lineage_limits::work_per_block : 0;
+      if (lineage_policy::public_enrollment) {
+        for (const auto& item : chain.lineage_status(images))
+          res.entries.push_back({item.state, item.completed_height, item.release_height});
+        res.disclosure_heights = chain.lineage_disclosure_heights(disclosures);
+      }
       res.status = CORE_RPC_STATUS_OK;
       return true;
     } catch (const std::exception& error) {

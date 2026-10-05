@@ -158,6 +158,8 @@ class lineage_audit_test {
   }
 public:
   static void audit_window() {
+    check(!lineage_policy::public_enrollment && !lineage_policy::consensus_enforcement,
+        "Privacy/review policy unexpectedly enables public proofs or consensus isolation");
     lineage_audit state;
     state.configure(100, 50, 40);
     check(state.closing_height() == 140 && !state.enrollment_open(99) &&
@@ -165,14 +167,19 @@ public:
         "Audit enrollment cutoff incorrect");
     auto good = root(1, 60), bad = root(2, 61, true), absent = root(3, 62);
     auto pending = child(4, absent, 63);
+    auto exchange_receipt = child(7, bad, 64);
     auto stake = child(5, good, 120); stake.stake_return = true;
-    state.insert({good, bad, pending, stake});
+    state.insert({good, bad, pending, exchange_receipt, stake});
     state.advance(100);
     check(state.get_status(good.image, 109).state == "MATURING" &&
         state.get_status(good.image, 110).state == "AUDIT_PASSED" &&
         state.get_status(good.image, 110).release_height == 110, "Cleared funds did not release at C + 10");
     check(state.stake_payouts(119).empty() && state.stake_payouts(120).size() == 1,
         "Good stake did not preserve normal maturity after C + 10");
+    check(state.get_status(bad.image, 110).state == "BAD" &&
+        state.get_status(exchange_receipt.image, 110).state == "REVIEW" &&
+        state.get_status(exchange_receipt.image, 110).release_height == 0,
+        "Confirmed origin was not kept distinct from exchange/descendant review");
     auto last = root(6, 70);
     state.insert({last}); state.advance(139);
     check(state.get_status(last.image, 140).state == "MATURING" &&
@@ -228,6 +235,8 @@ public:
       boost::get<txin_to_key>(spend.vin[0]).key_offsets = {0, frozen_index};
       check(!state.check_window_spend(outputs, FAKECHAIN, spend, 150, reason), "Good decoy authorized a frozen output");
     }
+    check(state.check_spend(outputs, FAKECHAIN, spend, reason),
+        "Report-only lineage incorrectly rejected a spend containing review evidence");
     check(state.eligible_outputs(outputs, FAKECHAIN).empty(), "Decoy index released output at C + 9");
     outputs.candidate = 110;
     check(state.eligible_outputs(outputs, FAKECHAIN) == std::vector<std::pair<uint64_t, uint64_t>>{{0, 50}},
@@ -969,9 +978,10 @@ public:
         state.insert(ancestry);
         state.advance(completion);
         const auto status = state.get_status(stake.image, completion + 10);
-        check(status.state == (bad ? "BAD" : "AUDIT_PASSED"), "stake funding verdict failed");
+        check(status.state == (bad ? "REVIEW" : "AUDIT_PASSED"), "stake funding review disposition failed");
         const uint64_t payout = std::max(stake.output_height, completion + 10);
-        check(state.stake_payouts(payout).size() == (bad ? 0 : 1), "bad/good payout authorization failed");
+        check(state.stake_payouts(payout).size() == (bad ? 0 : 1),
+            "Review-only ancestry retained audit payout authority");
         check(state.stake_payouts(payout - 1).empty(), "early payout authorized");
         check(state.stake_payouts(payout + 1).empty(), "repeat payout authorized");
         if (!bad) {
@@ -989,7 +999,7 @@ public:
         state.advance(completion + 100000);
         check(state.stake_payouts(payout).size() == (bad ? 0 : 1), "repeated disclosure altered payout");
         check(state.get_status(stake.image, completion + 100000).state ==
-            (bad ? "BAD" : "AUDIT_PASSED"), "time changed bad/good verdict");
+            (bad ? "REVIEW" : "AUDIT_PASSED"), "time changed review/good verdict");
         state.reset();
         check(state.stake_payouts(payout).empty(), "reset retained payout authorization");
       }
@@ -1012,7 +1022,7 @@ public:
       journal.disclosures.push_back(disclosure);
       state.current_undo_ = nullptr;
       state.undo_.push_back(std::move(journal));
-      check(state.get_status(stake.image, 30010).state == (seed % 2 ? "BAD" : "AUDIT_PASSED"), "journaled verdict incorrect");
+      check(state.get_status(stake.image, 30010).state == (seed % 2 ? "REVIEW" : "AUDIT_PASSED"), "journaled verdict incorrect");
       state.rollback_last();
       check(state.get_status(ancestor.image, 30010).state == "UNDISCLOSED", "rollback retained detached ancestor");
       check(state.get_status(stake.image, 30010).state == "PENDING", "rollback retained dependent verdict");
@@ -1020,8 +1030,9 @@ public:
           "rollback retained payout or enrollment confirmation");
       state.insert({ancestor});
       state.advance(30001);
-      check(state.get_status(stake.image, 30011).state == (seed % 2 ? "BAD" : "AUDIT_PASSED"), "rollback lost dependency wakeup");
-      check(state.stake_payouts(30011).size() == (seed % 2 ? 0 : 1), "replayed payout authorization incorrect");
+      check(state.get_status(stake.image, 30011).state == (seed % 2 ? "REVIEW" : "AUDIT_PASSED"), "rollback lost dependency wakeup");
+      check(state.stake_payouts(30011).size() == (seed % 2 ? 0 : 1),
+          "Review-only replay retained audit payout authority");
     }
 
     // A historical payout can be audited but must never be paid twice.
@@ -1084,20 +1095,21 @@ public:
         ++height;
       } while (!state.records_.at(stake.image).verdict);
       const auto completion = state.records_.at(stake.image).completion;
-      check(state.get_status(stake.image, completion + 10).state == (bad ? "BAD" : "AUDIT_PASSED"), "deep ancestry verdict incorrect");
-      check(state.stake_payouts(completion + 10).size() == (bad ? 0 : 1), "deep stake payout authorization incorrect");
+      check(state.get_status(stake.image, completion + 10).state == (bad ? "REVIEW" : "AUDIT_PASSED"), "deep ancestry disposition incorrect");
+      check(state.stake_payouts(completion + 10).size() == (bad ? 0 : 1),
+          "Deep review-only ancestry retained audit payout authority");
       while (!state.undo_.empty()) state.rollback_last();
       check(state.get_status(ancestor.image, height).state == "UNDISCLOSED", "deep rollback retained root");
       check(state.get_status(stake.image, height).state == "PENDING" && state.stake_payouts_.empty(), "deep rollback retained stake authority");
       for (const auto& entry : state.records_) check(!entry.second.verdict, "deep rollback retained a descendant verdict");
       state.insert({root(1, 1, !bad)});
       for (height = 60000; !state.queue_.empty(); ++height) state.advance(height);
-      check(state.get_status(stake.image, height + 10).state == (bad ? "AUDIT_PASSED" : "BAD"), "deep replay retained stale funding verdict");
+      check(state.get_status(stake.image, height + 10).state == (bad ? "AUDIT_PASSED" : "REVIEW"), "deep replay retained stale funding disposition");
     }
     std::cout << "{\"status\":\"STAKE_LINEAGE_STATE_PASS\",\"seeded_paths\":1000,"
                  "\"cryptographic_proof_cases\":1000,\"proof_forgeries_rejected\":4000,\"bad_and_good_ancestry_cases\":2000,\"historical_double_payout_blocked\":true,"
                  "\"journal_rollback_cases\":1000,\"deep_dependency_cases\":4,\"maximum_tested_dependency_depth\":12000,"
-                 "\"cross_asset_pattern_bad\":true,\"work_bound_checked\":true}\n";
+                 "\"cross_asset_pattern_bad\":true,\"descendants_review_only\":true,\"review_stakes_not_delayed\":true,\"work_bound_checked\":true}\n";
   }
 };
 }

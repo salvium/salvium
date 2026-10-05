@@ -340,7 +340,7 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
     delete db;
     return false;
   }
-  if (m_lineage_audit.activation() && db->get_blockchain_pruning_seed())
+  if (lineage_policy::public_enrollment && m_lineage_audit.activation() && db->get_blockchain_pruning_seed())
   {
     MERROR("SAL1 audit requires unpruned historical transactions; restore or resync an unpruned database before enabling the audit fork");
     delete db;
@@ -521,7 +521,8 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
   // Complete the costly historical emission reconstruction before RPC/P2P
   // services accept work. Otherwise the first owner enrollment can hold the
   // blockchain lock for minutes and time out at the wallet.
-  m_lineage_audit.sync(*m_db, m_nettype);
+  if (lineage_policy::public_enrollment || lineage_policy::consensus_enforcement)
+    m_lineage_audit.sync(*m_db, m_nettype);
 
   return true;
 }
@@ -1465,7 +1466,7 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, 
   {
     // Scale extra limit by number of outputs since Carrot requires 1 32-byte ephemeral pubkey per output (for Janus).
     std::size_t max_extra_size = 1060 + b.miner_tx.vout.size() * 32; //(1+32) + (1+1+16*32) + (1+16*32) = 1060
-    if (m_lineage_audit.active(height)) {
+    if (lineage_policy::public_enrollment && m_lineage_audit.active(height)) {
       std::vector<tx_extra_field> fields;
       if (!parse_tx_extra(b.miner_tx.extra, fields)) return false;
       size_t audit_bytes = 0;
@@ -1869,7 +1870,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   std::vector<std::pair<yield_tx_info_carrot, uint64_t>> carrot_yield_payouts;
   uint64_t matured_height = height - stake_lock_period - 1;
   bool ok = true;
-  if (m_lineage_audit.active(height)) {
+  if (lineage_policy::consensus_enforcement && m_lineage_audit.active(height)) {
     if (!calculate_lineage_yield_payouts(height, carrot_yield_payouts)) return false;
   } else {
     ok = get_ybi_entry(matured_height, ybi_matured);
@@ -2425,7 +2426,8 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
 
   cryptonote::yield_block_info ybi_matured;
   bool ok = get_ybi_entry(start_height, ybi_matured);
-  if (m_lineage_audit.active(height) || (ok && ybi_matured.locked_coins_this_block > 0)) {
+  if ((lineage_policy::consensus_enforcement && m_lineage_audit.active(height)) ||
+      (ok && ybi_matured.locked_coins_this_block > 0)) {
 
     // Work out what the asset_type should be based on height of submission
     uint8_t hf_submitted = m_hardfork->get_ideal_version(start_height);
@@ -2433,7 +2435,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
     // Iterate over the cached data for block yield, calculating the yield payouts due
     std::vector<std::pair<yield_tx_info, uint64_t>> yield_payouts;
     std::vector<std::pair<yield_tx_info_carrot, uint64_t>> carrot_yield_payouts;
-    if (m_lineage_audit.active(height)) {
+    if (lineage_policy::consensus_enforcement && m_lineage_audit.active(height)) {
       if (!calculate_lineage_yield_payouts(height, carrot_yield_payouts)) return false;
     } else if (hf_submitted >= HF_VERSION_CARROT) {
       if (!calculate_yield_payouts(start_height, carrot_yield_payouts)) {
@@ -2659,7 +2661,7 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   blobdata lineage_extra;
   const bool canonical_parent = !from_block || (m_db->height() &&
       *from_block == m_db->get_block_hash_from_height(m_db->height() - 1));
-  if (canonical_parent && m_lineage_audit.enrollment_open(height)) {
+  if (lineage_policy::public_enrollment && canonical_parent && m_lineage_audit.enrollment_open(height)) {
     load_lineage_queue();
     m_lineage_audit.sync(*m_db, m_nettype);
     // Pack independent wallet batches while preserving their original bytes
@@ -3338,7 +3340,8 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
     }
 
     const uint8_t hf_version = m_hardfork->get_current_version();
-    const bool audit_window_policy = m_lineage_audit.closing_height() && m_lineage_audit.active(m_db->height());
+    const bool audit_window_policy = lineage_policy::consensus_enforcement &&
+        m_lineage_audit.closing_height() && m_lineage_audit.active(m_db->height());
     if (audit_window_policy) m_lineage_audit.sync(*m_db, m_nettype);
     for (size_t i = 0; i < data.size(); ++i)
     {
@@ -4128,6 +4131,7 @@ std::string Blockchain::lineage_queue_path(const crypto::hash& id) const
 }
 void Blockchain::load_lineage_queue()
 {
+  if (!lineage_policy::public_enrollment) return;
   if (!m_lineage_audit.active(m_db->height()) || m_db->is_read_only()) return;
   m_lineage_audit.sync(*m_db, m_nettype);
   const auto directory = boost::filesystem::path(lineage_queue_path(crypto::null_hash)).parent_path();
@@ -4166,6 +4170,10 @@ void Blockchain::load_lineage_queue()
 bool Blockchain::queue_lineage_disclosure(const std::string& data, crypto::hash& id, std::string& reason)
 {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  if (!lineage_policy::public_enrollment) {
+    reason = "Public wallet audit proofs are disabled: lineage is review-only and wallet evidence must remain private";
+    return false;
+  }
   if (!m_lineage_audit.enrollment_open(m_db->height())) {
     reason = "Audit enrollment is not open";
     return false;
@@ -4205,6 +4213,7 @@ bool Blockchain::queue_lineage_disclosure(const std::string& data, crypto::hash&
 std::vector<std::string> Blockchain::pending_lineage_disclosures()
 {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  if (!lineage_policy::public_enrollment) return {};
   if (!m_lineage_audit.enrollment_open(m_db->height())) return {};
   load_lineage_queue();
   return {m_lineage_pending_disclosures.begin(), m_lineage_pending_disclosures.end()};
@@ -4212,6 +4221,7 @@ std::vector<std::string> Blockchain::pending_lineage_disclosures()
 std::vector<uint64_t> Blockchain::lineage_disclosure_heights(const std::vector<crypto::hash>& ids) const
 {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  if (!lineage_policy::public_enrollment) return std::vector<uint64_t>(ids.size(), 0);
   m_lineage_audit.sync(*m_db, m_nettype);
   std::vector<uint64_t> result;
   for (const auto& id : ids) result.push_back(m_lineage_audit.disclosure_height(id));
@@ -4226,6 +4236,19 @@ bool Blockchain::check_lineage_disclosure(const block& candidate, std::string& r
 {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   try {
+    if (!lineage_policy::public_enrollment) {
+      std::vector<tx_extra_field> fields;
+      if (!parse_tx_extra(candidate.miner_tx.extra, fields)) {
+        reason = "Malformed miner extra";
+        return false;
+      }
+      for (const auto& field : fields)
+        if (boost::get<tx_extra_lineage_audit>(&field)) {
+          reason = "Public wallet audit proofs are disabled; use private human review";
+          return false;
+        }
+      return true;
+    }
     m_lineage_audit.sync(*m_db, m_nettype);
     return m_lineage_audit.validate_disclosure(*m_db, m_nettype, candidate, reason);
   } catch (const std::exception& error) { reason = error.what(); return false; }
@@ -4254,6 +4277,7 @@ std::vector<std::pair<uint64_t, uint64_t>> Blockchain::lineage_outputs(uint64_t 
 bool Blockchain::check_lineage_tx_sanity(const transaction& tx) const
 {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  if (!lineage_policy::consensus_enforcement) return true;
   m_lineage_audit.sync(*m_db, m_nettype);
   if (!is_lineage_audit_asset(tx.source_asset_type)) return false;
   const auto& outputs = m_lineage_audit.eligible_outputs(*m_db, m_nettype, tx.source_asset_type);
@@ -6319,7 +6343,7 @@ leave:
   }
   audit_block_step(blockchain_height, "protocol_transaction_prevalidation");
 
-  if (m_lineage_audit.active(blockchain_height)) {
+  if (lineage_policy::public_enrollment && m_lineage_audit.active(blockchain_height)) {
     std::string reason;
     if (!check_lineage_disclosure(bl, reason)) {
       MERROR_VER("Invalid lineage audit disclosure: " << reason);
@@ -6785,7 +6809,7 @@ leave:
 //------------------------------------------------------------------
 bool Blockchain::prune_blockchain(uint32_t pruning_seed)
 {
-  CHECK_AND_ASSERT_MES(!m_lineage_audit.activation(), false,
+  CHECK_AND_ASSERT_MES(!lineage_policy::public_enrollment || !m_lineage_audit.activation(), false,
       "Pruning is disabled when a SAL1 audit fork is configured; historical transaction proofs must remain available");
   m_tx_pool.lock();
   epee::misc_utils::auto_scope_leave_caller unlocker = epee::misc_utils::create_scope_leave_handler([&](){m_tx_pool.unlock();});
