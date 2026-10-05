@@ -1139,7 +1139,8 @@ namespace cryptonote
         // Now generate the return address (and TX pubkey, although we will discard that)
         crypto::public_key F = crypto::null_pkey;
         crypto::public_key F_txpubkey = crypto::null_pkey;
-        CHECK_AND_ASSERT_MES(get_return_address(tx.version, tx.type, y, sender_account_keys, P_change, additional_tx_public_keys[op_index], F, F_txpubkey, hwdev), false, "Failed to get return_address");
+        const auto& output_tx_pubkey = additional_tx_public_keys.empty() ? txkey_pub : additional_tx_public_keys.at(op_index);
+        CHECK_AND_ASSERT_MES(get_return_address(tx.version, tx.type, y, sender_account_keys, P_change, output_tx_pubkey, F, F_txpubkey, hwdev), false, "Failed to get return_address");
 
         // Push the F point into the TX vector of F points
         tx.return_address_list.push_back(F);

@@ -172,6 +172,8 @@ public:
                                                       std::string url, 
                                                       uint32_t subaddr_account,
                                                       std::set<uint32_t> subaddr_indices = {}) override;
+    std::string audit(bool status_only = false, bool all_accounts = true,
+        uint32_t account = 0, const std::set<uint32_t>& subaddresses = {}) override;
     PendingTransaction * createAuditTransaction(uint32_t mixin_count,
                                                 PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
                                                 uint32_t subaddr_account = 0,

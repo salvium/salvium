@@ -1,0 +1,165 @@
+{
+  "native-gate": {
+    "status": "AUDIT_GATE_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-export": "76d9e3a1bd5b50d22d15264a48014b04478de560f6f8f8fd94c38024b917c291",
+      "salvium-blockchain-import": "b7c36d7e33d2f001322dd7334c1ad68c82ee92f0d476661f83a7351a6ed83214",
+      "salvium-blockchain-verification": "6825ffc2aae149b4617120c18bfc116738d167493c1458eaef1536d9dcf8e978",
+      "salvium-wallet-rpc": "df60e3d906fb7e71c9335e7ed084112da8271ebc717ce57bf18dbbe0a3e75d9b",
+      "salviumd": "6e3399f5b6f8dd77331b765e258afbc701a45866cb80e070184b5514831d00ca"
+    },
+    "artifact_directory": "/tmp/salvium-audit-gate-6i78dw_l"
+  },
+  "native-complex-gate": {
+    "status": "COMPLEX_AUDIT_GATE_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-export": "76d9e3a1bd5b50d22d15264a48014b04478de560f6f8f8fd94c38024b917c291",
+      "salvium-blockchain-import": "b7c36d7e33d2f001322dd7334c1ad68c82ee92f0d476661f83a7351a6ed83214",
+      "salvium-blockchain-verification": "6825ffc2aae149b4617120c18bfc116738d167493c1458eaef1536d9dcf8e978",
+      "salvium-wallet-rpc": "df60e3d906fb7e71c9335e7ed084112da8271ebc717ce57bf18dbbe0a3e75d9b",
+      "salviumd": "6e3399f5b6f8dd77331b765e258afbc701a45866cb80e070184b5514831d00ca"
+    },
+    "artifact_directory": "/tmp/salvium-complex-gate-0s71lup_"
+  },
+  "native-stake-gate": {
+    "status": "STAKE_AUDIT_GATE_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-export": "76d9e3a1bd5b50d22d15264a48014b04478de560f6f8f8fd94c38024b917c291",
+      "salvium-blockchain-import": "b7c36d7e33d2f001322dd7334c1ad68c82ee92f0d476661f83a7351a6ed83214",
+      "salvium-blockchain-verification": "6825ffc2aae149b4617120c18bfc116738d167493c1458eaef1536d9dcf8e978",
+      "salvium-wallet-rpc": "df60e3d906fb7e71c9335e7ed084112da8271ebc717ce57bf18dbbe0a3e75d9b",
+      "salviumd": "6e3399f5b6f8dd77331b765e258afbc701a45866cb80e070184b5514831d00ca"
+    },
+    "artifact_directory": "/tmp/salvium-stake-audit-gate-n2tigzp5"
+  },
+  "native-return-gate": {
+    "status": "RETURN_AUDIT_GATE_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-export": "76d9e3a1bd5b50d22d15264a48014b04478de560f6f8f8fd94c38024b917c291",
+      "salvium-blockchain-import": "b7c36d7e33d2f001322dd7334c1ad68c82ee92f0d476661f83a7351a6ed83214",
+      "salvium-blockchain-verification": "6825ffc2aae149b4617120c18bfc116738d167493c1458eaef1536d9dcf8e978",
+      "salvium-wallet-rpc": "df60e3d906fb7e71c9335e7ed084112da8271ebc717ce57bf18dbbe0a3e75d9b",
+      "salviumd": "6e3399f5b6f8dd77331b765e258afbc701a45866cb80e070184b5514831d00ca"
+    },
+    "artifact_directory": "/tmp/salvium-return-audit-gate-0mtqf_j2"
+  },
+  "native-replay": {
+    "status": "AUDIT_REPLAY_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-import.log": "a2a44c2140f7eca47f631f66dfd83c07a5e9aece433e145f2b80807e982b7f0b",
+      "salvium-blockchain-export.log": "595218e3390bb947b8e4f7d7ec779c749ef63926737eb7d34492de2812e093f8",
+      "salvium-blockchain-import": "b7c36d7e33d2f001322dd7334c1ad68c82ee92f0d476661f83a7351a6ed83214",
+      "salvium-blockchain-export": "76d9e3a1bd5b50d22d15264a48014b04478de560f6f8f8fd94c38024b917c291",
+      "salvium-blockchain-verification": "6825ffc2aae149b4617120c18bfc116738d167493c1458eaef1536d9dcf8e978"
+    },
+    "artifact_directory": "/tmp/salvium-audit-replay-mgjjwxtt"
+  },
+  "native-replay-rejection": {
+    "status": "AUDIT_REPLAY_REJECTION_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-import.log": "4788eeb644baa97282e40e8a4f0f02f829a2e18249a0192a2ef360a9275eef52",
+      "salvium-blockchain-export.log": "da1962f5312f6184ba35f6c4601da2f8ff7abb63df087f0f32abbf2f1c0423b6",
+      "salvium-blockchain-import": "b7c36d7e33d2f001322dd7334c1ad68c82ee92f0d476661f83a7351a6ed83214",
+      "salvium-blockchain-export": "76d9e3a1bd5b50d22d15264a48014b04478de560f6f8f8fd94c38024b917c291",
+      "salvium-blockchain-verification": "6825ffc2aae149b4617120c18bfc116738d167493c1458eaef1536d9dcf8e978"
+    },
+    "artifact_directory": "/tmp/salvium-audit-replay-e3kgcpfo"
+  },
+  "matrix-465074": {
+    "status": "AUDIT_MATRIX_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-verification": "3922b394f4bbc6ebb2ba7ce262ba8bc19bb4ecbedf606dd7404a9c82c3ed95da",
+      "salviumd": "30173802cd597db8e9111372a36f94c07d4605ad521679bd97f0f2340e96252a"
+    },
+    "artifact_directory": "/tmp/salvium-audit-matrix-04jzbg5a"
+  },
+  "matrix-650000": {
+    "status": "AUDIT_MATRIX_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-verification": "6825ffc2aae149b4617120c18bfc116738d167493c1458eaef1536d9dcf8e978",
+      "salviumd": "6e3399f5b6f8dd77331b765e258afbc701a45866cb80e070184b5514831d00ca"
+    },
+    "artifact_directory": "/tmp/salvium-audit-matrix-p55gkq1c"
+  },
+  "native-stake-payout-gate": {
+    "status": "STAKE_AUDIT_GATE_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-export": "2fddbd89ac7f10fc3524e4c57a684e808b0d41835a51ea3eaf470e2dfdfd2b9d",
+      "salvium-blockchain-import": "4f24fd93e90503db72300e0bd4d959a1d912eba058409033d31fdefbc307ee99",
+      "salvium-blockchain-verification": "3d51831d6f6d513eec86040ad29cbc688079c932581784e059f63d4c7b4e44e8",
+      "salvium-wallet-rpc": "924b8ecafeffc30c52a3835587d5a9d7971696cda4d926dfead38a7b1d6c713a",
+      "salviumd": "f358cb2ea0ab35c2fb855af4b5055b0e2f05f0a547227c2187954cc769fee92e"
+    },
+    "artifact_directory": "/tmp/salvium-stake-audit-gate-a64_sh3b",
+    "policy": "stake payouts require good funding ancestry; pending and bad stakes create no payout"
+  },
+  "native-payout-recovery": {
+    "status": "STAKE_PAYOUT_RECOVERY_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-verification": "3d51831d6f6d513eec86040ad29cbc688079c932581784e059f63d4c7b4e44e8",
+      "salviumd": "f358cb2ea0ab35c2fb855af4b5055b0e2f05f0a547227c2187954cc769fee92e"
+    },
+    "artifact_directory": "/tmp/salvium-payout-recovery-ngbgwyda",
+    "policy": "stake payouts require good funding ancestry; pending and bad stakes create no payout"
+  },
+  "matrix-21600": {
+    "status": "AUDIT_MATRIX_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-verification": "3d51831d6f6d513eec86040ad29cbc688079c932581784e059f63d4c7b4e44e8",
+      "salviumd": "f358cb2ea0ab35c2fb855af4b5055b0e2f05f0a547227c2187954cc769fee92e"
+    },
+    "artifact_directory": "/tmp/salvium-audit-matrix-6ba90cf8",
+    "policy": "stake payouts require good funding ancestry; pending and bad stakes create no payout"
+  },
+  "twenty-authorized-payouts": {
+    "status": "TWENTY_LATE_STAKES_PASS",
+    "artifact_directory": "/tmp/salvium-late-stakes-eojb1jr1",
+    "binary_sha256": {
+      "salvium-blockchain-verification": "3d51831d6f6d513eec86040ad29cbc688079c932581784e059f63d4c7b4e44e8",
+      "salvium-wallet-rpc": "924b8ecafeffc30c52a3835587d5a9d7971696cda4d926dfead38a7b1d6c713a",
+      "salviumd": "f358cb2ea0ab35c2fb855af4b5055b0e2f05f0a547227c2187954cc769fee92e"
+    }
+  },
+  "turnkey-authorized-payouts": {
+    "status": "DECLARED_OUTPUTS_PASS",
+    "artifact_directory": "/home/jonathan/data/salvium/build/audit-turnkey-payout",
+    "binary_sha256": {
+      "salviumd": "f358cb2ea0ab35c2fb855af4b5055b0e2f05f0a547227c2187954cc769fee92e",
+      "salvium-wallet-rpc": "924b8ecafeffc30c52a3835587d5a9d7971696cda4d926dfead38a7b1d6c713a",
+      "salvium-blockchain-verification": "3d51831d6f6d513eec86040ad29cbc688079c932581784e059f63d4c7b4e44e8",
+      "salvium-blockchain-import": "4f24fd93e90503db72300e0bd4d959a1d912eba058409033d31fdefbc307ee99",
+      "salvium-blockchain-export": "2fddbd89ac7f10fc3524e4c57a684e808b0d41835a51ea3eaf470e2dfdfd2b9d"
+    }
+  },
+  "isolated-native-gate": {
+    "status": "AUDIT_GATE_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-export": "f377efe11b7dde0e81e20cbfb4b2e53e3a5c9f06369ad0402bf6a7334b905bfb",
+      "salvium-blockchain-import": "f5fe648684f1de58b4bdf14913e3f320b535b5f1ca5ddad29462dec9a69a14e7",
+      "salvium-blockchain-verification": "ebad0ec4e04c8369a221ce746cd096a4ac6e2b107f9b31abe86f2a0eed190f1c",
+      "salvium-wallet-rpc": "94ff47f2f3c84ab1a22417ed930ff4758951ff26ec46d7078a6c2ce70ef8236b",
+      "salviumd": "3f258583ec9b3d49524b362e7614c47c7acb012896080cca24171971daab60e6"
+    },
+    "artifact_directory": "/tmp/salvium-audit-gate-24mpydn8"
+  },
+  "isolated-payout-recovery": {
+    "status": "STAKE_PAYOUT_RECOVERY_PASS",
+    "binary_sha256": {
+      "salvium-blockchain-verification": "ebad0ec4e04c8369a221ce746cd096a4ac6e2b107f9b31abe86f2a0eed190f1c",
+      "salviumd": "3f258583ec9b3d49524b362e7614c47c7acb012896080cca24171971daab60e6"
+    },
+    "artifact_directory": "/tmp/salvium-payout-recovery-bxv72gx3"
+  },
+  "isolated-packaged-runner": {
+    "status": "DECLARED_OUTPUTS_PASS",
+    "binary_sha256": {
+      "salviumd": "3f258583ec9b3d49524b362e7614c47c7acb012896080cca24171971daab60e6",
+      "salvium-wallet-rpc": "94ff47f2f3c84ab1a22417ed930ff4758951ff26ec46d7078a6c2ce70ef8236b",
+      "salvium-blockchain-verification": "ebad0ec4e04c8369a221ce746cd096a4ac6e2b107f9b31abe86f2a0eed190f1c",
+      "salvium-blockchain-import": "f5fe648684f1de58b4bdf14913e3f320b535b5f1ca5ddad29462dec9a69a14e7",
+      "salvium-blockchain-export": "f377efe11b7dde0e81e20cbfb4b2e53e3a5c9f06369ad0402bf6a7334b905bfb"
+    },
+    "artifact_directory": "/home/jonathan/data/salvium/build/audit-turnkey-isolated-smoke",
+    "committed_and_verified_blocks": 278
+  }
+}

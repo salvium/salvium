@@ -43,10 +43,14 @@ namespace tools
 {
 namespace wallet
 {
+bool get_address_openings_x_y(const cryptonote::transaction &tx,
+    const cryptonote::tx_source_entry &src, const wallet2 &w,
+    crypto::secret_key &x_out, crypto::secret_key &y_out);
 std::unordered_map<crypto::key_image, size_t> collect_non_burned_transfers_by_key_image(
     const wallet2::transfer_container &transfers);
 
 carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
+    wallet2 &w,
     const wallet2::transfer_container &transfers,
     const std::uint32_t from_account,
     const std::set<std::uint32_t> &from_subaddresses,

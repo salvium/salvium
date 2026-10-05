@@ -354,6 +354,8 @@ public:
                                         const std::string& asset_type,
                                         uint64_t asset_type_output_index) const;
 
+  uint64_t get_legacy_output_id_by_asset_index(const std::string& asset_type, uint64_t index) const override;
+
   void get_output_ids_by_asset_index(
                                      const std::string& asset_type,
                                      const std::vector<uint64_t>& asset_type_output_indices,

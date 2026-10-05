@@ -73,6 +73,7 @@
 #include "scanning_tools.h"
 
 #include "wallet_errors.h"
+#include "audit_balance.h"
 #include "common/password.h"
 #include "node_rpc_proxy.h"
 #include "message_store.h"
@@ -1347,6 +1348,69 @@ private:
     void rescan_spent();
     void rescan_blockchain(bool hard, bool refresh = true, bool keep_key_images = false);
     bool is_transfer_unlocked(const transfer_details& td);
+    void update_lineage_audit_status();
+    struct audit_output {
+      std::string transaction, key_image, state, asset_type;
+      uint64_t amount = 0, completed_height = 0, release_height = 0;
+      uint32_t account = 0, subaddress = 0;
+      bool spent = false, stake = false, immature = false;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(transaction)
+        KV_SERIALIZE(key_image)
+        KV_SERIALIZE(state)
+        KV_SERIALIZE(asset_type)
+        KV_SERIALIZE(amount)
+        KV_SERIALIZE(completed_height)
+        KV_SERIALIZE(release_height)
+        KV_SERIALIZE(account)
+        KV_SERIALIZE(subaddress)
+        KV_SERIALIZE(spent)
+        KV_SERIALIZE(stake)
+        KV_SERIALIZE(immature)
+      END_KV_SERIALIZE_MAP()
+    };
+    struct audit_result {
+      std::string state;
+      uint64_t activation_height = 0, opening_height = 0, closing_height = 0, candidate_height = 0;
+      uint64_t good = 0, bad = 0, unresolved = 0, spent = 0;
+      uint64_t good_count = 0, bad_count = 0, unresolved_count = 0, spent_count = 0;
+      uint64_t stake_good = 0, stake_bad = 0, stake_unresolved = 0, immature = 0;
+      uint64_t pending_batches = 0;
+      uint64_t stake_good_count = 0, stake_bad_count = 0, stake_unresolved_count = 0, stake_immature = 0;
+      std::vector<audit_asset_balance> balances;
+      std::vector<audit_output> outputs;
+      std::vector<std::string> proofs;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(state)
+        KV_SERIALIZE(activation_height)
+        KV_SERIALIZE(opening_height)
+        KV_SERIALIZE(closing_height)
+        KV_SERIALIZE(candidate_height)
+        KV_SERIALIZE(good)
+        KV_SERIALIZE(bad)
+        KV_SERIALIZE(unresolved)
+        KV_SERIALIZE(spent)
+        KV_SERIALIZE(good_count)
+        KV_SERIALIZE(bad_count)
+        KV_SERIALIZE(unresolved_count)
+        KV_SERIALIZE(spent_count)
+        KV_SERIALIZE(stake_good)
+        KV_SERIALIZE(stake_bad)
+        KV_SERIALIZE(stake_unresolved)
+        KV_SERIALIZE(immature)
+        KV_SERIALIZE(stake_good_count)
+        KV_SERIALIZE(stake_bad_count)
+        KV_SERIALIZE(stake_unresolved_count)
+        KV_SERIALIZE(stake_immature)
+        KV_SERIALIZE(pending_batches)
+        KV_SERIALIZE(balances)
+        KV_SERIALIZE(outputs)
+        KV_SERIALIZE(proofs)
+      END_KV_SERIALIZE_MAP()
+    };
+    audit_result audit(bool submit = true, bool all_accounts = true, uint32_t account = 0,
+        const std::set<uint32_t>& subaddresses = {}, bool prepare_only = false);
+    uint64_t resume_audit();
     bool is_transfer_unlocked(uint64_t unlock_time, uint64_t block_height);
 
     uint64_t get_last_block_reward() const { return m_last_block_reward; }
@@ -1663,6 +1727,7 @@ private:
     void send_change_back_to_subaddress(bool enable) { m_send_change_back_to_subaddress = enable; }
     bool is_mismatched_daemon_version_allowed() const { return m_allow_mismatched_daemon_version; }
     void allow_mismatched_daemon_version(bool allow_mismatch) { m_allow_mismatched_daemon_version = allow_mismatch; }
+    void set_lineage_regtest_height(uint64_t height) { m_lineage_regtest_height = height; }
 
     bool get_tx_key_cached(const crypto::hash &txid, crypto::secret_key &tx_key, std::vector<crypto::secret_key> &additional_tx_keys) const;
     void set_tx_key(const crypto::hash &txid, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const boost::optional<cryptonote::account_public_address> &single_destination_subaddress = boost::none);
@@ -2120,7 +2185,7 @@ private:
     bool is_spent(size_t idx, bool strict = true) const;
   public:
     void get_outs(std::vector<std::vector<get_outs_entry>> &outs, const transfer_container &transfers, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, bool rct, std::unordered_set<crypto::public_key> &valid_public_keys_cache);
-    void get_outs(std::vector<std::vector<get_outs_entry>> &outs, const transfer_container &transfers, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, std::vector<uint64_t> &rct_offsets, std::unordered_set<crypto::public_key> &valid_public_keys_cache, uint64_t &num_spendable_global_outs, uint64_t &num_outs);
+    void get_outs(std::vector<std::vector<get_outs_entry>> &outs, const transfer_container &transfers, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, std::vector<uint64_t> &rct_offsets, std::unordered_set<crypto::public_key> &valid_public_keys_cache, uint64_t &num_spendable_global_outs, uint64_t &num_outs, std::vector<uint64_t>& lineage_indices);
     size_t get_transfer_details(const crypto::key_image &ki) const;
     size_t get_transfer_details_from_container(const crypto::key_image &ki, const transfer_container& container) const;
     bool get_rct_distribution(const bool use_global_outs, const std::string &rct_asset_type, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &num_spendable_global_outs);
@@ -2129,6 +2194,7 @@ private:
     bool should_pick_a_second_output(bool use_rct, size_t n_transfers, const std::vector<size_t> &unused_transfers_indices, const std::vector<size_t> &unused_dust_indices) const;
     std::vector<size_t> get_only_rct(const std::vector<size_t> &unused_dust_indices, const std::vector<size_t> &unused_transfers_indices) const;
     void trim_hashchain();
+    void rebuild_transfer_indices();
     crypto::key_image get_multisig_composite_key_image(size_t n) const;
     rct::multisig_kLRki get_multisig_composite_kLRki(size_t n,  const std::unordered_set<crypto::public_key> &ignore_set, std::unordered_set<rct::key> &used_L, std::unordered_set<rct::key> &new_used_L) const;
     rct::multisig_kLRki get_multisig_kLRki(size_t n, const rct::key &k) const;
@@ -2282,6 +2348,10 @@ private:
     float m_auto_mine_for_rpc_payment_threshold;
     bool m_is_initialized;
     NodeRPCProxy m_node_rpc_proxy;
+    uint64_t m_lineage_activation_height = 0;
+    uint64_t m_lineage_closing_height = 0;
+    uint64_t m_lineage_regtest_height = 0;
+    std::unordered_map<crypto::key_image, uint64_t> m_lineage_release_heights;
     std::unordered_set<crypto::hash> m_scanned_pool_txs[2];
     size_t m_subaddress_lookahead_major, m_subaddress_lookahead_minor;
     std::string m_device_name;

@@ -1,0 +1,1034 @@
+{
+  "date_utc": "2026-09-10T11:42:32.672748+00:00",
+  "branch": "audit",
+  "validation_state": "TARGETED_CHECKS_PASS_HISTORICAL_REPLAY_INCOMPLETE",
+  "release_qualified": false,
+  "base_commit": "91abcf03ce0bae3e3ee94d099c5663d0aa719fb5",
+  "build_command": "make release-static builddir=build/audit topdir=../../.. -j2",
+  "build_result": "PASS",
+  "build_log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/build-startup-warmup.log",
+  "binary_sha256": {
+    "salvium-blockchain-import": "000d0f8742dbe888fe44f3438eae67c70d43690969bec445e7d6f750e621120e",
+    "salvium-wallet-cli": "ee9d776a1ae70dbe5ef81a1debfa5b58f34369f1deec368887c1bb3ce214cfa3",
+    "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0",
+    "salvium-lmdb-stat": "2018df3b9e6ced45f85514486a0239940e2c4514e68be3ea2f72f88d805568b3",
+    "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874",
+    "salvium-blockchain-verification": "978acb6116d8fdd7fc60bda07ff0c43fa67ceca52f9372ef9a1ff7099ce191f4"
+  },
+  "source_sha256": {
+    ".gitignore": "face1abcb96ff688c238a9a83d48761ad4ac9373adb44ded4564491c75c7c113",
+    "src/blockchain_db/blockchain_db.h": "487619feb92ca2410379d8012883b648c435854a0ada803c8e68971ddb7c8064",
+    "src/blockchain_db/lmdb/db_lmdb.cpp": "d6a50ea2436dfad698af70f05b923e22651ec4c46fde90a7d0caf6f6083a7741",
+    "src/blockchain_db/lmdb/db_lmdb.h": "a1c1617f1c7466eac30fb350c477f2516526b68248ce45a7e73d810336a31990",
+    "src/blockchain_db/testdb.h": "826d2ba182fbdd7df684a10200ee5171bb8c55c11411f807898f35c237b5116d",
+    "src/blockchain_utilities/CMakeLists.txt": "fcbe55f01931ac1e731ed887ac646b9ab2950d5a1575ce604b349dcd7be980d3",
+    "src/blockchain_utilities/blockchain_import.cpp": "81a441fa39fcdd47b0c206c22743ef81f08d00a3b4861dabe0bec51c52ef4b21",
+    "src/blockchain_utilities/blockchain_scanner.cpp": "bb4d6880c8874c721aa6625e7b9529e62a38f86d37699915a0be5687c7198edb",
+    "src/blockchain_utilities/blockchain_verification.cpp": "2d5caa3f951d2a671f7d26220faff0f4b79067540c7d138501d8a590f0384d37",
+    "src/blockchain_utilities/independent_chain_forensics.cpp": "44d873d8d77dd3db010fed30373d18c4ecadd9512f460678cfd287600efc2a59",
+    "src/blockchain_utilities/independent_chain_forensics.h": "79cd1a541bfa64bc1c9cbce2edd34d29832c62d9ac46fac8f0f14990bbd04f6b",
+    "src/crypto/rx-slow-hash.c": "960b6d3b193ee3c0bfe76754b1ffff715e2c1b5b3644bde6d2241b9f2d24ffff",
+    "src/cryptonote_basic/cryptonote_format_utils.cpp": "6a775b3f58336d69aa04b31b84b12d2cd79b56a6db77897365c5f26ae2e83632",
+    "src/cryptonote_basic/lineage_audit_limits.h": "8c6392cde6283e0c4691c4fbee5e4e9e867878ac88419cce8bac7b25d3cd0750",
+    "src/cryptonote_basic/tx_extra.h": "12e0fd4c525fa54a3e9f16279250d6dc106dd5c9f9eeffedd33979d172e5655b",
+    "src/cryptonote_core/CMakeLists.txt": "254eb3269256f334fc6014a0dbc5c9c92c355890cb80c1c15153b88cb7dbc913",
+    "src/cryptonote_core/blockchain.cpp": "1ce1297530702b203d177234e7dbdad2c9bdc2a939f3d7b59dafae6bdf969d52",
+    "src/cryptonote_core/blockchain.h": "13268c1ebec3ab627e587442cbc2cf4e2f989f957d3d75cb7544400fe2c80ff6",
+    "src/cryptonote_core/cryptonote_core.cpp": "61c7a819163f1cbd314316838a0fd7f7634457c004cc3f0b735527818986e12c",
+    "src/cryptonote_core/cryptonote_tx_utils.cpp": "12076d52006d63c6aec569927f019c71854dbd8a653d6390f0c5c68b3550b98f",
+    "src/cryptonote_core/lineage_audit.cpp": "53d2f7139aa55639e54c933393043adc6e6b55c15e06ba1fa7658e0353918c19",
+    "src/cryptonote_core/lineage_audit.h": "8adc03848b6ff14b12cf6275f43ce47bac4fce3ec92fbb7bc3dec53fd14fcab4",
+    "src/cryptonote_core/lineage_audit_policy.h": "6a73a5ea5cfcfae3e546dd4332bd365730eb2a3f70879153b45e961b5811269b",
+    "src/cryptonote_core/tx_pool.cpp": "a680edd4cf403df939561296b4e56cb76f6ff618eaa4a95fc4b30ece3e6302f1",
+    "src/cryptonote_core/tx_rules_engine.cpp": "f3b37aac206365b277c4eee8e18a913d8a0fb7213f94c3e313e29a7688624e99",
+    "src/cryptonote_protocol/cryptonote_protocol_defs.h": "ada43edbcf5aa941c6cdf768a630f00d1da76160ffd7b4712dba4ad6ec67341b",
+    "src/cryptonote_protocol/cryptonote_protocol_handler.h": "5ff933e481d86bf18121bfc94b6fd9d93116f84bdc23e40f5bd3d1286065f10e",
+    "src/cryptonote_protocol/cryptonote_protocol_handler.inl": "76964d86b9c88a0ef9102850452f926ffe05a8d60d0ba0e545e99246891fe95d",
+    "src/cryptonote_protocol/cryptonote_protocol_handler_common.h": "30aa4b88eda459478b93f5750c15ca423e12fe34e751f58a539b01f950eb0085",
+    "src/hardforks/hardforks.cpp": "ee0653db0389cd0376b1314cc393715345e28b60cbaa7460b72ba45b476c9c0d",
+    "src/rpc/core_rpc_server.cpp": "e9fb9ad823b9ccdd2947ff5954e05a83f5e65fd7503da6c18e81b7cc76c7cb4d",
+    "src/rpc/core_rpc_server.h": "fc670d43b4af6634a11313710b9c2bf85a6c091bd8d6f5aa3a7a40099a5a9d8b",
+    "src/rpc/core_rpc_server_commands_defs.h": "2b03cafad02510da7e57fd8ea3ffbe7a34e56c9d50c2f7073cf8faebf61b6649",
+    "src/simplewallet/simplewallet.cpp": "cda2903d209a51c4d3ffecaf6129ff60fd9ee279c05645d4cf3cc7c099b7867c",
+    "src/wallet/CMakeLists.txt": "91a00a58cc002f3da9863d48f201c13886e57329b86e481a522e52d6930a2857",
+    "src/wallet/api/CMakeLists.txt": "8c3602eed396072576eb104f5c87538c521fc4cbbef51d4236d3a84b5901a5c3",
+    "src/wallet/api/wallet.cpp": "4d1f2fc91547744cdd5d8c786ab880b791a874008f65c306fcd9149ea37a0aae",
+    "src/wallet/api/wallet.h": "b284f1d3919d86a5b1d71f7daa1a98c480762f1044c8fc45fa3c4e67194d1ee1",
+    "src/wallet/api/wallet2_api.h": "3b093f69d8ed0680b7df25a9407f96655cc3c3999c4b8e8dc77b9bb318661ecf",
+    "src/wallet/audit_balance.h": "eba45446e86a9acbebe0e83362a5a029cee53131707b74a790e3a104f35ae6c4",
+    "src/wallet/tx_builder.cpp": "51030d85e274a4e34a4f40716b08da0ad7be53fde3da8f955c255a5740b29325",
+    "src/wallet/tx_builder.h": "6e54868a293fefcd8d31f67c7e4906d2ae3d5bf55b3ccd775d592dafb33b4e99",
+    "src/wallet/wallet2.cpp": "ea4f5a2cf13d95b24d060352273a5f04a28aa01bc39553c079f4a3301e8c6436",
+    "src/wallet/wallet2.h": "d52441e1eebed76aabd059f81adeab79165479fe080c5a987a84b4452dd4169e",
+    "src/wallet/wallet_rpc_server.cpp": "f7a0e632a8cc4bf52924c760655e3fcf3a083c3f45ddb264e7696f274fde058b",
+    "src/wallet/wallet_rpc_server_commands_defs.h": "93dcf4ad30f16f5cac21fb5d9c21ad76314129c88f95ed090c584a976026a1b4",
+    "tests/data/sal1-bad-origin-465074.hex": "c741410bb6197740c5c089ea90b190daf384690db9b40377a3a5620baa99ade1",
+    "tests/functional_tests/audit_capacity_regtest.py": "89bd760d3852f25ededf719177433a618e316b138ca7f66b0d2c724b178b1708",
+    "tests/functional_tests/audit_complex_gate_regtest.py": "c19ae394d5cd3b7ebb48d82fff670da4856c67180041bb9d84eab6f8249a1e4d",
+    "tests/functional_tests/audit_complex_regtest.py": "22a0108d381a82f8e78e286dc16eaaf95dd7113b7966221ab066ebe179b34648",
+    "tests/functional_tests/audit_gate_regtest.py": "81cc2f2bc97019e77a2124e6a6a32d7caa44ac8e08310b0a0ef5fb678c7c9e1a",
+    "tests/functional_tests/audit_late_stakes_regtest.py": "356499aa532ec0fefbdeea137879ea87ac752cda015fa238ea40d889c9ea8a15",
+    "tests/functional_tests/audit_many_inputs_regtest.py": "19b7a65913d7656f41ad40a6dd2a4d79bc22bf167f4e05a62d33f6cd1f2f848b",
+    "tests/functional_tests/audit_matrix_regtest.py": "129432fabc3f02f197c4dfd60628fe6266bce57115ff0e29d64eb373ad51139e",
+    "tests/functional_tests/audit_mining_regtest.py": "e0382480f4e4e83c71d3423c102aa7668c0fd943ac4c04cbda008a96ac0b7043",
+    "tests/functional_tests/audit_multi_return_regtest.py": "b8243f744eacd0e78b50efb78ddff4b5af05d0fd720cfda54782d7d6c4119904",
+    "tests/functional_tests/audit_opening_regtest.py": "5affbd29dcb9b361764cc49fb155ef948d1f3dcffeb326c90b5bc9e47bb0f2f5",
+    "tests/functional_tests/audit_owner_rounds_regtest.py": "a1370f6713d1b2dbad557b453cbddcc5c8f889b3b9ea81cec06c1d50b39e4abb",
+    "tests/functional_tests/audit_payout_recovery_regtest.py": "7c28871801462ae285d06d780c094da27a6a92491e41a490b40cd5b4652d1b3f",
+    "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b",
+    "tests/functional_tests/audit_replay_regtest.py": "4967e49b42f95f6e03fb72ab51fdb334ec2def9965b772c6f272900819bf1598",
+    "tests/functional_tests/audit_return_gate_regtest.py": "89b7a275cd1e0183eda79d2a9add2876c85ddebcec186680d8ea1dabdb775101",
+    "tests/functional_tests/audit_runner_tests.py": "55f74c03c8f9b074c32eb2adc527e961af909a4de11aa5f794a56642511483ab",
+    "tests/functional_tests/audit_scan_range_regtest.py": "12ecc0cc8efd112cd1fa98e332b3d003e752a603873ca73ce0c5f3b691939e08",
+    "tests/functional_tests/audit_snapshot_faults.py": "0827bd1706b5ba6de14ac773d942fef0f685c07b659f9deb5b651480023b41a6",
+    "tests/functional_tests/audit_stake_gate_regtest.py": "6ac2504f9d8e4f1204f9c2687ec80708e63f0c4f6049757d031199621c58c069",
+    "tests/functional_tests/audit_startup_regtest.py": "1e9b2871167247648c2eb073a1e5f2a642e9c641c1616bccef85c47a6ab442c5",
+    "tests/functional_tests/audit_tokens_regtest.py": "792270e2748c568271c45b43e49b1093557236663f8f90ee7ea2fa7ecacc0f97",
+    "tests/functional_tests/audit_wallet_bad_stake_regtest.py": "b7252603c49ba13933e70e072a7bcbce2cc93fe411afd4214a3a6b1b00169325",
+    "tests/functional_tests/audit_wallet_complex_regtest.py": "82fcb6d936fa623bfd062ebdc84ffe6055414fa36aa18d9310a716983463f0f2",
+    "tests/functional_tests/audit_wallet_finish_regtest.py": "9fb46462f7924bcd8ab4d866788de8537cb77623ad6aaf46c976da1c7455fbe1",
+    "tests/functional_tests/audit_wallet_good_stake_regtest.py": "93f7455144615eb7e63c9b43877451d9e0db0f381b78fcfe44ec40e09c0fa2c8",
+    "tests/functional_tests/audit_wallet_matrix_regtest.py": "86c07c5d6d8829fb469124f23eb9f7d60c44538e1057d6bb1a120dfc80a7d0a9",
+    "tests/functional_tests/audit_wallet_matrix_suite_regtest.py": "a540ee77c47c720895401df865eec41348342fd2a59c7c8c30d2e4c9875af839",
+    "tests/functional_tests/audit_wallet_mixed_funds_regtest.py": "5be3a83446c14b2bc146f725c8c4689002e02595d3669fdd2697f2a7aa56a6bc",
+    "tests/functional_tests/audit_wallet_peer_regtest.py": "1754b6fa8bb3f656e01a6771115804863d67da03600cd59d94ca54c88142ed6b",
+    "tests/functional_tests/audit_wallet_regtest.py": "0db662c0c3b542c3850b07039486456a4d3cd038557f2017933cf39bb20556a1",
+    "tests/functional_tests/audit_wallet_review_regtest.py": "fca10ded89345b21ae83d614dbc2a3b0e5f020c6ec0c64c9ec71addbbb846fea",
+    "tests/functional_tests/audit_window_regtest.py": "d4086a5285b738af207f87b3365ddda1da9482f598c15ff79b34071e6a407960",
+    "tests/functional_tests/run_audit_limited.sh": "baa9682e65e0dba4d102e0dbf2cde8cc9efb8ac595b3e26163d60b09349ce830",
+    "tests/functional_tests/run_audit_regtest.sh": "6b8b3767940aa2848d6537aff40221847fa1c7d3c6f33bf47cfed62eded42d66",
+    "tests/unit_tests/lineage_audit.cpp": "800dab012ff6c124ef5319c06dbc1fa3f46961aa04b4358eca483903250e6e95",
+    "tests/unit_tests/wallet_audit_inventory.cpp": "a0694d38a4015126e575e91eccfb1db56f3f1c0715560eb37577572671c31524",
+    "tests/unit_tests/wallet_tx_builder.cpp": "ebb9135a92894e38003e9ca107a408550595cda23232dd7d036b2530ec0a5490",
+    "utils/audit_tui.py": "9da2ddcae235633678ea658f4b5db53884f6a5cbb28b85213798be8047360b54",
+    "utils/build_audit_activation.py": "81bb6c3e338f03b7cfe40e7a1d02537dd8040d8d883f8d7b2b3e8103bd91499d",
+    "utils/build_forensic_artifacts.py": "b0809b9d2a760bca2857cf8957343c6339da2aff9531fd456b69ec7714af562a",
+    "utils/full_chain_audit.sh": "ed20f74f605bbcb95198bb8bba880b5100a4bdff16b1ec2dce8727d46d961b2c",
+    "utils/generate_legacy_sal1_inventory.py": "ee5b3d4a99133f1e53cecd5002f84c09acaee8e566d77e45cf1e4967d4853ea2",
+    "utils/lineage_disclosure.py": "c76dc8d45530c427b104d4555cdf3a874b7501c55c6b7723024c79843189ed2e",
+    "utils/package_audit.py": "4f6518671a3a80dbab3f1ee3636e202d1542f645b50c5fb6ecf975d6e020b7ea",
+    "utils/publish_lineage_audit.py": "1d25b72e4bd67d51d7969e5213dec00b0ee96703dc0e5171ae782ca62412208f",
+    "utils/run_salvium_audit.py": "bf6d873d8da9feea8f6ed31931c0423c1dbae3913fe932a0562cb2b07c0df5d0",
+    "utils/summarize_audit_fixture.py": "8bbc8a083a20eeead5c6709101e360ada01468bb5b7ab666e6cac5aacf79c3ec",
+    "audit.md": "e45ac3da00e92dbb4040ff509a411f0f1c558113f90efa5b4e6d5a61d39ca663"
+  },
+  "changed_since_source_snapshot": [],
+  "policy": {
+    "mainnet_activation_height": 0,
+    "opening_height": 154749,
+    "duration_blocks": 10080,
+    "enrollment": "[H,H+10080)",
+    "assets": "SAL1 and supported tokens; legacy SAL excluded",
+    "release": "C+10 subject to normal maturity",
+    "old_stakes": "payout at max(normal maturity,C+10), original earning period; unresolved/bad do not pay",
+    "new_mining": "no enrollment or C+10; normal60blockmaturity",
+    "accepted_conversions": "both canonical SAL-to-SAL1 payouts are good origins; ownership still enrolls; no SAL funding re-audit",
+    "proofs_per_block": 512,
+    "enrollment_bytes_per_block": 262144,
+    "ancestry_work_items_per_block": 1024
+  },
+  "checks": {
+    "wallet-inventory": {
+      "stage": "wallet-inventory",
+      "command": [
+        "/home/jonathan/data/salvium/build/audit/release/src/wallet/wallet_audit_inventory_tests"
+      ],
+      "started_utc": "20260910T013023Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/wallet-inventory-20260910T013023Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 13.886166037002113,
+      "log_sha256": "a00b8e21df57b0cc50a05114d04f55503859a8a24c4a2a72cbc0e68f2e7b6a0a"
+    },
+    "capacity": {
+      "stage": "capacity",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_capacity_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin"
+      ],
+      "started_utc": "20260910T013037Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/capacity-20260910T013037Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 177.88539221600513,
+      "log_sha256": "f39e45ec9deb5c6c196a078827f9b8e3878dec031a11617dd94976b5e138feb8",
+      "result": {
+        "status": "AUDIT_CAPACITY_PASS",
+        "proofs": 1024,
+        "proofs_per_block": 512,
+        "packed_wallet_batches": 8,
+        "max_batch_bytes": 103462,
+        "submit_seconds": [
+          0.36545225701411255,
+          0.36580131499795243,
+          0.3522700299799908,
+          0.3495963020250201,
+          0.3945106089813635,
+          0.34461404601461254,
+          0.35116073599783704,
+          0.3403823369881138,
+          2.8414344290213194
+        ],
+        "full_block_seconds": [
+          2.074656019016402,
+          1.9285102770081721
+        ],
+        "daemon_memory": [
+          "VmHWM:\t 2179520 kB",
+          "VmRSS:\t 2179520 kB"
+        ],
+        "checks": [
+          "512_proofs_in_each_block",
+          "small_batches_packed",
+          "per_batch_confirmation_ids",
+          "combined_limits",
+          "reorg_and_replay",
+          "C_plus_9_and_C_plus_10",
+          "cleared_spend",
+          "restart"
+        ],
+        "binary_sha256": {
+          "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0",
+          "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874"
+        }
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_capacity_regtest.py": "89bd760d3852f25ededf719177433a618e316b138ca7f66b0d2c724b178b1708",
+        "tests/functional_tests/audit_gate_regtest.py": "fd0d5fdb0e2bd569c796ca5ae863cc3d7bf988cc9427c4833a01ad9b1f7b5474",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "capacity-load": {
+      "stage": "capacity-load",
+      "command": [
+        "/home/jonathan/data/salvium/build/audit/release/src/cryptonote_core/lineage_audit_tests",
+        "--capacity-load",
+        "3151784"
+      ],
+      "started_utc": "20260910T015912Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/capacity-load-20260910T015912Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 63.38634140000795,
+      "log_sha256": "85bb183959cda0d63f73bb2a43d959f1c2be04d36dfb744f088a77b77e5c646d",
+      "binary_sha256": {
+        "lineage_audit_tests": "3264b3ce6ff3a4f5436160dba510bae7bc1a00f18566ac8c78bcef9d0ba3fef9"
+      },
+      "measurements": {
+        "records": 3151784,
+        "enrollment_blocks": 6156,
+        "algorithm_seconds": 54.0407,
+        "peak_rss_kib": 7148676,
+        "ring_size": 16,
+        "pending_fraction": 0.25
+      }
+    },
+    "tokens": {
+      "stage": "tokens",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_tokens_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin",
+        "--fixture",
+        "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/token-prefix"
+      ],
+      "started_utc": "20260910T013019Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/tokens-20260910T013019Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 449.4990584840125,
+      "log_sha256": "9e1ac95192de4239a709ed6f2b6e77f20d9019d1c630c08aacc6d2dc4fe46585",
+      "result": {
+        "status": "TOKEN_AUDIT_PASS",
+        "issuance_height": 21613,
+        "release_height": 22514,
+        "closing_height": 22660,
+        "checks": [
+          "canonical_salYAHU_issuance",
+          "465074_structural_defect_rejected",
+          "bare_audit_includes_tokens",
+          "token_and_SAL1_ancestry",
+          "separate_asset_balances",
+          "H_freeze",
+          "C_plus_9_rejected",
+          "raw_prepaid_token_spend_at_C_plus_10",
+          "per_asset_population",
+          "reorg_revokes_token_clearance",
+          "replay_restores_token_clearance",
+          "absent_token_owner_frozen_at_cutoff",
+          "post_cutoff_token_spend",
+          "restart_restores_token_clearance"
+        ],
+        "binary_sha256": {
+          "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0",
+          "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874",
+          "salvium-blockchain-verification": "978acb6116d8fdd7fc60bda07ff0c43fa67ceca52f9372ef9a1ff7099ce191f4"
+        }
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_tokens_regtest.py": "792270e2748c568271c45b43e49b1093557236663f8f90ee7ea2fa7ecacc0f97",
+        "tests/functional_tests/audit_gate_regtest.py": "fd0d5fdb0e2bd569c796ca5ae863cc3d7bf988cc9427c4833a01ad9b1f7b5474",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "mining": {
+      "stage": "mining",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_mining_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin"
+      ],
+      "started_utc": "20260910T013748Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/mining-20260910T013748Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 104.59419761999743,
+      "log_sha256": "68b93f158906f66d0051a381289eafec6406422a2c3a4f883bc3bedd29440c76",
+      "result": {
+        "status": "AUDIT_MINING_PASS",
+        "activation": 120,
+        "first_mining_release": 180,
+        "mining_maturity_blocks": 60,
+        "wallet_never_enrolled": true,
+        "old_mining_output_still_frozen": true,
+        "spend": "41cc75527168e2641284e8a3038022e9b9e39ec6eeb28c5b2786ff7419832027",
+        "binary_sha256": {
+          "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0",
+          "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874"
+        }
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_mining_regtest.py": "e0382480f4e4e83c71d3423c102aa7668c0fd943ac4c04cbda008a96ac0b7043",
+        "tests/functional_tests/audit_gate_regtest.py": "fd0d5fdb0e2bd569c796ca5ae863cc3d7bf988cc9427c4833a01ad9b1f7b5474",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "startup": {
+      "stage": "startup",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_startup_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin"
+      ],
+      "started_utc": "20260910T013933Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/startup-20260910T013933Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 21.165715804992942,
+      "log_sha256": "bc4848a9dca7105f0d140fda71a3ee34be766975f3594beb42bbadf238fe057c",
+      "result": {
+        "status": "AUDIT_STARTUP_GUARDS_PASS",
+        "pruned_database_rejected": true,
+        "pruning_flag_rejected": true,
+        "pruning_rpc_rejected": true,
+        "real_network_test_option_rejected": true,
+        "invalid_opening_boundary_rejected": true,
+        "default_two_week_duration": 10080,
+        "unpruned_control_passed": true,
+        "daemon_sha256": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874"
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_startup_regtest.py": "1e9b2871167247648c2eb073a1e5f2a642e9c641c1616bccef85c47a6ab442c5",
+        "tests/functional_tests/audit_gate_regtest.py": "fd0d5fdb0e2bd569c796ca5ae863cc3d7bf988cc9427c4833a01ad9b1f7b5474",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "wallet": {
+      "stage": "wallet",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_wallet_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin"
+      ],
+      "started_utc": "20260910T013954Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/wallet-20260910T013954Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 287.43640270800097,
+      "log_sha256": "eb3dc9e3a6dba15c608f9fe97b7947590b7518702091eb76ec4dbca6f8381b0e",
+      "result": {
+        "status": "WALLET_AUDIT_PASS",
+        "tip": 306,
+        "stake": "cecba6aadd79b9b85b9075acdac78ce5bb78ee4b42dd5b903395c72cad7a50dc",
+        "release_height": 269,
+        "released_spend": "9ed6ca8fd1fe789583466455fe4be3448e66f60071ae2ba23796569a7b139b60",
+        "invalid_native_proofs_rejected": 1000,
+        "cli_entry_point": true,
+        "all_miner_batches_confirmed_in_bulk": true,
+        "mixed_batch_survives_orphaned_receipt": true,
+        "default_all_accounts_and_explicit_scope": true,
+        "bare_audit_enrolls_every_account_and_deposit_subaddress": true,
+        "deposit_accounts": 3,
+        "deposit_outputs_checked": 4,
+        "direct_forged_block_rejected_with_valid_control": true,
+        "mixed_good_and_quarantined_subaddress_transfer_and_sweep": true,
+        "viewing_secret_absent": true,
+        "immature_good_stake_enrolled": true,
+        "binary_sha256": {
+          "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874",
+          "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0",
+          "salvium-wallet-cli": "ee9d776a1ae70dbe5ef81a1debfa5b58f34369f1deec368887c1bb3ce214cfa3"
+        }
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_wallet_regtest.py": "0db662c0c3b542c3850b07039486456a4d3cd038557f2017933cf39bb20556a1",
+        "tests/functional_tests/audit_gate_regtest.py": "fd0d5fdb0e2bd569c796ca5ae863cc3d7bf988cc9427c4833a01ad9b1f7b5474",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "opening": {
+      "stage": "opening",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_opening_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin"
+      ],
+      "started_utc": "20260910T014839Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/opening-20260910T014839Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 139.47379464199184,
+      "log_sha256": "e37b3168fb502df9bad4ee314e824c8b75ff8f3c9a6ed455bc300fa18d37de13",
+      "result": {
+        "status": "OPENING_INVENTORY_AUDIT_PASS",
+        "opening_height": 135,
+        "mining_history_prepared_before_fork_rpc": true,
+        "opening_block_hash": "4b812e82cc36ba13e2c51c58f2ed6255cccb744533cbf4011cf18f305c678fa8",
+        "tip": 359,
+        "opening_ownership_without_previous_owners": true,
+        "post_boundary_receipt_requires_new_ancestry": true,
+        "pre_boundary_spent_history_excluded": true,
+        "active_opening_stake_principal_audited": true,
+        "post_boundary_miner_emission_verified": true,
+        "opening_boundary_restart_rebuild": true,
+        "post_boundary_spend_confirmed": "ea1a9fba0b7b720775867eb077d04806f2f43a1c1dfdea1474c1eb71290d7304",
+        "binary_sha256": {
+          "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874",
+          "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0"
+        }
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_opening_regtest.py": "5affbd29dcb9b361764cc49fb155ef948d1f3dcffeb326c90b5bc9e47bb0f2f5",
+        "tests/functional_tests/audit_gate_regtest.py": "fd0d5fdb0e2bd569c796ca5ae863cc3d7bf988cc9427c4833a01ad9b1f7b5474",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "window": {
+      "stage": "window",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_window_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin",
+        "--stake-cycle"
+      ],
+      "started_utc": "20260910T015641Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/window-20260910T015641Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 1210.622418665007,
+      "log_sha256": "7345c705eae8d111925f5844eecd5e5c4c3c7463ed0618868d0bd2da70d932e4",
+      "result": {
+        "status": "AUDIT_WINDOW_PASS",
+        "activation": 240,
+        "duration": 120,
+        "closing": 360,
+        "release_height": 251,
+        "tip": 21934,
+        "bare_cli_accounts": 3,
+        "cleared_outputs": 3,
+        "unresolved_frozen": 300000000,
+        "late_enrollment_rejected": true,
+        "final_block_clearance_releases_after_cutoff": true,
+        "recipient_wallet_never_enrolled": true,
+        "new_receipt_spend": "ab74df8f748faa74ba4cd9722a9cdb5d1a64e4f20818035aedac917582a645d7",
+        "reorg_and_restart": true,
+        "old_stake": "8bad84ff5fee614efb61d48c3650770506844388449959eb1e932661adbafae3",
+        "stake_cycle": true,
+        "post_activation_stake": "730015b52211e97c70ecc08bd5dab6b729abad83c4f3065428aac46d8cddbadc",
+        "post_activation_payout": 21874,
+        "payout_spend": "3a0da8677a9a330fb2d0b044288db4e8c6401256bd530fd18654b246e517a408",
+        "independent_issuance_and_payout_replay": true,
+        "binary_sha256": {
+          "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0",
+          "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874",
+          "salvium-blockchain-verification": "978acb6116d8fdd7fc60bda07ff0c43fa67ceca52f9372ef9a1ff7099ce191f4",
+          "salvium-wallet-cli": "ee9d776a1ae70dbe5ef81a1debfa5b58f34369f1deec368887c1bb3ce214cfa3"
+        }
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_window_regtest.py": "d4086a5285b738af207f87b3365ddda1da9482f598c15ff79b34071e6a407960",
+        "tests/functional_tests/audit_gate_regtest.py": "81cc2f2bc97019e77a2124e6a6a32d7caa44ac8e08310b0a0ef5fb678c7c9e1a",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "owner-rounds": {
+      "stage": "owner-rounds",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_owner_rounds_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin"
+      ],
+      "started_utc": "20260910T021651Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/owner-rounds-20260910T021651Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 1233.3706990059873,
+      "log_sha256": "609153b9882cbdc32f851952953e1e30c1aaa5357eb8480a5ad37309041abdf2",
+      "result": {
+        "status": "AUDIT_OWNER_ROUNDS_PASS",
+        "rounds": [
+          {
+            "enrolled": true,
+            "owner_address": "SC11tJQzpHH5uAEY1mt1p616nCm8xSqiBXfAUyZ4pDYKQdyJEn7LRPjXsxeGXKPkqai89pszFnX8tYx9cYGNDu1e7Zi82hiYWf",
+            "old_output_state": "BAD",
+            "activation": 240,
+            "duration": 10080,
+            "closing": 10320,
+            "tip": 10381,
+            "old_signed_spend_rejected": true,
+            "old_wallet_signing_rejected": true,
+            "new_receipt_in_same_wallet_spend_confirmed": "8b3e0120069b14386fde1e28049bdd5e8faa497bd9f81e4eca34bf47d63b77bb",
+            "owner_enrollment_calls": 1,
+            "partial_split_sweep_signing_pass": true,
+            "unspent_output_counter_matches_inventory": true
+          },
+          {
+            "enrolled": false,
+            "owner_address": "SC11tJQzpHH5uAEY1mt1p616nCm8xSqiBXfAUyZ4pDYKQdyJEn7LRPjXsxeGXKPkqai89pszFnX8tYx9cYGNDu1e7Zi82hiYWf",
+            "old_output_state": "UNDISCLOSED",
+            "activation": 240,
+            "duration": 10080,
+            "closing": 10320,
+            "tip": 10381,
+            "old_signed_spend_rejected": true,
+            "old_wallet_signing_rejected": true,
+            "new_receipt_in_same_wallet_spend_confirmed": "869de575068da620018050d9273f7c7808c05c83558ca2fd96b7e276310c9245",
+            "owner_enrollment_calls": 0,
+            "partial_split_sweep_signing_pass": true,
+            "unspent_output_counter_matches_inventory": true
+          }
+        ],
+        "fault": {
+          "height": 1,
+          "old_reserve": 2321720123,
+          "new_reserve": 2321720124,
+          "scope": "Disposable historical-corruption fixture with unchanged signed descendant transactions"
+        },
+        "signed_funding": "be6422aaee530c0d3fbe5a4ac760b71e3d739df9718c20ad3aa20748d491fe36",
+        "signed_stake": "f505bbe4ce6dc22d58cf85e39a7ec4d967384a1a953f1be826be7f5ab9d110d1",
+        "binary_sha256": {
+          "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874",
+          "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0",
+          "salvium-blockchain-verification": "978acb6116d8fdd7fc60bda07ff0c43fa67ceca52f9372ef9a1ff7099ce191f4"
+        }
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_owner_rounds_regtest.py": "a1370f6713d1b2dbad557b453cbddcc5c8f889b3b9ea81cec06c1d50b39e4abb",
+        "tests/functional_tests/audit_gate_regtest.py": "81cc2f2bc97019e77a2124e6a6a32d7caa44ac8e08310b0a0ef5fb678c7c9e1a",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "many-inputs": {
+      "stage": "many-inputs",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_many_inputs_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin"
+      ],
+      "started_utc": "20260910T023725Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/many-inputs-20260910T023725Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 620.3588104629889,
+      "log_sha256": "f6875ab055581917cc99c0678c24eb96559ed2a53d795af009f7b7c9c02a4601",
+      "result": {
+        "status": "AUDIT_MANY_INPUTS_PASS",
+        "funding_inputs": 2048,
+        "funding_bytes": 2459317,
+        "native_byte_budget": 1048576,
+        "consolidation_transactions": [
+          "01c0cbc247adcbe4e29829122373f2663173a804302e08fcd68ad93e1f7f9342",
+          "79b5f7261a79c017a6091f59adecb4e8e65abb64433c33d28129f7cf2166043a",
+          "b73e5824d8af4e675511252a53230acb6a79fe5101f3003244817f346deb8eb1",
+          "a8d676d5dd17bdda36bc79ba919fb744da7bd487190bd0a2a91d2ecdfec4bd7c",
+          "b20dc000fbab89dce371b148d0bea165ee24d7c9e798d47a0bfd09c6dc3ad70a",
+          "b64c19b021ad470aaa9ed10682d9f04a24904e631a4aa0deb1846dac9636640c",
+          "76eb001fc8ae83d2701fec570ae8601246d5e6b6bebb3f344897863901597464",
+          "8e20ba146ec8625da9d150464d481ea89098076e4b23eead71722d49563ad795",
+          "0790871bf847cce3bedad77ffbdf23803b7257349415fc9b9e0842343a2a1657",
+          "ee17a8f54f7038152e86230ec76e2d694bac27415307447faa6f027a441fdf28",
+          "80fa00352ed591b74fb73ba7efbdb75ba9591c8ece0e6e0de1e0bf1e57fd653e",
+          "f710960d11743167c176e16da267a60f1191bfcadfefc2ce520a2019592b671b",
+          "8ac39ab48179a5db0b2c8734735a2afcbf41cce4e544ff6e9ac681957cb5d8f9",
+          "da3a9047ce62d5597bcf10c658463d3604e53a185012ccb36f6ab70273b8e3b6",
+          "a8ece8cf697490c35b6b11152ac522af92e5b13a053004854d4f00c04456121b",
+          "2b73277204969fc4d720b6e856a67af94446e049fa539ffdf4f986b9c9a02615",
+          "5f0c2ecbc6749f2f370239ada10ff838231860598fb00ead3b162bd2013382c8",
+          "7bc84088d4aa623ca4215c546a1d77c3ab2ab417fbc3a6cc04cd342d31c5b54f",
+          "81a278a99b2e2ac67b2189b1b57df7b8d63851869d74d016c413d351e8fc26fc",
+          "9589924c7c0a71e8764ba959430a0ab6bb64d93fafc9afc6855ef8ab8f044253",
+          "f7c592a3104c5b4a21b9f7bc2fd0839359f0a52c7246d72229f7bcd4eebb925e",
+          "762d213a97c632e79ace566ae01fb05822e2d5becce2be869b48a94f12b1614b",
+          "c2dbcba08f7628585e825bbc9da16dfef4a5b1a27da514fd2bde032368aea398",
+          "72ad21c818a55db10f450623479dfb3b8d6787843f3db5ac76ad1cc0490390eb",
+          "0c4dc2dd0183b449fc4e77d9dfa93b6311cd12b4e43ca42b4ec47513c8660605",
+          "fe22bbae57e2c2ae644331673c30f7632689d877724cef15eb78bb06e0ac2b2b",
+          "cf555f4f6cf4981aa8ef9ad232f8ab02ad6fa0bbd8b24bb2f89f37ac69204c69",
+          "eda2745b00446834b6b0fbb03b2ca93ce91de9e3a63d9ad06e14b9b5e45e420c",
+          "03e375db2d54e4cbeeb606b9a91fd74b5d4299b50bddf2b1bfef8262f6ca076f",
+          "3d6e2b1955c27ab8c373268be58c43145a71e0f7526321c7eecc55c163645b62",
+          "7b9eafefeabd9aad2c01a39040ea4ceea6f83d19d8bd195a5538b364dc75589c",
+          "92327b05f3201202d46729bd356e104724273ae44ce244cf095514d804669e9d"
+        ],
+        "prepared_batches": 4,
+        "repaired_batches": 4,
+        "signatures_preserved": true,
+        "tip": 5039,
+        "binary_sha256": {
+          "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874",
+          "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0"
+        }
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_many_inputs_regtest.py": "19b7a65913d7656f41ad40a6dd2a4d79bc22bf167f4e05a62d33f6cd1f2f848b",
+        "tests/functional_tests/audit_gate_regtest.py": "81cc2f2bc97019e77a2124e6a6a32d7caa44ac8e08310b0a0ef5fb678c7c9e1a",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "multi-return": {
+      "stage": "multi-return",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_multi_return_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin"
+      ],
+      "started_utc": "20260910T024745Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/multi-return-20260910T024745Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 101.17526494298363,
+      "log_sha256": "45725f36aa29cf0fecabcab2674b2563ca1a390bfdb88e56469db462ac162165",
+      "result": {
+        "status": "AUDIT_MULTI_RETURN_PASS",
+        "received_outputs": 15,
+        "payment_output_counts": [
+          7,
+          7,
+          1
+        ],
+        "legacy_fifteen_in_one_tx_not_supported_by_carrot": true,
+        "returned_input_count": 15,
+        "returned_transactions": 3,
+        "returned_atomic": 1488856920,
+        "fees_atomic": 11143080,
+        "all_original_receipts_spent": true,
+        "duplicate_return_rejected": true,
+        "tip": 145,
+        "binary_sha256": {
+          "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874",
+          "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0"
+        },
+        "source_issue": "https://github.com/salvium/salvium/issues/13"
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_multi_return_regtest.py": "b8243f744eacd0e78b50efb78ddff4b5af05d0fd720cfda54782d7d6c4119904",
+        "tests/functional_tests/audit_gate_regtest.py": "81cc2f2bc97019e77a2124e6a6a32d7caa44ac8e08310b0a0ef5fb678c7c9e1a",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "peer": {
+      "stage": "peer",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_wallet_peer_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin"
+      ],
+      "started_utc": "20260910T024926Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/peer-20260910T024926Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 188.43441462598275,
+      "log_sha256": "63c67ec445aac0dd0d7f0c5e64cdb8312f874a335c1d7d8bef7fd1c50dbae0ca",
+      "result": {
+        "status": "WALLET_PEER_RELAY_PASS",
+        "restricted_owner_node": true,
+        "ordinary_funding_submitted_directly_to_miner": true,
+        "separate_mining_peer": true,
+        "exclusive_loopback_connections": true,
+        "queued_proof_relay_after_peer_reconnect": true,
+        "tip": 257,
+        "non_mining_node_retires_confirmed_queue": true,
+        "binary_sha256": {
+          "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874",
+          "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0"
+        }
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_wallet_peer_regtest.py": "1754b6fa8bb3f656e01a6771115804863d67da03600cd59d94ca54c88142ed6b",
+        "tests/functional_tests/audit_gate_regtest.py": "81cc2f2bc97019e77a2124e6a6a32d7caa44ac8e08310b0a0ef5fb678c7c9e1a",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "bad-stake": {
+      "stage": "bad-stake",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_wallet_bad_stake_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin"
+      ],
+      "started_utc": "20260910T025235Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/bad-stake-20260910T025235Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 960.734324917983,
+      "log_sha256": "24adb03e97348559b28517492f118511f1f61b46de8d10a73c4662b56528cd86",
+      "result": {
+        "status": "WALLET_BAD_STAKE_PASS",
+        "tip": 21778,
+        "fault": {
+          "mutation": "historical miner reserve over-issuance by one atomic SAL1",
+          "height": 1,
+          "old_reserve": 2321720123,
+          "new_reserve": 2321720124
+        },
+        "signed_funding": "98b8ac62807a5023ff6be72de850aa382d7760bf0193f8225bcf46b587656a21",
+        "signed_stake": "4e984309ccafb18d67d2aa626ecee09eb49f41db6eab65070de5894324478db0",
+        "normal_payout_height": 21713,
+        "bad_stake_payouts": 0,
+        "activation": 240,
+        "closing": 360,
+        "native_durable_queue_survived_restart": true,
+        "binary_sha256": {
+          "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874",
+          "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0",
+          "salvium-blockchain-verification": "978acb6116d8fdd7fc60bda07ff0c43fa67ceca52f9372ef9a1ff7099ce191f4"
+        },
+        "scope": "Controlled historical-corruption fixture; no claim that a current daemon accepts the damaged origin"
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_wallet_bad_stake_regtest.py": "b7252603c49ba13933e70e072a7bcbce2cc93fe411afd4214a3a6b1b00169325",
+        "tests/functional_tests/audit_gate_regtest.py": "81cc2f2bc97019e77a2124e6a6a32d7caa44ac8e08310b0a0ef5fb678c7c9e1a",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "good-stake": {
+      "stage": "good-stake",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_wallet_good_stake_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin",
+        "--root",
+        "/home/jonathan/salvium-audit-test-work/salvium-wallet-good-stake-v2-tor80eu8"
+      ],
+      "started_utc": "20260910T103059Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/good-stake-20260910T103059Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 241.45567868297803,
+      "log_sha256": "a9f567cdfd38d5cb47f4487d7856b0d6c93376ea675670dff98cb7951bd55e65",
+      "result": {
+        "status": "WALLET_GOOD_STAKE_PASS",
+        "normal_payout": 21713,
+        "activation": 21700,
+        "closing": 21820,
+        "actual_payout": 21749,
+        "payout_atomic": 49632084741438,
+        "tip": 21809,
+        "missing_ancestor_blocks_past_term": true,
+        "yield_uses_original_window": true,
+        "payout_reorg_replay": true,
+        "maturity_raw_spend_boundary": true,
+        "payout_spent_by_real_key_image": "9843463e8bd98f8f92ed5329a5fa2fad0f72ad4079ce410db5b1a6884a6309f9",
+        "paid_principal_not_double_counted": true,
+        "binary_sha256": {
+          "salviumd": "3af672ffd7b7dddf275deb4c5a5a97a7280cca121be3fadd792557f861bde874",
+          "salvium-wallet-rpc": "0ec81ab1032d9c41ee2203fffd616466954adb864c296205ec91c0c634c802f0"
+        }
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_wallet_good_stake_regtest.py": "93f7455144615eb7e63c9b43877451d9e0db0f381b78fcfe44ec40e09c0fa2c8",
+        "tests/functional_tests/audit_gate_regtest.py": "81cc2f2bc97019e77a2124e6a6a32d7caa44ac8e08310b0a0ef5fb678c7c9e1a",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "scan-range": {
+      "stage": "scan-range",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_scan_range_regtest.py",
+        "--binaries",
+        "/home/jonathan/data/salvium/build/audit/release/bin",
+        "--fixture-db",
+        "/home/jonathan/salvium-audit-test-work/salvium-audit-owner-rounds-v2zlzow8/setup/chain/fake/lmdb"
+      ],
+      "started_utc": "20260910T102559Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/scan-range-20260910T102559Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 1.3755581970035564,
+      "log_sha256": "d24038f043469e0b09dfaf0aa5eac455bf682bd907356202a0fabe59eda6c4d2",
+      "result": {
+        "status": "AUDIT_SCAN_RANGE_PASS",
+        "root": "/home/jonathan/salvium-audit-test-work/salvium-audit-scan-range-hnyorne6",
+        "cases": 4
+      },
+      "matching_final_build": true,
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_scan_range_regtest.py": "12ecc0cc8efd112cd1fa98e332b3d003e752a603873ca73ce0c5f3b691939e08",
+        "tests/functional_tests/audit_gate_regtest.py": "81cc2f2bc97019e77a2124e6a6a32d7caa44ac8e08310b0a0ef5fb678c7c9e1a",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    },
+    "runner": {
+      "stage": "runner",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_runner_tests.py"
+      ],
+      "started_utc": "20260910T102601Z",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/runner-20260910T102601Z.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 0.1562724459799938,
+      "log_sha256": "bbf220d889d409913082932298af56e5c6199e198725dc0cb2584e097ddc68d6",
+      "selected_test_source_sha256": {
+        "tests/functional_tests/audit_runner_tests.py": "55f74c03c8f9b074c32eb2adc527e961af909a4de11aa5f794a56642511483ab",
+        "tests/functional_tests/audit_gate_regtest.py": "81cc2f2bc97019e77a2124e6a6a32d7caa44ac8e08310b0a0ef5fb678c7c9e1a",
+        "tests/functional_tests/audit_release_regtest.py": "4625eec9a37673a4bcc2afec8d918b98cbfa8b5a45574a666c957e159f53f53b"
+      }
+    }
+  },
+  "additional_evidence": {
+    "native-public-warmup-qualified.json": {
+      "command": [
+        "/home/jonathan/data/salvium/build/audit/release/src/cryptonote_core/lineage_audit_tests",
+        "/home/jonathan/data/salvium/tests/data/sal1-bad-origin-465074.hex",
+        "/home/jonathan/salvium-audit-test-work/full-chain-20260909T110053Z/snapshot/lmdb",
+        "/home/jonathan/salvium-audit-test-work/full-chain-20260909T110053Z/legacy-sal1-refs.tsv",
+        "/home/jonathan/salvium-audit-test-work/full-chain-20260909T110053Z/poison-ranks.tsv"
+      ],
+      "binary_sha256": "3264b3ce6ff3a4f5436160dba510bae7bc1a00f18566ac8c78bcef9d0ba3fef9",
+      "started_utc": "2026-09-10T01:35:05.859620+00:00",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/native-public-warmup.log",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 1356.682068537979,
+      "log_sha256": "472adc9c511a7c3f3d0d16cc6b2c75dd9bf52d90228e7a0655b02970360a057f"
+    },
+    "full-snapshot-result.json": {
+      "accepted_opening": 154749,
+      "scan_start": 154750,
+      "scan_end": 558799,
+      "scanned_blocks": 404050,
+      "exit_code": null,
+      "seconds": null,
+      "postprocessed_existing_log": true,
+      "native_exit_code_not_preserved": true,
+      "validation_scope": "completed forensic phases and table invariants, not a recovered native exit code",
+      "command": [
+        "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/scan-bin/salvium-blockchain-verification",
+        "--db-path",
+        "/home/jonathan/salvium-audit-test-work/full-chain-20260909T110053Z/snapshot/lmdb",
+        "--include-miner",
+        "1",
+        "--start-height",
+        "154750",
+        "--end-height",
+        "558799",
+        "--stop-on-first-failure",
+        "0",
+        "--max-failures",
+        "0",
+        "--progress-interval",
+        "10000",
+        "--log-level",
+        "0"
+      ],
+      "binary_sha256": "7a83513ea1f3fc52ff1a63445d9baefd0144f2007edd436987f2e47d146971cd",
+      "snapshot": "Opening blockchain DB read-only at: /home/jonathan/salvium-audit-test-work/full-chain-20260909T110053Z/snapshot/lmdb\nSNAPSHOT_INFO blocks=558800 height=558799 hash=a2c952a97eca8caf8bf7fd72f2f1b7d586e84f96b4d4146ff2424b2130f17c74 genesis=1f5f4102fd000d6e4258856f57a0056ef653c56e7e25a6ad13b8bb31db00ee7b",
+      "summaries": {
+        "ASSET_FLOW_BLACKLIST_SUMMARY": "ASSET_FLOW_BLACKLIST_SUMMARY policy=ORIGIN_CONFIRMED_OR_DESCENDANT_PROVEN proposed_origins=1 proposed_descendants=0 review_only_candidates=79065 enforcement=NONE_REPORT_ONLY",
+        "ASSET_FLOW_SUMMARY": "ASSET_FLOW_SUMMARY blocks=404050 txs=412088 token_creations=37 duplicate_token_creations=0 issuance_mismatches=0 repeated_token_issuances=0 asset_id_collisions=0 findings=1 exact_amount_findings=1 confidential_or_ring_ambiguous_findings=0 bad_sal1_origin_transactions=1 bad_sal1_origin_outputs=2 unresolved_bad_sal1_origin_amounts=0 sal1_origin_amount_total=COMPLETE exact_sal1_created_atomic=4000000000000000 exact_cross_asset_fees_to_sal1_atomic=0 public_private_token_fees_atomic=95123960 matched_rollup_fees_atomic=95123960 trouble_outputs=2 later_ring_references=3377874 proven_descendant_references=0 possible_descendant_references=79065 recursive_descendant_transactions=79065 maximum_lineage_depth=5532 proposed_blacklist_origins=1 proposed_blacklist_descendants=0 review_only_candidates=79065 unresolved_input_rings=0 output_records=2330943 protocol_outputs_checked=17874 input_asset_labels_checked=1992501 output_asset_labels_checked=1764436 source_destination_checks=412088 private_token_fee_checks=106 token_registration_checks=37 token_supply_checks=37 token_price_checks=37 asset_ids_checked=3774811 descendant_inputs_checked=1992501 descendant_ring_members_checked=31879386",
+        "INDEPENDENT_CHAIN_SUMMARY": "INDEPENDENT_CHAIN_SUMMARY records=404050 start_height=154750 end_height=558799 expected_sal1_emission=10183972517724461 actual_sal1_issuance=10183972517724461 issuance_match=yes actual_visible_sal1_outputs=71690972476631050 verified_fees=2486706848040 claimed_burns=72321531670455701 protocol_outputs_checked=17874 paid_authorizations=17874 duplicate_authorizations=0 unauthorized_outputs=0 miner_mismatches=0 protocol_mismatches=0 first_mismatch=-1 affected_hf_min=-1 affected_hf_max=-1 findings=0 current_build=1.1.3c-91abcf03c, based on Monero 0.18.4.0-release reproducible_on_current_build=no spent_status=RING_DEPENDENT_UNKNOWN status=PASS",
+        "OUTPUT_AUDIT_SUMMARY": "OUTPUT_AUDIT_SUMMARY records=2330943 parent_missing=0 index_invalid=0 height_mismatches=0 pubkey_mismatches=0 asset_mismatches=0 asset_index_mismatches=271424 amount_index_mismatches=0 clear_amount_mismatches=566507 db_commitment_mismatches=0 serialized_db_commitment_substitutions=565805 malformed_cleartext_commitment_substitutions=50456",
+        "FORENSIC_SUMMARY": "FORENSIC_SUMMARY blocks=404050 txs=412088 inputs=1992501 matched_txs=7883 matched_inputs=11283 duplicate_key_images=0 cleartext_txs=7208 arithmetic_overflows=0 reconstruction_failures=0 matched_signature_failures=0 broken_block_links=0 missing_block_transactions=0 duplicate_transaction_hashes=0 general_forensics=COMPLETE start_height=154750 end_height=558799 prior_spend_validation=CONSENSUS_REPLAY_REQUIRED legacy_poison_analysis=COMPLETE",
+        "SUPPLY_AUDIT_SUMMARY": "SUPPLY_AUDIT_SUMMARY stored_final_generated=8914711023525073 accumulated_stored_deltas=4477848153191328 generated_supply_decreases=0 generated_supply_exceeds_cap=0 transparent_miner_outputs=4668859823466990 transparent_protocol_outputs=137824842719341953 ordinary_fees=2486706848040 ordinary_burns=72321531670455701 consensus_reward_replay=SEPARATE_IMPORT_REQUIRED confidential_net_amounts=COMMITMENT_ONLY",
+        "AFTEREFFECT_SUMMARY": "AFTEREFFECT_SUMMARY seed_candidate_transactions=7883 root_outputs=57664 recursive_transactions=33796 possible_transactions=33796 definite_transactions=2588 definite_descendant_outputs=20626 possible_descendant_outputs=136652 recursive_ring_references=1743733 max_lineage_depth=6 unresolved_lineage_inputs=0 later_protocol_return_key_matches=58 blacklist_entries=78290 blacklist_possible_excluded=136652 real_spend_identity=UNKNOWABLE confidential_minted_amount=UNKNOWABLE wallet_attribution=UNKNOWABLE legacy_poison_analysis=COMPLETE"
+      },
+      "salYAHU_evidence": [
+        "ASSET_FLOW_FINDING severity=CRITICAL class=OUTPUT_DESTINATION_MISMATCH height=465074 tx=9353dd3288e20618596085228ea6faf5bf2a9d01cd98c36ea5ceeef2c2d4eb1e type=TRANSFER source=salYAHU destination=salYAHU input_assets=salYAHU output_assets=SAL1 fee=810220 burnt=0 amount_status=EXACT_AGGREGATE input_atomic=4000000000000000 output_atomic=4000000000000000",
+        "ASSET_FLOW_TROUBLE_OUTPUT origin_height=465074 origin_tx=9353dd3288e20618596085228ea6faf5bf2a9d01cd98c36ea5ceeef2c2d4eb1e output_id=2621581 local_index=0 indexed_asset=SAL1 clear_amount=0",
+        "ASSET_FLOW_TROUBLE_OUTPUT origin_height=465074 origin_tx=9353dd3288e20618596085228ea6faf5bf2a9d01cd98c36ea5ceeef2c2d4eb1e output_id=2621582 local_index=1 indexed_asset=SAL1 clear_amount=0"
+      ],
+      "table_counts": {
+        "blocks": 558800,
+        "block_info": 558800,
+        "block_heights": 558800,
+        "hf_versions": 558800,
+        "tx_indices": 1804405,
+        "txs_pruned": 1804405,
+        "tx_outputs": 1804405,
+        "output_records": 3151784,
+        "output_txs": 3151784,
+        "output_amounts": 3151784,
+        "output_amount_refs": 3151784,
+        "output_types": 3101328,
+        "output_type_refs": 3101328,
+        "alt_blocks": 0,
+        "txpool_blob": 0,
+        "txpool_meta": 0
+      },
+      "table_invariants_pass": true,
+      "scope": "SAL1 and token recovery range 154750..558799; accepted opening 154749; earlier state is context; consensus import is separate"
+    },
+    "full-source-rules-result.json": {
+      "exit_code": 0,
+      "seconds": 754.8196222782135,
+      "command": [
+        "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/scan-bin/salvium-blockchain-verification",
+        "--db-path",
+        "/home/jonathan/salvium-audit-test-work/full-chain-20260909T110053Z/snapshot/lmdb",
+        "--no-asset-flow-forensic",
+        "--include-miner",
+        "1",
+        "--start-height",
+        "154750",
+        "--end-height",
+        "558799",
+        "--stop-on-first-failure",
+        "0",
+        "--max-failures",
+        "0",
+        "--progress-interval",
+        "10000"
+      ],
+      "checked": 816138,
+      "failed": 0,
+      "summary": "Range:           154750 .. 558799\nChecked txs:     816138\nPassed txs:      816138\nFailed txs:      0\n\nPer-HF:\n  HF 6: checked=10301 passed=10301 failed=0\n  HF 7: checked=37830 passed=37830 failed=0\n  HF 8: checked=34828 passed=34828 failed=0\n  HF 9: checked=283125 passed=283125 failed=0\n  HF 10: checked=276948 passed=276948 failed=0\n  HF 11: checked=101203 passed=101203 failed=0\n  HF 12: checked=8596 passed=8596 failed=0\n  HF 13: checked=63307 passed=63307 failed=0\n\nPer-type:\n  AUDIT: checked=3273 passed=3273 failed=0\n  BURN: checked=4 passed=4 failed=0\n  CREATE_TOKEN: checked=37 passed=37 failed=0\n  MINER: checked=404050 passed=404050 failed=0\n  ROLLUP: checked=109 passed=109 failed=0\n  STAKE: checked=15006 passed=15006 failed=0\n  TRANSFER: checked=393659 passed=393659 failed=0\n=== end summary ===",
+      "binary_sha256": "7a83513ea1f3fc52ff1a63445d9baefd0144f2007edd436987f2e47d146971cd",
+      "log_sha256": "da8e7f96cc97e76f3b55730fa28b644cff3be254e179a48551d9c9d4d1524854",
+      "scope": "Regular and miner transaction rules from 154750..558799, accepted opening 154749; protocol issuance checked separately",
+      "coverage_crosscheck_pass": true
+    },
+    "load-provenance.json": {
+      "recorded_utc": "2026-09-10T00:39:00.828646+00:00",
+      "scope": "Earlier graph component provenance. Current measurements and native binary hash are under checks.capacity-load.",
+      "files": {
+        "src/cryptonote_core/lineage_audit.cpp": "841111575ec4a2775c50a2cbed02d5e32f04df240e70df67c28b650e0a54d5b3",
+        "src/cryptonote_core/lineage_audit.h": "8adc03848b6ff14b12cf6275f43ce47bac4fce3ec92fbb7bc3dec53fd14fcab4",
+        "src/cryptonote_basic/lineage_audit_limits.h": "8c6392cde6283e0c4691c4fbee5e4e9e867878ac88419cce8bac7b25d3cd0750",
+        "src/cryptonote_core/lineage_audit_policy.h": "6a73a5ea5cfcfae3e546dd4332bd365730eb2a3f70879153b45e961b5811269b",
+        "tests/unit_tests/lineage_audit.cpp": "8d65bb05bcbce4b5096807c8c7a6c4a4a9d6e93685bc3e4815eac189db3d69fd",
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests": "da4c0e1da65ab85fb194970f81e860ed05bb2acafdca6452f55c49da4a71f305"
+      },
+      "logs": {
+        "workload-20260910T002705Z.log": "2a7518c58ac48a34bc3f10b6433f0ebe710d07b9b998ca942e600124bcfa65fe",
+        "capacity-load-20260910T003621Z.log": "b9add69f85941784406e9c016189edf554cf8a177fe8c255a98c8ac7fabbf48e"
+      }
+    },
+    "historical-consensus-progress.json": {
+      "status": "RUNNING",
+      "verified_through_height_observed": 321361,
+      "requested_start": 154750,
+      "requested_end": 558799,
+      "checked_at_utc": "2026-09-10T11:42:32.630577+00:00",
+      "importer_sha256": "6d335efc0cade63e5bf42a1d246ad930f4865aad6b66833c55e00fdb9e04d092",
+      "accepted_opening_hash": "980ec58da9cafe424e8b139812fdbd0f144f020cc8288aa000fd062bfe9cb552",
+      "target_hash": "a2c952a97eca8caf8bf7fd72f2f1b7d586e84f96b4d4146ff2424b2130f17c74",
+      "unit": "salvium-audit-consensus-20260910-r3.service",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/consensus-driver-r3.log",
+      "full_requested_range_pass": false
+    },
+    "bounded_consensus_replay": {
+      "status": "AUDIT_REPLAY_PASS",
+      "source_height": 2011,
+      "source_hash": "da2d893e5f0e3b7ced83f7fdf3fbbc2eb9d2462f647b550517381af2fdf13ccc",
+      "committed_blocks": 2012,
+      "activation_height": 2000,
+      "verified_height_records": 2012,
+      "duration_blocks": 10080,
+      "early_spend_tx": null,
+      "import_exit": 0,
+      "fast_block_sync": false,
+      "full_validation": true,
+      "rollback_each_block": true,
+      "binary_sha256": {
+        "salvium-blockchain-verification": "978acb6116d8fdd7fc60bda07ff0c43fa67ceca52f9372ef9a1ff7099ce191f4",
+        "salvium-blockchain-export": "b55bfb7b301d5a92d1ebc26d4d66da14b27e4fb34762eb7efde9616b269018c0",
+        "salvium-blockchain-import": "000d0f8742dbe888fe44f3438eae67c70d43690969bec445e7d6f750e621120e"
+      }
+    },
+    "stake_boundary_fixture_correction": {
+      "time_utc": "2026-09-10T10:31:00.900590+00:00",
+      "file": "tests/functional_tests/audit_wallet_good_stake_regtest.py",
+      "old_sha256": "96461e31c98d060bb947befbd22216026240d06c7a92057cb76034dafb9162fc",
+      "new_sha256": "93f7455144615eb7e63c9b43877451d9e0db0f381b78fcfe44ec40e09c0fa2c8",
+      "change": "Fixture signs at candidate P+60 and rolls back one block; signing later selected decoys that were immature at the tested boundary. Refresh resumed fixture before stake discovery.",
+      "cpp_changed": false
+    },
+    "stake_test_prefix": {
+      "root": "/home/jonathan/salvium-audit-test-work/salvium-wallet-good-stake-v2-tor80eu8",
+      "height": 21700,
+      "hash": "f1862f9aba0aec1e254fc8d9bee46764362402b60a41a1cb1433965b3333c830",
+      "source_fixture": "/home/jonathan/salvium-audit-test-work/salvium-wallet-good-stake-v2-onn42y_n",
+      "provenance": "Copied only isolated chain and disposable wallet keys; canonical prefix hash matched; caches rebuilt."
+    },
+    "public_enrollment_inventory": {
+      "status": "PASS",
+      "log": "/home/jonathan/salvium-audit-test-work/mainnet-handoff-20260909/workload-20260910T002705Z.log",
+      "log_sha256": "2a7518c58ac48a34bc3f10b6433f0ebe710d07b9b998ca942e600124bcfa65fe",
+      "summary": "ACTUAL_WORKLOAD_RESULT start=154750 end=558799 output_proofs=2327445 stake_proofs=15006 total_proofs=2342451 sources=826909 source_bytes=2503600270 inputs=2245931 largest_source=110813 oversized_sources=0 optimistic_blocks=4919 duration=10080 seconds=556.23 mode=public_inventory_not_owner_discovery_or_cryptographic_replay",
+      "sal1_outputs": 2327183,
+      "token_outputs": 262,
+      "stake_return_proofs": 15006,
+      "potential_proofs": 2342451,
+      "optimistic_enrollment_blocks": 4919,
+      "scope": "Public inventory and packing estimate; not owner discovery, owner timing, or full cryptographic replay."
+    }
+  },
+  "pending_or_failed": [
+    "full-historical-consensus-replay"
+  ],
+  "limitations": [
+    "Activation remains zero pending main developer configuration and validation of the release schedule.",
+    "Public-chain scans cannot identify actual ring members or prove owner participation.",
+    "The large native ancestry graph is a controlled load and excludes daemon/RandomX overhead.",
+    "Real wallet inspection was read-only; private wallet evidence is not included.",
+    "Full historical consensus replay is separate from output eligibility and must retain its exact checked range and importer hash.",
+    "Forensic phase summaries and table counts were recovered after the original wrapper failed using an incompatible system LMDB statistics binary. The native exit code was not retained. The independent transaction-rule scan completed separately with exit code zero."
+  ],
+  "handoff_scope": "Source and recorded validation for developer review; configured mainnet deployment is not qualified.",
+  "squash_parent": "40c7a671ad96247335f9789e99e74463e2d4f298",
+  "tested_source_note": "Binaries were built before the final commit amendment; their embedded version identifies base_commit. source_sha256 identifies the tested implementation, and selected_test_source_sha256 retains test fixture revisions.",
+  "release_requirements": [
+    "Complete and review historical consensus/PoW replay through the pinned snapshot tip.",
+    "Choose a future mainnet activation height and validate the configured release and enrollment workload on release hardware."
+  ]
+}

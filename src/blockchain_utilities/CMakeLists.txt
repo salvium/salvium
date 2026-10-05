@@ -38,6 +38,17 @@ set(blockchain_import_private_headers
   bootstrap_serialization.h
   )
 
+# The system LMDB utilities can use an incompatible reader-lock format. Link
+# the statistics tool against the daemon's LMDB so live replay monitoring uses
+# the same locking protocol, including while the importer commits blocks.
+monero_add_minimal_executable(salvium_lmdb_stat
+  ../../external/db_drivers/liblmdb/mdb_stat.c)
+target_link_libraries(salvium_lmdb_stat PRIVATE lmdb ${CMAKE_THREAD_LIBS_INIT})
+set_target_properties(salvium_lmdb_stat PROPERTIES
+  OUTPUT_NAME salvium-lmdb-stat
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+install(TARGETS salvium_lmdb_stat DESTINATION bin)
+
 monero_private_headers(blockchain_import
 	  ${blockchain_import_private_headers})
 
@@ -144,9 +155,12 @@ monero_private_headers(blockchain_scanner
 
 set(blockchain_verification_sources
   blockchain_verification.cpp
+  independent_chain_forensics.cpp
   )
 
-set(blockchain_verification_private_headers)
+set(blockchain_verification_private_headers
+  independent_chain_forensics.h
+  )
 
 monero_private_headers(blockchain_verification
 	  ${blockchain_verification_private_headers})

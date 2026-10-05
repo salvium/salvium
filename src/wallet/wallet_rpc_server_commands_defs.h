@@ -35,6 +35,7 @@
 #include "cryptonote_basic/subaddress_index.h"
 #include "crypto/hash.h"
 #include "wallet_rpc_server_error_codes.h"
+#include "audit_balance.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "wallet.rpc"
@@ -47,7 +48,7 @@
 // advance which version they will stop working with
 // Don't go over 32767 for any of these
 #define WALLET_RPC_VERSION_MAJOR 1
-#define WALLET_RPC_VERSION_MINOR 28
+#define WALLET_RPC_VERSION_MINOR 29
 #define MAKE_WALLET_RPC_VERSION(major,minor) (((major)<<16)|(minor))
 #define WALLET_RPC_VERSION MAKE_WALLET_RPC_VERSION(WALLET_RPC_VERSION_MAJOR, WALLET_RPC_VERSION_MINOR)
 namespace tools
@@ -924,6 +925,8 @@ namespace wallet_rpc
   {
     struct request_t
     {
+      bool status_only;
+      bool all_accounts;
       std::string address;
       uint32_t account_index;
       std::set<uint32_t> subaddr_indices;
@@ -937,22 +940,103 @@ namespace wallet_rpc
       std::string asset_type;
 
       BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(address)
-        KV_SERIALIZE(account_index)
-        KV_SERIALIZE(subaddr_indices)
+        KV_SERIALIZE_OPT(status_only, false)
+        KV_SERIALIZE_OPT(all_accounts, true)
+        KV_SERIALIZE_OPT(address, std::string())
+        KV_SERIALIZE_OPT(account_index, (uint32_t)0)
+        KV_SERIALIZE_OPT(subaddr_indices, std::set<uint32_t>())
         KV_SERIALIZE_OPT(subaddr_indices_all, false)
         KV_SERIALIZE_OPT(ring_size, (uint64_t)0)
-        KV_SERIALIZE(payment_id)
-        KV_SERIALIZE(get_tx_keys)
+        KV_SERIALIZE_OPT(payment_id, std::string())
+        KV_SERIALIZE_OPT(get_tx_keys, false)
         KV_SERIALIZE_OPT(do_not_relay, false)
         KV_SERIALIZE_OPT(get_tx_hex, false)
         KV_SERIALIZE_OPT(get_tx_metadata, false)
-        KV_SERIALIZE(asset_type)
+        KV_SERIALIZE_OPT(asset_type, std::string("SAL1"))
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<request_t> request;
 
-    typedef split_transfer_response response_t;
+    struct output {
+      std::string transaction;
+      std::string key_image;
+      std::string state;
+      std::string asset_type;
+      uint64_t amount;
+      uint64_t completed_height;
+      uint64_t release_height;
+      uint32_t account;
+      uint32_t subaddress;
+      bool spent;
+      bool stake;
+      bool immature;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(transaction)
+        KV_SERIALIZE(key_image)
+        KV_SERIALIZE(state)
+        KV_SERIALIZE(asset_type)
+        KV_SERIALIZE(amount)
+        KV_SERIALIZE(completed_height)
+        KV_SERIALIZE(release_height)
+        KV_SERIALIZE(account)
+        KV_SERIALIZE(subaddress)
+        KV_SERIALIZE(spent)
+        KV_SERIALIZE(stake)
+        KV_SERIALIZE(immature)
+      END_KV_SERIALIZE_MAP()
+    };
+    struct response_t : split_transfer_response {
+      std::string state;
+      uint64_t activation_height;
+      uint64_t opening_height;
+      uint64_t closing_height;
+      uint64_t candidate_height;
+      uint64_t good;
+      uint64_t bad;
+      uint64_t unresolved;
+      uint64_t spent;
+      uint64_t good_count;
+      uint64_t bad_count;
+      uint64_t unresolved_count;
+      uint64_t spent_count;
+      uint64_t stake_good;
+      uint64_t stake_bad;
+      uint64_t stake_unresolved;
+      uint64_t immature;
+      uint64_t pending_batches;
+      uint64_t stake_good_count, stake_bad_count, stake_unresolved_count, stake_immature;
+      std::vector<audit_asset_balance> balances;
+      std::vector<output> outputs;
+      std::vector<std::string> proofs;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_PARENT(split_transfer_response)
+        KV_SERIALIZE(state)
+        KV_SERIALIZE(activation_height)
+        KV_SERIALIZE(opening_height)
+        KV_SERIALIZE(closing_height)
+        KV_SERIALIZE(candidate_height)
+        KV_SERIALIZE(good)
+        KV_SERIALIZE(bad)
+        KV_SERIALIZE(unresolved)
+        KV_SERIALIZE(spent)
+        KV_SERIALIZE(good_count)
+        KV_SERIALIZE(bad_count)
+        KV_SERIALIZE(unresolved_count)
+        KV_SERIALIZE(spent_count)
+        KV_SERIALIZE(stake_good)
+        KV_SERIALIZE(stake_bad)
+        KV_SERIALIZE(stake_unresolved)
+        KV_SERIALIZE(immature)
+        KV_SERIALIZE(stake_good_count)
+        KV_SERIALIZE(stake_bad_count)
+        KV_SERIALIZE(stake_unresolved_count)
+        KV_SERIALIZE(stake_immature)
+        KV_SERIALIZE(pending_batches)
+        KV_SERIALIZE(balances)
+        KV_SERIALIZE(outputs)
+        KV_SERIALIZE(proofs)
+      END_KV_SERIALIZE_MAP()
+    };
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 

@@ -27,6 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "hardforks.h"
+#include "cryptonote_core/lineage_audit_policy.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "blockchain.hardforks"
@@ -70,6 +71,9 @@ const hardfork_t mainnet_hard_forks[] = {
 
   // version 13 Reject poisoned refs + rct ring index realign - starts from block 521425 on or about 1st July 2026. No fork voting occurs for the v13 fork.
   {13, 521425, 0, 1782766500 },
+#if SALVIUM_LINEAGE_AUDIT_MAINNET_HEIGHT
+  {cryptonote::lineage_policy::fork_version, cryptonote::lineage_policy::mainnet_height, 0, 1788739200 },
+#endif
 };
 const size_t num_mainnet_hard_forks = sizeof(mainnet_hard_forks) / sizeof(mainnet_hard_forks[0]);
 const uint64_t mainnet_hard_fork_version_1_till = ((uint64_t)-1);
@@ -113,6 +117,9 @@ const hardfork_t testnet_hard_forks[] = {
 
   // version 13 Reject poisoned refs
   {13, 1400, 0, 1782766415 },
+#if SALVIUM_LINEAGE_AUDIT_TESTNET_HEIGHT
+  {cryptonote::lineage_policy::fork_version, cryptonote::lineage_policy::testnet_height, 0, 1788739200 },
+#endif
 };
 const size_t num_testnet_hard_forks = sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]);
 const uint64_t testnet_hard_fork_version_1_till = ((uint64_t)-1);
@@ -120,6 +127,9 @@ const uint64_t testnet_hard_fork_version_1_till = ((uint64_t)-1);
 const hardfork_t stagenet_hard_forks[] = {
   // version 1 from the start of the blockchain
   { 1, 1, 0, 1341378000 },
+#if SALVIUM_LINEAGE_AUDIT_STAGENET_HEIGHT
+  {cryptonote::lineage_policy::fork_version, cryptonote::lineage_policy::stagenet_height, 0, 1788739200 },
+#endif
 
   // versions 2-7 in rapid succession from March 13th, 2018
   //{ 2, 1000, 0, 1521000000 },

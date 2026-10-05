@@ -45,7 +45,8 @@
 #include "carrot_impl/input_selection.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "ringct/bulletproofs_plus.h"
-#include "wallet/scanning_tools.cpp"
+#include "wallet/scanning_tools.h"
+#include "ringct/rctSigs.h"
 #include "common/container_helpers.h"
 #include "carrot_core/payment_proposal.cpp"
 
@@ -237,6 +238,7 @@ std::unordered_map<crypto::key_image, size_t> collect_non_burned_transfers_by_ke
 }
 //-------------------------------------------------------------------------------------------------------------------
 carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
+    wallet2 &w,
     const wallet2::transfer_container &transfers,
     const std::uint32_t from_account,
     const std::set<std::uint32_t> &from_subaddresses,
@@ -256,7 +258,7 @@ carrot::select_inputs_func_t make_wallet2_single_transfer_input_selector(
     for (size_t i = 0; i < transfers.size(); ++i)
     {
         const wallet2::transfer_details &td = transfers.at(i);
-        if (is_transfer_usable_for_input_selection(td,
+        if (w.is_transfer_unlocked(td) && is_transfer_usable_for_input_selection(td,
                                                    from_account,
                                                    from_subaddresses,
                                                    ignore_above,
@@ -332,6 +334,9 @@ std::vector<cryptonote::tx_source_entry> get_sources(
     const std::string &source_asset,
     wallet2 &w
 ) {
+    for (const auto index : selected_transfers)
+        CHECK_AND_ASSERT_THROW_MES(w.is_transfer_unlocked(transfers.at(index)),
+            "Selected input has not completed audit clearance or normal maturity");
     // get decoys
     size_t fake_outputs_count = (cryptonote::is_asset_type_token(source_asset)) ? 0 : 15;
     // check here!
@@ -481,6 +486,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         // make input selector
         std::set<size_t> selected_transfer_indices;
         carrot::select_inputs_func_t select_inputs = make_wallet2_single_transfer_input_selector(
+            w,
             unused_transfers,
             subaddr_account,
             subaddr_indices,
@@ -625,6 +631,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         // make input selector
         std::set<size_t> selected_transfer_indices;
         carrot::select_inputs_func_t select_inputs = make_wallet2_single_transfer_input_selector(
+            w,
             unused_transfers,
             subaddr_account,
             subaddr_indices,
@@ -760,7 +767,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         CHECK_AND_ASSERT_THROW_MES(ki_it != best_transfers_by_ki.cend(),
             __func__ << ": unknown key image");
         const wallet2::transfer_details &td = unused_transfers.at(ki_it->second);
-        CHECK_AND_ASSERT_THROW_MES(is_transfer_usable_for_input_selection(td,
+        CHECK_AND_ASSERT_THROW_MES(w.is_transfer_unlocked(td) && is_transfer_usable_for_input_selection(td,
                                                                           td.m_subaddr_index.major,
                                                                           /*from_subaddresses=*/{},
                                                                           /*ignore_above=*/MONEY_SUPPLY,
@@ -897,7 +904,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     {
         const wallet2::transfer_details &td = transfers.at(transfer_idx);
 
-        if (!is_transfer_usable_for_input_selection(td,
+        if (!w.is_transfer_unlocked(td) || !is_transfer_usable_for_input_selection(td,
                                                     subaddr_account,
                                                     subaddr_indices,
                                                     only_below ? only_below : MONEY_SUPPLY,

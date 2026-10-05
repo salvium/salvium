@@ -28,6 +28,7 @@
 
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 #include <algorithm>
 #include <fstream>
 
@@ -127,6 +128,79 @@ int pop_blocks(cryptonote::core& core, int num_blocks)
   return num_blocks;
 }
 
+struct rollback_audit_state
+{
+  uint64_t height = 0;
+  uint64_t txs = 0;
+  uint64_t rct_outputs = 0;
+  uint64_t sal_outputs = 0;
+  uint64_t sal1_outputs = 0;
+  uint64_t burn_outputs = 0;
+  uint64_t generated = 0;
+  crypto::hash top = crypto::null_hash;
+  bool rct_index_realigned = false;
+  bool has_yield_state = false;
+  yield_block_info yield_state{};
+  bool has_audit_state = false;
+  audit_block_info audit_state{};
+  std::string token_registry;
+
+  bool operator==(const rollback_audit_state& other) const
+  {
+    return height == other.height && txs == other.txs &&
+        rct_outputs == other.rct_outputs &&
+        sal_outputs == other.sal_outputs &&
+        sal1_outputs == other.sal1_outputs &&
+        burn_outputs == other.burn_outputs &&
+        generated == other.generated && top == other.top &&
+        rct_index_realigned == other.rct_index_realigned &&
+        has_yield_state == other.has_yield_state &&
+        (!has_yield_state ||
+         (yield_state.block_height == other.yield_state.block_height &&
+          yield_state.slippage_total_this_block ==
+              other.yield_state.slippage_total_this_block &&
+          yield_state.locked_coins_this_block ==
+              other.yield_state.locked_coins_this_block &&
+          yield_state.locked_coins_tally ==
+              other.yield_state.locked_coins_tally)) &&
+        has_audit_state == other.has_audit_state &&
+        (!has_audit_state ||
+         (audit_state.block_height == other.audit_state.block_height &&
+          audit_state.locked_coins_this_block ==
+              other.audit_state.locked_coins_this_block &&
+          audit_state.locked_coins_tally ==
+              other.audit_state.locked_coins_tally)) &&
+        token_registry == other.token_registry;
+  }
+};
+
+rollback_audit_state capture_rollback_audit_state(BlockchainDB& db)
+{
+  rollback_audit_state state;
+  state.height = db.height();
+  state.txs = db.get_tx_count();
+  state.rct_outputs = db.get_num_outputs(0);
+  state.sal_outputs = db.get_num_outputs_of_asset_type("SAL");
+  state.sal1_outputs = db.get_num_outputs_of_asset_type("SAL1");
+  state.burn_outputs = db.get_num_outputs_of_asset_type("BURN");
+  state.rct_index_realigned = db.rct_index_realigned();
+  for (const auto& token : db.get_tokens())
+  {
+    state.token_registry += token.first;
+    state.token_registry.push_back('\n');
+  }
+  if (state.height)
+  {
+    state.generated = db.get_block_already_generated_coins(state.height - 1);
+    state.top = db.top_block_hash();
+    state.has_yield_state =
+        db.get_yield_block_info(state.height - 1, state.yield_state) == 0;
+    state.has_audit_state =
+        db.get_audit_block_info(state.height - 1, state.audit_state) == 0;
+  }
+  return state;
+}
+
 int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &blocks, bool force)
 {
   if (blocks.empty())
@@ -134,9 +208,11 @@ int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &block
   if (!force && blocks.size() < db_batch_size)
     return 0;
 
-  // wait till we can verify a full HOH without extra, for speed
+  // Wait till we can verify a full HOH without extra, for speed.  An explicit
+  // one-block audit batch intentionally trades that optimization for a
+  // separately committed result after every verified block.
   uint64_t new_height = core.get_blockchain_storage().get_db().height() + blocks.size();
-  if (!force && new_height % HASH_OF_HASHES_STEP)
+  if (!force && db_batch_size != 1 && new_height % HASH_OF_HASHES_STEP)
     return 0;
 
   std::vector<crypto::hash> hashes;
@@ -170,6 +246,24 @@ int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &block
   size_t blockidx = 0;
   for(const block_complete_entry& block_entry: blocks)
   {
+    const uint64_t audit_height = core.get_blockchain_storage().get_db().height();
+    const char *rollback_setting =
+        std::getenv("SALVIUM_AUDIT_ROLLBACK_EVERY_BLOCK");
+    const bool rollback_audit =
+        rollback_setting != nullptr && std::string(rollback_setting) != "0" &&
+        audit_height > 0;
+    const rollback_audit_state before_state =
+        rollback_audit
+            ? capture_rollback_audit_state(
+                  core.get_blockchain_storage().get_db())
+            : rollback_audit_state{};
+    std::vector<crypto::key_image> rollback_key_images;
+    if (std::getenv("SALVIUM_AUDIT_TRACE"))
+      std::cout << "AUDIT_BLOCK height=" << audit_height
+                << " tx_total=" << block_entry.txs.size()
+                << " step=START status=RUNNING" << std::endl
+                << "AUDIT_BLOCK height=" << audit_height
+                << " step=block_blob_parse_and_prepare status=PASS" << std::endl;
     // process transactions
     for(auto& tx_blob: block_entry.txs)
     {
@@ -185,13 +279,37 @@ int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &block
         core.cleanup_handle_incoming_blocks();
         return 1;
       }
+      if (rollback_audit)
+      {
+        cryptonote::transaction rollback_tx;
+        if (!cryptonote::parse_and_validate_tx_from_blob(
+                tx_blob.blob, rollback_tx))
+        {
+          core.cleanup_handle_incoming_blocks();
+          return 1;
+        }
+        for (const txin_v& input : rollback_tx.vin)
+          if (const txin_to_key *key = boost::get<txin_to_key>(&input))
+            rollback_key_images.push_back(key->k_image);
+      }
+      if (std::getenv("SALVIUM_AUDIT_TRACE"))
+      {
+        cryptonote::transaction transaction;
+        if (cryptonote::parse_and_validate_tx_from_blob(tx_blob.blob, transaction))
+          std::cout << "AUDIT_TX height=" << core.get_blockchain_storage().get_db().height()
+                    << " tx=" << cryptonote::get_transaction_hash(transaction)
+                    << " type=" << static_cast<unsigned>(transaction.type)
+                    << " step=parsing_semantics_ringct_balance_and_range_proofs status=PASS"
+                    << std::endl;
+      }
     }
 
     // process block
 
     block_verification_context bvc = {};
 
-    core.handle_incoming_block(block_entry.block, pblocks.empty() ? NULL : &pblocks[blockidx++], bvc, false); // <--- process block
+    block *prepared_block = pblocks.empty() ? NULL : &pblocks[blockidx++];
+    core.handle_incoming_block(block_entry.block, prepared_block, bvc, false); // <--- process block
 
     if(bvc.m_verifivation_failed)
     {
@@ -208,6 +326,83 @@ int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &block
       MERROR("Block received at sync phase was marked as orphaned");
       core.cleanup_handle_incoming_blocks();
       return 1;
+    }
+    if (rollback_audit)
+    {
+      core.get_blockchain_storage().pop_blocks(1);
+      const rollback_audit_state restored_state =
+          capture_rollback_audit_state(core.get_blockchain_storage().get_db());
+      if (!(restored_state == before_state))
+      {
+        std::cout << "ROLLBACK_AUDIT height=" << audit_height
+                  << " status=FAIL"
+                  << " before_height=" << before_state.height
+                  << " restored_height=" << restored_state.height
+                  << " before_txs=" << before_state.txs
+                  << " restored_txs=" << restored_state.txs
+                  << " before_rct_outputs=" << before_state.rct_outputs
+                  << " restored_rct_outputs=" << restored_state.rct_outputs
+                  << " before_sal1_outputs=" << before_state.sal1_outputs
+                  << " restored_sal1_outputs=" << restored_state.sal1_outputs
+                  << std::endl;
+        core.cleanup_handle_incoming_blocks();
+        return 1;
+      }
+      for (const crypto::key_image& image : rollback_key_images)
+        if (core.get_blockchain_storage().get_db().has_key_image(image))
+        {
+          std::cout << "ROLLBACK_AUDIT height=" << audit_height
+                    << " status=FAIL reason=KEY_IMAGE_REMAINED_SPENT"
+                    << " key_image=" << image << std::endl;
+          core.cleanup_handle_incoming_blocks();
+          return 1;
+        }
+      std::vector<yield_tx_info> reverted_yield;
+      std::vector<yield_tx_info> reverted_audit;
+      std::vector<yield_tx_info_carrot> reverted_carrot_yield;
+      core.get_blockchain_storage().get_db().get_yield_tx_info(
+          audit_height, reverted_yield);
+      core.get_blockchain_storage().get_db().get_audit_tx_info(
+          audit_height, reverted_audit);
+      core.get_blockchain_storage().get_db().get_carrot_yield_tx_info(
+          audit_height, reverted_carrot_yield);
+      if (!reverted_yield.empty() || !reverted_audit.empty() ||
+          !reverted_carrot_yield.empty())
+      {
+        std::cout << "ROLLBACK_AUDIT height=" << audit_height
+                  << " status=FAIL reason=PROTOCOL_AUTHORIZATION_RECORD_REMAINED"
+                  << std::endl;
+        core.cleanup_handle_incoming_blocks();
+        return 1;
+      }
+
+      block_verification_context reconnect_bvc = {};
+      core.handle_incoming_block(
+          block_entry.block, nullptr, reconnect_bvc, false);
+      if (reconnect_bvc.m_verifivation_failed ||
+          reconnect_bvc.m_marked_as_orphaned)
+      {
+        std::cout << "ROLLBACK_AUDIT height=" << audit_height
+                  << " status=FAIL reason=RECONNECT_REJECTED" << std::endl;
+        core.cleanup_handle_incoming_blocks();
+        return 1;
+      }
+      for (const crypto::key_image& image : rollback_key_images)
+        if (!core.get_blockchain_storage().get_db().has_key_image(image))
+        {
+          std::cout << "ROLLBACK_AUDIT height=" << audit_height
+                    << " status=FAIL reason=KEY_IMAGE_NOT_RESTORED"
+                    << " key_image=" << image << std::endl;
+          core.cleanup_handle_incoming_blocks();
+          return 1;
+        }
+      std::cout << "ROLLBACK_AUDIT height=" << audit_height
+                << " status=PASS"
+                << " state=height,top,transactions,rct_outputs,"
+                   "SAL_outputs,SAL1_outputs,BURN_outputs,generated_supply,"
+                   "key_images,yield_state,audit_state,token_registry,"
+                   "protocol_authorizations"
+                << std::endl;
     }
 
   } // each download block

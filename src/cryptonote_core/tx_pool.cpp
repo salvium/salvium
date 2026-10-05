@@ -38,6 +38,7 @@
 
 #include "tx_rules_engine.h"
 #include "tx_rules_adapters.h"
+#include "lineage_audit_policy.h"
 
 #include "cryptonote_tx_utils.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
@@ -1496,6 +1497,11 @@ namespace cryptonote
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::check_tx_inputs(const std::function<cryptonote::transaction&(void)> &get_tx, const crypto::hash &txid, uint64_t &max_used_block_height, crypto::hash &max_used_block_id, tx_verification_context &tvc, bool kept_by_block) const
   {
+    std::string lineage_reason;
+    if (!m_blockchain.check_lineage_spend(get_tx(), lineage_reason)) {
+      tvc.m_invalid_input = true;
+      return false;
+    }
     if (!kept_by_block)
     {
       const std::unordered_map<crypto::hash, std::tuple<bool, tx_verification_context, uint64_t, crypto::hash>>::const_iterator i = m_input_cache.find(txid);
@@ -1534,6 +1540,9 @@ namespace cryptonote
       transaction &tx;
       bool parsed;
     } lazy_tx(txblob, txid, tx);
+
+    std::string lineage_reason;
+    if (!m_blockchain.check_lineage_spend(lazy_tx(), lineage_reason)) return false;
 
     //not the best implementation at this time, sorry :(
     //check is ring_signature already checked ?
@@ -1708,6 +1717,10 @@ namespace cryptonote
     size_t max_total_weight_pre_v5 = (130 * median_weight) / 100 - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
     size_t max_total_weight_v5 = 2 * median_weight - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
     size_t max_total_weight = version >= 5 ? max_total_weight_v5 : max_total_weight_pre_v5;
+    const uint64_t audit_height = m_blockchain.lineage_audit_activation();
+    if (lineage_policy::public_enrollment && audit_height &&
+        m_blockchain.get_current_blockchain_height() >= audit_height)
+      max_total_weight -= std::min<size_t>(max_total_weight, 2308);
     std::unordered_set<crypto::key_image> k_images;
 
     LOG_PRINT_L2("Filling block template, median weight " << median_weight << ", " << m_txs_by_fee_and_receive_time.size() << " txes in the pool");

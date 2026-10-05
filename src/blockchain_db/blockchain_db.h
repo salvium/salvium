@@ -1603,6 +1603,10 @@ public:
    */
   virtual uint64_t get_output_id_by_asset_index(const std::string& asset_type, uint64_t asset_type_output_index) const = 0;
 
+  // Resolve the effective ring index used before HF13. Migrated databases
+  // must use their preserved reference table, never today's renumbered ranks.
+  virtual uint64_t get_legacy_output_id_by_asset_index(const std::string& asset_type, uint64_t asset_type_output_index) const = 0;
+
   /**
    * @brief resolves asset output indices to canonical global output ids via the output_type_refs table
    */

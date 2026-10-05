@@ -1,0 +1,706 @@
+{
+  "fixture": {
+    "snapshot_height": 100011,
+    "unit": "atomic SAL1 (100000000 = 1 SAL1)",
+    "unspent_outputs": {
+      "good_spendable": {
+        "atomic": 934411292857423,
+        "outputs": 101394
+      },
+      "good_immature_outputs": {
+        "atomic": 498111780968,
+        "outputs": 59
+      },
+      "bad": {
+        "atomic": 0,
+        "outputs": 0
+      },
+      "unresolved": {
+        "atomic": 0,
+        "outputs": 0
+      },
+      "good_treasury_spendable": {
+        "atomic": 368906557994946,
+        "outputs": 99952
+      },
+      "good_treasury_immature": {
+        "atomic": 207546575362,
+        "outputs": 59
+      }
+    },
+    "good_unspent_atomic": 1304023509208699,
+    "wallet_unspent_atomic": 934909404638391,
+    "treasury_unspent_atomic": 369114104570308,
+    "good_locked_stake_principal_atomic": 24000000000,
+    "unspent_total_atomic": 1304023509208699,
+    "mining_outputs_atomic": 1254987955699277,
+    "protocol_payouts_atomic": 49185291253272,
+    "transaction_fees_atomic": 1736576180,
+    "stake_and_other_burns_atomic": 148001167670,
+    "permanent_burns_atomic": 100000000000,
+    "native_net_emission_atomic": 1476454680687539,
+    "undistributed_staking_reserve_atomic": 172307171478840,
+    "rejected_invalid_mints_accepted_atomic": 0,
+    "historical_mainnet_bad_outputs": {
+      "height": 465074,
+      "txid": "9353dd3288e20618596085228ea6faf5bf2a9d01cd98c36ea5ceeef2c2d4eb1e",
+      "status": "BAD_FUNDS",
+      "reason": "CROSS_ASSET_OUTPUT",
+      "bad_output_indices": [
+        0,
+        1
+      ],
+      "bad_output_ids": [
+        2621581,
+        2621582
+      ],
+      "verified_as_good": false,
+      "source": "read-only local chain snapshot",
+      "aggregate_output_atomic": 4000000000000000,
+      "fee_paid_separately_atomic": 810220,
+      "amount_basis": "canonical public issuance input and verified RingCT; fee paid by separate SAL1 rollup",
+      "current_unspent_bad_atomic": null,
+      "individual_output_amounts_atomic": [
+        null,
+        null
+      ]
+    },
+    "mainnet_current_good_atomic": null,
+    "mainnet_current_bad_atomic": null,
+    "mainnet_limit": "Mainnet confidential outputs and ring ambiguity prevent an exact current good/bad balance without viewing disclosures.",
+    "conservation_verified": true,
+    "consensus_quarantine_enforced": false
+  },
+  "damaged_snapshot_audits": [
+    {
+      "good_unspent_atomic": 1304015067154299,
+      "bad_unspent_atomic": 8542054400,
+      "bad_output_count": 1,
+      "excess_issuance_atomic": 100000000,
+      "reason": "MINER_REWARD_MISMATCH",
+      "case": "excess_miner_issuance",
+      "snapshot_height": 100011,
+      "status": "BAD_FUNDS",
+      "verified_as_good": false,
+      "locked_good_stake_principal_atomic": 24000000000,
+      "native_audit_summary": "INDEPENDENT_CHAIN_SUMMARY records=100012 expected_sal1_emission=1476454680687539 actual_sal1_issuance=1476454780687539 issuance_match=no actual_visible_sal1_outputs=1304173346952549 verified_fees=1737743850 claimed_burns=148001167670 protocol_outputs_checked=21 paid_authorizations=21 duplicate_authorizations=0 unauthorized_outputs=0 miner_mismatches=1 protocol_mismatches=0 first_mismatch=100011 affected_hf_min=13 affected_hf_max=13 findings=1 current_build=1.1.3c-bfb618faa, based on Monero 0.18.4.0-release reproducible_on_current_build=yes spent_status=RING_DEPENDENT_UNKNOWN status=FINDING",
+      "database": "/tmp/salvium-complex-audit-0mwcufod/fault-excess_miner_issuance-4fd17e2d/lmdb",
+      "scope": "deliberately damaged offline copy; no daemon or wallet accepts this snapshot"
+    },
+    {
+      "good_unspent_atomic": 1304023509208699,
+      "bad_unspent_atomic": 500000000,
+      "bad_output_count": 1,
+      "excess_issuance_atomic": 500000000,
+      "reason": "UNAUTHORIZED_PROTOCOL_OUTPUT",
+      "case": "unauthorized_protocol_issuance",
+      "snapshot_height": 100011,
+      "status": "BAD_FUNDS",
+      "verified_as_good": false,
+      "locked_good_stake_principal_atomic": 24000000000,
+      "native_audit_summary": "INDEPENDENT_CHAIN_SUMMARY records=100012 expected_sal1_emission=1476454680687539 actual_sal1_issuance=1476455180687539 issuance_match=no actual_visible_sal1_outputs=1304173746952549 verified_fees=1737743850 claimed_burns=148001167670 protocol_outputs_checked=21 paid_authorizations=21 duplicate_authorizations=0 unauthorized_outputs=1 miner_mismatches=0 protocol_mismatches=2 first_mismatch=100011 affected_hf_min=13 affected_hf_max=13 findings=2 current_build=1.1.3c-bfb618faa, based on Monero 0.18.4.0-release reproducible_on_current_build=yes spent_status=RING_DEPENDENT_UNKNOWN status=FINDING",
+      "database": "/tmp/salvium-complex-audit-0mwcufod/fault-unauthorized_protocol_issuance-6ee2f05b/lmdb",
+      "scope": "deliberately damaged offline copy; no daemon or wallet accepts this snapshot"
+    }
+  ],
+  "mainnet": {
+    "snapshot_blocks": 558800,
+    "snapshot_transactions": 686805,
+    "bad_origin_tx": "9353dd3288e20618596085228ea6faf5bf2a9d01cd98c36ea5ceeef2c2d4eb1e",
+    "bad_sal1_origin_output_count": 2,
+    "bad_sal1_origin_output_ids": [
+      2621581,
+      2621582
+    ],
+    "bad_sal1_origin_amount_atomic": 4000000000000000,
+    "current_good_sal1_atomic": null,
+    "current_bad_sal1_atomic": null,
+    "private_token_fee_records": 106,
+    "public_private_token_fee_atomic": 95123960,
+    "unmatched_private_token_fee_atomic": 0,
+    "matched_rollup_fee_atomic": 95123960,
+    "proven_origin_descendants": 0,
+    "unresolved_origin_candidates": 79065,
+    "native_summary": {
+      "blocks": "558800",
+      "txs": "686805",
+      "token_creations": "37",
+      "duplicate_token_creations": "0",
+      "issuance_mismatches": "0",
+      "repeated_token_issuances": "0",
+      "asset_id_collisions": "0",
+      "findings": "1",
+      "exact_amount_findings": "1",
+      "confidential_or_ring_ambiguous_findings": "0",
+      "bad_sal1_origin_transactions": "1",
+      "bad_sal1_origin_outputs": "2",
+      "unresolved_bad_sal1_origin_amounts": "0",
+      "sal1_origin_amount_total": "COMPLETE",
+      "exact_sal1_created_atomic": "4000000000000000",
+      "exact_cross_asset_fees_to_sal1_atomic": "0",
+      "public_private_token_fees_atomic": "95123960",
+      "matched_rollup_fees_atomic": "95123960",
+      "trouble_outputs": "2",
+      "later_ring_references": "3377744",
+      "proven_descendant_references": "0",
+      "possible_descendant_references": "79065",
+      "recursive_descendant_transactions": "79065",
+      "maximum_lineage_depth": "5525",
+      "proposed_blacklist_origins": "1",
+      "proposed_blacklist_descendants": "0",
+      "review_only_candidates": "79065",
+      "unresolved_input_rings": "0",
+      "output_records": "3151784",
+      "protocol_outputs_checked": "23419",
+      "input_asset_labels_checked": "2614713",
+      "output_asset_labels_checked": "2424982",
+      "source_destination_checks": "686805",
+      "private_token_fee_checks": "106",
+      "token_registration_checks": "37",
+      "token_supply_checks": "37",
+      "token_price_checks": "37",
+      "asset_ids_checked": "5063114",
+      "descendant_inputs_checked": "2614713",
+      "descendant_ring_members_checked": "41834778"
+    },
+    "audit_disposition": {
+      "forensic_bad_funds": "yes",
+      "verified_as_good": "no"
+    },
+    "note": "The single public issuance input plus verified RingCT proves the 40M aggregate. Individual output amounts and later real-input links remain hidden, preventing exact current good/bad balances. Matched SAL1 rollup fees are not unbacked issuance."
+  },
+  "native_gate_and_regression_tests": [
+    {
+      "status": "AUDIT_GATE_PASS",
+      "completion_height": 256,
+      "release_height": 266,
+      "stake_tx": "2580262e74730d2a6f276ea35c31390673193b6eb5964505be6a42adf5a0e187",
+      "checks": [
+        "unaudited_raw_spend_rejected",
+        "wrong_view_secret_rejected",
+        "missing_ancestor_stays_pending_after_15_blocks",
+        "C_plus_9_rejected",
+        "C_plus_10_accepted",
+        "conflicting_spend_rejected",
+        "new_receipt_requires_its_own_audit",
+        "wrong_network_disclosure_rejected_in_raw_block",
+        "reorg_revokes_clearance",
+        "reorg_stale_pool_transaction_not_mined",
+        "canonical_replay_restores_clearance"
+      ]
+    },
+    {
+      "status": "COMPLEX_AUDIT_GATE_PASS",
+      "snapshot_height": 100011,
+      "audit_end_height": 101688,
+      "wallets": 100,
+      "exchange_customer_subaddresses": 1000,
+      "disclosures": 1667,
+      "audited_unspent_outputs": 101453,
+      "audited_unspent_atomic": 934909404638391,
+      "bad_audited_outputs": 0,
+      "pending_audited_outputs": 0,
+      "immature_stakes": 20,
+      "immature_principal_atomic": 24000000000,
+      "unaudited_signed_spend_rejected": true,
+      "audited_signed_spend_confirmed": "87d69e72c6a93bbd98671d794182f866929524b5aeda8c9ac4287dc11be90974",
+      "new_mining_outputs_outside_snapshot_remain_unaudited": true
+    },
+    {
+      "status": "RETURN_AUDIT_GATE_PASS",
+      "returned_tx": "ce283147c63665327d4b2f0ae1ed5326fe22d268ad5392f7b57c1441da00655d",
+      "returned_atomic": 998760840,
+      "completion_height": 259,
+      "spend_height": 269,
+      "missing_returning_owner_stayed_pending": true,
+      "return_context_scanned": true,
+      "C_plus_9_rejected": true,
+      "C_plus_10_spent_exact_return": true
+    },
+    {
+      "status": "AUDIT_REPLAY_PASS",
+      "source_height": 277,
+      "source_hash": "3abafb69ea0e314dcc588fdc526804c061c2d4b49800390a266bc3e176338343",
+      "committed_blocks": 278,
+      "activation_height": 240,
+      "verified_height_records": 278,
+      "early_spend_tx": null,
+      "import_exit": 0,
+      "fast_block_sync": false,
+      "full_validation": true
+    },
+    {
+      "status": "AUDIT_REPLAY_REJECTION_PASS",
+      "source_height": 277,
+      "source_hash": "3abafb69ea0e314dcc588fdc526804c061c2d4b49800390a266bc3e176338343",
+      "committed_blocks": 240,
+      "activation_height": 240,
+      "verified_height_records": 240,
+      "early_spend_tx": "8922714cad5acca467bbe2694df0c9e98a220dd1466dbad35391b917ef1c590a",
+      "import_exit": 0,
+      "fast_block_sync": false,
+      "full_validation": true
+    },
+    {
+      "status": "AUDIT_MATRIX_PASS",
+      "snapshot_height": 100011,
+      "snapshot_hash": "579e27f7bf626ff4c82f2c93529a6dfd90993f442e2e3790d90c47697382fcdc",
+      "cases": 1000,
+      "seed": 465074,
+      "distinct_paths": 1000,
+      "invalid_categories": {
+        "wrong_network": 100,
+        "wrong_genesis": 100,
+        "wrong_epoch": 100,
+        "wrong_view_secret": 100,
+        "empty_scope": 100,
+        "oversize_scope": 100,
+        "duplicate_reference": 100,
+        "unsorted_references": 100,
+        "unknown_transaction": 100,
+        "trailing_bytes": 100
+      },
+      "raw_invalid_blocks_rejected": 800,
+      "canonical_suffix_blocks_generated": 10000,
+      "scope": "Independent audit, mining-arrival and reorg paths over one fully mined 100011-block snapshot"
+    },
+    {
+      "status": "AUDIT_MATRIX_PASS",
+      "snapshot_height": 100011,
+      "snapshot_hash": "579e27f7bf626ff4c82f2c93529a6dfd90993f442e2e3790d90c47697382fcdc",
+      "cases": 1000,
+      "seed": 650000,
+      "distinct_paths": 1000,
+      "invalid_categories": {
+        "wrong_network": 100,
+        "wrong_genesis": 100,
+        "wrong_epoch": 100,
+        "wrong_view_secret": 100,
+        "empty_scope": 100,
+        "oversize_scope": 100,
+        "duplicate_reference": 100,
+        "unsorted_references": 100,
+        "unknown_transaction": 100,
+        "trailing_bytes": 100
+      },
+      "raw_invalid_blocks_rejected": 800,
+      "canonical_suffix_blocks_generated": 10000,
+      "scope": "Independent audit, mining-arrival and reorg paths over one fully mined 100011-block snapshot"
+    },
+    {
+      "status": "AUDIT_MATRIX_PASS",
+      "snapshot_height": 100011,
+      "snapshot_hash": "579e27f7bf626ff4c82f2c93529a6dfd90993f442e2e3790d90c47697382fcdc",
+      "cases": 1000,
+      "seed": 21600,
+      "distinct_paths": 1000,
+      "invalid_categories": {
+        "wrong_network": 100,
+        "wrong_genesis": 100,
+        "wrong_epoch": 100,
+        "wrong_view_secret": 100,
+        "empty_scope": 100,
+        "oversize_scope": 100,
+        "duplicate_reference": 100,
+        "unsorted_references": 100,
+        "unknown_transaction": 100,
+        "trailing_bytes": 100
+      },
+      "raw_invalid_blocks_rejected": 800,
+      "canonical_suffix_blocks_generated": 10000,
+      "scope": "Independent audit, mining-arrival and reorg paths over one fully mined 100011-block snapshot"
+    },
+    {
+      "status": "STAKE_LINEAGE_STATE_PASS",
+      "seeded_paths": 1000,
+      "bad_and_good_ancestry_cases": 2000,
+      "historical_double_payout_blocked": true,
+      "cross_asset_pattern_bad": true,
+      "work_bound_checked": true
+    },
+    {
+      "status": "STAKE_AUDIT_GATE_PASS",
+      "tip": 21874,
+      "stake_period": 21600,
+      "activation_height": 240,
+      "normal_payout_height": 21713,
+      "delayed_completion_height": 21804,
+      "delayed_payout_height": 21814,
+      "principal_each_atomic": 1200000000,
+      "payout_each_atomic": 16544828240348,
+      "audited_immature_stake_stayed_locked": true,
+      "pending_stake_created_no_payout": true,
+      "undisclosed_stake_created_no_payout": true,
+      "raw_unauthorized_payout_blocks_rejected": 4,
+      "delayed_payout_kept_original_yield": true,
+      "release_C_plus_9_no_payout_C_plus_10_payout": true,
+      "reorg_revoked_payout_authorization": true,
+      "replay_restored_one_payout": true,
+      "both_payouts_rejected_at_P_plus_59_spent_at_P_plus_60": true,
+      "both_audited_mature_payouts_spent": true
+    },
+    {
+      "status": "STAKE_PAYOUT_RECOVERY_PASS",
+      "daemon_starts": 4,
+      "activation_height": 240,
+      "completion_height": 21804,
+      "delayed_payout_height": 21814,
+      "exact_payout_reconstructed_after_restart": true,
+      "restart_did_not_repeat_payout": true,
+      "reorg_and_restart_removed_authorization": true
+    },
+    {
+      "status": "TWENTY_LATE_STAKES_PASS",
+      "audit_end_height": 101688,
+      "payout_height": 121602,
+      "spend_height": 121662,
+      "wallets": 20,
+      "immature_at_audit": 20,
+      "principal_atomic": 24000000000,
+      "payout_atomic": 45145177251364,
+      "early_signed_spends_rejected": 20,
+      "mature_signed_spends_confirmed": 20,
+      "exact_real_payout_inputs_verified": true,
+      "stakes": [
+        {
+          "wallet": 12,
+          "key_image": "12555ceb1281d686234751ada8975587d55e59e83dea5eee8530e89337899d77",
+          "principal_atomic": 1200000000,
+          "payout_atomic": 2257258862785
+        },
+        {
+          "wallet": 11,
+          "key_image": "662428dfa544c81c495e3c4f165870049f8306e53cbb458900a0edea3f02987e",
+          "principal_atomic": 1100000000,
+          "payout_atomic": 2069153956294
+        },
+        {
+          "wallet": 10,
+          "key_image": "34651db021f6b4d4d1cf78a96e750e4ccecf4795af073231d874a836ec097365",
+          "principal_atomic": 1000000000,
+          "payout_atomic": 1881049050613
+        },
+        {
+          "wallet": 13,
+          "key_image": "40cb074ec3ecd8998a270ed68e6bfe939fd90d2fc94525dee6b634afe2291745",
+          "principal_atomic": 1300000000,
+          "payout_atomic": 2445363768553
+        },
+        {
+          "wallet": 16,
+          "key_image": "afe4f12bb7dddb09643b7bde96ae5a4ac72f4ec12a1ebd6a7a93f041d1e42720",
+          "principal_atomic": 1100000000,
+          "payout_atomic": 2069153956294
+        },
+        {
+          "wallet": 15,
+          "key_image": "edc918704e93fa267d475ecf1bfe5e5903f78743a52c6aa2cb80a6a17f85d6a2",
+          "principal_atomic": 1000000000,
+          "payout_atomic": 1881049050613
+        },
+        {
+          "wallet": 17,
+          "key_image": "0e243ff792b4760c4855df38222f8ea2ddcb2c0ff5946e65c964b861b7427a43",
+          "principal_atomic": 1200000000,
+          "payout_atomic": 2257258862785
+        },
+        {
+          "wallet": 14,
+          "key_image": "efb92ba9e0d2ede213324de23cfe8df3445e30e4a4254386b95e9affcff0da67",
+          "principal_atomic": 1400000000,
+          "payout_atomic": 2633468674596
+        },
+        {
+          "wallet": 20,
+          "key_image": "f7dac053d1365f7518e3b588bef6cc21059e6276b56b5916420c0763e2a67333",
+          "principal_atomic": 1000000000,
+          "payout_atomic": 1881049050613
+        },
+        {
+          "wallet": 19,
+          "key_image": "78e63fa81a10284ea630fd5377e979ca1508e72370872f454a631d957aff8fa0",
+          "principal_atomic": 1400000000,
+          "payout_atomic": 2633468674596
+        },
+        {
+          "wallet": 18,
+          "key_image": "9582eb4a0ada6cf395cb927f5e861cbe879407eac05b92943e95cb8a1661fcdb",
+          "principal_atomic": 1300000000,
+          "payout_atomic": 2445363768553
+        },
+        {
+          "wallet": 21,
+          "key_image": "713d2234caed39088e36d97faff4189ada9b5c914d8a2ccd38eba6d282df43a2",
+          "principal_atomic": 1100000000,
+          "payout_atomic": 2069153956294
+        },
+        {
+          "wallet": 24,
+          "key_image": "97571176c3207b49d57b214c50ece1af02e6c1925552401e80cc11078c5d4349",
+          "principal_atomic": 1400000000,
+          "payout_atomic": 2633468674596
+        },
+        {
+          "wallet": 23,
+          "key_image": "98517307bb78199ddb487019943bba70b3624c2434b721b6484d8b8f818197b9",
+          "principal_atomic": 1300000000,
+          "payout_atomic": 2445363768553
+        },
+        {
+          "wallet": 25,
+          "key_image": "64bf1f353781a42b4c9766bcd9c26975edcfcbc6fee7f00f78ed4ce1d6b45177",
+          "principal_atomic": 1000000000,
+          "payout_atomic": 1881049050613
+        },
+        {
+          "wallet": 22,
+          "key_image": "6a1a46ecb60b2e0da2a56ca11c847e5ecc8784853848ff73e200e3ef0590b133",
+          "principal_atomic": 1200000000,
+          "payout_atomic": 2257258862785
+        },
+        {
+          "wallet": 28,
+          "key_image": "4383d7c0959f7c354f0964cc3da860a31695339f65a2e73a21ba4ff5c33fa7da",
+          "principal_atomic": 1300000000,
+          "payout_atomic": 2445363768553
+        },
+        {
+          "wallet": 27,
+          "key_image": "0210f23096e5b6a771eaedbe7833e0ac8e3a9762be08bb8de3fdf10bd98fd2b7",
+          "principal_atomic": 1200000000,
+          "payout_atomic": 2257258862785
+        },
+        {
+          "wallet": 29,
+          "key_image": "1817941f817437de0c5f22368dc9f319b69d5021560eb70a5047993d573ba0da",
+          "principal_atomic": 1400000000,
+          "payout_atomic": 2633468674596
+        },
+        {
+          "wallet": 26,
+          "key_image": "da70c800195dad221d7caf338168b0bebf44256b7994d3a68c6bd802ff782e53",
+          "principal_atomic": 1100000000,
+          "payout_atomic": 2069153956294
+        }
+      ]
+    },
+    {
+      "status": "DECLARED_OUTPUTS_PASS",
+      "audit_completed": true,
+      "verified_as_good": true,
+      "verification_scope": "declared account-0 unspent outputs only",
+      "global_funds_verified_as_good": false,
+      "snapshot_height": 21874,
+      "snapshot_hash": "9d33dbd79ed3335eff3a90b6423d20d111ba69e6cd4107581a919b6001c24a81",
+      "identity": {
+        "source": "/tmp/salvium-stake-audit-gate-a64_sh3b/chain/fake/lmdb",
+        "network": "regtest",
+        "binaries": {
+          "salvium-blockchain-verification": "3d51831d6f6d513eec86040ad29cbc688079c932581784e059f63d4c7b4e44e8",
+          "salvium-blockchain-export": "2fddbd89ac7f10fc3524e4c57a684e808b0d41835a51ea3eaf470e2dfdfd2b9d",
+          "salvium-blockchain-import": "4f24fd93e90503db72300e0bd4d959a1d912eba058409033d31fdefbc307ee99",
+          "salviumd": "f358cb2ea0ab35c2fb855af4b5055b0e2f05f0a547227c2187954cc769fee92e",
+          "salvium-wallet-rpc": "924b8ecafeffc30c52a3835587d5a9d7971696cda4d926dfead38a7b1d6c713a"
+        }
+      },
+      "native": {
+        "asset_flow": {
+          "blocks": "21875",
+          "txs": "7",
+          "token_creations": "0",
+          "duplicate_token_creations": "0",
+          "issuance_mismatches": "0",
+          "repeated_token_issuances": "0",
+          "asset_id_collisions": "0",
+          "findings": "0",
+          "exact_amount_findings": "0",
+          "confidential_or_ring_ambiguous_findings": "0",
+          "bad_sal1_origin_transactions": "0",
+          "bad_sal1_origin_outputs": "0",
+          "unresolved_bad_sal1_origin_amounts": "0",
+          "sal1_origin_amount_total": "COMPLETE",
+          "exact_sal1_created_atomic": "0",
+          "exact_cross_asset_fees_to_sal1_atomic": "0",
+          "public_private_token_fees_atomic": "0",
+          "matched_rollup_fees_atomic": "0",
+          "trouble_outputs": "0",
+          "later_ring_references": "0",
+          "proven_descendant_references": "0",
+          "possible_descendant_references": "0",
+          "recursive_descendant_transactions": "0",
+          "maximum_lineage_depth": "0",
+          "proposed_blacklist_origins": "0",
+          "proposed_blacklist_descendants": "0",
+          "review_only_candidates": "0",
+          "unresolved_input_rings": "0",
+          "output_records": "43762",
+          "protocol_outputs_checked": "2",
+          "input_asset_labels_checked": "8",
+          "output_asset_labels_checked": "11",
+          "source_destination_checks": "7",
+          "private_token_fee_checks": "0",
+          "token_registration_checks": "0",
+          "token_supply_checks": "0",
+          "token_price_checks": "0",
+          "asset_ids_checked": "21",
+          "descendant_inputs_checked": "8",
+          "descendant_ring_members_checked": "128"
+        },
+        "disposition": {
+          "forensic_bad_funds": "no",
+          "verified_as_good": "yes"
+        },
+        "monetary": {
+          "records": "21875",
+          "expected_sal1_emission": "335061907404458",
+          "actual_sal1_issuance": "335061907404458",
+          "issuance_match": "yes",
+          "actual_visible_sal1_outputs": "317892285640126",
+          "verified_fees": "9245260",
+          "claimed_burns": "3600000000",
+          "protocol_outputs_checked": "2",
+          "paid_authorizations": "2",
+          "duplicate_authorizations": "0",
+          "unauthorized_outputs": "0",
+          "miner_mismatches": "0",
+          "protocol_mismatches": "0",
+          "first_mismatch": "-1",
+          "affected_hf_min": "-1",
+          "affected_hf_max": "-1",
+          "findings": "0",
+          "current_build": "1.1.3c-bfb618faa,",
+          "reproducible_on_current_build": "no",
+          "spent_status": "RING_DEPENDENT_UNKNOWN",
+          "status": "PASS"
+        },
+        "monetary_findings": [],
+        "asset_exit_code": 0,
+        "rule_failures": 0,
+        "proven_bad_transactions": 0,
+        "unresolved_ring_candidates": 0
+      },
+      "consensus_replay": {
+        "status": "PASS",
+        "verified": true,
+        "exit_code": 0,
+        "committed_blocks": 21875,
+        "verified_block_heights": 21875,
+        "missing_block_verification_records": 0,
+        "crypto_findings": 0
+      },
+      "disclosed_owners": {
+        "status": "SCANNED",
+        "owners": 3,
+        "snapshot_hash": "9d33dbd79ed3335eff3a90b6423d20d111ba69e6cd4107581a919b6001c24a81",
+        "unspent": {
+          "GOOD": {
+            "atomic": 34014691445696,
+            "outputs": 105
+          },
+          "BAD": {
+            "atomic": 0,
+            "outputs": 0
+          },
+          "UNRESOLVED": {
+            "atomic": 0,
+            "outputs": 0
+          }
+        },
+        "all_current_sal1_counted": false,
+        "scope": "Declared account-0 address ranges only; undisclosed wallets and locked principal are outside these UTXO sums"
+      },
+      "sal1": {
+        "bad_origin_output_count": 0,
+        "proven_bad_origin_atomic": 0,
+        "bad_origin_amount_complete": true,
+        "excess_miner_issuance_atomic": 0,
+        "excess_protocol_issuance_atomic": 0,
+        "current_good_atomic": null,
+        "current_bad_atomic": null,
+        "public_private_token_fees_atomic": 0,
+        "matched_rollup_fee_atomic": 0
+      },
+      "consensus_quarantine_enforced": false,
+      "limits": [
+        "Global current good/bad balances require complete viewing evidence; undisclosed value is unknown.",
+        "Ring candidates alone never establish a bad real input.",
+        "This audit reports and refuses clearance; it does not change node consensus or unlock funds."
+      ]
+    },
+    {
+      "status": "AUDIT_GATE_PASS",
+      "completion_height": 256,
+      "release_height": 266,
+      "stake_tx": "fb46fd84c582e6b4f6937a355baa5d99686140122fcb6f8f2a833569eb5322a7",
+      "checks": [
+        "unaudited_raw_spend_rejected",
+        "wrong_view_secret_rejected",
+        "missing_ancestor_stays_pending_after_15_blocks",
+        "C_plus_9_rejected",
+        "C_plus_10_accepted",
+        "conflicting_spend_rejected",
+        "new_receipt_requires_its_own_audit",
+        "wrong_network_disclosure_rejected_in_raw_block",
+        "reorg_revokes_clearance",
+        "reorg_stale_pool_transaction_not_mined",
+        "canonical_replay_restores_clearance"
+      ],
+      "artifact_group": "isolated-native-gate"
+    },
+    {
+      "status": "STAKE_PAYOUT_RECOVERY_PASS",
+      "daemon_starts": 4,
+      "activation_height": 240,
+      "completion_height": 21804,
+      "delayed_payout_height": 21814,
+      "exact_payout_reconstructed_after_restart": true,
+      "restart_did_not_repeat_payout": true,
+      "reorg_and_restart_removed_authorization": true,
+      "artifact_group": "isolated-payout-recovery"
+    },
+    {
+      "status": "PACKAGED_ISOLATED_AUDIT_PASS",
+      "verified_block_records": 278,
+      "owners": 3,
+      "normal_binaries_unchanged": true,
+      "wallet_logs_in_run_directory": true
+    }
+  ],
+  "build_isolation": {
+    "status": "BUILD_ISOLATION_PASS",
+    "normal_my_complete": {
+      "branch": "my-complete",
+      "revision": "095d88ee88579b34a68d0f370f539e23b08f6c15",
+      "build_command": "make release-static builddir=build/x86_64-linux-gnu topdir=../../.. -j4",
+      "binary_sha256": {
+        "salvium-blockchain-ancestry": "4498a5812e28c99c35ae9ce6094ff35cb2e9dde89f126e9db464b1a83818d995",
+        "salvium-blockchain-depth": "0f60282b3231487e681e7ff03eefc770e48663ec603538d03fc6e25eb675b579",
+        "salvium-blockchain-export": "552e56fd39d4d999c51adcb0a42346045ab553ec5cbcc4fe054c210fd502235f",
+        "salvium-blockchain-import": "95a4e81c8e24c9ebfbc3c6c8d00641fd9582f6be384009aacddd7858d22b186e",
+        "salvium-blockchain-mark-spent-outputs": "028c11cc22638f62e03ffee64335f1eda0665643cef0626ad218b4348848c708",
+        "salvium-blockchain-prune": "cf93dfe6af8745be734c3385db4554ae839f72751a4f95222e8a39ea03906bcf",
+        "salvium-blockchain-prune-known-spent-data": "64e41d7abd13b5afb9aeef5b487f82fb19e68ef17250ef0f2e3450096256ba23",
+        "salvium-blockchain-scanner": "b76c592022c944ea2600c4e66eff58f0cb06456797867cbb7d95828d9e02cac0",
+        "salvium-blockchain-stats": "bda3bdac5775eef853b10d49611f2f1c1a92d479d580d4746246ad6bc941ba98",
+        "salvium-blockchain-usage": "74860ece59e03287c1d866fae2d7d39f5d8aa7c660b8804faf066ff448126ff5",
+        "salvium-blockchain-verification": "f80dace202aea6b8d7c9f0695fd411505f264c02cf83213fc03a2c41b77fda8f",
+        "salvium-gen-ssl-cert": "004f1fc1be56d8144840e9728f3aa3bcbd6d58bcbc25fa6791de0208371560a0",
+        "salvium-gen-trusted-multisig": "612a7a7d897074a7be172a5c95e6ee09617249ee6fc3050c7e439225315446e1",
+        "salvium-wallet-cli": "da6329d653694e3b4ffdbcf38051fd04801e150c25973cad35066f0799abd143",
+        "salvium-wallet-rpc": "cf7d0aa5c705fbcda4d01e250ed7069700e3d58ebd8880c685f5a74881af7c96",
+        "salviumd": "411d85689479607f8bdcb744ab9f5871023220be99203608c631b3f386256d8f"
+      }
+    },
+    "audit_revision": "498e5b6359e414e073f3ec1f0f51ac00c9b85222",
+    "audit_build_command": "make release-static builddir=build/audit 'topdir=../../.. -D SALVIUM_BUILD_LINEAGE_TESTS=ON' -j4",
+    "audit_binary_sha256": {
+      "salviumd": "3f258583ec9b3d49524b362e7614c47c7acb012896080cca24171971daab60e6",
+      "salvium-wallet-rpc": "94ff47f2f3c84ab1a22417ed930ff4758951ff26ec46d7078a6c2ce70ef8236b",
+      "salvium-blockchain-verification": "ebad0ec4e04c8369a221ce746cd096a4ac6e2b107f9b31abe86f2a0eed190f1c",
+      "salvium-blockchain-import": "f5fe648684f1de58b4bdf14913e3f320b535b5f1ca5ddad29462dec9a69a14e7",
+      "salvium-blockchain-export": "f377efe11b7dde0e81e20cbfb4b2e53e3a5c9f06369ad0402bf6a7334b905bfb"
+    },
+    "all_restored_normal_binaries_unchanged": true,
+    "production_daemon_restarted": false
+  }
+}

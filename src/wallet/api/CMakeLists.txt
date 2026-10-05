@@ -87,6 +87,12 @@ target_link_libraries(wallet_api
 set_property(TARGET wallet_api PROPERTY EXCLUDE_FROM_ALL TRUE)
 set_property(TARGET obj_wallet_api PROPERTY EXCLUDE_FROM_ALL TRUE)
 
+# Audit acceptance also compiles the public Wallet::audit entry point.
+if(SALVIUM_BUILD_LINEAGE_TESTS)
+  set_property(TARGET wallet_api PROPERTY EXCLUDE_FROM_ALL FALSE)
+  set_property(TARGET obj_wallet_api PROPERTY EXCLUDE_FROM_ALL FALSE)
+endif()
+
 if(IOS)
     set(lib_folder lib-${ARCH})
 else()

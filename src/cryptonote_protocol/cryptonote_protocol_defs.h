@@ -189,6 +189,17 @@ namespace cryptonote
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
+  struct NOTIFY_WALLET_AUDIT
+  {
+    const static int ID = BC_COMMANDS_POOL_BASE + 30;
+    struct request_t {
+      std::string data;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(data)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+  };
   struct NOTIFY_NEW_TRANSACTIONS
   {
     const static int ID = BC_COMMANDS_POOL_BASE + 2;

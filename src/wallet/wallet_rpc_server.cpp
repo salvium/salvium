@@ -38,6 +38,7 @@ using namespace epee;
 
 #include "version.h"
 #include "wallet_rpc_server.h"
+#include "cryptonote_core/lineage_audit.h"
 #include "wallet/wallet_args.h"
 #include "common/command_line.h"
 #include "common/i18n.h"
@@ -614,8 +615,13 @@ namespace tools
           balance_per_subaddress_per_account[req.account_index] = m_wallet->balance_per_subaddress(req.account_index, asset, req.strict);
           unlocked_balance_per_subaddress_per_account[req.account_index] = m_wallet->unlocked_balance_per_subaddress(req.account_index, asset, req.strict);
         }
-        //SRCG: need to work this out
-        //tools::wallet2::transfers_iterator_container transfers = m_wallet->get_specific_transfers(asset);
+        std::map<std::pair<uint32_t, uint32_t>, uint64_t> unspent_outputs;
+        for (size_t transfer_index = 0; transfer_index < m_wallet->get_num_transfer_details(); ++transfer_index)
+        {
+          const auto& transfer = m_wallet->get_transfer_details(transfer_index);
+          if (!transfer.m_spent && transfer.asset_type == asset)
+            ++unspent_outputs[{transfer.m_subaddr_index.major, transfer.m_subaddr_index.minor}];
+        }
         for (const auto& p : balance_per_subaddress_per_account)
         {
           uint32_t account_index = p.first;
@@ -633,7 +639,7 @@ namespace tools
           }
           for (uint32_t i : address_indices)
           {
-            wallet_rpc::COMMAND_RPC_GET_BALANCE::per_subaddress_info info;
+            wallet_rpc::COMMAND_RPC_GET_BALANCE::per_subaddress_info info{};
             info.account_index = account_index;
             info.address_index = i;
             cryptonote::subaddress_index index = {info.account_index, info.address_index};
@@ -643,8 +649,7 @@ namespace tools
             info.blocks_to_unlock = unlocked_balance_per_subaddress[i].second.first;
             info.time_to_unlock = unlocked_balance_per_subaddress[i].second.second;
             info.label = m_wallet->get_subaddress_label(index);
-            // SRCG: need to work this out
-            //info.num_unspent_outputs = std::count_if(transfers.begin(), transfers.end(), [&](const auto& td) { return !td->m_spent && td->m_subaddr_index == index; });
+            info.num_unspent_outputs = unspent_outputs[{index.major, index.minor}];
             balance_info.per_subaddress.emplace_back(std::move(info));
           }
         }
@@ -1233,6 +1238,47 @@ namespace tools
       return false;
     }
 
+    CHECK_IF_BACKGROUND_SYNCING();
+    if (req.asset_type.empty() || cryptonote::is_lineage_audit_asset(req.asset_type)) {
+      try {
+        CHECK_AND_ASSERT_THROW_MES(!req.all_accounts || (req.account_index == 0 && req.subaddr_indices.empty()),
+            "Set all_accounts=false when selecting an audit account or subaddresses");
+        m_wallet->refresh(m_wallet->is_trusted_daemon());
+        const auto result = m_wallet->audit(!req.status_only && !req.do_not_relay, req.all_accounts,
+            req.account_index, req.subaddr_indices, req.do_not_relay && !req.status_only);
+        res.state = result.state;
+        res.activation_height = result.activation_height;
+        res.opening_height = result.opening_height;
+        res.closing_height = result.closing_height;
+        res.candidate_height = result.candidate_height;
+        res.good = result.good;
+        res.bad = result.bad;
+        res.unresolved = result.unresolved;
+        res.spent = result.spent;
+        res.good_count = result.good_count;
+        res.bad_count = result.bad_count;
+        res.unresolved_count = result.unresolved_count;
+        res.spent_count = result.spent_count;
+        res.stake_good = result.stake_good;
+        res.stake_bad = result.stake_bad;
+        res.stake_unresolved = result.stake_unresolved;
+        res.immature = result.immature;
+        res.pending_batches = result.pending_batches;
+        res.stake_good_count = result.stake_good_count;
+        res.stake_bad_count = result.stake_bad_count;
+        res.stake_unresolved_count = result.stake_unresolved_count;
+        res.stake_immature = result.stake_immature;
+        res.balances = result.balances;
+        res.proofs = result.proofs;
+        for (const auto& row : result.outputs)
+          res.outputs.push_back({row.transaction, row.key_image, row.state, row.asset_type, row.amount,
+              row.completed_height, row.release_height, row.account, row.subaddress, row.spent, row.stake, row.immature});
+        return true;
+      } catch (const std::exception&) {
+        handle_rpc_exception(std::current_exception(), er, WALLET_RPC_ERROR_CODE_GENERIC_TRANSFER_ERROR);
+        return false;
+      }
+    }
     CHECK_MULTISIG_ENABLED();
 
     std::string asset_type = req.asset_type.empty() ? "SAL" : req.asset_type;
@@ -1267,6 +1313,8 @@ namespace tools
       const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_wallet->nettype()).AUDIT_HARD_FORKS;
       const uint8_t hf_version = m_wallet->get_current_hard_fork();
       if (audit_hard_forks.find(hf_version) == audit_hard_forks.end()) {
+        er.code = WALLET_RPC_ERROR_CODE_DENIED;
+        er.message = "Legacy SAL migration is not active; use wallet audit";
         return false;
       }
       

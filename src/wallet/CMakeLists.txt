@@ -107,3 +107,8 @@ if(NOT IOS)
 endif()
 
 add_subdirectory(api)
+
+if(SALVIUM_BUILD_LINEAGE_TESTS)
+  monero_add_minimal_executable(wallet_audit_inventory_tests ../../tests/unit_tests/wallet_audit_inventory.cpp)
+  target_link_libraries(wallet_audit_inventory_tests PRIVATE wallet ${CMAKE_THREAD_LIBS_INIT} ${EXTRA_LIBRARIES})
+endif()

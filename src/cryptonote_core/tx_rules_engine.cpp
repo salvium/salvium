@@ -3,6 +3,7 @@
 
 #include "misc_log_ex.h"
 #include "tx_rules_engine.h"
+#include "lineage_audit_policy.h"
 
 #include "carrot_core/config.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
@@ -815,6 +816,10 @@ namespace cryptonote::txrules
       hf_rules hf13 = m[12];
       apply_hf_13(hf13);
       m[13] = hf13;
+
+      // Lineage eligibility is checked against canonical chain state in
+      // Blockchain. HF14 retains the existing transaction-local rules.
+      m[lineage_policy::fork_version] = hf13;
 
       return m;
     }();

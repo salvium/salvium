@@ -109,6 +109,7 @@ public:
   virtual cryptonote::output_data_t get_output_data_by_id(uint64_t output_id) const override { return cryptonote::output_data_t(); }
   virtual void get_output_data_by_id(const std::vector<uint64_t>& output_ids, std::vector<cryptonote::output_data_t>& outputs) const override {}
   virtual uint64_t get_output_id_by_asset_index(const std::string& asset_type, uint64_t asset_type_output_index) const override { return 0; }
+  virtual uint64_t get_legacy_output_id_by_asset_index(const std::string& asset_type, uint64_t index) const override { return get_output_id_by_asset_index(asset_type, index); }
   virtual void get_output_ids_by_asset_index(const std::string& asset_type, const std::vector<uint64_t>& asset_type_output_indices, std::vector<uint64_t>& output_ids) const override {}
   virtual uint64_t get_output_id_by_amount_index(uint64_t amount, uint64_t amount_index) const override { return 0; }
   virtual void get_output_ids_by_amount_index(uint64_t amount, const std::vector<uint64_t>& amount_indices, std::vector<uint64_t>& output_ids) const override {}

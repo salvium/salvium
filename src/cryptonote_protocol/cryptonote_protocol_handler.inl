@@ -991,6 +991,32 @@ namespace cryptonote
   }
   //------------------------------------------------------------------------------------------------------------------------
   template<class t_core>
+  bool t_cryptonote_protocol_handler<t_core>::relay_wallet_audit(const std::string& data, const boost::uuids::uuid& source)
+  {
+    NOTIFY_WALLET_AUDIT::request request;
+    request.data = data;
+    m_p2p->for_each_connection([&](connection_context& context, nodetool::peerid_type, uint32_t) {
+      if (context.m_connection_id != source && context.m_state == connection_context::state_normal)
+        post_notify<NOTIFY_WALLET_AUDIT>(request, context);
+      return true;
+    });
+    return true;
+  }
+  template<class t_core>
+  int t_cryptonote_protocol_handler<t_core>::handle_notify_wallet_audit(int command,
+      NOTIFY_WALLET_AUDIT::request& arg, cryptonote_connection_context& context)
+  {
+    if (context.m_state != connection_context::state_normal || arg.data.empty() || arg.data.size() > cryptonote::lineage_limits::max_bytes) return 1;
+    auto& chain = m_core.get_blockchain_storage();
+    const auto pending = chain.pending_lineage_disclosures();
+    if (std::find(pending.begin(), pending.end(), arg.data) != pending.end()) return 1;
+    crypto::hash id = crypto::cn_fast_hash(arg.data.data(), arg.data.size());
+    if (chain.lineage_disclosure_heights({id}).front()) return 1;
+    std::string reason;
+    if (chain.queue_lineage_disclosure(arg.data, id, reason)) relay_wallet_audit(arg.data, context.m_connection_id);
+    return 1;
+  }
+  template<class t_core>
   int t_cryptonote_protocol_handler<t_core>::handle_notify_new_transactions(int command, NOTIFY_NEW_TRANSACTIONS::request& arg, cryptonote_connection_context& context)
   {
     MLOG_P2P_MESSAGE("Received NOTIFY_NEW_TRANSACTIONS (" << arg.txs.size() << " txes)");
@@ -1828,6 +1854,16 @@ skip:
     m_idle_peer_kicker.do_call(boost::bind(&t_cryptonote_protocol_handler<t_core>::kick_idle_peers, this));
     m_standby_checker.do_call(boost::bind(&t_cryptonote_protocol_handler<t_core>::check_standby_peers, this));
     m_sync_search_checker.do_call(boost::bind(&t_cryptonote_protocol_handler<t_core>::update_sync_search, this));
+    const auto now = std::chrono::steady_clock::now();
+    if (now - m_last_audit_relay >= std::chrono::seconds(30)) {
+      m_last_audit_relay = now;
+      const auto pending = m_core.get_blockchain_storage().pending_lineage_disclosures();
+      if (!pending.empty()) {
+        for (size_t i = 0; i < std::min<size_t>(128, pending.size()); ++i)
+          relay_wallet_audit(pending[(m_audit_relay_offset + i) % pending.size()], boost::uuids::nil_uuid());
+        m_audit_relay_offset = (m_audit_relay_offset + std::min<size_t>(128, pending.size())) % pending.size();
+      }
+    }
     return m_core.on_idle();
   }
   //------------------------------------------------------------------------------------------------------------------------

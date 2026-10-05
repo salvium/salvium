@@ -1,0 +1,312 @@
+{
+  "date_utc": "2026-09-08T16:52:46.127140+00:00",
+  "branch": "audit",
+  "release_qualified": false,
+  "build_command": "make release-static builddir=build/audit topdir=../../.. -j1",
+  "build_result": "PASS",
+  "build_directory": "build/audit/release",
+  "resource_limits": {
+    "memory_bytes": 8589934592,
+    "swap_bytes": 0,
+    "cpu_quota_percent": 100,
+    "concurrent_large_fixture_copies": 1,
+    "minimum_temporary_free_bytes": 4294967296
+  },
+  "binary_sha256": {
+    "salviumd": "74327529144d43c3e4da44447da21ba6aed6743b58cfd16a2495029a9acf18e5",
+    "salvium-wallet-rpc": "ae64df33f8c5d56eff73f8dd8d68d5f3d1fce7b9e1f4e6065f9ddf807fd8b362",
+    "salvium-wallet-cli": "19fe6bf9a676f4f2061c204b4b0f9b9091441a1c3f34b7f63e606be6a6c8707b"
+  },
+  "native_tests": [
+    {
+      "status": "STAKE_LINEAGE_STATE_PASS",
+      "seeded_paths": 1000,
+      "cryptographic_proof_cases": 1000,
+      "proof_forgeries_rejected": 4000,
+      "bad_and_good_ancestry_cases": 2000,
+      "historical_double_payout_blocked": true,
+      "journal_rollback_cases": 1000,
+      "deep_dependency_cases": 4,
+      "maximum_tested_dependency_depth": 12000,
+      "cross_asset_pattern_bad": true,
+      "work_bound_checked": true
+    },
+    {
+      "status": "ACTUAL_465074_NATIVE_BAD_PASS",
+      "bad_origin_outputs": 2,
+      "bad_origin_atomic": 4000000000000000
+    }
+  ],
+  "wallet_inventory_test": {
+    "status": "PASS",
+    "checks": [
+      "legacy SAL1 unresolved",
+      "all accounts and explicit scope",
+      "spent history excluded",
+      "post-activation signing blocked before refresh",
+      "refreshed positive control"
+    ]
+  },
+  "wallet_cli_rpc_test": {
+    "status": "WALLET_AUDIT_PASS",
+    "tip": 309,
+    "stake": "638e842c2f7d0e29b291875c435f57f0183b0194bb8f6a3df3fb578ea81a7d25",
+    "release_height": 272,
+    "released_spend": "3347a05f4cbfeebd2c120247ba802a0899a30df80d38364a32ca676df79a922e",
+    "invalid_native_proofs_rejected": 1000,
+    "cli_entry_point": true,
+    "all_miner_batches_confirmed_in_bulk": true,
+    "mixed_batch_survives_orphaned_receipt": true,
+    "default_all_accounts_and_explicit_scope": true,
+    "direct_forged_block_rejected_with_valid_control": true,
+    "mixed_good_and_quarantined_subaddress_transfer_and_sweep": true,
+    "viewing_secret_absent": true,
+    "immature_good_stake_enrolled": true,
+    "binary_sha256": {
+      "salviumd": "74327529144d43c3e4da44447da21ba6aed6743b58cfd16a2495029a9acf18e5",
+      "salvium-wallet-rpc": "ae64df33f8c5d56eff73f8dd8d68d5f3d1fce7b9e1f4e6065f9ddf807fd8b362",
+      "salvium-wallet-cli": "19fe6bf9a676f4f2061c204b4b0f9b9091441a1c3f34b7f63e606be6a6c8707b"
+    }
+  },
+  "runner_tests": {
+    "status": "PASS",
+    "tests": 2,
+    "checks": [
+      "four shards execute sequentially",
+      "damaged journal rejected before test service creation"
+    ]
+  },
+  "concurrent_runner_lock_test": "PASS",
+  "production_daemon_started_or_restarted": false,
+  "normal_binary_hashes_unchanged": true,
+  "interrupted_matrix": {
+    "status": "INCOMPLETE",
+    "parseable_records_per_shard": [
+      125,
+      10,
+      8,
+      13
+    ],
+    "damaged_tails": true,
+    "records_are_acceptance": false
+  },
+  "remaining_limits": [
+    "Mainnet pre-Carrot SAL1 opening inventory policy and proof support remain incomplete.",
+    "Kernel recorded NVMe I/O errors and filesystem shutdown; trigger undetermined."
+  ],
+  "evidence_sha256": {
+    "build-recovery-limited.log": "591a78e217b6450a990e3be3c61352726b46ea7d21ec60d861c183d7f54bd660",
+    "unit-recovery-limited.log": "6f92d8c9d9bd72462b693555fcf317fe80d917269f309d89ce754e216c29b2b4",
+    "wallet-recovery-limited.log": "5aa49d955bbf64f38dca50430a82db41d6a6418b64b89a14cf36c58e0106c84c",
+    "wallet-recovery-limited.json": "f0c938d3e216ba2476a47340f5d41531fd11b0c432c6e3696df9bae80a5353b9"
+  },
+  "native_source_commit": "0d8ff4fcc5978f4089ef1c244357a2dfaa226fdb",
+  "wallet_matrix": {
+    "status": "WALLET_MATRIX_PASS",
+    "cases": 1000,
+    "start_tip": 106544,
+    "start_case": 0,
+    "end_case_exclusive": 1000,
+    "final_tip": 146017,
+    "unique_signed_receipts": 1000,
+    "forged_proofs_rejected": 1000,
+    "signed_spends": 1000,
+    "unique_signed_spends": 1000,
+    "false_mints_rejected": 1000,
+    "reorg_cases": 50,
+    "restart_cases": 10,
+    "binary_sha256": {
+      "salviumd": "74327529144d43c3e4da44447da21ba6aed6743b58cfd16a2495029a9acf18e5",
+      "salvium-wallet-rpc": "ae64df33f8c5d56eff73f8dd8d68d5f3d1fce7b9e1f4e6065f9ddf807fd8b362",
+      "salvium-blockchain-verification": "100d3aa5dd1ba0c177e797ba369c977fdac253dfafc790b0c1aec68cac099211"
+    },
+    "auxiliary_binary_sha256": {
+      "salvium-wallet-cli": "19fe6bf9a676f4f2061c204b4b0f9b9091441a1c3f34b7f63e606be6a6c8707b"
+    },
+    "scope": "Distinct transitions on one evolving chain starting above 100,000 blocks",
+    "test_process_exit_code": 0,
+    "wrapper_exit_code": 127,
+    "wrapper_exit_note": "The wrapper was edited while Bash was waiting. After the test service exited 0/SUCCESS, Bash read ERM at the original file end offset and exited 127. The updated wrapper passed a fresh invocation; native results, all 1000 journal records, and frozen/current binary hashes were independently checked.",
+    "journal_and_binary_provenance": "PASS",
+    "memory_peak_bytes": 4923760640,
+    "service_runtime_seconds": 14219.281,
+    "evidence_directory": "/home/jonathan/salvium-audit-test-work/salvium-wallet-matrix-v2-y9iltewl",
+    "evidence_sha256": {
+      "result.json": "19a9de893040f1174159f2ed8cd36d28a0ff6b90d715746f77018986652840ae",
+      "cases.jsonl": "24d22a6ac9e5d5d023b9718b9fb336cae910db42715e5a1266de1ca4cf2b9064",
+      "binary-sha256.json": "47d20bc2484e47009b6600f9e76470defb0e698e99dd8ba9dc79fa23cd138129",
+      "auxiliary-binary-sha256.json": "90d46d62dcd3e24cde0eb84a7d5cdcf81004652d5a496118124b9343c11ded51"
+    },
+    "false_mint_cases_by_kind": {
+      "excess_miner_reward": 334,
+      "overflow_miner_reward": 333,
+      "unauthorized_protocol_mint": 333
+    }
+  },
+  "wallet_final_inventory": {
+    "status": "WALLET_MATRIX_FINAL_INVENTORY_PASS",
+    "matrix_cases": 1000,
+    "matrix_shard_cases": 1000,
+    "matrix_tip": 146017,
+    "final_tip": 146141,
+    "wallets": 100,
+    "immature_good_stake_wallets": 20,
+    "late_stake_transactions": [
+      "977d5556901f05401e2099e48a17d7b6b61600d1f800e042e147c190c80f5330",
+      "64515d0a17cf9ef6fe086a875d666f6f2fcba0d8926fb57750b6ee43098a9226",
+      "929c7f9738761dbd9af7e9f22022aa87c9f34bc021fd15f7422cfb5fca7146f0",
+      "74880f11d64141fbba2098a465952f2ec7124b706eb7071aac88c68d0616ab61",
+      "14628826625104cd4329419aee7d73a16fdf82557429a1f9027528bbdc9a3101",
+      "02175aab60733e8170bae0aaac38c63147ab42ec9c5fe8d1738c0352c5be9d1f",
+      "710548c586de97d77eec73fb5157f6cf89ba81fd00f3c818108c3864c9f8c98d",
+      "afe47e7efab2e98a05beef12d1c603b62318320e6774c4fbaf7ed602e43d6197",
+      "3289d7b8266f7e4c6d5196f8205fba1464e8170ac27914322c5830ab6542145c",
+      "455a1ac754aa98ddd480d95248d3bb9f5fa992d9f8a0d7feab68705af54ec799",
+      "4e142b7813ab7648b2ca933debb0e436d8ab18cef62979a4c071e48a4a5d3cfa",
+      "83bd8a154f6947d9900ca2802e0173824a6f8ef9f80193e10298753a7ce45a0f",
+      "10e1374335f240c4a4220f7b6c3b0f6581928380aa064b1f768a0c9f429104d5",
+      "350d7748a6e2b1527610b74f9ce9c95fb69fd43e62133df7e8e2d0c29c1e22a7",
+      "6262c45a835550f60d8ec96b8d9ef4c24b0fd0e378ea0b1ec214b55ee8ef4803",
+      "347c454a57a27fe08f4c665badc55cb6c79aaadf4b4ffcc30394be041788075c",
+      "b824e0993863053c869bc95f427716420e54bcf70fe0f4fd204d6468ae15f789",
+      "42086f63e2f2282ffaad46c9a935f2a0f01477c7b9ea535964cb1517e9c33945",
+      "45db22c3b25acd215b9974c452830e39139a4fa9768b26a46be13d5ec536d306",
+      "ce83e0d0cdc054102dd7fda0c9600ba4752375b16049036054281e21af975f76"
+    ],
+    "good_atomic": 980048226034135,
+    "good_output_count": 102967,
+    "bad_atomic": 0,
+    "bad_output_count": 0,
+    "unresolved_atomic": 0,
+    "good_locked_stake_principal": 4000000000,
+    "binary_sha256": {
+      "salviumd": "74327529144d43c3e4da44447da21ba6aed6743b58cfd16a2495029a9acf18e5",
+      "salvium-wallet-rpc": "ae64df33f8c5d56eff73f8dd8d68d5f3d1fce7b9e1f4e6065f9ddf807fd8b362",
+      "salvium-blockchain-verification": "100d3aa5dd1ba0c177e797ba369c977fdac253dfafc790b0c1aec68cac099211"
+    },
+    "scope": "All accounts of the 100 fixture wallets; treasury and separate mining-carrier wallet excluded",
+    "test_process_exit_code": 0,
+    "wrapper_exit_code": 0,
+    "inventory_and_binary_provenance": "PASS",
+    "unresolved_output_count": 0,
+    "bad_stake_count": 0,
+    "unresolved_stake_count": 0,
+    "memory_peak_bytes": 5389950976,
+    "service_runtime_seconds": 5317.046,
+    "evidence_sha256": {
+      "finish-result.json": "c2d077eaf0e75aa938f3f5f3a848d184ceb8c3ddfa6c50b89b1e6da5e796b451",
+      "finish-evidence-sha256.json": "96b4375303a04a0dd79c911a60fa4aee837754430bd0051eb45b9ea9ff7e5f0d"
+    }
+  },
+  "build_test_options": {
+    "BUILD_TESTS": false,
+    "SALVIUM_BUILD_LINEAGE_TESTS": true
+  },
+  "runner_guard_tests": {
+    "status": "RUNNER_GUARDS_PASS",
+    "failure_exit_code_propagated": 1,
+    "fresh_success_invocations": "final inventory and runner regressions both exited 0",
+    "low_space_rejected_before_service_launch": true,
+    "low_space_free_bytes": 1498329088
+  },
+  "prior_acceptance_provenance": [
+    {
+      "file": "peer-relay-queue-final.json",
+      "sha256": "921b57e2eace8ee27ea4490b29ad7edafabc5663448e70cf4ef14e9b64415f2f",
+      "status": "WALLET_PEER_RELAY_PASS",
+      "binary_sha256": {
+        "salviumd": "74327529144d43c3e4da44447da21ba6aed6743b58cfd16a2495029a9acf18e5",
+        "salvium-wallet-rpc": "407ac663458a5b6655a203703c7c4aa54d1eda2dfbb49f717fd85851d89ce00b"
+      }
+    },
+    {
+      "file": "good-stake-selection-final.json",
+      "sha256": "f0484ef3c6671707159fd04938fa2f8093fad38ee632a176f2f35bbe41807873",
+      "status": "WALLET_GOOD_STAKE_PASS",
+      "binary_sha256": {
+        "salviumd": "74327529144d43c3e4da44447da21ba6aed6743b58cfd16a2495029a9acf18e5",
+        "salvium-wallet-rpc": "ac6c891533acebc7cbdca4cfbf7bfb79cb05a9edd4484cb9e872c83390571a9c"
+      }
+    },
+    {
+      "file": "bad-stake-selection-final.json",
+      "sha256": "3d8ae4b2b4f8872222e3aef13bf835614bd17613bd5ad847605287145543f5b1",
+      "status": "WALLET_BAD_STAKE_PASS",
+      "binary_sha256": {
+        "salviumd": "74327529144d43c3e4da44447da21ba6aed6743b58cfd16a2495029a9acf18e5",
+        "salvium-wallet-rpc": "ac6c891533acebc7cbdca4cfbf7bfb79cb05a9edd4484cb9e872c83390571a9c",
+        "salvium-blockchain-verification": "100d3aa5dd1ba0c177e797ba369c977fdac253dfafc790b0c1aec68cac099211"
+      }
+    },
+    {
+      "file": "mixed-funds-indices-final.json",
+      "sha256": "19e817a4ea8fc71c19056a2f75e13a0745c1b3299f5aacb8e3921f229d46ca04",
+      "status": "WALLET_MIXED_FUNDS_PASS",
+      "binary_sha256": {
+        "salviumd": "74327529144d43c3e4da44447da21ba6aed6743b58cfd16a2495029a9acf18e5",
+        "salvium-wallet-rpc": "1d33f526ddf21bfd3657288e3319b992b719ead91d0224f7bb1766ed83e3d33b",
+        "salvium-blockchain-verification": "100d3aa5dd1ba0c177e797ba369c977fdac253dfafc790b0c1aec68cac099211"
+      }
+    },
+    {
+      "file": "complex-wallet-journal.json",
+      "sha256": "bae8fd69ca7b8b97091f36eb9753b616df909adb48a8319b72d57270af6babaf",
+      "status": "COMPLEX_WALLET_AUDIT_PASS",
+      "binary_sha256": {
+        "salviumd": "d19eb6a4b48e85db7eb83d7d91a8be944220fcdd45fb07d67543d58c688e1b1a",
+        "salvium-wallet-rpc": "76415f7d5c5b8d5bed6113eb845ee5eaabe10558017e766ba73bcbaea51be8a0",
+        "salvium-wallet-cli": "587735579e0b05987357da80ba624c2c4cc842918f1b1f365db38d4fd982cc38",
+        "salvium-blockchain-verification": "8c6dddfcd8b16fcc202464f0a092f349e39a1aa96eeebd123fca1bb2a27cae58"
+      }
+    },
+    {
+      "file": "replay-complex-journal.json",
+      "sha256": "2394fce33a1febdd4e2dc34ed9c6f5a76b0b8fa55a2511868bbd34d9e17ed781",
+      "status": "AUDIT_REPLAY_PASS",
+      "binary_sha256": {
+        "salvium-blockchain-verification": "8c6dddfcd8b16fcc202464f0a092f349e39a1aa96eeebd123fca1bb2a27cae58",
+        "salvium-blockchain-export": "8b32fbe36e968b11612081fbe093505f6479c2df19ca4bb3c2c67890bce6b4f2",
+        "salvium-blockchain-import": "97fa24eb60bfd06d4093d11c618c4ee0618f039c1ad7d248f69c817933a54954"
+      }
+    },
+    {
+      "file": "replay-wallet-queue-final.json",
+      "sha256": "d19eb91a4b89c1277afa634942f55467a3d22bd7428f9f9bb472608b969195fc",
+      "status": "AUDIT_REPLAY_PASS",
+      "binary_sha256": {
+        "salvium-blockchain-verification": "100d3aa5dd1ba0c177e797ba369c977fdac253dfafc790b0c1aec68cac099211",
+        "salvium-blockchain-export": "8db5f82ebd234268170161dae2c0f27a30cb6767b4b24729189c9dddcd88bea0",
+        "salvium-blockchain-import": "ffcc668b7022c72012382d34107a73d3cf95ce262c734dc48d3223a071e5484a"
+      }
+    },
+    {
+      "file": "replay-rejection-queue-final.json",
+      "sha256": "8bc67a2da215072daa15c9fe29545a85ac09e54b9d2680efcc6399fdd72b62e1",
+      "status": "AUDIT_REPLAY_REJECTION_PASS",
+      "binary_sha256": {
+        "salvium-blockchain-verification": "100d3aa5dd1ba0c177e797ba369c977fdac253dfafc790b0c1aec68cac099211",
+        "salvium-blockchain-export": "8db5f82ebd234268170161dae2c0f27a30cb6767b4b24729189c9dddcd88bea0",
+        "salvium-blockchain-import": "ffcc668b7022c72012382d34107a73d3cf95ce262c734dc48d3223a071e5484a"
+      }
+    }
+  ],
+  "current_test_harness_sha256": {
+    "run_audit_limited.sh": "baa9682e65e0dba4d102e0dbf2cde8cc9efb8ac595b3e26163d60b09349ce830",
+    "audit_wallet_complex_regtest.py": "4f1f33d9f352e2157e9af043cfc38795eaaa421bf6e08c05366002e0dbe39a3e",
+    "audit_wallet_matrix_regtest.py": "86c07c5d6d8829fb469124f23eb9f7d60c44538e1057d6bb1a120dfc80a7d0a9",
+    "audit_wallet_finish_regtest.py": "9fb46462f7924bcd8ab4d866788de8537cb77623ad6aaf46c976da1c7455fbe1",
+    "audit_runner_tests.py": "55f74c03c8f9b074c32eb2adc527e961af909a4de11aa5f794a56642511483ab"
+  },
+  "completed_test_log_sha256": {
+    "wallet-matrix-recovery-1000.log": "083dc09018fa1753210bb3002363f1a301e7d42314ce08e197e05b6eb66ae412",
+    "wallet-finish-recovery.log": "db126161d24558813cfd48fd7649af7f22b7aa78122b9eb149eb3f7ed5732b92",
+    "runner-final.log": "bf930f2af20f2f4b5bc93cf1fa50b52f19f540a162b209fce60fadc81fbcfb3b",
+    "runner-guards-final.json": "95957069c474f2e806b3b7e1051297020a0dd8b5882c2f0e8e4f52a70993d0ef",
+    "runner-guards-final.log": "f95a14254a406c5623168ccc9f9ee6ec2844a01e288cc6f07167af1beb74fbf2"
+  },
+  "test_services_remaining": 0,
+  "production_processes_preserved": {
+    "miner_pid": 2979,
+    "daemon_pid": 6751
+  }
+}

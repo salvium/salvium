@@ -969,6 +969,12 @@ struct Wallet
      *                                after object returned
      */
 
+    // With no arguments, refreshes and audits every account and subaddress.
+    // Returns JSON with atomic SAL1 totals and per-output/stake status.
+    // An empty string means failure; inspect errorString().
+    virtual std::string audit(bool status_only = false, bool all_accounts = true,
+        uint32_t account = 0, const std::set<uint32_t>& subaddresses = {}) = 0;
+
     virtual PendingTransaction * createAuditTransaction(uint32_t mixin_count,
                                                         PendingTransaction::Priority = PendingTransaction::Priority_Low,
                                                         uint32_t subaddr_account = 0,

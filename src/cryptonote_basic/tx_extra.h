@@ -29,6 +29,7 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #pragma once
+#include "lineage_audit_limits.h"
 
 
 #define TX_EXTRA_PADDING_MAX_COUNT          255
@@ -40,6 +41,7 @@
 #define TX_EXTRA_MERGE_MINING_TAG           0x03
 #define TX_EXTRA_TAG_ADDITIONAL_PUBKEYS     0x04
 #define TX_EXTRA_TAG_TOKEN                  0x80
+#define TX_EXTRA_TAG_LINEAGE_AUDIT          0x81
 #define TX_EXTRA_MYSTERIOUS_MINERGATE_TAG   0xDE
 
 #define TX_EXTRA_NONCE_PAYMENT_ID           0x00
@@ -186,15 +188,25 @@ namespace cryptonote
     END_SERIALIZE()
   };
 
+  struct tx_extra_lineage_audit
+  {
+    std::string data;
+    BEGIN_SERIALIZE()
+      FIELD(data)
+      if (data.size() > lineage_limits::max_bytes) return false;
+    END_SERIALIZE()
+  };
+
   // tx_extra_field format, except tx_extra_padding and tx_extra_pub_key:
   //   varint tag;
   //   varint size;
   //   varint data[];
-  typedef boost::variant<tx_extra_padding, tx_extra_pub_key, tx_extra_nonce, tx_extra_merge_mining_tag, tx_extra_additional_pub_keys, tx_extra_mysterious_minergate, tx_extra_token> tx_extra_field;
+  typedef boost::variant<tx_extra_padding, tx_extra_pub_key, tx_extra_nonce, tx_extra_merge_mining_tag, tx_extra_additional_pub_keys, tx_extra_mysterious_minergate, tx_extra_token, tx_extra_lineage_audit> tx_extra_field;
 }
 
 VARIANT_TAG(binary_archive, cryptonote::tx_extra_padding, TX_EXTRA_TAG_PADDING);
 VARIANT_TAG(binary_archive, cryptonote::tx_extra_pub_key, TX_EXTRA_TAG_PUBKEY);
+VARIANT_TAG(binary_archive, cryptonote::tx_extra_lineage_audit, TX_EXTRA_TAG_LINEAGE_AUDIT);
 VARIANT_TAG(binary_archive, cryptonote::tx_extra_nonce, TX_EXTRA_NONCE);
 VARIANT_TAG(binary_archive, cryptonote::tx_extra_merge_mining_tag, TX_EXTRA_MERGE_MINING_TAG);
 VARIANT_TAG(binary_archive, cryptonote::tx_extra_additional_pub_keys, TX_EXTRA_TAG_ADDITIONAL_PUBKEYS);

@@ -87,6 +87,7 @@ TEST(wallet_tx_builder, input_selection_basic)
         tools::wallet2::transfer_details &td = transfers.emplace_back();
         td = gen_transfer_details();
         td.m_block_height = transfers.size(); // small ascending block heights
+        td.m_internal_output_index = 0; // The fixture transaction has one output.
     }
 
     // modify one so that it funds the transfer all by itself
@@ -97,10 +98,17 @@ TEST(wallet_tx_builder, input_selection_basic)
 
     // set such that all transfers are unlocked
     const std::uint64_t top_block_index = transfers.size() + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE;
+    tools::wallet2 wallet;
+    cryptonote::block genesis;
+    const auto& config = cryptonote::get_config(cryptonote::MAINNET);
+    cryptonote::generate_genesis_block(genesis, config.GENESIS_TX, config.GENESIS_NONCE);
+    const auto genesis_hash = cryptonote::get_block_hash(genesis);
+    wallet.import_blockchain({0, genesis_hash, std::vector<crypto::hash>(top_block_index + 1, genesis_hash)});
 
     // make input selector
     std::set<size_t> selected_transfer_indices;
     const carrot::select_inputs_func_t input_selector = tools::wallet::make_wallet2_single_transfer_input_selector(
+        wallet,
         transfers,
         /*from_account=*/0,
         /*from_subaddresses=*/{},

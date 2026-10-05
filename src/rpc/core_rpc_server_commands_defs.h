@@ -91,7 +91,7 @@ namespace cryptonote
 // advance which version they will stop working with
 // Don't go over 32767 for any of these
 #define CORE_RPC_VERSION_MAJOR 3
-#define CORE_RPC_VERSION_MINOR 13
+#define CORE_RPC_VERSION_MINOR 14
 #define MAKE_CORE_RPC_VERSION(major,minor) (((major)<<16)|(minor))
 #define CORE_RPC_VERSION MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR)
 
@@ -983,6 +983,121 @@ namespace cryptonote
   };
 
 
+  struct COMMAND_RPC_SUBMIT_LINEAGE_DISCLOSURE
+  {
+    struct request_t
+    {
+      std::string data;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(data)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+    struct response_t: public rpc_response_base
+    {
+      std::string disclosure_id;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_PARENT(rpc_response_base)
+        KV_SERIALIZE(disclosure_id)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  struct COMMAND_RPC_LINEAGE_AUDIT_STATUS
+  {
+    struct request_t
+    {
+      std::vector<std::string> key_images;
+      std::vector<std::string> disclosure_ids;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(key_images)
+        KV_SERIALIZE_OPT(disclosure_ids, std::vector<std::string>())
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+    struct entry
+    {
+      std::string state;
+      uint64_t completed_height;
+      uint64_t release_height;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(state)
+        KV_SERIALIZE(completed_height)
+        KV_SERIALIZE(release_height)
+      END_KV_SERIALIZE_MAP()
+    };
+    struct response_t: public rpc_response_base
+    {
+      uint64_t activation_height;
+      uint64_t opening_height;
+      uint64_t closing_height;
+      uint64_t candidate_height;
+      uint64_t max_output_proofs_per_block;
+      uint64_t max_enrollment_bytes_per_block;
+      uint64_t work_items_per_block;
+      std::vector<entry> entries;
+      std::vector<uint64_t> disclosure_heights;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_PARENT(rpc_response_base)
+        KV_SERIALIZE(activation_height)
+        KV_SERIALIZE_OPT(opening_height, uint64_t(0))
+        KV_SERIALIZE_OPT(closing_height, uint64_t(0))
+        KV_SERIALIZE(candidate_height)
+        KV_SERIALIZE(max_output_proofs_per_block)
+        KV_SERIALIZE(max_enrollment_bytes_per_block)
+        KV_SERIALIZE(work_items_per_block)
+        KV_SERIALIZE(entries)
+        KV_SERIALIZE(disclosure_heights)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  struct COMMAND_RPC_LINEAGE_AUDIT_OUTPUTS
+  {
+    struct request_t
+    {
+      uint64_t from_index = 0;
+      uint64_t limit = 1000;
+      std::string asset_type = "SAL1";
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_OPT(from_index, uint64_t(0))
+        KV_SERIALIZE_OPT(limit, uint64_t(1000))
+        KV_SERIALIZE_OPT(asset_type, std::string("SAL1"))
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+    struct entry
+    {
+      uint64_t index;
+      uint64_t height;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(index)
+        KV_SERIALIZE(height)
+      END_KV_SERIALIZE_MAP()
+    };
+    struct response_t: public rpc_response_base
+    {
+      uint64_t activation_height, closing_height, candidate_height;
+      std::string tip_hash;
+      std::string asset_type;
+      bool more;
+      std::vector<entry> outputs;
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_PARENT(rpc_response_base)
+        KV_SERIALIZE(activation_height)
+        KV_SERIALIZE(closing_height)
+        KV_SERIALIZE(candidate_height)
+        KV_SERIALIZE(tip_hash)
+        KV_SERIALIZE(asset_type)
+        KV_SERIALIZE(more)
+        KV_SERIALIZE(outputs)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
   struct COMMAND_RPC_GETBLOCKTEMPLATE
   {
     struct request_t: public rpc_request_base
@@ -991,6 +1106,7 @@ namespace cryptonote
       std::string wallet_address;
       std::string prev_block;
       std::string extra_nonce;
+      std::string audit_disclosure;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE_PARENT(rpc_request_base)
@@ -998,6 +1114,7 @@ namespace cryptonote
         KV_SERIALIZE(wallet_address)
         KV_SERIALIZE(prev_block)
         KV_SERIALIZE(extra_nonce)
+        KV_SERIALIZE_OPT(audit_disclosure, std::string())
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<request_t> request;

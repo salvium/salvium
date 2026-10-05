@@ -88,6 +88,7 @@ namespace cryptonote
 
     BEGIN_INVOKE_MAP2(cryptonote_protocol_handler)
       HANDLE_NOTIFY_T2(NOTIFY_NEW_BLOCK, &cryptonote_protocol_handler::handle_notify_new_block)
+      HANDLE_NOTIFY_T2(NOTIFY_WALLET_AUDIT, &cryptonote_protocol_handler::handle_notify_wallet_audit)
       HANDLE_NOTIFY_T2(NOTIFY_NEW_TRANSACTIONS, &cryptonote_protocol_handler::handle_notify_new_transactions)
       HANDLE_NOTIFY_T2(NOTIFY_REQUEST_GET_OBJECTS, &cryptonote_protocol_handler::handle_request_get_objects)
       HANDLE_NOTIFY_T2(NOTIFY_RESPONSE_GET_OBJECTS, &cryptonote_protocol_handler::handle_response_get_objects)
@@ -136,6 +137,8 @@ namespace cryptonote
   private:
     //----------------- commands handlers ----------------------------------------------
     int handle_notify_new_block(int command, NOTIFY_NEW_BLOCK::request& arg, cryptonote_connection_context& context);
+    int handle_notify_wallet_audit(int command, NOTIFY_WALLET_AUDIT::request& arg, cryptonote_connection_context& context);
+    bool relay_wallet_audit(const std::string& data, const boost::uuids::uuid& source) override;
     int handle_notify_new_transactions(int command, NOTIFY_NEW_TRANSACTIONS::request& arg, cryptonote_connection_context& context);
     int handle_request_get_objects(int command, NOTIFY_REQUEST_GET_OBJECTS::request& arg, cryptonote_connection_context& context);
     int handle_response_get_objects(int command, NOTIFY_RESPONSE_GET_OBJECTS::request& arg, cryptonote_connection_context& context);
@@ -188,6 +191,8 @@ namespace cryptonote
     mutable epee::critical_section m_max_out_peers_lock;
     tools::PerformanceTimer m_sync_timer, m_add_timer;
     uint64_t m_last_add_end_time;
+    std::chrono::steady_clock::time_point m_last_audit_relay{};
+    size_t m_audit_relay_offset = 0;
     uint64_t m_sync_spans_downloaded, m_sync_old_spans_downloaded, m_sync_bad_spans_downloaded;
     uint64_t m_sync_download_chain_size, m_sync_download_objects_size;
     size_t m_block_download_max_size;

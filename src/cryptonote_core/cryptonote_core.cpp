@@ -56,6 +56,7 @@ using namespace epee;
 #include "common/notify.h"
 #include "hardforks/hardforks.h"
 #include "version.h"
+#include "lineage_audit_policy.h"
 
 #include <boost/filesystem.hpp>
 
@@ -92,6 +93,15 @@ namespace cryptonote
     "keep-fakechain"
   , "Don't delete any existing database when in fakechain mode."
   , false
+  };
+  const command_line::arg_descriptor<uint64_t> arg_regtest_lineage_audit_height = {
+    "regtest-lineage-audit-height", "Isolated regtest only: activate SAL1 lineage quarantine at this height", 0
+  };
+  const command_line::arg_descriptor<uint64_t> arg_regtest_lineage_audit_opening_height = {
+    "regtest-lineage-audit-opening-height", "Isolated regtest only: last block of accepted opening SAL1 inventory", 0
+  };
+  const command_line::arg_descriptor<uint64_t> arg_regtest_lineage_audit_duration = {
+    "regtest-lineage-audit-duration", "Isolated regtest only: enrollment window in blocks (zero replays historical test policy)", lineage_policy::duration_blocks
   };
   const command_line::arg_descriptor<difficulty_type> arg_fixed_difficulty  = {
     "fixed-difficulty"
@@ -333,6 +343,9 @@ namespace cryptonote
     command_line::add_arg(desc, arg_testnet_on);
     command_line::add_arg(desc, arg_stagenet_on);
     command_line::add_arg(desc, arg_regtest_on);
+    command_line::add_arg(desc, arg_regtest_lineage_audit_height);
+    command_line::add_arg(desc, arg_regtest_lineage_audit_opening_height);
+    command_line::add_arg(desc, arg_regtest_lineage_audit_duration);
     command_line::add_arg(desc, arg_keep_fakechain);
     command_line::add_arg(desc, arg_fixed_difficulty);
     command_line::add_arg(desc, arg_dns_checkpoints);
@@ -678,12 +691,30 @@ namespace cryptonote
       MERROR("Failed to parse block rate notify spec: " << e.what());
     }
 
-    const std::pair<uint8_t, uint64_t> regtest_hard_forks[3] = {std::make_pair(1, 0), std::make_pair(mainnet_hard_forks[num_mainnet_hard_forks-1].version, 1), std::make_pair(0, 0)};
+    const uint64_t test_audit_height = command_line::get_arg(vm, arg_regtest_lineage_audit_height);
+    const uint64_t test_opening_height = command_line::get_arg(vm, arg_regtest_lineage_audit_opening_height);
+    const uint64_t test_audit_duration = command_line::get_arg(vm, arg_regtest_lineage_audit_duration);
+    CHECK_AND_ASSERT_MES(regtest || test_audit_duration == lineage_policy::duration_blocks, false,
+        "Audit test duration requires --regtest");
+    CHECK_AND_ASSERT_MES(regtest || (!test_audit_height && !test_opening_height), false, "Audit test height requires --regtest");
+    CHECK_AND_ASSERT_MES(!test_opening_height || (test_audit_height && test_opening_height < test_audit_height),
+        false, "Previous audit boundary must precede activation");
+    // Keep existing fixtures at the pre-audit fork until their explicit epoch.
+    std::vector<std::pair<uint8_t, uint64_t>> regtest_hard_forks = {{1, 0},
+        {test_audit_height == 1 ? lineage_policy::fork_version : uint8_t(lineage_policy::fork_version - 1), 1}};
+    if (test_audit_height > 1) regtest_hard_forks.emplace_back(lineage_policy::fork_version, test_audit_height);
+    regtest_hard_forks.emplace_back(0, 0);
     const cryptonote::test_options regtest_test_options = {
-      regtest_hard_forks,
+      regtest_hard_forks.data(),
       0
     };
     const difficulty_type fixed_difficulty = command_line::get_arg(vm, arg_fixed_difficulty);
+    m_blockchain_storage.configure_lineage_audit(regtest ? test_audit_height :
+        m_nettype == MAINNET ? lineage_policy::mainnet_height :
+        m_nettype == TESTNET ? lineage_policy::testnet_height : lineage_policy::stagenet_height,
+        regtest ? test_opening_height : m_nettype == MAINNET ? lineage_policy::mainnet_opening_height :
+        m_nettype == TESTNET ? lineage_policy::testnet_opening_height : lineage_policy::stagenet_opening_height,
+        regtest ? test_audit_duration : lineage_policy::duration_blocks);
     r = m_blockchain_storage.init(db.release(), m_nettype, m_offline, regtest ? &regtest_test_options : test_options, fixed_difficulty, get_checkpoints);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize blockchain storage");
 
@@ -1099,6 +1130,15 @@ namespace cryptonote
     for (size_t i = 0; i < tx_blobs.size(); i++, ++it) {
       if (!results[i].res)
         continue;
+      if (tx_relay != relay_method::block && !m_blockchain_storage.have_tx(results[i].hash)) {
+        std::string reason;
+        if (!m_blockchain_storage.check_lineage_spend(results[i].tx, reason)) {
+          tvc[i].m_invalid_input = true;
+          tvc[i].m_verifivation_failed = true;
+          results[i].res = false;
+          continue;
+        }
+      }
       if(m_mempool.have_tx(results[i].hash, relay_category::legacy))
       {
         LOG_PRINT_L2("tx " << results[i].hash << "already have transaction in tx_pool");
@@ -1418,6 +1458,14 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   bool core::add_new_tx(transaction& tx, const crypto::hash& tx_hash, const cryptonote::blobdata &blob, size_t tx_weight, tx_verification_context& tvc, relay_method tx_relay, bool relayed)
   {
+    if (tx_relay != relay_method::block && !m_blockchain_storage.have_tx(tx_hash)) {
+      std::string reason;
+      if (!m_blockchain_storage.check_lineage_spend(tx, reason)) {
+        tvc.m_invalid_input = true;
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+    }
     if(m_mempool.have_tx(tx_hash, relay_category::legacy))
     {
       LOG_PRINT_L2("tx " << tx_hash << "already have transaction in tx_pool");

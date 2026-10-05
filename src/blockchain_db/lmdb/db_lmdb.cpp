@@ -5825,6 +5825,27 @@ uint64_t BlockchainLMDB::get_output_id_by_asset_index(const std::string &asset_t
   return output_ids[0];
 }
 
+uint64_t BlockchainLMDB::get_legacy_output_id_by_asset_index(const std::string& asset_type, uint64_t index) const
+{
+  check_open();
+  if (!m_rct_index_realigned) return get_output_id_by_asset_index(asset_type, index);
+  TXN_PREFIX_RDONLY();
+  MDB_cursor* raw_cursor = nullptr;
+  int result = mdb_cursor_open(m_txn, m_output_type_refs_backup, &raw_cursor);
+  if (result) throw0(DB_ERROR(lmdb_error("Cannot open preserved historical ring index: ", result).c_str()));
+  std::unique_ptr<MDB_cursor, decltype(&mdb_cursor_close)> cursor(raw_cursor, &mdb_cursor_close);
+  MDB_val_copy<uint32_t> key(cryptonote::asset_id_from_type(asset_type));
+  MDB_val_copy<uint64_t> value(index);
+  result = mdb_cursor_get(cursor.get(), &key, &value, MDB_GET_BOTH);
+  if (result == MDB_NOTFOUND) throw1(OUTPUT_DNE("Historical ring index is missing from the preserved reference table"));
+  if (result) throw0(DB_ERROR(lmdb_error("Cannot read preserved historical ring index: ", result).c_str()));
+  if (value.mv_size != sizeof(output_type_ref)) throw0(DB_ERROR("Invalid historical ring reference size"));
+  output_type_ref reference;
+  std::memcpy(&reference, value.mv_data, sizeof(reference));
+  if (reference.asset_type_output_index != index) throw0(DB_ERROR("Historical ring reference index mismatch"));
+  return reference.output_id;
+}
+
 void BlockchainLMDB::get_output_id_from_asset_type_output_index(const std::string asset_type_str, const std::vector<uint64_t> &asset_type_output_indices, std::vector<uint64_t> &output_indices) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);

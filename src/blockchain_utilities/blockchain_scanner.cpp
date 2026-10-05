@@ -340,7 +340,40 @@ skip:
     
       if (tx.type == cryptonote::transaction_type::STAKE && stake_mode.compare("off")) {
         if (stake_mode.compare("all") == 0) {
-          std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "STAKE TX detected" << delimiter << "amount:" << (tx.amount_burnt / 100000000) << std::endl;
+          std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "STAKE TX detected" << delimiter << "amount:" << (tx.amount_burnt / 100000000) << delimiter << "inputs:" << tx.vin.size() << delimiter << "outputs:" << tx.vout.size() << std::endl;
+          if (tx.amount_burnt == 500 * COIN)
+          {
+            for (size_t input_index = 0; input_index < tx.vin.size(); ++input_index)
+            {
+              const auto* input = boost::get<txin_to_key>(&tx.vin[input_index]);
+              if (!input)
+                continue;
+              const std::vector<uint64_t> offsets =
+                  relative_output_offsets_to_absolute(input->key_offsets);
+              std::vector<uint64_t> output_ids;
+              db->get_output_id_from_asset_type_output_index(
+                  input->asset_type, offsets, output_ids);
+              for (size_t member = 0; member < output_ids.size(); ++member)
+              {
+                const output_record_t record =
+                    db->get_output_record_by_id(output_ids[member]);
+                if (record.clear_amount != 0)
+                  std::cout << timebuf << delimiter << h << delimiter << tx_id
+                            << delimiter << "STAKE 500 CLEARTEXT MEMBER"
+                            << delimiter << "input:" << input_index
+                            << delimiter << "member:" << member
+                            << delimiter << "ring:" << output_ids.size()
+                            << delimiter << "asset:" << input->asset_type
+                            << delimiter << "output_id:" << output_ids[member]
+                            << delimiter << "parent:" << record.tx_hash
+                            << delimiter << "parent_height:" << record.od.height
+                            << delimiter << "clear_amount:"
+                            << record.clear_amount
+                            << delimiter << "clear_coins:"
+                            << (record.clear_amount / COIN) << std::endl;
+              }
+            }
+          }
         } else if (stake_mode.compare("large") == 0 && tx.amount_burnt > 25000000000000llu) {
           std::cout << timebuf << "" << delimiter << "" << h << "" << delimiter << "" << tx_id << "" << delimiter << "large STAKE TX detected" << delimiter << "amount:" << (tx.amount_burnt / 100000000) << std::endl;
         }

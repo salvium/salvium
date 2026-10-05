@@ -1,0 +1,327 @@
+{
+  "date_utc": "2026-09-09T02:08:07.901100+00:00",
+  "branch": "audit",
+  "validation_state": "PASS",
+  "release_qualified": false,
+  "build_command": "make release-static builddir=build/audit topdir=../../.. -j1",
+  "build_result": "PASS",
+  "build_log": "/home/jonathan/salvium-audit-test-work/window-build-7.log",
+  "base_commit": "8c7dd06cdc62e4b5158718cc52a35ef43feb525c",
+  "policy": {
+    "activation_height": "H (unscheduled on mainnet)",
+    "default_duration_blocks": 10080,
+    "exclusive_cutoff": "E = H + duration",
+    "output_release": "C + 10, subject to normal maturity",
+    "late_completion_or_enrollment": false,
+    "clearance_scope": "canonical SAL1 outputs and every ring member",
+    "new_valid_outputs_inherit_clearance": true
+  },
+  "binary_sha256": {
+    "build/audit/release/bin/salviumd": "1bacdcbaf98b9e7b52cdde53fbc8180d013f502b4fbf452a9da5c861f0fa8a27",
+    "build/audit/release/bin/salvium-wallet-rpc": "fd334047ee00d330cafc0530b284aa4751410a93b2c88ec77d01a01f866c8b79",
+    "build/audit/release/bin/salvium-wallet-cli": "61ddf0cbe42142497990e94af089faeedf1bea8ec93b657163a8e7f883e8800f",
+    "build/audit/release/bin/salvium-blockchain-verification": "c9553fbcc0037bd4f5bfa1a5a1b7e481e2186dd120df9e66201bd8d1b9265029",
+    "build/audit/release/src/cryptonote_core/lineage_audit_tests": "04cf3945158bae97f20f82000d56d5ca3d557683f4076dfa4480205ad0920fc3",
+    "build/audit/release/src/wallet/wallet_audit_inventory_tests": "ead3399824183ec4ccb3f32570260c3538a39552b3edcb6f608dccd45a280675"
+  },
+  "changed_source_sha256": {
+    "src/blockchain_utilities/blockchain_verification.cpp": "b559e0c5ba5e87abcfb4ab60659a468605fde668ba59ca384c2347942052d605",
+    "src/blockchain_utilities/independent_chain_forensics.cpp": "f2bf108da600da390c6943c8eeded3f2dd60cf512d14f9b6c9768b751b4b807d",
+    "src/blockchain_utilities/independent_chain_forensics.h": "0c06f583dc066046b6a580bf17cbe34f51b6098caf13bee6840d0ba5c9fde517",
+    "src/cryptonote_core/blockchain.cpp": "14b890d43b5754f3e19b31b4a15ac3e14ae5edcaf8d2a92db500de068261c817",
+    "src/cryptonote_core/blockchain.h": "1f73903a7ed0013344b0f2c6de02b70794334823afebe4ae82bcd674c195a002",
+    "src/cryptonote_core/cryptonote_core.cpp": "61c7a819163f1cbd314316838a0fd7f7634457c004cc3f0b735527818986e12c",
+    "src/cryptonote_core/cryptonote_tx_utils.cpp": "12076d52006d63c6aec569927f019c71854dbd8a653d6390f0c5c68b3550b98f",
+    "src/cryptonote_core/lineage_audit.cpp": "9a9fa37836ab434d87be08e9e59bc7f4719fed6323ced5502489550c2719e9a1",
+    "src/cryptonote_core/lineage_audit.h": "c5052707368f3145cf6bfc452952ded5200ddab52f9442aee02acde52af62d1c",
+    "src/cryptonote_core/lineage_audit_policy.h": "484a63b8c17b985c3a532ebff825af2cee6f1dc12bbff51eace58d420fdb0f02",
+    "src/rpc/core_rpc_server.cpp": "7ddfd8f07afa314bf14b478cd6cccf7cceb1f79f5639209fb986dc795a0e949e",
+    "src/rpc/core_rpc_server.h": "fc670d43b4af6634a11313710b9c2bf85a6c091bd8d6f5aa3a7a40099a5a9d8b",
+    "src/rpc/core_rpc_server_commands_defs.h": "1e7f1a7a7b3e28bc3c328c5bbaa8c0b3da878209f78c7762e234a0342168d4cd",
+    "src/simplewallet/simplewallet.cpp": "0c64a70dc5dcbd15ea4ab4cdd7fd335ea2e1d28323bc9dad7d9c65fcd22289e5",
+    "src/wallet/api/wallet2_api.h": "3b093f69d8ed0680b7df25a9407f96655cc3c3999c4b8e8dc77b9bb318661ecf",
+    "src/wallet/wallet2.cpp": "fac704eefaa9f20b4ce04c58a098505265bdc0919f753a39447486116d35a04b",
+    "src/wallet/wallet2.h": "c751e4fca2f2c6908e5000c27fe58c9d235c37f89b9f6656368d1de0d75f06be",
+    "src/wallet/wallet_rpc_server.cpp": "4e2e3f84139daa2028e2fa34722f06645f0951ba005ad69a4251ce182c896e66",
+    "src/wallet/wallet_rpc_server_commands_defs.h": "07c391d226adf364adbf3b141e1e325fef4f636687f3d6d7382a99de93c0adc1",
+    "tests/functional_tests/audit_complex_gate_regtest.py": "c19ae394d5cd3b7ebb48d82fff670da4856c67180041bb9d84eab6f8249a1e4d",
+    "tests/functional_tests/audit_complex_regtest.py": "22a0108d381a82f8e78e286dc16eaaf95dd7113b7966221ab066ebe179b34648",
+    "tests/functional_tests/audit_gate_regtest.py": "fd0d5fdb0e2bd569c796ca5ae863cc3d7bf988cc9427c4833a01ad9b1f7b5474",
+    "tests/functional_tests/audit_many_inputs_regtest.py": "cecbb4c033f773dc42e28f61acf5bb0d6760f0a48f5d425d430ea771aa75b8d6",
+    "tests/functional_tests/audit_matrix_regtest.py": "129432fabc3f02f197c4dfd60628fe6266bce57115ff0e29d64eb373ad51139e",
+    "tests/functional_tests/audit_opening_regtest.py": "3f901127b2ba5fe02b63d95e0b40a52e45486bb421537c1f109e625bcc8a08cf",
+    "tests/functional_tests/audit_release_regtest.py": "b858613e2f8a3cea4cfa67aab48a3f428453726f1ce9c29fe0ec92c0a47a816e",
+    "tests/functional_tests/audit_replay_regtest.py": "e2c343208eb930f2a0525e7f17efe3656955a4b6601d3938c5392f08fa55cb4b",
+    "tests/functional_tests/audit_return_gate_regtest.py": "89b7a275cd1e0183eda79d2a9add2876c85ddebcec186680d8ea1dabdb775101",
+    "tests/functional_tests/audit_startup_regtest.py": "1e9b2871167247648c2eb073a1e5f2a642e9c641c1616bccef85c47a6ab442c5",
+    "tests/functional_tests/audit_wallet_complex_regtest.py": "82fcb6d936fa623bfd062ebdc84ffe6055414fa36aa18d9310a716983463f0f2",
+    "tests/functional_tests/audit_wallet_peer_regtest.py": "1754b6fa8bb3f656e01a6771115804863d67da03600cd59d94ca54c88142ed6b",
+    "tests/functional_tests/audit_wallet_regtest.py": "e4889125888bc246930209c2c16c99dde8105a88a199a6bfba9a4ac560d623e2",
+    "tests/functional_tests/audit_window_regtest.py": "d4086a5285b738af207f87b3365ddda1da9482f598c15ff79b34071e6a407960",
+    "tests/unit_tests/lineage_audit.cpp": "71582f8500918d56f14040258b4e474ba0f919b412ec3d4b562ca040a6079f7b",
+    "tests/unit_tests/wallet_audit_inventory.cpp": "e9900a1c9c944ff4e816a92ac992898d59e07352fd1ff7dd8e5cbd4d85c7c8a0",
+    "utils/build_audit_activation.py": "4967cf19b52213a2474551cbd9b673f8cecf025edd9e542dcc1180438fdaf371"
+  },
+  "completed_tests": {
+    "native": {
+      "test": "native",
+      "command": [
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests",
+        "tests/data/sal1-bad-origin-465074.hex"
+      ],
+      "log": "/home/jonathan/salvium-audit-test-work/bounded-native-20260909T004242.log",
+      "exit_code": 0,
+      "log_sha256": "6a1e1698d5c6880ea79e91d8461674a9b1dc0a9fc2d366d04543ee38a7e7add5",
+      "started": "2026-09-09T00:42:42.101492+00:00",
+      "ended": "2026-09-09T00:42:54.071841+00:00",
+      "seconds": 11.970349,
+      "binary_sha256": {
+        "build/audit/release/bin/salviumd": "1bacdcbaf98b9e7b52cdde53fbc8180d013f502b4fbf452a9da5c861f0fa8a27",
+        "build/audit/release/bin/salvium-wallet-rpc": "fd334047ee00d330cafc0530b284aa4751410a93b2c88ec77d01a01f866c8b79",
+        "build/audit/release/bin/salvium-wallet-cli": "61ddf0cbe42142497990e94af089faeedf1bea8ec93b657163a8e7f883e8800f",
+        "build/audit/release/bin/salvium-blockchain-verification": "c9553fbcc0037bd4f5bfa1a5a1b7e481e2186dd120df9e66201bd8d1b9265029",
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests": "04cf3945158bae97f20f82000d56d5ca3d557683f4076dfa4480205ad0920fc3",
+        "build/audit/release/src/wallet/wallet_audit_inventory_tests": "ead3399824183ec4ccb3f32570260c3538a39552b3edcb6f608dccd45a280675"
+      }
+    },
+    "inventory": {
+      "test": "inventory",
+      "command": [
+        "build/audit/release/src/wallet/wallet_audit_inventory_tests"
+      ],
+      "log": "/home/jonathan/salvium-audit-test-work/bounded-inventory-20260909T004254.log",
+      "exit_code": 0,
+      "log_sha256": "417f31eaf5358bd6d55a66712f6261500580f0794f6f09ad7222d2173bd282cf",
+      "started": "2026-09-09T00:42:54.072359+00:00",
+      "ended": "2026-09-09T00:42:58.958622+00:00",
+      "seconds": 4.886263,
+      "binary_sha256": {
+        "build/audit/release/bin/salviumd": "1bacdcbaf98b9e7b52cdde53fbc8180d013f502b4fbf452a9da5c861f0fa8a27",
+        "build/audit/release/bin/salvium-wallet-rpc": "fd334047ee00d330cafc0530b284aa4751410a93b2c88ec77d01a01f866c8b79",
+        "build/audit/release/bin/salvium-wallet-cli": "61ddf0cbe42142497990e94af089faeedf1bea8ec93b657163a8e7f883e8800f",
+        "build/audit/release/bin/salvium-blockchain-verification": "c9553fbcc0037bd4f5bfa1a5a1b7e481e2186dd120df9e66201bd8d1b9265029",
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests": "04cf3945158bae97f20f82000d56d5ca3d557683f4076dfa4480205ad0920fc3",
+        "build/audit/release/src/wallet/wallet_audit_inventory_tests": "ead3399824183ec4ccb3f32570260c3538a39552b3edcb6f608dccd45a280675"
+      }
+    },
+    "window": {
+      "test": "window",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_window_regtest.py",
+        "--stake-cycle"
+      ],
+      "log": "/home/jonathan/salvium-audit-test-work/bounded-window-20260909T004258.log",
+      "exit_code": 0,
+      "log_sha256": "46e0f5e6739b071fb4dea63e862c493e09a7e76b131cb8dd55faf103c067ed3e",
+      "started": "2026-09-09T00:42:58.959074+00:00",
+      "ended": "2026-09-09T01:01:40.526406+00:00",
+      "seconds": 1121.567332,
+      "binary_sha256": {
+        "build/audit/release/bin/salviumd": "1bacdcbaf98b9e7b52cdde53fbc8180d013f502b4fbf452a9da5c861f0fa8a27",
+        "build/audit/release/bin/salvium-wallet-rpc": "fd334047ee00d330cafc0530b284aa4751410a93b2c88ec77d01a01f866c8b79",
+        "build/audit/release/bin/salvium-wallet-cli": "61ddf0cbe42142497990e94af089faeedf1bea8ec93b657163a8e7f883e8800f",
+        "build/audit/release/bin/salvium-blockchain-verification": "c9553fbcc0037bd4f5bfa1a5a1b7e481e2186dd120df9e66201bd8d1b9265029",
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests": "04cf3945158bae97f20f82000d56d5ca3d557683f4076dfa4480205ad0920fc3",
+        "build/audit/release/src/wallet/wallet_audit_inventory_tests": "ead3399824183ec4ccb3f32570260c3538a39552b3edcb6f608dccd45a280675"
+      }
+    },
+    "opening": {
+      "test": "opening",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_opening_regtest.py"
+      ],
+      "log": "/home/jonathan/salvium-audit-test-work/bounded-opening-20260909T010140.log",
+      "exit_code": 0,
+      "log_sha256": "f9390582438f72b2ee8b4253b383c3ff1daef7de3fdce680fee946875d6b8c16",
+      "started": "2026-09-09T01:01:40.526880+00:00",
+      "ended": "2026-09-09T01:03:30.760138+00:00",
+      "seconds": 110.233258,
+      "binary_sha256": {
+        "build/audit/release/bin/salviumd": "1bacdcbaf98b9e7b52cdde53fbc8180d013f502b4fbf452a9da5c861f0fa8a27",
+        "build/audit/release/bin/salvium-wallet-rpc": "fd334047ee00d330cafc0530b284aa4751410a93b2c88ec77d01a01f866c8b79",
+        "build/audit/release/bin/salvium-wallet-cli": "61ddf0cbe42142497990e94af089faeedf1bea8ec93b657163a8e7f883e8800f",
+        "build/audit/release/bin/salvium-blockchain-verification": "c9553fbcc0037bd4f5bfa1a5a1b7e481e2186dd120df9e66201bd8d1b9265029",
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests": "04cf3945158bae97f20f82000d56d5ca3d557683f4076dfa4480205ad0920fc3",
+        "build/audit/release/src/wallet/wallet_audit_inventory_tests": "ead3399824183ec4ccb3f32570260c3538a39552b3edcb6f608dccd45a280675"
+      }
+    },
+    "startup": {
+      "test": "startup",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_startup_regtest.py"
+      ],
+      "log": "/home/jonathan/salvium-audit-test-work/bounded-startup-20260909T010330.log",
+      "exit_code": 0,
+      "log_sha256": "a88eaa0b78cd70635fc144a799d956da90569a9902d22196eefb13f56b3c2e80",
+      "started": "2026-09-09T01:03:30.760601+00:00",
+      "ended": "2026-09-09T01:03:49.239950+00:00",
+      "seconds": 18.479349,
+      "binary_sha256": {
+        "build/audit/release/bin/salviumd": "1bacdcbaf98b9e7b52cdde53fbc8180d013f502b4fbf452a9da5c861f0fa8a27",
+        "build/audit/release/bin/salvium-wallet-rpc": "fd334047ee00d330cafc0530b284aa4751410a93b2c88ec77d01a01f866c8b79",
+        "build/audit/release/bin/salvium-wallet-cli": "61ddf0cbe42142497990e94af089faeedf1bea8ec93b657163a8e7f883e8800f",
+        "build/audit/release/bin/salvium-blockchain-verification": "c9553fbcc0037bd4f5bfa1a5a1b7e481e2186dd120df9e66201bd8d1b9265029",
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests": "04cf3945158bae97f20f82000d56d5ca3d557683f4076dfa4480205ad0920fc3",
+        "build/audit/release/src/wallet/wallet_audit_inventory_tests": "ead3399824183ec4ccb3f32570260c3538a39552b3edcb6f608dccd45a280675"
+      }
+    },
+    "wallet": {
+      "test": "wallet",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_wallet_regtest.py"
+      ],
+      "log": "/home/jonathan/salvium-audit-test-work/bounded-wallet-20260909T010349.log",
+      "exit_code": 0,
+      "log_sha256": "b02d00bc472ccac0cfe8f3225bd1827398dd4e79979df462d6de6c866be481bb",
+      "started": "2026-09-09T01:03:49.240475+00:00",
+      "ended": "2026-09-09T01:08:22.435096+00:00",
+      "seconds": 273.194621,
+      "binary_sha256": {
+        "build/audit/release/bin/salviumd": "1bacdcbaf98b9e7b52cdde53fbc8180d013f502b4fbf452a9da5c861f0fa8a27",
+        "build/audit/release/bin/salvium-wallet-rpc": "fd334047ee00d330cafc0530b284aa4751410a93b2c88ec77d01a01f866c8b79",
+        "build/audit/release/bin/salvium-wallet-cli": "61ddf0cbe42142497990e94af089faeedf1bea8ec93b657163a8e7f883e8800f",
+        "build/audit/release/bin/salvium-blockchain-verification": "c9553fbcc0037bd4f5bfa1a5a1b7e481e2186dd120df9e66201bd8d1b9265029",
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests": "04cf3945158bae97f20f82000d56d5ca3d557683f4076dfa4480205ad0920fc3",
+        "build/audit/release/src/wallet/wallet_audit_inventory_tests": "ead3399824183ec4ccb3f32570260c3538a39552b3edcb6f608dccd45a280675"
+      }
+    },
+    "many_inputs": {
+      "test": "many_inputs",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_many_inputs_regtest.py"
+      ],
+      "log": "/home/jonathan/salvium-audit-test-work/bounded-many_inputs-20260909T012234.log",
+      "exit_code": 0,
+      "log_sha256": "183ca100cd78f0c258316ee21cae17d2c05efd33fb2cb182b6e143a999a418a5",
+      "started": "2026-09-09T01:22:34.536215+00:00",
+      "ended": "2026-09-09T01:32:42.547975+00:00",
+      "seconds": 608.01176,
+      "binary_sha256": {
+        "build/audit/release/bin/salviumd": "1bacdcbaf98b9e7b52cdde53fbc8180d013f502b4fbf452a9da5c861f0fa8a27",
+        "build/audit/release/bin/salvium-wallet-rpc": "fd334047ee00d330cafc0530b284aa4751410a93b2c88ec77d01a01f866c8b79",
+        "build/audit/release/bin/salvium-wallet-cli": "61ddf0cbe42142497990e94af089faeedf1bea8ec93b657163a8e7f883e8800f",
+        "build/audit/release/bin/salvium-blockchain-verification": "c9553fbcc0037bd4f5bfa1a5a1b7e481e2186dd120df9e66201bd8d1b9265029",
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests": "04cf3945158bae97f20f82000d56d5ca3d557683f4076dfa4480205ad0920fc3",
+        "build/audit/release/src/wallet/wallet_audit_inventory_tests": "ead3399824183ec4ccb3f32570260c3538a39552b3edcb6f608dccd45a280675"
+      }
+    },
+    "return": {
+      "test": "return",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_return_gate_regtest.py"
+      ],
+      "log": "/home/jonathan/salvium-audit-test-work/bounded-return-20260909T011724.log",
+      "exit_code": 0,
+      "log_sha256": "39d8f235cf9c95a03b371bf25af41e04232b17f04759355cbacca6d4d0bc1330",
+      "started": "2026-09-09T01:17:24.817273+00:00",
+      "ended": "2026-09-09T01:19:13.704611+00:00",
+      "seconds": 108.887338,
+      "binary_sha256": {
+        "build/audit/release/bin/salviumd": "1bacdcbaf98b9e7b52cdde53fbc8180d013f502b4fbf452a9da5c861f0fa8a27",
+        "build/audit/release/bin/salvium-wallet-rpc": "fd334047ee00d330cafc0530b284aa4751410a93b2c88ec77d01a01f866c8b79",
+        "build/audit/release/bin/salvium-wallet-cli": "61ddf0cbe42142497990e94af089faeedf1bea8ec93b657163a8e7f883e8800f",
+        "build/audit/release/bin/salvium-blockchain-verification": "c9553fbcc0037bd4f5bfa1a5a1b7e481e2186dd120df9e66201bd8d1b9265029",
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests": "04cf3945158bae97f20f82000d56d5ca3d557683f4076dfa4480205ad0920fc3",
+        "build/audit/release/src/wallet/wallet_audit_inventory_tests": "ead3399824183ec4ccb3f32570260c3538a39552b3edcb6f608dccd45a280675"
+      }
+    },
+    "peer": {
+      "test": "peer",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_wallet_peer_regtest.py"
+      ],
+      "log": "/home/jonathan/salvium-audit-test-work/bounded-peer-20260909T013245.log",
+      "exit_code": 0,
+      "log_sha256": "f8ed59e9b4c55875fbbed7f8e6099ecb5ebf5df89f8bc98105c76e314c48e1dc",
+      "started": "2026-09-09T01:32:45.587090+00:00",
+      "ended": "2026-09-09T01:35:23.460285+00:00",
+      "seconds": 157.873195,
+      "binary_sha256": {
+        "build/audit/release/bin/salviumd": "1bacdcbaf98b9e7b52cdde53fbc8180d013f502b4fbf452a9da5c861f0fa8a27",
+        "build/audit/release/bin/salvium-wallet-rpc": "fd334047ee00d330cafc0530b284aa4751410a93b2c88ec77d01a01f866c8b79",
+        "build/audit/release/bin/salvium-wallet-cli": "61ddf0cbe42142497990e94af089faeedf1bea8ec93b657163a8e7f883e8800f",
+        "build/audit/release/bin/salvium-blockchain-verification": "c9553fbcc0037bd4f5bfa1a5a1b7e481e2186dd120df9e66201bd8d1b9265029",
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests": "04cf3945158bae97f20f82000d56d5ca3d557683f4076dfa4480205ad0920fc3",
+        "build/audit/release/src/wallet/wallet_audit_inventory_tests": "ead3399824183ec4ccb3f32570260c3538a39552b3edcb6f608dccd45a280675"
+      }
+    },
+    "bad_stake": {
+      "test": "bad_stake",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_wallet_bad_stake_regtest.py"
+      ],
+      "log": "/home/jonathan/salvium-audit-test-work/bounded-bad_stake-20260909T013523.log",
+      "exit_code": 0,
+      "log_sha256": "7ef16704513e27cb35bf9059620f57aff2219a72fbfa9b30f1e572e4890cd719",
+      "started": "2026-09-09T01:35:23.460792+00:00",
+      "ended": "2026-09-09T01:51:06.699636+00:00",
+      "seconds": 943.238844,
+      "binary_sha256": {
+        "build/audit/release/bin/salviumd": "1bacdcbaf98b9e7b52cdde53fbc8180d013f502b4fbf452a9da5c861f0fa8a27",
+        "build/audit/release/bin/salvium-wallet-rpc": "fd334047ee00d330cafc0530b284aa4751410a93b2c88ec77d01a01f866c8b79",
+        "build/audit/release/bin/salvium-wallet-cli": "61ddf0cbe42142497990e94af089faeedf1bea8ec93b657163a8e7f883e8800f",
+        "build/audit/release/bin/salvium-blockchain-verification": "c9553fbcc0037bd4f5bfa1a5a1b7e481e2186dd120df9e66201bd8d1b9265029",
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests": "04cf3945158bae97f20f82000d56d5ca3d557683f4076dfa4480205ad0920fc3",
+        "build/audit/release/src/wallet/wallet_audit_inventory_tests": "ead3399824183ec4ccb3f32570260c3538a39552b3edcb6f608dccd45a280675"
+      }
+    },
+    "good_stake": {
+      "test": "good_stake",
+      "command": [
+        "python3",
+        "tests/functional_tests/audit_wallet_good_stake_regtest.py"
+      ],
+      "log": "/home/jonathan/salvium-audit-test-work/bounded-good_stake-20260909T015106.log",
+      "exit_code": 0,
+      "log_sha256": "0902ae59a533df82075fb912dbc3e646c433faee2d41c6c4ad547430370e9098",
+      "started": "2026-09-09T01:51:06.700094+00:00",
+      "ended": "2026-09-09T02:06:43.934593+00:00",
+      "seconds": 937.234499,
+      "binary_sha256": {
+        "build/audit/release/bin/salviumd": "1bacdcbaf98b9e7b52cdde53fbc8180d013f502b4fbf452a9da5c861f0fa8a27",
+        "build/audit/release/bin/salvium-wallet-rpc": "fd334047ee00d330cafc0530b284aa4751410a93b2c88ec77d01a01f866c8b79",
+        "build/audit/release/bin/salvium-wallet-cli": "61ddf0cbe42142497990e94af089faeedf1bea8ec93b657163a8e7f883e8800f",
+        "build/audit/release/bin/salvium-blockchain-verification": "c9553fbcc0037bd4f5bfa1a5a1b7e481e2186dd120df9e66201bd8d1b9265029",
+        "build/audit/release/src/cryptonote_core/lineage_audit_tests": "04cf3945158bae97f20f82000d56d5ca3d557683f4076dfa4480205ad0920fc3",
+        "build/audit/release/src/wallet/wallet_audit_inventory_tests": "ead3399824183ec4ccb3f32570260c3538a39552b3edcb6f608dccd45a280675"
+      }
+    }
+  },
+  "normal_binary_sha256": {
+    "build/x86_64-linux-gnu/release/bin/salviumd": "411d85689479607f8bdcb744ab9f5871023220be99203608c631b3f386256d8f",
+    "build/x86_64-linux-gnu/release/bin/salvium-wallet-cli": "da6329d653694e3b4ffdbcf38051fd04801e150c25973cad35066f0799abd143",
+    "build/x86_64-linux-gnu/release/bin/salvium-wallet-rpc": "cf7d0aa5c705fbcda4d01e250ed7069700e3d58ebd8880c685f5a74881af7c96"
+  },
+  "production_daemon_started_or_restarted": false,
+  "limits": [
+    "Mainnet opening and activation must be chosen and rehearsed by the main developer.",
+    "At most 32 enrollment proofs per block; confirm capacity before choosing a permanent deadline.",
+    "Post-fork input rings are currently limited to SAL1."
+  ],
+  "test_scope": {
+    "window": "Current bounded policy: H=240, duration=120; C+9/C+10; final-block clearance; exclusive cutoff; frozen and inherited outputs; eligible decoys; reorg/restart; full old/new stake payouts and independent issuance replay.",
+    "native": "Default duration=10080; cutoff and overflow boundaries; unresolved-work cutoff; canonical output identity; eligible-output cache invalidation; ownership/ancestry rejection; known bad-origin fixture.",
+    "opening": "Accepted opening inventory, ownership, descendant ancestry, active opening stake and issuance checks.",
+    "startup": "Scheduled default cutoff, pruned database rejection and regtest-only override restrictions.",
+    "many_inputs": "Fresh 32-transaction fixture with 2048 funding inputs and more than 1 MiB of funding data; oversized saved enrollment splits without resigning and clears after ancestry enrollment.",
+    "peer": "Ordinary funding is submitted directly to the miner as setup. Audit enrollment must relay automatically from a restricted owner node after the mining peer reconnects.",
+    "legacy_regressions": "wallet, many_inputs, return, peer, bad_stake and good_stake retain duration=0 only in isolated historical fixtures; they supplement the bounded window test."
+  },
+  "cold_population_diagnostic": {
+    "log": "/home/jonathan/salvium-audit-test-work/population-probe.log",
+    "log_sha256": "6047d76f7f1983ebbf5b64b3d325f7a262235106f38f9d19cd7c523a94643ef8",
+    "candidate_height": 21936,
+    "cpu_quota": "1 CPU",
+    "cold_seconds": 88.36314177500026,
+    "cached_seconds": 0.004672228002164047,
+    "fix": "Wallet eligible-output query uses the existing 210-second history-query timeout."
+  }
+}

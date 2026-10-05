@@ -1,0 +1,30 @@
+{
+  "status": "REQUIREMENT_FAILURES_REPRODUCED",
+  "chain": "/tmp/salvium-wallet-audit-review-1iep5b9_",
+  "tip": 257,
+  "activation": 240,
+  "cli_test_hf": 14,
+  "source_revision": "938186ae2fa6b3e20c2f1cb298349477af065f40",
+  "binary_sha256": {
+    "salviumd": "3f258583ec9b3d49524b362e7614c47c7acb012896080cca24171971daab60e6",
+    "salvium-wallet-rpc": "94ff47f2f3c84ab1a22417ed930ff4758951ff26ec46d7078a6c2ce70ef8236b",
+    "salvium-wallet-cli": "587436e03551564780c44e2e9f04e971fcbeeb438b0e4b05a0d4785ac602e2f2",
+    "salvium-blockchain-verification": "ebad0ec4e04c8369a221ce746cd096a4ac6e2b107f9b31abe86f2a0eed190f1c",
+    "salvium-blockchain-import": "f5fe648684f1de58b4bdf14913e3f320b535b5f1ca5ddad29462dec9a69a14e7",
+    "salvium-blockchain-export": "f377efe11b7dde0e81e20cbfb4b2e53e3a5c9f06369ad0402bf6a7334b905bfb"
+  },
+  "findings": {
+    "wallet_audit_command_unavailable": true,
+    "wallet_rpc_audit_rejection": "audit: {'code': 0, 'message': ''}",
+    "second_valid_submission_blocked_by_single_slot": true,
+    "view_balance_secret_is_public_coinbase_data": true,
+    "honest_owner_requires_other_owners_funding_disclosures": true,
+    "good_stake_and_funds_still_pending_after_15_blocks": [
+      {
+        "completed_height": 0,
+        "release_height": 0,
+        "state": "PENDING"
+      }
+    ]
+  }
+}

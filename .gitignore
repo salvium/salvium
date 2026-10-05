@@ -121,6 +121,12 @@ nbproject
 
 /testnet
 
+# Local daemon data must not enter Git or workspace snapshots.
+/.salvium/
+
 __pycache__/
 *.pyc
 *.log
+
+# Local audit configuration can contain private viewing evidence.
+/audit-config*.json

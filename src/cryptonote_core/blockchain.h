@@ -64,6 +64,7 @@
 #include "checkpoints/checkpoints.h"
 #include "cryptonote_basic/hardfork.h"
 #include "blockchain_db/blockchain_db.h"
+#include "lineage_audit.h"
 
 namespace tools { class Notify; }
 
@@ -100,6 +101,7 @@ namespace cryptonote
   /************************************************************************/
   class Blockchain
   {
+    friend class lineage_audit;
   public:
     /**
      * @brief container for passing a block and metadata about it on the blockchain
@@ -639,6 +641,20 @@ namespace cryptonote
      * @return false if any input is invalid, otherwise true
      */
     bool check_tx_inputs(transaction& tx, uint64_t& pmax_used_block_height, crypto::hash& max_used_block_id, tx_verification_context &tvc, bool kept_by_block = false) const;
+    void configure_lineage_audit(uint64_t activation, uint64_t opening_height = 0,
+        uint64_t duration = lineage_policy::duration_blocks) { m_lineage_audit.configure(activation, opening_height, duration); }
+    uint64_t lineage_audit_activation() const { return m_lineage_audit.activation(); }
+    uint64_t lineage_audit_opening_height() const { return m_lineage_audit.opening_height(); }
+    uint64_t lineage_audit_closing_height() const { return m_lineage_audit.closing_height(); }
+    bool check_lineage_spend(const transaction& tx, std::string& reason) const;
+    bool check_lineage_disclosure(const block& candidate, std::string& reason) const;
+    std::vector<lineage_audit::status> lineage_status(const std::vector<crypto::key_image>& images) const;
+    std::vector<std::pair<uint64_t, uint64_t>> lineage_outputs(uint64_t from_index, size_t limit, bool& more,
+        const std::string& asset = "SAL1") const;
+    bool check_lineage_tx_sanity(const transaction& tx) const;
+    bool queue_lineage_disclosure(const std::string& data, crypto::hash& id, std::string& reason);
+    std::vector<std::string> pending_lineage_disclosures();
+    std::vector<uint64_t> lineage_disclosure_heights(const std::vector<crypto::hash>& ids) const;
 
     /**
      * @brief get fee quantization mask
@@ -1196,6 +1212,8 @@ namespace cryptonote
      * @return TRUE if the payouts were calculated successfully, FALSE otherwise
      */
     bool calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info_carrot, uint64_t>>& yield_payouts);
+    bool calculate_lineage_yield_payouts(uint64_t height,
+        std::vector<std::pair<yield_tx_info_carrot, uint64_t>>& yield_payouts);
 
     /**
      * @brief get the ABI entry for a particular height from the cache
@@ -1263,6 +1281,11 @@ namespace cryptonote
 
 
     BlockchainDB* m_db;
+    mutable lineage_audit m_lineage_audit;
+    std::deque<std::string> m_lineage_pending_disclosures;
+    bool m_lineage_queue_loaded = false;
+    void load_lineage_queue();
+    std::string lineage_queue_path(const crypto::hash& id) const;
 
     tx_memory_pool& m_tx_pool;
 
@@ -1524,7 +1547,7 @@ namespace cryptonote
      * 
      * @return bool indicating payout valid, and the index of the output within miner transaction outputs.
      */
-    std::tuple<bool, size_t> validate_treasury_payout(const transaction& tx, const std::tuple<std::string, std::string, std::string, std::string>& treasury_data, uint8_t hf_version) const;
+    static std::tuple<bool, size_t> validate_treasury_payout(const transaction& tx, const std::tuple<std::string, std::string, std::string, std::string>& treasury_data, uint8_t hf_version);
 
     /**
      * @brief sanity checks a miner transaction before validating an entire block
@@ -1571,6 +1594,9 @@ namespace cryptonote
      * @return false if anything is found wrong with the miner transaction, otherwise true
      */
     bool validate_miner_transaction(const block& b, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version);
+    static bool validate_miner_reward(const block& b, size_t cumulative_block_weight, uint64_t fee,
+        uint64_t& base_reward, uint64_t already_generated_coins, bool& partial_block_reward,
+        uint8_t version, network_type nettype, uint64_t median_weight);
 
     /**
      * @brief validates a protocol (coinbase) transaction

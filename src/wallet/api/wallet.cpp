@@ -1744,12 +1744,33 @@ PendingTransaction *WalletImpl::createCreateTokenTransaction(const std::string &
     return transaction;
 }
 
+std::string WalletImpl::audit(bool status_only, bool all_accounts, uint32_t account,
+    const std::set<uint32_t>& subaddresses)
+{
+    clearStatus();
+    try {
+        LOCK_REFRESH();
+        m_wallet->refresh(trustedDaemon());
+        const auto result = m_wallet->audit(!status_only, all_accounts, account, subaddresses);
+        return epee::serialization::store_t_to_json(result);
+    } catch (const std::exception& e) {
+        setStatusError(e.what());
+        return {};
+    }
+}
+
 PendingTransaction *WalletImpl::createAuditTransaction(
     uint32_t mixin_count,
     PendingTransaction::Priority priority,
     uint32_t subaddr_account,
     std::set<uint32_t> subaddr_indices
 ) {
+    if (m_wallet->get_current_hard_fork() >= 14) {
+        auto transaction = new PendingTransactionImpl(*this);
+        setStatusError("SAL1 provenance review uses Wallet::audit(); it does not create a SAL migration transaction");
+        statusWithErrorString(transaction->m_status, transaction->m_errorString);
+        return transaction;
+    }
     // Need to populate {dst_entr, payment_id, asset_type, is_return}
     const bool is_carrot = m_wallet->get_current_hard_fork() >= HF_VERSION_CARROT;
     const string dst_addr = m_wallet->get_subaddress_as_str({{subaddr_account, 0}, is_carrot ? carrot::AddressDeriveType::Carrot : carrot::AddressDeriveType::PreCarrot});//MY LOCAL (SUB)ADDRESS

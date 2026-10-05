@@ -49,6 +49,7 @@ using namespace epee;
 #include "cryptonote_config.h"
 #include "cryptonote_basic/merge_mining.h"
 #include "cryptonote_core/tx_sanity_check.h"
+#include "cryptonote_core/lineage_audit_policy.h"
 #include "misc_language.h"
 #include "net/local_ip.h"
 #include "net/parse.h"
@@ -1423,10 +1424,20 @@ namespace cryptonote
       return true;
     }
 
-    uint64_t output_count = m_core.get_blockchain_storage().get_num_mature_outputs(req.source_asset_type);
-    bool ok = cryptonote::tx_sanity_check(tx_blob, output_count);
+    auto& chain = m_core.get_blockchain_storage();
+    bool ok;
+    {
+      CRITICAL_REGION_LOCAL(chain);
+      if (lineage_policy::consensus_enforcement && chain.lineage_audit_closing_height() &&
+          chain.get_current_blockchain_height() >= chain.lineage_audit_activation()) {
+        transaction tx;
+        ok = parse_and_validate_tx_from_blob(tx_blob, tx) && chain.check_lineage_tx_sanity(tx);
+      } else {
+        ok = cryptonote::tx_sanity_check(tx_blob, chain.get_num_mature_outputs(req.source_asset_type));
+      }
+    }
     if (!ok) {
-      if (req.do_sanity_checks && !cryptonote::tx_sanity_check(tx_blob, output_count)) {
+      if (req.do_sanity_checks) {
         res.status = "Failed";
         res.reason = "Sanity check failed";
         res.sanity_check_failed = true;
@@ -1930,6 +1941,112 @@ namespace cryptonote
     return 0;
   }
   //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_submit_lineage_disclosure(const COMMAND_RPC_SUBMIT_LINEAGE_DISCLOSURE::request& req,
+      COMMAND_RPC_SUBMIT_LINEAGE_DISCLOSURE::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
+  {
+    std::string data, reason;
+    crypto::hash id;
+    if (req.data.size() > 2 * lineage_limits::max_bytes || !string_tools::parse_hexstr_to_binbuff(req.data, data) ||
+        !m_core.get_blockchain_storage().queue_lineage_disclosure(data, id, reason)) {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = reason.empty() ? "Invalid audit disclosure" : reason;
+      return false;
+    }
+    m_core.get_protocol()->relay_wallet_audit(data, boost::uuids::nil_uuid());
+    res.disclosure_id = string_tools::pod_to_hex(id);
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
+
+  bool core_rpc_server::on_lineage_audit_outputs(const COMMAND_RPC_LINEAGE_AUDIT_OUTPUTS::request& req,
+      COMMAND_RPC_LINEAGE_AUDIT_OUTPUTS::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
+  {
+    if (!lineage_policy::consensus_enforcement) {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Lineage output allow-lists are disabled; descendants are review-only";
+      return false;
+    }
+    if (!req.limit || req.limit > 1000) {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Audit output page limit must be 1 through 1000";
+      return false;
+    }
+    try {
+      auto& chain = m_core.get_blockchain_storage();
+      CRITICAL_REGION_LOCAL(chain);
+      res.activation_height = chain.lineage_audit_activation();
+      res.closing_height = chain.lineage_audit_closing_height();
+      res.candidate_height = chain.get_current_blockchain_height();
+      res.tip_hash = string_tools::pod_to_hex(chain.get_tail_id());
+      res.asset_type = req.asset_type;
+      for (const auto& output : chain.lineage_outputs(req.from_index, req.limit, res.more, req.asset_type))
+        res.outputs.push_back({output.first, output.second});
+      res.status = CORE_RPC_STATUS_OK;
+      return true;
+    } catch (const std::exception& error) {
+      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
+      error_resp.message = error.what();
+      return false;
+    }
+  }
+
+  bool core_rpc_server::on_lineage_audit_status(const COMMAND_RPC_LINEAGE_AUDIT_STATUS::request& req,
+      COMMAND_RPC_LINEAGE_AUDIT_STATUS::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
+  {
+    if (!lineage_policy::public_enrollment && (!req.key_images.empty() || !req.disclosure_ids.empty())) {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Public output and key-image audit queries are disabled; use private human review";
+      return false;
+    }
+    if (req.key_images.size() + req.disclosure_ids.size() > 1000) {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "At most 1000 audit key images per request";
+      return false;
+    }
+    std::vector<crypto::key_image> images;
+    for (const auto& text : req.key_images) {
+      crypto::key_image image;
+      if (!epee::string_tools::hex_to_pod(text, image)) {
+        error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+        error_resp.message = "Invalid audit key image";
+        return false;
+      }
+      images.push_back(image);
+    }
+    std::vector<crypto::hash> disclosures;
+    for (const auto& text : req.disclosure_ids) {
+      crypto::hash id;
+      if (!epee::string_tools::hex_to_pod(text, id)) {
+        error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+        error_resp.message = "Invalid audit disclosure identifier";
+        return false;
+      }
+      disclosures.push_back(id);
+    }
+    try {
+      auto& chain = m_core.get_blockchain_storage();
+      CRITICAL_REGION_LOCAL(chain);
+      res.activation_height = chain.lineage_audit_activation();
+      res.opening_height = chain.lineage_audit_opening_height();
+      res.closing_height = chain.lineage_audit_closing_height();
+      res.candidate_height = chain.get_current_blockchain_height();
+      res.max_output_proofs_per_block = lineage_policy::public_enrollment ? lineage_limits::max_outputs : 0;
+      res.max_enrollment_bytes_per_block = lineage_policy::public_enrollment ? lineage_limits::max_bytes : 0;
+      res.work_items_per_block = lineage_policy::consensus_enforcement ? lineage_limits::work_per_block : 0;
+      if (lineage_policy::public_enrollment) {
+        for (const auto& item : chain.lineage_status(images))
+          res.entries.push_back({item.state, item.completed_height, item.release_height});
+        res.disclosure_heights = chain.lineage_disclosure_heights(disclosures);
+      }
+      res.status = CORE_RPC_STATUS_OK;
+      return true;
+    } catch (const std::exception& error) {
+      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
+      error_resp.message = error.what();
+      return false;
+    }
+  }
+
   bool core_rpc_server::get_block_template(const account_public_address &address, const crypto::hash *prev_block, const cryptonote::blobdata &extra_nonce, size_t &reserved_offset, cryptonote::difficulty_type  &difficulty, uint64_t &height, uint64_t &expected_reward, block &b, uint64_t &seed_height, crypto::hash &seed_hash, crypto::hash &next_seed_hash, epee::json_rpc::error &error_resp)
   {
     b = boost::value_initialized<cryptonote::block>();
@@ -2084,6 +2201,45 @@ namespace cryptonote
     crypto::hash seed_hash, next_seed_hash;
     if (!get_block_template(info.address, req.prev_block.empty() ? NULL : &prev_block, blob_reserve, reserved_offset, wdiff, res.height, res.expected_reward, b, res.seed_height, seed_hash, next_seed_hash, error_resp))
       return false;
+
+    if (!req.audit_disclosure.empty()) {
+      cryptonote::tx_extra_lineage_audit envelope;
+      if (req.reserve_size || !req.extra_nonce.empty() || !req.prev_block.empty() ||
+          req.audit_disclosure.size() > 2 * lineage_limits::max_bytes ||
+          !string_tools::parse_hexstr_to_binbuff(req.audit_disclosure, envelope.data)) {
+        error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+        error_resp.message = "Invalid audit disclosure or incompatible template options";
+        return false;
+      }
+      cryptonote::tx_extra_field field = envelope;
+      const auto encoded = t_serializable_object_to_blob(field);
+      b.miner_tx.extra.insert(b.miner_tx.extra.end(), encoded.begin(), encoded.end());
+      b.miner_tx.invalidate_hashes(); b.invalidate_hashes();
+      std::string reason;
+      if (!m_core.get_blockchain_storage().check_lineage_disclosure(b, reason)) {
+        error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+        error_resp.message = reason;
+        return false;
+      }
+      // The extra proof must not change the reward penalty. Empty templates
+      // always have ample space; busy miners can retry on the following tip.
+      size_t weight = get_transaction_weight(b.miner_tx);
+      for (const auto& hash : b.tx_hashes) {
+        blobdata blob;
+        transaction tx;
+        if (!m_core.get_pool_transaction(hash, blob, relay_category::all) || !parse_and_validate_tx_from_blob(blob, tx)) {
+          error_resp.code = CORE_RPC_ERROR_CODE_CORE_BUSY;
+          error_resp.message = "Template transactions changed; retry";
+          return false;
+        }
+        weight += get_transaction_weight(tx);
+      }
+      if (weight > m_core.get_blockchain_storage().get_current_cumulative_block_weight_limit() / 2) {
+        error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+        error_resp.message = "No unpenalized template space for audit disclosure";
+        return false;
+      }
+    }
 
     res.seed_hash = string_tools::pod_to_hex(seed_hash);
     if (seed_hash != next_seed_hash)
