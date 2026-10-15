@@ -266,15 +266,19 @@ struct options {
   const command_line::arg_descriptor<bool> daemon_ssl_allow_chained = {"daemon-ssl-allow-chained", tools::wallet2::tr("Allow user (via --daemon-ssl-ca-certificates) chain certificates"), false};
   const command_line::arg_descriptor<bool> testnet = {"testnet", tools::wallet2::tr("For testnet. Daemon must also be launched with --testnet flag"), false};
   const command_line::arg_descriptor<bool> stagenet = {"stagenet", tools::wallet2::tr("For stagenet. Daemon must also be launched with --stagenet flag"), false};
-  const command_line::arg_descriptor<std::string, false, true, 2> shared_ringdb_dir = {
+  // Mirrors the daemon's --regtest (FAKECHAIN) mode
+  const command_line::arg_descriptor<bool> regtest = {"regtest", tools::wallet2::tr("For regression testing. Daemon must also be launched with --regtest flag"), false};
+  const command_line::arg_descriptor<std::string, false, true, 3> shared_ringdb_dir = {
     "shared-ringdb-dir", tools::wallet2::tr("Set shared ring database path"),
     get_default_ringdb_path(),
-    {{ &testnet, &stagenet }},
-    [](std::array<bool, 2> testnet_stagenet, bool defaulted, std::string val)->std::string {
-      if (testnet_stagenet[0])
+    {{ &testnet, &stagenet, &regtest }},
+    [](std::array<bool, 3> net_options, bool defaulted, std::string val)->std::string {
+      if (net_options[0])
         return (boost::filesystem::path(val) / "testnet").string();
-      else if (testnet_stagenet[1])
+      else if (net_options[1])
         return (boost::filesystem::path(val) / "stagenet").string();
+      else if (net_options[2])
+        return (boost::filesystem::path(val) / "regtest").string();
       return val;
     }
   };
@@ -329,7 +333,8 @@ std::unique_ptr<tools::wallet2> make_basic(const boost::program_options::variabl
 {
   const bool testnet = command_line::get_arg(vm, opts.testnet);
   const bool stagenet = command_line::get_arg(vm, opts.stagenet);
-  const network_type nettype = testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
+  const bool regtest = command_line::get_arg(vm, opts.regtest);
+  const network_type nettype = regtest ? FAKECHAIN : testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
   const uint64_t kdf_rounds = command_line::get_arg(vm, opts.kdf_rounds);
   THROW_WALLET_EXCEPTION_IF(kdf_rounds == 0, tools::error::wallet_internal_error, "KDF rounds must not be 0");
 
@@ -545,7 +550,8 @@ std::pair<std::unique_ptr<tools::wallet2>, tools::password_container> generate_f
 {
   const bool testnet = command_line::get_arg(vm, opts.testnet);
   const bool stagenet = command_line::get_arg(vm, opts.stagenet);
-  const network_type nettype = testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
+  const bool regtest = command_line::get_arg(vm, opts.regtest);
+  const network_type nettype = regtest ? FAKECHAIN : testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
 
   /* GET_FIELD_FROM_JSON_RETURN_ON_ERROR Is a generic macro that can return
   false. Gcc will coerce this into unique_ptr(nullptr), but clang correctly
@@ -1299,6 +1305,11 @@ bool wallet2::has_stagenet_option(const boost::program_options::variables_map& v
   return command_line::get_arg(vm, options().stagenet);
 }
 
+bool wallet2::has_regtest_option(const boost::program_options::variables_map& vm)
+{
+  return command_line::get_arg(vm, options().regtest);
+}
+
 bool wallet2::has_proxy_option() const
 {
   return !m_proxy.empty();
@@ -1335,6 +1346,7 @@ void wallet2::init_options(boost::program_options::options_description& desc_par
   command_line::add_arg(desc_params, opts.daemon_ssl_allow_chained);
   command_line::add_arg(desc_params, opts.testnet);
   command_line::add_arg(desc_params, opts.stagenet);
+  command_line::add_arg(desc_params, opts.regtest);
   command_line::add_arg(desc_params, opts.shared_ringdb_dir);
   command_line::add_arg(desc_params, opts.kdf_rounds);
   mms::message_store::init_options(desc_params);
@@ -3721,6 +3733,15 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
 //----------------------------------------------------------------------------------------------------
 void check_block_hard_fork_version(cryptonote::network_type nettype, uint8_t hf_version, uint64_t height, bool &wallet_is_outdated, bool &daemon_is_outdated)
 {
+  // A regtest (FAKECHAIN) daemon runs the latest hard fork from height 1 and is
+  // not tied to the mainnet schedule, so skip the height/version range check.
+  if (nettype == cryptonote::FAKECHAIN)
+  {
+    wallet_is_outdated = false;
+    daemon_is_outdated = false;
+    return;
+  }
+
   const size_t wallet_num_hard_forks = nettype == TESTNET ? num_testnet_hard_forks
     : nettype == STAGENET ? num_stagenet_hard_forks : num_mainnet_hard_forks;
   const hardfork_t *wallet_hard_forks = nettype == TESTNET ? testnet_hard_forks
@@ -16865,7 +16886,10 @@ uint64_t wallet2::get_segregation_fork_height() const
     return TESTNET_SEGREGATION_FORK_HEIGHT;
   if (m_nettype == STAGENET)
     return STAGENET_SEGREGATION_FORK_HEIGHT;
-  THROW_WALLET_EXCEPTION_IF(m_nettype != MAINNET, tools::error::wallet_internal_error, "Invalid network type");
+  // regtest (FAKECHAIN) shares the mainnet config (see get_config() in
+  // cryptonote_config.h), so handle it like mainnet here. Otherwise transaction
+  // construction fails with "Invalid network type".
+  THROW_WALLET_EXCEPTION_IF(m_nettype != MAINNET && m_nettype != FAKECHAIN, tools::error::wallet_internal_error, "Invalid network type");
 
   if (m_segregation_height > 0)
     return m_segregation_height;
