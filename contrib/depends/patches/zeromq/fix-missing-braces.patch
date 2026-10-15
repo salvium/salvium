@@ -1,0 +1,11 @@
+--- a/src/proxy.cpp
++++ b/src/proxy.cpp
+@@ -499,7 +499,7 @@
+     zmq_pollitem_t itemsout[] = {{frontend_, 0, ZMQ_POLLOUT, 0},
+                                  {backend_, 0, ZMQ_POLLOUT, 0}};
+ 
+-    stats_proxy stats = {0};
++    stats_proxy stats = {};
+ 
+     //  Proxy can be in these three states
+     proxy_state_t state = active;
