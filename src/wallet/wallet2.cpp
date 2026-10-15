@@ -16886,7 +16886,10 @@ uint64_t wallet2::get_segregation_fork_height() const
     return TESTNET_SEGREGATION_FORK_HEIGHT;
   if (m_nettype == STAGENET)
     return STAGENET_SEGREGATION_FORK_HEIGHT;
-  THROW_WALLET_EXCEPTION_IF(m_nettype != MAINNET, tools::error::wallet_internal_error, "Invalid network type");
+  // regtest (FAKECHAIN) shares the mainnet config (see get_config() in
+  // cryptonote_config.h), so handle it like mainnet here. Otherwise transaction
+  // construction fails with "Invalid network type".
+  THROW_WALLET_EXCEPTION_IF(m_nettype != MAINNET && m_nettype != FAKECHAIN, tools::error::wallet_internal_error, "Invalid network type");
 
   if (m_segregation_height > 0)
     return m_segregation_height;
