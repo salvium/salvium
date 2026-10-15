@@ -21,7 +21,10 @@ namespace test
     make_miner_transaction(cryptonote::account_public_address const& to)
     {
         cryptonote::transaction tx{};
-        if (!cryptonote::construct_miner_tx(0, 0, 5000, 500, 500, to, tx))
+        // construct_miner_tx() gained the miner_reward_tx_key parameter with the
+        // Carrot miner reward change; this test only needs a well-formed tx.
+        crypto::public_key miner_reward_tx_key{};
+        if (!cryptonote::construct_miner_tx(0, 0, 5000, 500, 500, to, miner_reward_tx_key, tx))
             throw std::runtime_error{"miner transaction construction error"};
 
         crypto::hash id{0};

@@ -140,8 +140,10 @@ TEST(parse_and_validate_tx_extra, is_valid_tx_extra_parsed)
   cryptonote::transaction tx = AUTO_VAL_INIT(tx);
   cryptonote::account_base acc;
   acc.generate();
+  // Added to construct_miner_tx() by the Carrot miner reward change
+  crypto::public_key miner_reward_tx_key{};
   cryptonote::blobdata b = "dsdsdfsdfsf";
-  ASSERT_TRUE(cryptonote::construct_miner_tx(0, 0, 10000000000000, 1000, TEST_FEE, acc.get_keys().m_account_address, tx, cryptonote::network_type::FAKECHAIN, {}, b, 1));
+  ASSERT_TRUE(cryptonote::construct_miner_tx(0, 0, 10000000000000, 1000, TEST_FEE, acc.get_keys().m_account_address, miner_reward_tx_key, tx, cryptonote::network_type::FAKECHAIN, {}, b, 1));
   crypto::public_key tx_pub_key = cryptonote::get_tx_pub_key_from_extra(tx);
   ASSERT_NE(tx_pub_key, crypto::null_pkey);
 }
@@ -150,8 +152,9 @@ TEST(parse_and_validate_tx_extra, fails_on_big_extra_nonce)
   cryptonote::transaction tx = AUTO_VAL_INIT(tx);
   cryptonote::account_base acc;
   acc.generate();
+  crypto::public_key miner_reward_tx_key{};
   cryptonote::blobdata b(TX_EXTRA_NONCE_MAX_COUNT + 1, 0);
-  ASSERT_FALSE(cryptonote::construct_miner_tx(0, 0, 10000000000000, 1000, TEST_FEE, acc.get_keys().m_account_address, tx, cryptonote::network_type::FAKECHAIN, {}, b, 1));
+  ASSERT_FALSE(cryptonote::construct_miner_tx(0, 0, 10000000000000, 1000, TEST_FEE, acc.get_keys().m_account_address, miner_reward_tx_key, tx, cryptonote::network_type::FAKECHAIN, {}, b, 1));
 }
 TEST(parse_and_validate_tx_extra, fails_on_wrong_size_in_extra_nonce)
 {
