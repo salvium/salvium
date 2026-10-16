@@ -432,7 +432,11 @@ namespace rct {
           FIELD(type)
           if (type == RCTTypeNull)
             return ar.good();
-          if (type != RCTTypeBulletproofPlus && type != RCTTypeFullProofs && type != RCTTypeSalviumZero && type != RCTTypeSalviumOne)
+          // Types 1-5 (Full/Simple/Bulletproof/Bulletproof2/CLSAG) are still produced by
+          // genRct() and consumed by verRct() and Blockchain::expand_transaction_2(), and the
+          // output loop below already has a legacy branch for them. Rejecting them here broke
+          // deserialisation of every transaction using those types.
+          if (type < RCTTypeFull || type > RCTTypeSalviumOne)
             return false;
           VARINT_FIELD(txnFee)
           // inputs/outputs not saved, only here for serialization help
