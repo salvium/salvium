@@ -83,8 +83,11 @@ TEST(account, encrypt_keys)
 
 TEST(account, derive_output_key)
 {
-  const std::string secret_view = "";
-  const std::string addr = "";
+  // These were committed empty (commit 2d9b302), so this test could never pass.
+  // Build a self-consistent account instead of relying on a hard-coded vector.
+  cryptonote::account_base account;
+  account.generate();
+  const std::string addr = account.get_public_address_str(network_type::MAINNET);
   address_parse_info address_info;
   bool ok = get_account_address_from_str(address_info, network_type::MAINNET, addr);
   ASSERT_TRUE(ok);
@@ -111,8 +114,7 @@ TEST(account, derive_output_key)
   }
 
   // validate we can receive them
-  crypto::secret_key secret_view_key;
-  epee::string_tools::hex_to_pod(secret_view, secret_view_key);
+  const crypto::secret_key &secret_view_key = account.get_keys().m_view_secret_key;
   size_t i = 0;
   for (const auto& txkey : txkeys) {
     crypto::key_derivation derivation;
