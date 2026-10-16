@@ -38,8 +38,11 @@
 using namespace boost::filesystem;
 using namespace epee::file_io_utils;
 
+// Address of the committed test fixture tests/data/wallet_00fd416a (password "beepbeep").
+// The Monero-era value that used to be here belongs to a Monero-format wallet, which this
+// code base cannot load any more ("Invalid decimal point specification: 12").
 static constexpr const char WALLET_00fd416a_PRIMARY_ADDRESS[] =
-    "45p2SngJAPSJbqSiUvYfS3BfhEdxZmv8pDt25oW1LzxrZv9Uq6ARagiFViMGUE3gJk5VPWingCXVf1p2tyAy6SUeSHPhbve";
+    "SaLvdUe5gB9PJ14PotyFRz9UMgcVUPw7A9rdRzU7CPih4z4DRHSg48njN5Bkeici8XNRm319bnBdvYwMEytECVFnLdiSdFTpPJb";
 
 // https://github.com/monero-project/monero/blob/67d190ce7c33602b6a3b804f633ee1ddb7fbb4a1/src/wallet/wallet2.cpp#L156
 static constexpr const char WALLET2_ASCII_OUTPUT_MAGIC[] = "MoneroAsciiDataV1";
