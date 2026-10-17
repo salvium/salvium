@@ -46,6 +46,29 @@ namespace cryptonote
   bool get_converted_amount(const uint64_t& conversion_rate, const uint64_t& source_amount, uint64_t& dest_amount);
   bool calculate_conversion(const std::string& source_asset, const std::string& dest_asset, const uint64_t amount_burnt, const uint64_t amount_slippage_limit, uint64_t& amount_minted, uint64_t& amount_slippage, const std::map<std::string, uint64_t> &circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version);
 
+  // The protocol always retains 1/32 (3.125%) of the burnt amount.  A CONVERT whose declared
+  // amount_slippage_limit is below that floor is priced at zero minted and can therefore never
+  // be mined; the memory pool and the wallet share this helper so such a transaction is either
+  // refused up front (pool) or built with an acceptable limit (wallet).
+  inline uint64_t convert_minimum_slippage_limit(uint64_t amount_burnt)
+  {
+    return amount_burnt >> 5;
+  }
+
+  // Turns a user-facing percentage (0-100; 0 = no preference) into the absolute slippage limit
+  // the consensus rule expects.  Floors at the protocol fee and never overflows uint64.
+  inline uint64_t convert_slippage_limit_from_percent(uint64_t amount_burnt, uint64_t percent)
+  {
+    const uint64_t minimum = convert_minimum_slippage_limit(amount_burnt);
+    if (percent == 0)
+      return minimum;
+    if (percent > 100)
+      percent = 100;
+    // floor(amount_burnt * percent / 100) without overflowing the intermediate product.
+    const uint64_t limit = amount_burnt / 100 * percent + amount_burnt % 100 * percent / 100;
+    return limit < minimum ? minimum : limit;
+  }
+
   /**
    * C4: the consensus rule for CONVERT transactions.
    *

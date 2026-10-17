@@ -30,6 +30,7 @@
 
 #include "gtest/gtest.h"
 
+#include <limits>
 #include <vector>
 
 #include "common/util.h"
@@ -482,6 +483,33 @@ TEST(conversion, slippage_over_limit_mints_nothing_but_reports_success)
   ASSERT_TRUE(cryptonote::calculate_conversion("SAL", "SAL1", 32 * COIN, 0, minted, slippage, SUPPLY, pr, 14));
   ASSERT_EQ(COIN, slippage);
   ASSERT_EQ(0u, minted);
+}
+
+TEST(conversion, minimum_slippage_limit_is_the_protocol_fee)
+{
+  // 1/32 of the burnt amount - exactly the value calculate_conversion() retains.
+  ASSERT_EQ(0u, cryptonote::convert_minimum_slippage_limit(0));
+  ASSERT_EQ(3u, cryptonote::convert_minimum_slippage_limit(99));
+  ASSERT_EQ(3125000u, cryptonote::convert_minimum_slippage_limit(COIN));
+  ASSERT_EQ(COIN, cryptonote::convert_minimum_slippage_limit(32 * COIN));
+}
+
+TEST(conversion, percent_limit_is_floored_to_the_protocol_fee)
+{
+  const uint64_t burnt = 100 * COIN;
+  // 0 means "no preference" and yields exactly the protocol fee.
+  ASSERT_EQ(burnt >> 5, cryptonote::convert_slippage_limit_from_percent(burnt, 0));
+  // Anything below 3.125% would make the transaction unmineable, so it is raised to the fee.
+  ASSERT_EQ(burnt >> 5, cryptonote::convert_slippage_limit_from_percent(burnt, 1));
+  ASSERT_EQ(burnt >> 5, cryptonote::convert_slippage_limit_from_percent(burnt, 3));
+  // 4% and above are honoured, and the percentage is not truncated to whole hundreds first.
+  ASSERT_EQ(4 * COIN, cryptonote::convert_slippage_limit_from_percent(burnt, 4));
+  ASSERT_EQ(burnt, cryptonote::convert_slippage_limit_from_percent(burnt, 100));
+  // Percentages above 100 are clamped instead of overflowing.
+  ASSERT_EQ(burnt, cryptonote::convert_slippage_limit_from_percent(burnt, std::numeric_limits<uint64_t>::max()));
+  // Small amounts keep the floor even though amount * percent / 100 rounds down to zero.
+  ASSERT_EQ(3u, cryptonote::convert_slippage_limit_from_percent(99, 4));
+  ASSERT_EQ(1u, cryptonote::convert_slippage_limit_from_percent(32, 1));
 }
 
 // ---------------------------------------------------------------------------

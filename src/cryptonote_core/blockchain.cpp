@@ -3470,16 +3470,25 @@ void Blockchain::get_pricing_record(oracle::pricing_record &pr, std::map<std::st
   COMMAND_RPC_GET_PRICING_RECORD::request req = AUTO_VAL_INIT(req);
   COMMAND_RPC_GET_PRICING_RECORD::response res = AUTO_VAL_INIT(res);
 
-  std::array<std::string, 3> oracle_urls = (m_nettype == cryptonote::FAKECHAIN)
+  const std::array<std::string, 3> configured_oracle_urls = (m_nettype == cryptonote::FAKECHAIN)
       ? config::FAKECHAIN_ORACLE_URLS : get_config(m_nettype).ORACLE_URLS;
+  // ORACLE_URLS is sized for operators who list several endpoints; the shipped configuration
+  // lists the same endpoint three times.  Trying a duplicate again only repeats the timeout, so
+  // collapse duplicates before shuffling: one unreachable host must cost one timeout, not three.
+  std::vector<std::string> oracle_urls(configured_oracle_urls.begin(), configured_oracle_urls.end());
+  std::sort(oracle_urls.begin(), oracle_urls.end());
+  oracle_urls.erase(std::unique(oracle_urls.begin(), oracle_urls.end()), oracle_urls.end());
   std::shuffle(oracle_urls.begin(), oracle_urls.end(), std::default_random_engine(crypto::rand<unsigned>()));
   std::string url = "/price?height=" + std::to_string(height);
   //url += "&timestamp=" + boost::lexical_cast<std::string>(timestamp) + "&version=" + std::to_string(hf_version);
   url += "&sal=" + (circ_supply.count("SAL") ? std::to_string(circ_supply["SAL"]) : "0");
   url += "&vsd=" + (circ_supply.count("VSD") ? std::to_string(circ_supply["VSD"]) : "0");
+  // Long enough for a TLS handshake plus one JSON round trip, short enough that a dead oracle
+  // does not dominate block template latency (this call is on the mining path).
+  static constexpr std::chrono::seconds ORACLE_REQUEST_TIMEOUT{5};
   for (size_t n = 0; n < oracle_urls.size(); n++) {
     http_client.set_server(oracle_urls[n], boost::none, epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
-    r = epee::net_utils::invoke_http_json(url, req, res, http_client, std::chrono::seconds(10), "GET");
+    r = epee::net_utils::invoke_http_json(url, req, res, http_client, ORACLE_REQUEST_TIMEOUT, "GET");
     if (r) {
       LOG_PRINT_L1("Obtained pricing record from Oracle : " << oracle_urls[n]);
       break;
@@ -4397,6 +4406,18 @@ bool Blockchain::check_tx_asset_types(const transaction& tx, tx_verification_con
       }
       if (tx.amount_burnt == 0) {
         MERROR_VER("CONVERT transaction has no burnt amount");
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+      // A limit below the protocol's 1/32 can never be satisfied: calculate_conversion() would
+      // price the transaction at zero minted, so it could never be mined.  Refusing it here
+      // keeps an unmineable transaction (and its inputs) out of the memory pool and gives the
+      // wallet a precise error instead of a transaction that is broadcast and never confirmed.
+      const uint64_t minimum_slippage_limit = convert_minimum_slippage_limit(tx.amount_burnt);
+      if (tx.amount_slippage_limit < minimum_slippage_limit) {
+        MERROR_VER("CONVERT slippage limit " << tx.amount_slippage_limit << " is below the protocol "
+            << "fee of " << minimum_slippage_limit << " (1/32 of the burnt amount) - the transaction "
+            << "could never be mined; raise the limit to at least " << minimum_slippage_limit);
         tvc.m_verifivation_failed = true;
         return false;
       }
@@ -5999,6 +6020,11 @@ leave:
   // from the tx_pool and validating them.  Each is then added
   // to txs.  Keys spent in each are added to <keys> by the double spend check.
   txs.reserve(bl.tx_hashes.size());
+  // The circulating supply is identical for every transaction of the block (the block is not in
+  // the DB yet), so snapshot it lazily and at most once instead of running a cursor scan per
+  // CONVERT transaction.  Blocks without conversions pay nothing.
+  std::map<std::string, uint64_t> circ_supply_for_convert;
+  bool circ_supply_loaded = false;
   for (const crypto::hash& tx_id : bl.tx_hashes)
   {
     transaction tx_tmp;
@@ -6110,7 +6136,12 @@ leave:
     if (tx.type == cryptonote::transaction_type::CONVERT)
     {
       std::string convert_error;
-      if (!cryptonote::verify_convert_tx(tx, bl.pricing_record, get_db().get_circulating_supply(),
+      if (!circ_supply_loaded)
+      {
+        circ_supply_for_convert = get_db().get_circulating_supply();
+        circ_supply_loaded = true;
+      }
+      if (!cryptonote::verify_convert_tx(tx, bl.pricing_record, circ_supply_for_convert,
                                          hf_version, convert_error))
       {
         MERROR_VER("Block with id: " << id << " has a CONVERT transaction (id: " << tx_id

@@ -60,6 +60,14 @@ which is `484375` for a burn of `500000` (verified on regtest, block index 390).
 it the transaction is built with zero minted amount and refused. The fee is retained by the
 protocol transaction, not by the miner.
 
+Because the fee is fixed, a limit below `amount_burnt >> 5` can never be satisfied: the
+transaction would be priced at zero minted, could never be mined, and yet would still be relayed
+and sit in the memory pool forever. `Blockchain::check_tx_asset_types()`
+(`src/cryptonote_core/blockchain.cpp`, CONVERT branch) therefore rejects such a transaction at
+pool admission, and the wallet raises a user-supplied percentage to the 3.125% floor
+(`convert_minimum_slippage_limit()` / `convert_slippage_limit_from_percent()` in
+`src/cryptonote_core/cryptonote_tx_utils.h`).
+
 `COIN` is 8-decimal fixed point (`src/cryptonote_config.h:76`: `(uint64_t)100000000`).
 
 ## Consensus checks

@@ -44,6 +44,7 @@
 #include "carrot_impl/format_utils.h"
 #include "carrot_impl/input_selection.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "cryptonote_core/cryptonote_tx_utils.h"
 #include "ringct/bulletproofs_plus.h"
 #include "wallet/scanning_tools.cpp"
 #include "common/container_helpers.h"
@@ -722,11 +723,12 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
           selfsends.at(1).proposal.asset_type = input_asset_type_eff;
           tx_proposal.amount_burnt = burnt;
           // The consensus rule compares the slippage against an absolute amount, while the
-          // convert command takes a percentage; with no percentage given, accept exactly
-          // the protocol's own slippage (amount_burnt >> 5).
-          tx_proposal.amount_slippage_limit = (convert_slippage_limit_pct == 0)
-              ? (burnt >> 5)
-              : (burnt / 100) * convert_slippage_limit_pct;
+          // convert command takes a percentage.  A limit below the protocol's 1/32 can never be
+          // satisfied, so anything smaller (including 0, which means "no preference") is raised
+          // to the floor - otherwise the signed transaction would be unmineable and the wallet
+          // would report success for a conversion that never confirms.
+          tx_proposal.amount_slippage_limit =
+              cryptonote::convert_slippage_limit_from_percent(burnt, convert_slippage_limit_pct);
         }
 
         // update `unused_transfers` for next proposal by removing selected transfers

@@ -228,7 +228,7 @@ namespace
   const char* USAGE_SWEEP_SINGLE("sweep_single [<priority>] [<ring_size>] [outputs=<N>] <key_image> <address> [<asset_type>] [<payment_id (obsolete)>]");
   const char* USAGE_RETURN_PAYMENT("return_payment <tx_hash>");
   const char* USAGE_BURN("burn <amount> <asset_type>");
-  const char* USAGE_CONVERT("convert <source_amount> <source_asset> <dest_asset> [<slippage_limit>]");
+  const char* USAGE_CONVERT("convert <source_amount> <source_asset> <dest_asset> [<slippage_limit>] - convert between coin types; <slippage_limit> is a percentage and the protocol retains at least 3.125%");
   const char* USAGE_STAKE("stake <amount>");
   const char* USAGE_AUDIT("audit [index=<N1>[,<N2>,...] | index=all]");
   const char* USAGE_CREATE_TOKEN("create_token [index=<N1>[,<N2>,...]] <ticker> <supply> [name=<name>|metadata=<metadata>|file=<metadata_file>]");
@@ -3400,7 +3400,7 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
     message_writer() << tr("\"transfer <address> <amount> [<asset_type>]\" - Send specified asset to an address. If no asset type is specified, it will send SAL1.");
     message_writer() << tr("\"return_payment <tx_hash>\" - Return a previously-received amount to sender.");
     message_writer() << tr("\"burn <amount> <asset_type>\" - destroy coins forever.");
-    message_writer() << tr("\"convert <amount> <source_asset> <dest_asset> [<slippage_limit>]\" - convert between coin types.");
+    message_writer() << tr("\"convert <amount> <source_asset> <dest_asset> [<slippage_limit>]\" - convert between coin types. The protocol retains 3.125% of the converted amount, so smaller slippage limits are raised to 3.125%.");
     message_writer() << tr("\"stake <amount>\" - stake SAL1 for 30 days to earn yield.");
     message_writer() << tr("\"audit\" - audit your wallet main address (or subaddress(es) if specified).");
     message_writer() << tr("\"create_token <ticker> <supply> [name=<name>|metadata=<metadata>|file=<metadata_file>]\" - Create new private token.");
