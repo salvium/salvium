@@ -8937,9 +8937,11 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
     local_args.push_back(std::to_string(slippage_limit));
   }
   
-    // C5 fix: transfer_main() reads the destination address from local_args[0];
-    // a conversion is a self-transfer, so supply the wallet own address here.
-    local_args.insert(local_args.begin(), m_wallet->get_address_as_str());
+    // transfer_main() reads the destination address from local_args[0]; a conversion is a
+    // self-transfer, so supply the address of the account being spent. Using the primary
+    // address of account 0 here would send the change of a conversion started from another
+    // subaddress account back to account 0.
+    local_args.insert(local_args.begin(), m_wallet->get_subaddress_as_str({m_current_subaddress_account, 0}));
   transfer_main(Convert, source_asset, dest_asset, local_args, false);
   return true;  
 }
