@@ -25,6 +25,24 @@ sections before mainnet activation.
 - [ ] Any private security fixes have a coordinated disclosure and release
       plan.
 
+## DeFi Core (CONVERT + Oracle Pricing Records)
+
+- [ ] Hard fork v14 scheduled in `src/hardforks/hardforks.cpp` for mainnet, testnet
+      and stagenet, with the height and timestamp announced (see `docs/defi/ACTIVATION.md`).
+- [ ] Production oracle live at every `ORACLE_URLS` endpoint, signing the requested
+      `height` and publishing `timestamp = max(now, last+1)`; signature verified against
+      the network `ORACLE_PUBLIC_KEY` (DSA-2048/q-224 on mainnet).
+- [ ] `PRICING_RECORD_HEIGHT_BINDING_HEIGHT` reviewed per network: `0` only where the
+      chain contains no v14 blocks mined before the binding rule (see
+      `docs/defi/ORACLE.md`).
+- [ ] Wallets, daemons, mining pools and exchanges upgraded before the fork height
+      (old binaries cannot validate v14 blocks).
+- [ ] Post-activation check: `pricing_record.height == block height` on the last N blocks,
+      and one small real CONVERT reconciled (`burned - burned/32` minted, correct asset).
+- [ ] Checkpoints added for blocks after the fork height once the chain is stable.
+- [ ] `docs/defi/*` reviewed by operations: oracle incident playbooks, monitoring signals
+      and the daemon-restart-after-rejected-template caveat.
+
 ## Consensus And Data
 
 - [ ] Fork height and fork timestamp finalized, if applicable.
