@@ -55,7 +55,8 @@ public:
     {
       m_miners[i].generate();
 
-      if (!construct_miner_tx(0, 0, 0, 2, 0, m_miners[i].get_keys().m_account_address, m_miner_txs[i]))
+      crypto::public_key miner_reward_tx_key{};
+      if (!construct_miner_tx(0, 0, 0, 2, 0, m_miners[i].get_keys().m_account_address, miner_reward_tx_key, m_miner_txs[i]))
         return false;
 
       txout_to_key tx_out = boost::get<txout_to_key>(m_miner_txs[i].vout[0].target);

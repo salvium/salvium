@@ -359,7 +359,8 @@ namespace cryptonote
             FIELD(return_address_list)
             FIELD(return_address_change_mask)
           } else {
-            if ((type == cryptonote::transaction_type::STAKE || type == cryptonote::transaction_type::CREATE_TOKEN) &&
+            if ((type == cryptonote::transaction_type::STAKE || type == cryptonote::transaction_type::CREATE_TOKEN ||
+                 type == cryptonote::transaction_type::CONVERT) &&
                 (version >= TRANSACTION_VERSION_CARROT)) {
               FIELD(protocol_tx_data)
             } else {

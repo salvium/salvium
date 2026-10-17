@@ -277,7 +277,8 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
         INSERT_INTO_JSON_OBJECT(dest, return_address_list, tx.return_address_list);
         INSERT_INTO_JSON_OBJECT(dest, return_address_change_mask, tx.return_address_change_mask);
       } else {
-        if ((tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::CREATE_TOKEN) &&
+        if ((tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
+             tx.type == cryptonote::transaction_type::CONVERT) &&
             (tx.version >= TRANSACTION_VERSION_CARROT)) {
           INSERT_INTO_JSON_OBJECT(dest, protocol_tx_data, tx.protocol_tx_data);
         } else {
@@ -335,7 +336,8 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
         GET_FROM_JSON_OBJECT(val, tx.return_address_list, return_address_list);
         GET_FROM_JSON_OBJECT(val, tx.return_address_change_mask, return_address_change_mask);
       } else {
-        if ((tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::CREATE_TOKEN) &&
+        if ((tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
+             tx.type == cryptonote::transaction_type::CONVERT) &&
             (tx.version >= TRANSACTION_VERSION_CARROT)) {
           GET_FROM_JSON_OBJECT(val, tx.protocol_tx_data, protocol_tx_data);
         } else {

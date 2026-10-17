@@ -52,6 +52,8 @@
 #include <boost/regex.hpp>
 #include <boost/range/adaptor/transformed.hpp>
 #include <boost/filesystem.hpp>
+#include <cmath>
+
 #include "include_base_utils.h"
 #include "console_handler.h"
 #include "common/i18n.h"
@@ -228,7 +230,7 @@ namespace
   const char* USAGE_SWEEP_SINGLE("sweep_single [<priority>] [<ring_size>] [outputs=<N>] <key_image> <address> [<asset_type>] [<payment_id (obsolete)>]");
   const char* USAGE_RETURN_PAYMENT("return_payment <tx_hash>");
   const char* USAGE_BURN("burn <amount> <asset_type>");
-  const char* USAGE_CONVERT("convert <source_amount> <source_asset> <dest_asset> [<slippage_limit>]");
+  const char* USAGE_CONVERT("convert <source_amount> <source_asset> <dest_asset> [<slippage_limit>] - convert between coin types; <slippage_limit> is a percentage and the protocol retains at least 3.125%");
   const char* USAGE_STAKE("stake <amount>");
   const char* USAGE_AUDIT("audit [index=<N1>[,<N2>,...] | index=all]");
   const char* USAGE_CREATE_TOKEN("create_token [index=<N1>[,<N2>,...]] <ticker> <supply> [name=<name>|metadata=<metadata>|file=<metadata_file>]");
@@ -3400,7 +3402,7 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
     message_writer() << tr("\"transfer <address> <amount> [<asset_type>]\" - Send specified asset to an address. If no asset type is specified, it will send SAL1.");
     message_writer() << tr("\"return_payment <tx_hash>\" - Return a previously-received amount to sender.");
     message_writer() << tr("\"burn <amount> <asset_type>\" - destroy coins forever.");
-    message_writer() << tr("\"convert <amount> <source_asset> <dest_asset> [<slippage_limit>]\" - convert between coin types.");
+    message_writer() << tr("\"convert <amount> <source_asset> <dest_asset> [<slippage_limit>]\" - convert between coin types. The protocol retains 3.125% of the converted amount, so smaller slippage limits are raised to 3.125%.");
     message_writer() << tr("\"stake <amount>\" - stake SAL1 for 30 days to earn yield.");
     message_writer() << tr("\"audit\" - audit your wallet main address (or subaddress(es) if specified).");
     message_writer() << tr("\"create_token <ticker> <supply> [name=<name>|metadata=<metadata>|file=<metadata_file>]\" - Create new private token.");
@@ -4443,12 +4445,13 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
 
   const bool testnet = tools::wallet2::has_testnet_option(vm);
   const bool stagenet = tools::wallet2::has_stagenet_option(vm);
-  if (testnet && stagenet)
+  const bool regtest = tools::wallet2::has_regtest_option(vm);
+  if ((testnet ? 1 : 0) + (stagenet ? 1 : 0) + (regtest ? 1 : 0) > 1)
   {
-    fail_msg_writer() << tr("Can't specify more than one of --testnet and --stagenet");
+    fail_msg_writer() << tr("Can't specify more than one of --testnet, --stagenet and --regtest");
     return false;
   }
-  const network_type nettype = testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
+  const network_type nettype = regtest ? FAKECHAIN : testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
 
   epee::wipeable_string multisig_keys;
   epee::wipeable_string password;
@@ -7064,7 +7067,8 @@ void simple_wallet::check_for_inactivity_lock(bool user)
         tools::msg_writer() << tr("Filename: ") << m_wallet->get_wallet_file();
         tools::msg_writer() << tr("Network type: ") << (
           m_wallet->nettype() == cryptonote::TESTNET ? tr("Testnet") :
-          m_wallet->nettype() == cryptonote::STAGENET ? tr("Stagenet") : tr("Mainnet")
+          m_wallet->nettype() == cryptonote::STAGENET ? tr("Stagenet") :
+          m_wallet->nettype() == cryptonote::FAKECHAIN ? tr("Regtest") : tr("Mainnet")
         );
       }
       try
@@ -7114,6 +7118,25 @@ bool simple_wallet::transfer_main(
   if (!try_connect_to_daemon())
     return false;
   std::vector<std::string> local_args = args_;
+  // C5 fix: the CONVERT form appends "<slippage_limit>" as a trailing positional
+  // argument; the <address> <amount> pair walk below cannot consume a lone
+  // trailing argument, so consume it here.  Slippage 0 pushes nothing, so the
+  // legacy path is unchanged.
+  double convert_slippage_limit = 0.0;
+  if (transfer_type == Convert && local_args.size() >= 3)
+  {
+    // C5: convert() appends the slippage percentage as a decimal.  Consume it only when the
+    // whole token is a finite number; a half-parsed token must not silently turn into "no
+    // preference", which would widen the limit the user asked for.
+    const std::string slippage_arg = local_args.back();
+    size_t slippage_consumed = 0;
+    try { convert_slippage_limit = std::stod(slippage_arg, &slippage_consumed); }
+    catch (...) { slippage_consumed = 0; }
+    if (slippage_consumed == slippage_arg.size() && std::isfinite(convert_slippage_limit))
+      local_args.pop_back();
+    else
+      convert_slippage_limit = 0.0;
+  }
 
   std::set<uint32_t> subaddr_indices;
   if (local_args.size() > 0 && local_args[0].substr(0, 6) == "index=")
@@ -7291,6 +7314,16 @@ bool simple_wallet::transfer_main(
     }
     de.addr = info.address;
     de.asset_type = dest_asset;
+    // C5: the convert command's fourth parameter is the permitted slippage, as a
+    // percentage; carry it to the destination entry, which the builder turns into an
+    // absolute limit once the burnt amount is known.
+    if (transfer_type == Convert)
+    {
+      // Round up: a request for 3.2% must not be silently downgraded to 3%, which the builder
+      // would then raise to the 3.125% fee anyway.
+      de.slippage_limit = (std::isfinite(convert_slippage_limit) && convert_slippage_limit > 0.0)
+        ? static_cast<uint64_t>(std::ceil(convert_slippage_limit)) : 0;
+    }
     de.is_subaddress = info.is_subaddress;
     de.is_integrated = info.has_payment_id;
 
@@ -7493,6 +7526,7 @@ bool simple_wallet::transfer_main(
               dust_not_in_fee += ptx_vector[n].dust;
           } else if (ptx_vector[n].tx.type == cryptonote::transaction_type::AUDIT ||
                      ptx_vector[n].tx.type == cryptonote::transaction_type::BURN ||
+                     ptx_vector[n].tx.type == cryptonote::transaction_type::CONVERT ||
                      ptx_vector[n].tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
                      ptx_vector[n].tx.type == cryptonote::transaction_type::STAKE) {
             total_sent += ptx_vector[n].tx.amount_burnt;
@@ -8836,11 +8870,20 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
     // Expect to be able to parse the last arg as a double
     try
     {
-      slippage_limit = std::stod(strLastArg);
-      if (slippage_limit < 0.0 or slippage_limit > 90.0) {
-        fail_msg_writer() << tr("invalid slippage_limit value : expected 0.0-90.0, got ") << slippage_limit;
+      size_t slippage_consumed = 0;
+      slippage_limit = std::stod(strLastArg, &slippage_consumed);
+      // C5: require the WHOLE token to be the number.  std::stod parses a prefix ("3%" -> 3)
+      // and returns NaN for tokens it cannot classify, and NaN passes every comparison below.
+      if (slippage_consumed != strLastArg.size() or not std::isfinite(slippage_limit) or slippage_limit < 0.0 or slippage_limit > 90.0) {
+        fail_msg_writer() << tr("invalid slippage_limit value : expected a percentage 0.0-90.0, got ") << strLastArg;
         PRINT_USAGE(USAGE_CONVERT);
         return true;
+      }
+      // The protocol always retains 1/32 (3.125%) of the burnt amount, so a smaller limit can
+      // never be mined.  Say that the fee floor is used instead of pretending the stricter
+      // limit is honoured.
+      if (slippage_limit > 0.0 and slippage_limit < 3.125) {
+        message_writer(console_color_yellow, true) << tr("slippage limit ") << strLastArg << tr("% is below the 3.125% protocol fee; the conversion will use 3.125%");
       }
       
       // Update the last arg value
@@ -8894,6 +8937,11 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
     local_args.push_back(std::to_string(slippage_limit));
   }
   
+    // transfer_main() reads the destination address from local_args[0]; a conversion is a
+    // self-transfer, so supply the address of the account being spent. Using the primary
+    // address of account 0 here would send the change of a conversion started from another
+    // subaddress account back to account 0.
+    local_args.insert(local_args.begin(), m_wallet->get_subaddress_as_str({m_current_subaddress_account, 0}));
   transfer_main(Convert, source_asset, dest_asset, local_args, false);
   return true;  
 }
@@ -11848,7 +11896,8 @@ bool simple_wallet::wallet_info(const std::vector<std::string> &args)
   message_writer() << tr("Type: ") << type;
   message_writer() << tr("Network type: ") << (
     m_wallet->nettype() == cryptonote::TESTNET ? tr("Testnet") :
-    m_wallet->nettype() == cryptonote::STAGENET ? tr("Stagenet") : tr("Mainnet"));
+    m_wallet->nettype() == cryptonote::STAGENET ? tr("Stagenet") :
+    m_wallet->nettype() == cryptonote::FAKECHAIN ? tr("Regtest") : tr("Mainnet"));
   return true;
 }
 //----------------------------------------------------------------------------------------------------

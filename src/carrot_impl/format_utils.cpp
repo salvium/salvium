@@ -198,6 +198,7 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
                                                        const rct::xmr_amount fee,
                                                        const cryptonote::transaction_type tx_type,
                                                        const rct::xmr_amount tx_amount_burnt,
+     const rct::xmr_amount tx_amount_slippage_limit,
                                                        const std::vector<uint8_t> &change_masks,
                                                        const cryptonote::token_metadata_t &token,
                                                        const carrot::RCTOutputEnoteProposal &return_enote,
@@ -217,27 +218,39 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
       else
         CHECK_AND_ASSERT_THROW_MES(enote.asset_type == asset_type, "invalid asset_type in enote. Expected: " << asset_type << " got: " << enote.asset_type);
     }
+    std::string source_asset_type = "";
     for (const auto &source: sources) {
-      if (asset_type == "")
-        asset_type = source.asset_type;
+      if (source_asset_type == "")
+        source_asset_type = source.asset_type;
       else
-        CHECK_AND_ASSERT_THROW_MES(source.asset_type == asset_type, "invalid asset_type in source. Expected: " << asset_type << " got: " << source.asset_type);
-    }      
-    
+        CHECK_AND_ASSERT_THROW_MES(source.asset_type == source_asset_type, "invalid asset_type in source. Expected: " << source_asset_type << " got: " << source.asset_type);
+    }
+    if (asset_type.empty())
+      asset_type = source_asset_type;
+    // C5: CONVERT is the one tx type that burns the SOURCE asset and mints the DESTINATION
+    // asset, so its sources and enotes are, by design, in different assets.
+    if (tx_type != cryptonote::transaction_type::CONVERT)
+      CHECK_AND_ASSERT_THROW_MES(asset_type == source_asset_type, "invalid asset_type in source. Expected: " << asset_type << " got: " << source_asset_type);
+
     cryptonote::transaction tx;
     tx.pruned = true;
     tx.unlock_time = 0;
-    tx.source_asset_type = asset_type;
+    // C5 fix: CONVERT burns the SOURCE asset and mints the DESTINATION asset, so the two
+    // prefix fields must differ. Storing asset_type (= the output/enote asset) in both
+    // made a SAL1->SAL conversion claim to be SAL->SAL, which the consensus-side
+    // calculate_conversion() then rejects as "cannot convert an asset to itself".
+    tx.source_asset_type = (tx_type == cryptonote::transaction_type::CONVERT) ? source_asset_type : asset_type;
     tx.destination_asset_type = asset_type;
     tx.version = (hf_version >= HF_VERSION_ENABLE_TOKENS) ? TRANSACTION_VERSION_ENABLE_TOKENS : TRANSACTION_VERSION_CARROT;
     tx.type = 
         tx_type == cryptonote::transaction_type::RETURN ? cryptonote::transaction_type::TRANSFER : tx_type;
+    tx.amount_slippage_limit = tx_amount_slippage_limit;
     tx.amount_burnt = (
                        tx.type == cryptonote::transaction_type::STAKE ||
                        tx.type == cryptonote::transaction_type::BURN ||
                        tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
-                       tx.type == cryptonote::transaction_type::ROLLUP
-                       ) ? tx_amount_burnt : 0;
+                       tx.type == cryptonote::transaction_type::ROLLUP ||
+                       tx.type == cryptonote::transaction_type::CONVERT) ? tx_amount_burnt : 0;
     tx.return_address_change_mask.assign(change_masks.begin(), change_masks.end());
     tx.vin.reserve(nins);
     tx.vout.reserve(nouts);
@@ -292,7 +305,8 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
     }
 
     // store the return pubkey for stake txs
-    if (tx_type == cryptonote::transaction_type::STAKE || tx_type == cryptonote::transaction_type::CREATE_TOKEN)
+    if (tx_type == cryptonote::transaction_type::STAKE || tx_type == cryptonote::transaction_type::CREATE_TOKEN ||
+        tx_type == cryptonote::transaction_type::CONVERT)
     {
         tx.protocol_tx_data.version = 1;
         memcpy(tx.protocol_tx_data.return_address.data, return_enote.enote.onetime_address.data, sizeof(crypto::public_key));

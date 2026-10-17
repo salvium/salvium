@@ -107,6 +107,7 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
                                                        const rct::xmr_amount fee,
                                                        const cryptonote::transaction_type tx_type,
                                                        const rct::xmr_amount tx_amount_burnt,
+                                                       const rct::xmr_amount tx_amount_slippage_limit,
                                                        const std::vector<uint8_t> &change_masks,
                                                        const cryptonote::token_metadata_t &token,
                                                        const RCTOutputEnoteProposal &return_enote,

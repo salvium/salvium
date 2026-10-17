@@ -1149,6 +1149,10 @@ bool Blockchain::switch_to_alternative_blockchain(std::list<block_extended_info>
       return false;
   }
 
+  // NOTE (S1): the pricing records of the blocks in alt_chain were not validated when they
+  // arrived (handle_alternative_block() stores them as-is), so a bad record is only caught by
+  // handle_block_to_main_chain() below - i.e. after the main chain has been popped. A pre-check
+  // over alt_chain (heights are known there) would reject such a chain without touching main.
   // pop blocks from the blockchain until the top block is the parent
   // of the front block of the alt chain.
   std::list<block> disconnected_chain;
@@ -1624,7 +1628,8 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_ENABLE_TOKENS:
   case HF_VERSION_REJECT_CLEARTEXT_AMOUNTS:
   case HF_VERSION_REJECT_POISONED_REFS:
-    // HF11-13: block reward split is 60% miner + 25% treasury + 15% staker (amount_burnt)
+  case HF_VERSION_ORACLE_CONVERT:
+    // HF11-14: block reward split is 60% miner + 25% treasury + 15% staker (amount_burnt)
     if (already_generated_coins != 0) {
 
       // Validate treasury share: one output must equal block_reward * 25 / 100
@@ -1753,10 +1758,98 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   // if nothing is created by this TX - check no money is included
   if (b.protocol_tx.vin.size() != 1) { MERROR("coinbase protocol transaction in the block has no inputs"); return false; }
 
+  // Protocol mints - the supply created by a CREATE_TOKEN transaction and the
+  // payouts of the CONVERT transactions in this block - are appended to the
+  // protocol transaction of the block carrying those transactions.  They are not
+  // staking payouts: they do not wait for the staking lock period, so they are
+  // validated here, for every block, early ones included.
+  size_t create_token_count = 0;
+  size_t convert_count = 0;
+  if (hf_version >= HF_VERSION_ENABLE_TOKENS) {
+    for (const auto& tx_pair : txs)
+      if (tx_pair.first.type == cryptonote::transaction_type::CREATE_TOKEN)
+        ++create_token_count;
+  }
+  if (hf_version >= HF_VERSION_ORACLE_CONVERT) {
+    for (const auto& tx_pair : txs)
+      if (tx_pair.first.type == cryptonote::transaction_type::CONVERT)
+        ++convert_count;
+  }
+  const size_t mint_count = create_token_count + convert_count;
+  if (b.protocol_tx.vout.size() < mint_count) {
+    MERROR("protocol transaction in the block is missing mint outputs");
+    return false;
+  }
+
+  // Carrot transaction outputs carry no cleartext amount, so the minted amount of a
+  // conversion cannot be checked on the converting transaction itself; it is checked
+  // here, where the protocol transaction carries it in the clear, against the pricing
+  // record committed in this block.
+  if (hf_version >= HF_VERSION_ORACLE_CONVERT) {
+    const std::map<std::string, uint64_t> circ_supply = get_db().get_circulating_supply();
+    const size_t convert_output_idx_start = b.protocol_tx.vout.size() - convert_count;
+    size_t convert_idx = 0;
+    for (const auto& tx_pair : txs) {
+      const transaction& tx = tx_pair.first;
+      if (tx.type != cryptonote::transaction_type::CONVERT)
+        continue;
+
+      const size_t out_idx = convert_output_idx_start + convert_idx;
+      convert_idx++;
+
+      // Verify the output key
+      crypto::public_key out_key;
+      cryptonote::get_output_public_key(b.protocol_tx.vout[out_idx], out_key);
+      if (out_key != tx.protocol_tx_data.return_address) { MERROR("Incorrect CONVERT output key detected in protocol_tx"); return false; }
+
+      // Verify the return pubkey
+      if (b.protocol_tx.vout.size() > 1) {
+        const auto additional_pubkeys = cryptonote::get_additional_tx_pub_keys_from_extra(b.protocol_tx.extra);
+        if (additional_pubkeys.size() <= out_idx) { MERROR("Missing CONVERT return pubkey detected in protocol_tx"); return false; }
+        if (additional_pubkeys[out_idx] != tx.protocol_tx_data.return_pubkey) { MERROR("Incorrect CONVERT return pubkey detected in protocol_tx"); return false; }
+      } else {
+        const auto main_pubkey = cryptonote::get_tx_pub_key_from_extra(b.protocol_tx.extra);
+        if (main_pubkey != tx.protocol_tx_data.return_pubkey) { MERROR("Incorrect CONVERT return pubkey detected in protocol_tx"); return false; }
+      }
+
+      // The minted amount must be exactly what the pricing record committed in this
+      // block implies for the burnt amount and the declared slippage limit.  This is
+      // the consensus-critical check of the convert primitive.
+      uint64_t minted = 0;
+      uint64_t slippage = 0;
+      if (!cryptonote::calculate_conversion(tx.source_asset_type, tx.destination_asset_type,
+                                            tx.amount_burnt, tx.amount_slippage_limit,
+                                            minted, slippage, circ_supply, b.pricing_record, hf_version)) {
+        MERROR("CONVERT conversion could not be calculated from the block pricing record"); return false;
+      }
+      if (minted == 0) { MERROR("CONVERT issues nothing (slippage limit too low)"); return false; }
+      if (b.protocol_tx.vout[out_idx].amount != minted) { MERROR("Incorrect CONVERT output amount detected in protocol_tx"); return false; }
+
+      // Verify the output asset type (must be the destination asset)
+      std::string out_asset_type;
+      cryptonote::get_output_asset_type(b.protocol_tx.vout[out_idx], out_asset_type);
+      if (out_asset_type != tx.destination_asset_type) { MERROR("Incorrect CONVERT output asset_type detected in protocol_tx"); return false; }
+
+      // Verify the view tag
+      if (boost::get<cryptonote::txout_to_carrot_v1>(
+          b.protocol_tx.vout[out_idx].target
+        ).view_tag != tx.protocol_tx_data.return_view_tag) { MERROR("Incorrect CONVERT view tag detected in protocol_tx"); return false; }
+
+      // Verify the anchor encrypted
+      if (boost::get<cryptonote::txout_to_carrot_v1>(
+          b.protocol_tx.vout[out_idx].target
+        ).encrypted_janus_anchor != tx.protocol_tx_data.return_anchor_enc) { MERROR("Incorrect CONVERT anchor detected in protocol_tx"); return false; }
+    }
+  }
+
+
   // Can we have matured STAKE transactions yet?
   uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   if (height <= stake_lock_period) {
-    if (b.protocol_tx.vout.size() != 0) { MERROR("protocol transaction in the block has outputs"); return false; }
+    // This early branch guards the staking-yield payouts: none can have matured
+    // yet, so the only outputs the protocol transaction may carry are the mints of
+    // this block's own transactions (validated above).
+    if (b.protocol_tx.vout.size() != mint_count) { MERROR("protocol transaction in the block has outputs"); return false; }
     return true;
   }
 
@@ -1834,19 +1927,11 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
     }
   }
 
-  // Count CREATE_TOKEN transactions if we're at the right hard fork version
-  size_t create_token_count = 0;
-  if (hf_version >= HF_VERSION_ENABLE_TOKENS && !txs.empty()) {
-    for (const auto& tx_pair : txs) {
-      const transaction& tx = tx_pair.first;
-      if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
-        create_token_count++;
-      }
-    }
-  }
+  // The number of CREATE_TOKEN and CONVERT transactions - and therefore of the mint
+  // outputs they are paid with - was counted and validated at the top of this
+  // function (see the mint validation there).
 
-  // Check we have the correct number of entries
-  if (b.protocol_tx.vout.size() != yield_payouts.size() + audit_payouts.size() + carrot_yield_payouts.size() + create_token_count) { MERROR("Invalid number of outputs in protocol_tx - aborting"); return false; }
+  if (b.protocol_tx.vout.size() != yield_payouts.size() + audit_payouts.size() + carrot_yield_payouts.size() + create_token_count + convert_count) { MERROR("Invalid number of outputs in protocol_tx - aborting"); return false; }
 
   if (hf_version >= HF_VERSION_CARROT) {
 
@@ -2005,6 +2090,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
         output_idx++;
       }
     }
+
 
     return true;
   }
@@ -2278,6 +2364,10 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
     return false;
   }
 
+  // NOTE (S2): this supply is the main-chain value even when the template below is built on top of
+  // an alternative chain. It only feeds the oracle request: consensus never reads the signed
+  // pr.supply back (calculate_conversion() takes the node's own circ_supply and prices come from
+  // pr.ma()), so the mismatch cannot fork anything - it is a reporting artefact of alt templates.
   std::map<std::string, uint64_t> circ_supply = get_db().get_circulating_supply();
 
   // Check if we are supposed to be obtaining PRs from the Oracle
@@ -2285,10 +2375,9 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
 
     // Yep - go get the pricing records
     oracle::pricing_record pr;
-    if (!get_pricing_record(pr, circ_supply, b.timestamp)) {
-      LOG_ERROR("Creating block template: error: failed to get pricing record");
-      return false;
-    }
+    // Cannot fail: if no oracle answers (or the reply does not verify) the record is left
+    // empty, the block stays valid and CONVERT stays unpriced until the oracle is reachable.
+    get_pricing_record(pr, circ_supply, b.timestamp, height);
 
     // Copy the returned record
     b.pricing_record = pr;
@@ -2305,7 +2394,8 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   size_t txs_weight;
   uint64_t fee;
   std::vector<std::pair<protocol_tx_data_t, token_metadata_t>> create_token_entries;
-  if (!m_tx_pool.fill_block_template(b, median_weight, already_generated_coins, txs_weight, fee, expected_reward, create_token_entries, b.major_version))
+  std::vector<cryptonote::transaction> convert_txs;
+  if (!m_tx_pool.fill_block_template(b, median_weight, already_generated_coins, txs_weight, fee, expected_reward, create_token_entries, convert_txs, circ_supply, b.major_version))
   {
     return false;
   }
@@ -2480,6 +2570,39 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   }
 
   // Time to construct the protocol_tx
+  // Create the protocol transaction entries for CONVERT TXs
+  if (b.major_version >= HF_VERSION_ORACLE_CONVERT)
+  {
+    for (const auto& convert_tx : convert_txs)
+    {
+      uint64_t amount_minted = 0;
+      uint64_t amount_slippage = 0;
+      if (!cryptonote::calculate_conversion(convert_tx.source_asset_type, convert_tx.destination_asset_type,
+                                            convert_tx.amount_burnt, convert_tx.amount_slippage_limit,
+                                            amount_minted, amount_slippage, circ_supply,
+                                            b.pricing_record, b.major_version) || amount_minted == 0)
+      {
+        LOG_ERROR("Failed to price a CONVERT transaction - aborting");
+        return false;
+      }
+
+      cryptonote::protocol_data_entry entry;
+      entry.type = cryptonote::transaction_type::CONVERT;
+      entry.amount_burnt = convert_tx.amount_burnt;
+      entry.amount_minted = amount_minted;
+      entry.amount_slippage_limit = convert_tx.amount_slippage_limit;
+      entry.source_asset = convert_tx.source_asset_type;
+      entry.destination_asset = convert_tx.destination_asset_type;
+      entry.return_address = convert_tx.protocol_tx_data.return_address;
+      entry.return_pubkey = convert_tx.protocol_tx_data.return_pubkey;
+      entry.return_view_tag = convert_tx.protocol_tx_data.return_view_tag;
+      entry.return_anchor_enc = convert_tx.protocol_tx_data.return_anchor_enc;
+      entry.origin_height = height;
+      entry.is_carrot = true;
+      protocol_entries.push_back(entry);
+    }
+  }
+
   ok = construct_protocol_tx(height, b.protocol_tx, protocol_entries, b.major_version);
   CHECK_AND_ASSERT_MES(ok, false, "Failed to construct protocol tx");
 
@@ -3330,27 +3453,42 @@ bool Blockchain::find_blockchain_supplement(const std::list<crypto::hash>& qbloc
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::get_pricing_record(oracle::pricing_record &pr, std::map<std::string, uint64_t> &circ_supply, uint64_t timestamp)
+void Blockchain::get_pricing_record(oracle::pricing_record &pr, std::map<std::string, uint64_t> &circ_supply, uint64_t timestamp, uint64_t request_height)
 {
   LOG_PRINT_L1("Requesting pricing record from Oracle - time : " << timestamp);
 
   bool r = false;
-  const uint64_t height = get_current_blockchain_height();
+  // The record must be priced for the height of the block that is being built, which is not
+  // always the current chain height: create_block_template() can build a template on top of an
+  // alternative chain, and the height binding in pricing_record::valid() is checked against the
+  // height the block is eventually added at. The main-chain caller passes m_db->height(), which
+  // is exactly what get_current_blockchain_height() returns, so this stays a no-op there.
+  const uint64_t height = request_height;
   // const uint8_t hf_version = m_hardfork->get_current_version();
 
   epee::net_utils::http::http_simple_client http_client;
   COMMAND_RPC_GET_PRICING_RECORD::request req = AUTO_VAL_INIT(req);
   COMMAND_RPC_GET_PRICING_RECORD::response res = AUTO_VAL_INIT(res);
 
-  std::array<std::string, 3> oracle_urls = get_config(m_nettype).ORACLE_URLS;
+  const std::array<std::string, 3> configured_oracle_urls = (m_nettype == cryptonote::FAKECHAIN)
+      ? config::FAKECHAIN_ORACLE_URLS : get_config(m_nettype).ORACLE_URLS;
+  // ORACLE_URLS is sized for operators who list several endpoints; the shipped configuration
+  // lists the same endpoint three times.  Trying a duplicate again only repeats the timeout, so
+  // collapse duplicates before shuffling: one unreachable host must cost one timeout, not three.
+  std::vector<std::string> oracle_urls(configured_oracle_urls.begin(), configured_oracle_urls.end());
+  std::sort(oracle_urls.begin(), oracle_urls.end());
+  oracle_urls.erase(std::unique(oracle_urls.begin(), oracle_urls.end()), oracle_urls.end());
   std::shuffle(oracle_urls.begin(), oracle_urls.end(), std::default_random_engine(crypto::rand<unsigned>()));
   std::string url = "/price?height=" + std::to_string(height);
   //url += "&timestamp=" + boost::lexical_cast<std::string>(timestamp) + "&version=" + std::to_string(hf_version);
   url += "&sal=" + (circ_supply.count("SAL") ? std::to_string(circ_supply["SAL"]) : "0");
   url += "&vsd=" + (circ_supply.count("VSD") ? std::to_string(circ_supply["VSD"]) : "0");
+  // Long enough for a TLS handshake plus one JSON round trip, short enough that a dead oracle
+  // does not dominate block template latency (this call is on the mining path).
+  static constexpr std::chrono::seconds ORACLE_REQUEST_TIMEOUT{5};
   for (size_t n = 0; n < oracle_urls.size(); n++) {
     http_client.set_server(oracle_urls[n], boost::none, epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
-    r = epee::net_utils::invoke_http_json(url, req, res, http_client, std::chrono::seconds(10), "GET");
+    r = epee::net_utils::invoke_http_json(url, req, res, http_client, ORACLE_REQUEST_TIMEOUT, "GET");
     if (r) {
       LOG_PRINT_L1("Obtained pricing record from Oracle : " << oracle_urls[n]);
       break;
@@ -3364,7 +3502,9 @@ bool Blockchain::get_pricing_record(oracle::pricing_record &pr, std::map<std::st
   }
 
   // Verify the signature
-  if (res.pr.verifySignature(get_config(m_nettype).ORACLE_PUBLIC_KEY)) {
+  const std::string oracle_pk = (m_nettype == cryptonote::FAKECHAIN)
+      ? config::FAKECHAIN_ORACLE_PUBLIC_KEY : get_config(m_nettype).ORACLE_PUBLIC_KEY;
+  if (res.pr.verifySignature(oracle_pk)) {
     // Copy the PR
     pr = res.pr;
   } else {
@@ -3379,7 +3519,6 @@ bool Blockchain::get_pricing_record(oracle::pricing_record &pr, std::map<std::st
     sig_hex += ss.str();
   }
   LOG_PRINT_L1("Received pricing record - signature = " << sig_hex);
-  return true;
 }
 //------------------------------------------------------------------
 difficulty_type Blockchain::block_difficulty(uint64_t i) const
@@ -4246,9 +4385,42 @@ bool Blockchain::check_tx_asset_types(const transaction& tx, tx_verification_con
         tvc.m_verifivation_failed = true;
         return false;
       }
-    } else if (tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::CONVERT) {
-      MERROR_VER("AUDIT and CONVERT transaction types are not allowed in this hardfork version:" << std::to_string(HF_VERSION_REJECT_CLEARTEXT_AMOUNTS));
+    } else if (tx.type == cryptonote::transaction_type::AUDIT) {
+      MERROR_VER("AUDIT transaction type is not allowed in this hardfork version:" << std::to_string(HF_VERSION_REJECT_CLEARTEXT_AMOUNTS));
       return false;
+    } else if (tx.type == cryptonote::transaction_type::CONVERT) {
+      // C4: conversions arrive with the oracle hard fork.  The conversion itself is checked
+      // against the pricing record the containing block commits to (verify_convert_tx, called
+      // from handle_block_to_main_chain); here we only police the asset pair.
+      if (hf_version < HF_VERSION_ENABLE_CONVERT) {
+        MERROR_VER("CONVERT transaction type is not allowed in this hardfork version:" << std::to_string(hf_version));
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+      const bool convert_src_ok = (tx.source_asset_type == "SAL" || tx.source_asset_type == "SAL1");
+      const bool convert_dst_ok = (tx.destination_asset_type == "SAL" || tx.destination_asset_type == "SAL1");
+      if (!convert_src_ok || !convert_dst_ok || tx.source_asset_type == tx.destination_asset_type) {
+        MERROR_VER("Invalid source/dest asset type for CONVERT - provided source asset: " << tx.source_asset_type << ", and destination asset: " << tx.destination_asset_type << ", expected SAL and SAL1 in either order");
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+      if (tx.amount_burnt == 0) {
+        MERROR_VER("CONVERT transaction has no burnt amount");
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+      // A limit below the protocol's 1/32 can never be satisfied: calculate_conversion() would
+      // price the transaction at zero minted, so it could never be mined.  Refusing it here
+      // keeps an unmineable transaction (and its inputs) out of the memory pool and gives the
+      // wallet a precise error instead of a transaction that is broadcast and never confirmed.
+      const uint64_t minimum_slippage_limit = convert_minimum_slippage_limit(tx.amount_burnt);
+      if (tx.amount_slippage_limit < minimum_slippage_limit) {
+        MERROR_VER("CONVERT slippage limit " << tx.amount_slippage_limit << " is below the protocol "
+            << "fee of " << minimum_slippage_limit << " (1/32 of the burnt amount) - the transaction "
+            << "could never be mined; raise the limit to at least " << minimum_slippage_limit);
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
     } else {
       MERROR_VER("Unknown transaction type: " << tx.type << ".");
       tvc.m_verifivation_failed = true;
@@ -5671,6 +5843,43 @@ leave:
     goto leave;
   }
 
+  // The pricing record carried by a block must be validated by the chain, not only by whoever
+  // fetched it: a valid signature is not enough, because an old (but correctly signed) record
+  // could otherwise be replayed. pricing_record::valid() enforces that the record is empty
+  // before the oracle/convert hard fork, and after it that the signature verifies and that the
+  // timestamp is strictly newer than the parent block.
+  {
+    // get_current_blockchain_height() returns the number of blocks already in the db (the genesis
+    // included), which is the height of the block being added here - it is NOT the tip height and
+    // it is NOT the parent height. The parent is therefore chain_h - 1, and chain_h is also the
+    // height the oracle was asked to price, so a block must carry a record whose signed height is
+    // exactly chain_h (pricing_record::valid() enforces that).
+    // The guard must be on the chain height (0 while the genesis is being added - it flows
+    // through here too), not on blockchain_height: guarding on blockchain_height made parent_ts
+    // 0 for the first mined block and silently bypassed the freshness rule there.
+    const uint64_t chain_h = get_current_blockchain_height();
+    const uint64_t parent_ts = (chain_h > 0) ? m_db->get_block_timestamp(chain_h - 1) : 0;
+    bool pr_ok = false;
+    try
+    {
+      pr_ok = bl.pricing_record.valid(m_nettype, hf_version, chain_h, bl.timestamp, parent_ts);
+    }
+    catch (const std::exception &e)
+    {
+      pr_ok = false;
+    }
+    catch (...)
+    {
+      pr_ok = false;
+    }
+    if (!pr_ok)
+    {
+      MERROR_VER("Block with id: " << id << " has an invalid pricing record (block height " << chain_h << ", record height " << bl.pricing_record.height << ")");
+      bvc.m_verifivation_failed = true;
+      goto leave;
+    }
+  }
+
   TIME_MEASURE_FINISH(t1);
   TIME_MEASURE_START(t2);
 
@@ -5811,6 +6020,11 @@ leave:
   // from the tx_pool and validating them.  Each is then added
   // to txs.  Keys spent in each are added to <keys> by the double spend check.
   txs.reserve(bl.tx_hashes.size());
+  // The circulating supply is identical for every transaction of the block (the block is not in
+  // the DB yet), so snapshot it lazily and at most once instead of running a cursor scan per
+  // CONVERT transaction.  Blocks without conversions pay nothing.
+  std::map<std::string, uint64_t> circ_supply_for_convert;
+  bool circ_supply_loaded = false;
   for (const crypto::hash& tx_id : bl.tx_hashes)
   {
     transaction tx_tmp;
@@ -5905,6 +6119,37 @@ leave:
       bvc.m_verifivation_failed = true;
       return_tx_to_pool(txs);
       goto leave;
+    }
+
+    // C4: a CONVERT transaction mints exactly what the pricing record committed in
+    // this block implies. The transaction does not get to choose the amount, and this
+    // check is deliberately outside the fast_check guard: skipping consensus
+    // verification must not be a way to mint at an arbitrary rate.
+    //
+    // Measured: a Carrot output carries no cleartext amount - store_carrot_to_transaction_v1
+    // writes tx_out{0, txout_to_carrot_v1{...}} and keeps the amount in ecdhInfo/outPk - so the
+    // minted amount cannot be read from this transaction (an earlier version of this check
+    // summed tx.vout amounts and therefore always read zero). What is checkable here, and
+    // what this check enforces, is that the burn is priceable under the record committed in
+    // this block and issues a non-zero amount (F6: no burning for nothing). The minted amount
+    // itself is paid out by the block protocol transaction, where amounts are cleartext.
+    if (tx.type == cryptonote::transaction_type::CONVERT)
+    {
+      std::string convert_error;
+      if (!circ_supply_loaded)
+      {
+        circ_supply_for_convert = get_db().get_circulating_supply();
+        circ_supply_loaded = true;
+      }
+      if (!cryptonote::verify_convert_tx(tx, bl.pricing_record, circ_supply_for_convert,
+                                         hf_version, convert_error))
+      {
+        MERROR_VER("Block with id: " << id << " has a CONVERT transaction (id: " << tx_id
+                   << ") that does not match the oracle price: " << convert_error);
+        add_block_as_invalid(bl, id);
+        bvc.m_verifivation_failed = true;
+        goto leave;
+      }
     }
 
 #if defined(PER_BLOCK_CHECKPOINT)

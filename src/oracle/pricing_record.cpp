@@ -206,6 +206,15 @@ namespace oracle
     }
     return 0;
   }
+
+  uint64_t pricing_record::ma(const std::string& asset_type) const noexcept
+  {
+    for (const auto& asset: assets) {
+      if (asset.asset_type != asset_type) continue;
+      return asset.ma_price;
+    }
+    return 0;
+  }
   
   bool pricing_record::equal(const pricing_record& other) const noexcept
   {
@@ -223,6 +232,66 @@ namespace oracle
     return (*this).equal(empty_pr);
   }
 
+  std::string pricing_record::build_signing_message() const
+  {
+    // NOTE: this byte string is what gets signed and verified. It is built by hand so that
+    // it matches the oracle's producer exactly; both sides now share this one function.
+    std::ostringstream oss;
+    oss << "{\"pr_version\":" << pr_version;
+    oss << ",\"height\":" << height;
+    oss << ",\"supply\":{\"SAL\":" << supply.sal << ",\"VSD\":" << supply.vsd << "}";
+    oss << ",\"assets\":[";
+    bool first = true;
+    for (const auto& asset: assets) {
+      if (first)
+        first=false;
+      else
+        oss << ",";
+      oss << "{\"asset_type\":\"" << asset.asset_type << "\",\"spot_price\":" << asset.spot_price << ",\"ma_price\":" << asset.ma_price << "}";
+    }
+    oss << "]";
+    oss << ",\"timestamp\":" << timestamp;
+    oss << "}";
+    return oss.str();
+  }
+
+  bool pricing_record::sign(const std::string& private_key)
+  {
+    CHECK_AND_ASSERT_THROW_MES(!private_key.empty(), "Pricing record signing failed. NULL private key.");
+
+    BIO* bio = BIO_new_mem_buf(private_key.c_str(), private_key.size());
+    if (!bio)
+      return false;
+    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+    BIO_free(bio);
+    CHECK_AND_ASSERT_THROW_MES(pkey != NULL, "Pricing record signing failed. Could not parse private key.");
+
+    const std::string message = build_signing_message();
+
+    std::vector<uint8_t> sig(EVP_PKEY_size(pkey));
+    size_t sig_len = sig.size();
+    EVP_MD_CTX* ctx = EVP_MD_CTX_create();
+    int ret = 0;
+    if (ctx) {
+      ret = EVP_DigestSignInit(ctx, NULL, EVP_sha256(), NULL, pkey);
+      if (ret == 1)
+        ret = EVP_DigestSignUpdate(ctx, message.data(), message.length());
+      if (ret == 1)
+        ret = EVP_DigestSignFinal(ctx, sig.data(), &sig_len);
+    }
+    EVP_MD_CTX_destroy(ctx);
+    EVP_PKEY_free(pkey);
+
+    if (ret != 1) {
+      ERR_print_errors_fp(stderr);
+      return false;
+    }
+
+    sig.resize(sig_len);
+    signature = std::move(sig);
+    return true;
+  }
+
   bool pricing_record::verifySignature(const std::string& public_key) const
   {
     CHECK_AND_ASSERT_THROW_MES(!public_key.empty(), "Pricing record verification failed. NULL public key. PK Size: " << public_key.size());
@@ -237,55 +306,82 @@ namespace oracle
     BIO_free(bio);
     CHECK_AND_ASSERT_THROW_MES(pubkey != NULL, "Pricing record verification failed. NULL public key.");
 
-    // Build the JSON string, so that we can verify the signature
-    std::ostringstream oss;
-    oss << "{\"pr_version\":" << pr_version;
-    oss << ",\"height\":" << height;
-    oss << ",\"supply\":{\"SAL\":" << supply.sal <<",\"VSD\":" << supply.vsd << "}";
-    oss << ",\"assets\":[";
-    bool first = true;
-    for (const auto& asset: assets) {
-      if (first)
-        first=false;
-      else
-        oss << ",";
-      oss << "{\"asset_type\":\"" << asset.asset_type << "\",\"spot_price\":" << asset.spot_price << ",\"ma_price\":" << asset.ma_price << "}";
-    }
-    oss << "]";
-    oss << ",\"timestamp\":" << timestamp;
-    oss << "}";
-    std::string message = oss.str();
+    // the exact bytes that were signed
+    const std::string message = build_signing_message();
 
-    // Create a verify digest from the message
-    EVP_MD_CTX *ctx = EVP_MD_CTX_create();
+    // A pricing record is accepted if it verifies under ANY digest that the oracle
+    // implementations have used in the field. This verifier used to hard-code SHA-256,
+    // which made every record produced by a legacy OpenSSL 1.1 DSA signer fail (those
+    // default to SHA-1) even though the record was genuine. Both attempts below use the
+    // same configured key and a real digest, so a malformed, foreign or replayed
+    // signature still fails both.
+    static const EVP_MD *const accepted_digests[] = { EVP_sha256(), EVP_sha1() };
     int ret = 0;
-    if (ctx) {
-      ret = EVP_DigestVerifyInit(ctx, NULL, EVP_sha256(), NULL, pubkey);
-      if (ret == 1) {
-        ret = EVP_DigestVerifyUpdate(ctx, message.data(), message.length());
+    for (const EVP_MD *digest : accepted_digests) {
+      ret = 0;
+      // Create a verify digest from the message
+      EVP_MD_CTX *ctx = EVP_MD_CTX_create();
+      if (ctx) {
+        ret = EVP_DigestVerifyInit(ctx, NULL, digest, NULL, pubkey);
         if (ret == 1) {
-          ret = EVP_DigestVerifyFinal(ctx, (const unsigned char *)signature.data(), signature.size());
+          ret = EVP_DigestVerifyUpdate(ctx, message.data(), message.length());
+          if (ret == 1) {
+            ret = EVP_DigestVerifyFinal(ctx, (const unsigned char *)signature.data(), signature.size());
+          }
         }
       }
+
+      // Cleanup the context we created
+      EVP_MD_CTX_destroy(ctx);
+      if (ret == 1)
+        break;
+      // Do not let the failed attempt leak into the next one (or into the log)
+      ERR_clear_error();
     }
 
-    // Cleanup the context we created
-    EVP_MD_CTX_destroy(ctx);
     // Cleanup the openssl stuff
     EVP_PKEY_free(pubkey);
 
     if (ret == 1)
       return true;
 
-    // Get the errors from OpenSSL
-    ERR_print_errors_fp (stderr);
-
+    // Consensus-reject path: never dump the OpenSSL error stack here (anyone could flood
+    // the log with malformed signatures). One bounded line is enough.
+    LOG_ERROR("Pricing record signature rejected under every accepted digest.");
     return false;
   }
 
-  // overload for pr validation for block
-  bool pricing_record::valid(cryptonote::network_type nettype, uint32_t hf_version, uint64_t bl_timestamp, uint64_t last_bl_timestamp) const 
+  // The per-network activation height of the height binding (see
+  // config::PRICING_RECORD_HEIGHT_BINDING_HEIGHT). 0 means every block that is subject to
+  // HF_VERSION_ENABLE_ORACLE has to be bound to the record the oracle signed for it.
+  uint64_t pricing_record::height_binding_height(cryptonote::network_type nettype)
   {
+    // FAKECHAIN reuses the mainnet config_t, so its value is selected explicitly, exactly
+    // like the oracle public key below.
+    return (nettype == cryptonote::FAKECHAIN)
+        ? config::FAKECHAIN_PRICING_RECORD_HEIGHT_BINDING_HEIGHT
+        : get_config(nettype).PRICING_RECORD_HEIGHT_BINDING_HEIGHT;
+  }
+
+  // overload for pr validation for block
+  bool pricing_record::valid(cryptonote::network_type nettype, uint32_t hf_version, uint64_t bl_height, uint64_t bl_timestamp, uint64_t last_bl_timestamp) const
+  {
+    return valid_with_binding_height(nettype, hf_version, height_binding_height(nettype),
+                                     bl_height, bl_timestamp, last_bl_timestamp);
+  }
+
+  bool pricing_record::valid_with_binding_height(cryptonote::network_type nettype, uint32_t hf_version, uint64_t binding_height, uint64_t bl_height, uint64_t bl_timestamp, uint64_t last_bl_timestamp) const
+  {
+    // Contract: a block either carries no record at all, or it carries a record the oracle
+    // signed for exactly this block height -- there is no third option, and in particular no
+    // "record that was not really a record". empty() compares every field against the canonical
+    // default, so a payload that sets a version, a height, a supply figure, an asset table, a
+    // timestamp or a signature blob is a record and must pass the checks below; zeroing the
+    // other fields does not buy a way around them.
+    // Accepting a record-less block is not a hole either, it is a degradation: with no prices
+    // the accessors return 0 and get_conversion_rate() refuses to convert
+    // (src/cryptonote_core/cryptonote_tx_utils.cpp:274-280), so such a block can never mint a
+    // CONVERT. An unreachable oracle therefore costs availability, not soundness.
     if (hf_version < HF_VERSION_SLIPPAGE_YIELD) {
       if (!this->empty())
         return false;
@@ -294,8 +390,26 @@ namespace oracle
     if (this->empty())
         return true;
 
-    if (!verifySignature(get_config(nettype).ORACLE_PUBLIC_KEY)) {
+    const std::string oracle_pk = (nettype == cryptonote::FAKECHAIN)
+        ? config::FAKECHAIN_ORACLE_PUBLIC_KEY : get_config(nettype).ORACLE_PUBLIC_KEY;
+    if (!verifySignature(oracle_pk)) {
       LOG_ERROR("Invalid pricing record signature.");
+      return false;
+    }
+
+    // The oracle signs the height the record was priced for. A valid signature only proves that
+    // the record is authentic, it does not prove that the record belongs to THIS block: without
+    // the comparison below a freshly signed record can be replayed into any later block that is
+    // still inside the timestamp window. The signed height is the binding, and it is unique per
+    // block on a chain, so one record can only ever be spent by one block.
+    // The binding is only in force from the network's activation height on; blocks below it
+    // stay exempt so that chains which contain blocks mined before the rule existed can still
+    // be re-connected (see PRICING_RECORD_HEIGHT_BINDING_HEIGHT and B2).
+    const bool height_binding_active =
+        hf_version >= HF_VERSION_ENABLE_ORACLE && bl_height >= binding_height;
+    if (height_binding_active && this->height != bl_height) {
+      LOG_ERROR("Pricing record height: " << this->height << ", block height: " << bl_height);
+      LOG_ERROR("Pricing record is not bound to this block height.");
       return false;
     }
 
@@ -305,6 +419,9 @@ namespace oracle
       return false;
     }
 
+    // NOTE: the record must be strictly newer than the previous block timestamp. Oracles
+    // should publish timestamp = max(now, last_signed_timestamp + 1); otherwise two blocks
+    // mined inside the same second cannot both be given a valid record.
     if (this->timestamp <= last_bl_timestamp) {
       LOG_ERROR("Pricing record timestamp: " << this->timestamp << ", block timestamp: " << bl_timestamp);
       LOG_ERROR("Pricing record timestamp is too old.");

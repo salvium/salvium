@@ -1689,7 +1689,7 @@ namespace cryptonote
   //---------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------
   //TODO: investigate whether boolean return is appropriate
-  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, std::vector<std::pair<protocol_tx_data_t, token_metadata_t>> &create_token_entries, uint8_t version)
+  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, std::vector<std::pair<protocol_tx_data_t, token_metadata_t>> &create_token_entries, std::vector<cryptonote::transaction> &convert_txs, const std::map<std::string, uint64_t> &circ_supply, uint8_t version)
   {
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
@@ -1875,6 +1875,44 @@ namespace cryptonote
 
         tokens.insert(tx.token_metadata.asset_type);
         create_token_entries.push_back(std::make_pair(tx.protocol_tx_data, tx.token_metadata));
+      }
+
+      // check and include convert entries: a CONVERT transaction burns its source asset,
+      // and the block protocol transaction mints the destination asset to the
+      // transaction's return address.  The minted amount is derived from the pricing
+      // record committed in this block, so a convert that cannot be priced (or that
+      // would issue nothing) is simply not mined instead of burning funds for nothing.
+      if (tx.type == transaction_type::CONVERT)
+      {
+        if (version < HF_VERSION_ORACLE_CONVERT) {
+          LOG_PRINT_L2("  is a CONVERT transaction before they are permitted - cannot be mined");
+          continue;
+        }
+
+        if (tx.source_asset_type.empty() || tx.destination_asset_type.empty() ||
+            tx.source_asset_type == tx.destination_asset_type) {
+          LOG_PRINT_L2("  is a CONVERT transaction with an invalid asset pair - cannot be mined");
+          continue;
+        }
+
+        uint64_t amount_minted = 0;
+        uint64_t amount_slippage = 0;
+        if (!cryptonote::calculate_conversion(tx.source_asset_type, tx.destination_asset_type,
+                                              tx.amount_burnt, tx.amount_slippage_limit,
+                                              amount_minted, amount_slippage, circ_supply,
+                                              bl.pricing_record, version)) {
+          LOG_PRINT_L2("  is a CONVERT transaction that cannot be priced - cannot be mined");
+          continue;
+        }
+
+        if (amount_minted == 0) {
+          LOG_PRINT_L2("  is a CONVERT transaction that would issue nothing - cannot be mined");
+          continue;
+        }
+
+        // Hand the transaction over: the caller turns it into a protocol transaction
+        // entry (it knows the block height) and prices it against the same record.
+        convert_txs.push_back(tx);
       }
 
       bl.tx_hashes.push_back(sorted_it->second);

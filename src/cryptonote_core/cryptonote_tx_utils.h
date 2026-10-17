@@ -41,11 +41,69 @@
 
 namespace cryptonote
 {
-  /*
+  // C1a: declarations restored from the upstream comment block
   bool get_conversion_rate(const oracle::pricing_record& pr, const std::string& from_asset, const std::string& to_asset, uint64_t& rate);
   bool get_converted_amount(const uint64_t& conversion_rate, const uint64_t& source_amount, uint64_t& dest_amount);
-  bool calculate_conversion(const std::string& source_asset, const std::string& dest_asset, const uint64_t amount_burnt, const uint64_t amount_slippage_limit, uint64_t& amount_minted, uint64_t& amount_slippage, const std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version);
-  */
+  bool calculate_conversion(const std::string& source_asset, const std::string& dest_asset, const uint64_t amount_burnt, const uint64_t amount_slippage_limit, uint64_t& amount_minted, uint64_t& amount_slippage, const std::map<std::string, uint64_t> &circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version);
+
+  // The protocol always retains 1/32 (3.125%) of the burnt amount.  A CONVERT whose declared
+  // amount_slippage_limit is below that floor is priced at zero minted and can therefore never
+  // be mined; the memory pool and the wallet share this helper so such a transaction is either
+  // refused up front (pool) or built with an acceptable limit (wallet).
+  inline uint64_t convert_minimum_slippage_limit(uint64_t amount_burnt)
+  {
+    return amount_burnt >> 5;
+  }
+
+  // Turns a user-facing percentage (0-100; 0 = no preference) into the absolute slippage limit
+  // the consensus rule expects.  Floors at the protocol fee and never overflows uint64.
+  inline uint64_t convert_slippage_limit_from_percent(uint64_t amount_burnt, uint64_t percent)
+  {
+    const uint64_t minimum = convert_minimum_slippage_limit(amount_burnt);
+    if (percent == 0)
+      return minimum;
+    if (percent > 100)
+      percent = 100;
+    // floor(amount_burnt * percent / 100) without overflowing the intermediate product.
+    const uint64_t limit = amount_burnt / 100 * percent + amount_burnt % 100 * percent / 100;
+    return limit < minimum ? minimum : limit;
+  }
+
+  /**
+   * C4: the consensus rule for CONVERT transactions.
+   *
+   * The conversion is recomputed from the pricing record that is committed in the
+   * block being validated, never from anything the transaction carries: otherwise a
+   * transaction could simply assert the amount it wants minted.
+   *
+   * @param declared_minted the amount the transaction's outputs declare as minted
+   *                        (in the long run this must be derived from the outputs)
+   * @return true only if the declared amount is exactly what the block's oracle
+   *         price implies and the conversion issues a non-zero amount
+   */
+  bool verify_convert_tx(const transaction& tx,
+                         const oracle::pricing_record& pr,
+                         const std::map<std::string, uint64_t>& circ_supply,
+                         const uint8_t hf_version,
+                         const uint64_t declared_minted,
+                         std::string& error);
+
+  /**
+   * C4 (burn side): the same rule without the minted-amount comparison.
+   *
+   * A Carrot output carries no cleartext amount - store_carrot_to_transaction_v1 writes
+   * tx_out{0, txout_to_carrot_v1{...}} and keeps the amount in ecdhInfo/outPk - so a
+   * verifier cannot read the minted amount off a conversion transaction. The minted
+   * amount is only readable where it is cleartext: in the protocol transaction that pays
+   * the conversion out. This overload therefore checks only what the transaction itself
+   * can establish (the burn is priceable under the record committed in this block and
+   * issues a non-zero amount); the minted-amount equality belongs to the protocol entry.
+   */
+  bool verify_convert_tx(const transaction& tx,
+                         const oracle::pricing_record& pr,
+                         const std::map<std::string, uint64_t>& circ_supply,
+                         const uint8_t hf_version,
+                         std::string& error);
   //---------------------------------------------------------------
   /**
    * Construct the protocol_tx
@@ -172,6 +230,41 @@ namespace cryptonote
       FIELD(is_return)
     END_SERIALIZE()
   };
+
+  /**
+   * C5: the shape of a CONVERT request.
+   *
+   * A conversion burns the whole spendable balance of the source asset and mints the
+   * proceeds into one destination output, so the request must name exactly one
+   * destination.  Allowing more would make the transaction builder burn the same balance
+   * once per destination: each payment proposal is capped by the source balance, but every
+   * proposal carries its own burn, so N destinations burn N times.  Rejecting the shape
+   * here keeps the wallet and the RPC on the same rule before any amount is computed.
+   *
+   * @param dsts the requested destinations
+   * @param source_asset the asset that is burnt
+   * @param error receives the reason when the shape is rejected
+   * @return true when the request can be built
+   */
+  inline bool check_convert_destinations(const std::vector<tx_destination_entry> &dsts, const std::string &source_asset, std::string &error)
+  {
+    if (dsts.size() != 1)
+    {
+      error = "CONVERT requires exactly one destination";
+      return false;
+    }
+    if (dsts[0].amount == 0)
+    {
+      error = "CONVERT destination amount must be greater than zero";
+      return false;
+    }
+    if (dsts[0].asset_type == source_asset)
+    {
+      error = "CONVERT destination asset must differ from the source asset";
+      return false;
+    }
+    return true;
+  }
 
   //---------------------------------------------------------------
 

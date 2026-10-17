@@ -43,7 +43,8 @@ public:
 
     m_bob.generate();
 
-    if (!construct_miner_tx(0, 0, 0, 2, 0, m_bob.get_keys().m_account_address, m_tx))
+    crypto::public_key miner_reward_tx_key{};
+    if (!construct_miner_tx(0, 0, 0, 2, 0, m_bob.get_keys().m_account_address, miner_reward_tx_key, m_tx))
       return false;
 
     m_tx_pub_key = get_tx_pub_key_from_extra(m_tx);

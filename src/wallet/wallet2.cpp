@@ -53,6 +53,9 @@ using namespace epee;
 #include "cryptonote_core/tx_sanity_check.h"
 #include "wallet_rpc_helpers.h"
 #include "wallet2.h"
+
+// Highest hard fork activated by the regtest (FAKECHAIN) schedule from height 1.
+#define HF_VERSION_FAKECHAIN_TOP 14
 #include "wallet_args.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "net/parse.h"
@@ -266,15 +269,19 @@ struct options {
   const command_line::arg_descriptor<bool> daemon_ssl_allow_chained = {"daemon-ssl-allow-chained", tools::wallet2::tr("Allow user (via --daemon-ssl-ca-certificates) chain certificates"), false};
   const command_line::arg_descriptor<bool> testnet = {"testnet", tools::wallet2::tr("For testnet. Daemon must also be launched with --testnet flag"), false};
   const command_line::arg_descriptor<bool> stagenet = {"stagenet", tools::wallet2::tr("For stagenet. Daemon must also be launched with --stagenet flag"), false};
-  const command_line::arg_descriptor<std::string, false, true, 2> shared_ringdb_dir = {
+  // 本地新增：与守护进程的 --regtest（FAKECHAIN）配套
+  const command_line::arg_descriptor<bool> regtest = {"regtest", tools::wallet2::tr("For regression testing. Daemon must also be launched with --regtest flag"), false};
+  const command_line::arg_descriptor<std::string, false, true, 3> shared_ringdb_dir = {
     "shared-ringdb-dir", tools::wallet2::tr("Set shared ring database path"),
     get_default_ringdb_path(),
-    {{ &testnet, &stagenet }},
-    [](std::array<bool, 2> testnet_stagenet, bool defaulted, std::string val)->std::string {
-      if (testnet_stagenet[0])
+    {{ &testnet, &stagenet, &regtest }},
+    [](std::array<bool, 3> net_options, bool defaulted, std::string val)->std::string {
+      if (net_options[0])
         return (boost::filesystem::path(val) / "testnet").string();
-      else if (testnet_stagenet[1])
+      else if (net_options[1])
         return (boost::filesystem::path(val) / "stagenet").string();
+      else if (net_options[2])
+        return (boost::filesystem::path(val) / "regtest").string();
       return val;
     }
   };
@@ -329,7 +336,8 @@ std::unique_ptr<tools::wallet2> make_basic(const boost::program_options::variabl
 {
   const bool testnet = command_line::get_arg(vm, opts.testnet);
   const bool stagenet = command_line::get_arg(vm, opts.stagenet);
-  const network_type nettype = testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
+  const bool regtest = command_line::get_arg(vm, opts.regtest);
+  const network_type nettype = regtest ? FAKECHAIN : testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
   const uint64_t kdf_rounds = command_line::get_arg(vm, opts.kdf_rounds);
   THROW_WALLET_EXCEPTION_IF(kdf_rounds == 0, tools::error::wallet_internal_error, "KDF rounds must not be 0");
 
@@ -545,7 +553,8 @@ std::pair<std::unique_ptr<tools::wallet2>, tools::password_container> generate_f
 {
   const bool testnet = command_line::get_arg(vm, opts.testnet);
   const bool stagenet = command_line::get_arg(vm, opts.stagenet);
-  const network_type nettype = testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
+  const bool regtest = command_line::get_arg(vm, opts.regtest);
+  const network_type nettype = regtest ? FAKECHAIN : testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
 
   /* GET_FIELD_FROM_JSON_RETURN_ON_ERROR Is a generic macro that can return
   false. Gcc will coerce this into unique_ptr(nullptr), but clang correctly
@@ -1299,6 +1308,11 @@ bool wallet2::has_stagenet_option(const boost::program_options::variables_map& v
   return command_line::get_arg(vm, options().stagenet);
 }
 
+bool wallet2::has_regtest_option(const boost::program_options::variables_map& vm)
+{
+  return command_line::get_arg(vm, options().regtest);
+}
+
 bool wallet2::has_proxy_option() const
 {
   return !m_proxy.empty();
@@ -1335,6 +1349,7 @@ void wallet2::init_options(boost::program_options::options_description& desc_par
   command_line::add_arg(desc_params, opts.daemon_ssl_allow_chained);
   command_line::add_arg(desc_params, opts.testnet);
   command_line::add_arg(desc_params, opts.stagenet);
+  command_line::add_arg(desc_params, opts.regtest);
   command_line::add_arg(desc_params, opts.shared_ringdb_dir);
   command_line::add_arg(desc_params, opts.kdf_rounds);
   mms::message_store::init_options(desc_params);
@@ -2879,13 +2894,16 @@ void wallet2::process_new_scanned_transaction(
       const transfer_details &td_origin = m_transfers[td.m_td_origin_idx];
       THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.type != cryptonote::transaction_type::AUDIT &&
                                 td_origin.m_tx.type != cryptonote::transaction_type::STAKE &&
-                                td_origin.m_tx.type != cryptonote::transaction_type::CREATE_TOKEN,
+                                td_origin.m_tx.type != cryptonote::transaction_type::CREATE_TOKEN &&
+                                td_origin.m_tx.type != cryptonote::transaction_type::CONVERT,
                                 error::wallet_internal_error,
                                 "incorrect TX type for protocol_tx origin in m_transfers");
 
-      if (td_origin.m_tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+      if (td_origin.m_tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
+          td_origin.m_tx.type == cryptonote::transaction_type::CONVERT) {
 
-        THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.type != cryptonote::transaction_type::CREATE_TOKEN, error::wallet_internal_error, "can't happen");
+        // CREATE_TOKEN and CONVERT payouts mint a NEW asset, so there are no locked
+        // coins to release (only STAKE/AUDIT lock coins in the first place).
         
       } else {
         
@@ -3623,17 +3641,26 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
       if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
         tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(par_blk.block.miner_tx), tx_output_idx));
       tx_output_idx += par_blk.block.miner_tx.vout.size();
-      if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
-        tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(par_blk.block.protocol_tx), tx_output_idx));
+      const size_t protocol_tx_output_idx = tx_output_idx;
       tx_output_idx += par_blk.block.protocol_tx.vout.size();
+      // 本地修改：先扫描本块的普通交易（作者侧内部 enote 扫描会填充 account.return_output_map），
+      // 再扫描 protocol_tx：其中的返还输出（STAKE/CREATE_TOKEN/CONVERT 铸币）靠 return_output_map 才能被认出。
+      tools::threadpool::waiter author_scan_waiter(tpool);
       for (const cryptonote::transaction &tx : par_blk.txes)
       {
         if (tx.type != cryptonote::transaction_type::CREATE_TOKEN) {
           if (!skip_scan_for_this_block)
-            tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(tx), tx_output_idx));
+            tpool.submit(&author_scan_waiter, std::bind(tx_scan_job, std::cref(tx), tx_output_idx));
           tx_output_idx += tx.vout.size();
         }
       }
+      if (!author_scan_waiter.wait())
+      {
+        THROW_WALLET_EXCEPTION_IF(password_failure, error::password_needed);
+        THROW_WALLET_EXCEPTION(error::wallet_internal_error, "Unrecognized exception in enote scanning threadpool");
+      }
+      if (!skip_scan_for_this_block && m_refresh_type != RefreshNoCoinbase)
+        tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(par_blk.block.protocol_tx), protocol_tx_output_idx));
     }
     if (!scan_blocks_waiter.wait())
     {
@@ -3721,6 +3748,15 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
 //----------------------------------------------------------------------------------------------------
 void check_block_hard_fork_version(cryptonote::network_type nettype, uint8_t hf_version, uint64_t height, bool &wallet_is_outdated, bool &daemon_is_outdated)
 {
+  // 本地新增：regtest(FAKECHAIN) 的守护进程从高度 1 起就以最新硬分叉运行，
+  // 与主网时间表无关，因此这里不按高度做版本范围校验。
+  if (nettype == cryptonote::FAKECHAIN)
+  {
+    wallet_is_outdated = false;
+    daemon_is_outdated = false;
+    return;
+  }
+
   const size_t wallet_num_hard_forks = nettype == TESTNET ? num_testnet_hard_forks
     : nettype == STAGENET ? num_stagenet_hard_forks : num_mainnet_hard_forks;
   const hardfork_t *wallet_hard_forks = nettype == TESTNET ? testnet_hard_forks
@@ -7576,7 +7612,13 @@ void wallet2::get_transfers(wallet2::transfer_container& incoming_transfers, con
   if (asset_type == "") {
     incoming_transfers = m_transfers;
   } else {
-    CHECK_AND_ASSERT_THROW_MES(m_transfers_indices.count(asset_type) == 1, "invalid asset_type specified to get_transfers");
+    // C5 fix: a wallet that has never received this asset has zero transfers of
+    // it, which is an empty result rather than an error.
+    if (m_transfers_indices.count(asset_type) == 0)
+    {
+      incoming_transfers.clear();
+      return;
+    }
     incoming_transfers.clear();
     incoming_transfers.reserve(m_transfers_indices.at(asset_type).size());
     for (size_t i: m_transfers_indices.at(asset_type))
@@ -7586,7 +7628,13 @@ void wallet2::get_transfers(wallet2::transfer_container& incoming_transfers, con
 //----------------------------------------------------------------------------------------------------
 void wallet2::get_transfers_indices(std::set<size_t>& indices, const std::string& asset_type) const
 {
-  CHECK_AND_ASSERT_THROW_MES(m_transfers_indices.count(asset_type) == 1, "invalid asset_type specified to get_transfers_indices");
+  // C5 fix: see get_transfers() above - absent means empty, not an error.
+  auto it_asset = m_transfers_indices.find(asset_type);
+  if (it_asset == m_transfers_indices.end())
+  {
+    indices.clear();
+    return;
+  }
   indices = m_transfers_indices.at(asset_type);
 }
 //----------------------------------------------------------------------------------------------------
@@ -11169,7 +11217,8 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
     carrot::rollup_binding_tag_t rollup_binding_tag = crypto::rand<carrot::rollup_binding_tag_t>();
     
     uint64_t total_fee = 0;
-    auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts, priority, extra, tx_type, subaddr_account, subaddr_indices, subtract_fee_from_outputs);
+    auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts, priority, extra, tx_type, subaddr_account, subaddr_indices, subtract_fee_from_outputs,
+        source_asset);
     if (source_asset != "SAL1")
     {
       // We are creating a TOKEN TRANSFER
@@ -11207,7 +11256,11 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
       dsts_rollup.push_back(fee_de);
 
       priority = get_default_priority();
-      auto tx_proposals_rollup = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts_rollup, priority, {}, cryptonote::transaction_type::ROLLUP, subaddr_account, subaddr_indices, {});
+      auto tx_proposals_rollup = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts_rollup, priority, {}, cryptonote::transaction_type::ROLLUP, subaddr_account, subaddr_indices, {},
+        /*input_asset_type=*/""); // C5 fix: the fee ROLLUP tx always pays in the native SAL1 asset,
+                                 // so it must NOT inherit the source asset of the main transaction
+                                 // (a SAL-source CONVERT otherwise fails with
+                                 // "invalid asset_type in source. Expected: SAL1 got: SAL").
       THROW_WALLET_EXCEPTION_IF(tx_proposals_rollup.size() != 1, error::wallet_internal_error, "Failed to create single ROLLUP TX from TRANSFER TOKEN TXs");
 
       // Store the binding tag
@@ -12906,6 +12959,28 @@ uint8_t wallet2::estimate_current_hard_fork(const uint64_t height) const
 {
   // Get the last-seen top height by the wallet
   uint64_t guessed_height = (height > 0) ? height : m_blockchain.size();
+
+  // Ask the daemon first. The schedule tables below describe the public networks only,
+  // and a test chain reuses the mainnet tables, so guessing from the height alone makes
+  // the wallet believe it sits at HF1 and therefore never emit Carrot addresses - which
+  // makes mining impossible on any chain at or above HF_VERSION_CARROT (the daemon
+  // rejects CryptoNote addresses there). The daemon is authoritative; fall back to the
+  // local estimate when it cannot be reached (offline wallets).
+  {
+    uint8_t daemon_hf = 0;
+    try { daemon_hf = const_cast<wallet2*>(this)->get_current_hard_fork(); } catch (...) { daemon_hf = 0; }
+    if (daemon_hf != 0)
+      return daemon_hf;
+  }
+
+  // FAKECHAIN (regtest) has no entry in the schedule tables below: the daemon activates
+  // the highest configured hard fork from height 1 onwards (see the regtest table in
+  // cryptonote_core.cpp). Without this branch the wallet estimates the hard fork against
+  // the mainnet schedule, i.e. HF1 at height 1, and therefore never produces Carrot
+  // addresses - which makes mining impossible on regtest for any chain at or above
+  // HF_VERSION_CARROT (the daemon rejects CryptoNote addresses for mining).
+  if (m_nettype == cryptonote::FAKECHAIN)
+    return HF_VERSION_FAKECHAIN_TOP;
 
   // Get the correct hardfork table, based on current net type
   const hardfork_t *hfs = 
@@ -16865,7 +16940,9 @@ uint64_t wallet2::get_segregation_fork_height() const
     return TESTNET_SEGREGATION_FORK_HEIGHT;
   if (m_nettype == STAGENET)
     return STAGENET_SEGREGATION_FORK_HEIGHT;
-  THROW_WALLET_EXCEPTION_IF(m_nettype != MAINNET, tools::error::wallet_internal_error, "Invalid network type");
+  // regtest(FAKECHAIN) 与主网共用配置（见 cryptonote_config.h 的 get_config），
+  // 所以这里也按主网处理，否则构造交易时会抛 "Invalid network type"。
+  THROW_WALLET_EXCEPTION_IF(m_nettype != MAINNET && m_nettype != FAKECHAIN, tools::error::wallet_internal_error, "Invalid network type");
 
   if (m_segregation_height > 0)
     return m_segregation_height;

@@ -244,7 +244,6 @@ namespace cryptonote
     // Not implemented yet
     return false;
   }
-  /*
   //---------------------------------------------------------------
   bool get_conversion_rate(const oracle::pricing_record& pr, const std::string& from_asset, const std::string& to_asset, uint64_t& rate) {
     // Check for burns
@@ -258,17 +257,32 @@ namespace cryptonote
       rate = COIN;
       return true;
     }
-    if ((from_asset == "SAL" && to_asset != "VSD") ||
-        (from_asset == "VSD" && to_asset != "SAL")) {
-      // Invalid conversion - abort
+    // F3b: closed allowlist. Only SAL<->SAL1 is convertible: those are the only non-BURN
+    // members of oracle::ASSET_TYPES (src/oracle/asset_types.h:36) and the pair the wallet
+    // convert command works with (src/simplewallet/simplewallet.cpp:7687-7697). The upstream
+    // draft named "VSD", which exists nowhere in the asset universe.
+    if (!((from_asset == "SAL" && to_asset == "SAL1") ||
+          (from_asset == "SAL1" && to_asset == "SAL"))) {
       LOG_ERROR("Invalid conversion (" << from_asset << "," << to_asset << ") - aborting");
+      return false;
+    }
+
+    // F2: both assets must carry a price - the accessors return 0 for an unknown asset, so
+    // without this the division below is a divide-by-zero.
+    // F1: use the moving-average price, not the instantaneous spot price: a single
+    // manipulated or stale feed reading must not set the mint rate for a whole block.
+    const uint64_t from_price = pr.ma(from_asset);
+    const uint64_t to_price   = pr.ma(to_asset);
+    if (from_price == 0 || to_price == 0) {
+      LOG_ERROR("Missing moving-average price for " << from_asset << " or " << to_asset
+                << " in pricing record - aborting");
       return false;
     }
 
     // Scale to correct value
     boost::multiprecision::uint128_t rate_128 = COIN;
-    rate_128 *= pr[from_asset];
-    rate_128 /= pr[to_asset];
+    rate_128 *= from_price;
+    rate_128 /= to_price;
     rate = rate_128.convert_to<uint64_t>();
     rate -= (rate % 10000);
     return true;
@@ -287,7 +301,7 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  bool calculate_conversion(const std::string& source_asset, const std::string& dest_asset, const uint64_t amount_burnt, const uint64_t amount_slippage_limit, uint64_t& amount_minted, uint64_t& amount_slippage, const std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version) {
+  bool calculate_conversion(const std::string& source_asset, const std::string& dest_asset, const uint64_t amount_burnt, const uint64_t amount_slippage_limit, uint64_t& amount_minted, uint64_t& amount_slippage, const std::map<std::string, uint64_t> &circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version) {
 
     // Sanity check - are the asset types a valid conversion?
     CHECK_AND_ASSERT_MES(source_asset != dest_asset, false, "cannot calculate slippage when source and dest assets are identical");
@@ -318,7 +332,76 @@ namespace cryptonote
     
     return true;
   }
-  */
+
+  //---------------------------------------------------------------
+  // C4: consensus validation of a CONVERT transaction against the block's oracle price.
+  static bool verify_convert_tx_impl(const transaction& tx,
+                         const oracle::pricing_record& pr,
+                         const std::map<std::string, uint64_t>& circ_supply,
+                         const uint8_t hf_version,
+                         const uint64_t* declared_minted,
+                         std::string& error)
+  {
+    error.clear();
+    if (tx.type != cryptonote::transaction_type::CONVERT) {
+      error = "not a CONVERT transaction";
+      return false;
+    }
+    if (tx.source_asset_type.empty() || tx.destination_asset_type.empty()) {
+      error = "CONVERT transaction without source/destination asset types";
+      return false;
+    }
+    if (tx.amount_burnt == 0) {
+      error = "CONVERT transaction declares no burnt amount";
+      return false;
+    }
+
+    uint64_t minted = 0;
+    uint64_t slippage = 0;
+    if (!calculate_conversion(tx.source_asset_type, tx.destination_asset_type,
+                              tx.amount_burnt, tx.amount_slippage_limit,
+                              minted, slippage, circ_supply, pr, hf_version)) {
+      error = "conversion could not be calculated from the block pricing record";
+      return false;
+    }
+
+    // F6: a conversion that issues nothing is not a conversion. Accepting it would
+    // destroy the burnt funds and mint nothing in return.
+    if (minted == 0) {
+      error = "conversion issues nothing (slippage limit too low) - refusing to burn for nothing";
+      return false;
+    }
+
+    // The amount is implied by the oracle price committed in this block, so a tx
+    // cannot choose it. Any disagreement is a rejection.
+    if (declared_minted && *declared_minted != minted) {
+      error = "declared minted amount does not match the amount implied by the oracle price";
+      return false;
+    }
+
+    return true;
+  }
+
+  // C4 (burn side): the minted amount is not readable from a Carrot transaction, so the
+  // block-level check uses this overload; the equality is enforced on the protocol entry.
+  bool verify_convert_tx(const transaction& tx,
+                         const oracle::pricing_record& pr,
+                         const std::map<std::string, uint64_t>& circ_supply,
+                         const uint8_t hf_version,
+                         std::string& error)
+  {
+    return verify_convert_tx_impl(tx, pr, circ_supply, hf_version, nullptr, error);
+  }
+
+  bool verify_convert_tx(const transaction& tx,
+                         const oracle::pricing_record& pr,
+                         const std::map<std::string, uint64_t>& circ_supply,
+                         const uint8_t hf_version,
+                         const uint64_t declared_minted,
+                         std::string& error)
+  {
+    return verify_convert_tx_impl(tx, pr, circ_supply, hf_version, &declared_minted, error);
+  }
   //---------------------------------------------------------------
   bool construct_protocol_tx(
     const size_t height,
@@ -364,8 +447,9 @@ namespace cryptonote
           // Build the proposal
           carrot::CarrotCoinbaseEnoteV1 e;
           e.onetime_address = entry.return_address;
-          // amount_minted for CREATE_TOKEN, amount_burnt for STAKE/AUDIT
-          e.amount = (entry.type == cryptonote::transaction_type::CREATE_TOKEN) ? entry.amount_minted : entry.amount_burnt;
+          // amount_minted for CREATE_TOKEN and CONVERT, amount_burnt for STAKE/AUDIT
+          e.amount = (entry.type == cryptonote::transaction_type::CREATE_TOKEN ||
+                      entry.type == cryptonote::transaction_type::CONVERT) ? entry.amount_minted : entry.amount_burnt;
           e.asset_type = entry.destination_asset;
           e.view_tag = entry.return_view_tag;
           e.anchor_enc = entry.return_anchor_enc;
@@ -634,6 +718,7 @@ namespace cryptonote
       case HF_VERSION_ENABLE_TOKENS:
       case HF_VERSION_REJECT_CLEARTEXT_AMOUNTS:
       case HF_VERSION_REJECT_POISONED_REFS:
+      case HF_VERSION_ORACLE_CONVERT:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;

@@ -33,6 +33,7 @@ set(core_tests_sources
   chain_switch_1.cpp
   chaingen.cpp
   chaingen001.cpp
+  convert_block_validation.cpp
   chaingen_main.cpp
   double_spend.cpp
   integer_overflow.cpp
@@ -55,6 +56,7 @@ set(core_tests_headers
   chain_switch_1.h
   chaingen.h
   chaingen_tests_list.h
+  convert_block_validation.h
   double_spend.h
   double_spend.inl
   integer_overflow.h

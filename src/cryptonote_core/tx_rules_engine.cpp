@@ -464,6 +464,40 @@ namespace cryptonote::txrules
     return r;
   }
 
+  // CONVERT is the ONLY implemented tx type whose source and destination assets differ
+  // by definition: it burns the source asset and mints the destination asset. Every other
+  // type keeps src == dst (see tx_rules_types.h asset_rules::src_eq_dst).
+  static tx_type_rules make_convert_rules(uint8_t txver)
+  {
+    tx_type_rules r;
+    r.tx_versions = {txver, txver};
+    r.vin_count   = {1, carrot::CARROT_MAX_TX_INPUTS};
+    r.vout_count  = {1, carrot::CARROT_MAX_TX_OUTPUTS};
+
+    r.variants.inputs  = bits_inputs({input_kind::to_key});
+    r.variants.outputs = bits_outputs({output_kind::to_carrot_v1});
+
+    // Source != destination is the point of this type: require it rather than forbid it.
+    r.assets.src_eq_dst = req::MUST_NOT;
+
+    // Inputs are the source asset. Outputs are the minted destination asset PLUS the
+    // source-asset change returned to the sender, so both may legitimately be present.
+    r.assets.inputs_match_source = req::MUST;
+    r.assets.outputs_match_destination = req::MAY;
+    r.assets.outputs_multi_asset = req::MAY;
+
+    // The asset pair is closed: only the two native assets of this prototype.
+    r.assets.allowed_assets = {"SAL", "SAL1"};
+
+    // A convert must actually burn something.
+    r.burning.amount_burnt_positive = req::MUST;
+
+    r.rct.coinbase_must_be_null = false;
+    r.rct.allowed_rct_types.reset();
+
+    return r;
+  }
+
   static tx_type_rules make_transfer_rules(const std::string& asset_fixed_or_hint,
                                            uint8_t txver,
                                            uint32_t min_vout,
@@ -761,6 +795,16 @@ namespace cryptonote::txrules
     // The poisoned reference check is enforced via check_tx_inputs_consensus().
   }
   
+  static void apply_hf_14(hf_rules& hf)
+  {
+    hf.hf_version = 14;
+    // HF14 (ORACLE_CONVERT) enables CONVERT. HF1 removed it and no later fork restored it,
+    // so without this entry every CONVERT tx is rejected with "tx type not allowed at this HF".
+    hf.by_type[cryptonote::CONVERT] = make_convert_rules(TRANSACTION_VERSION_ENABLE_TOKENS);
+    hf.by_type[cryptonote::CONVERT].assets.allowed_assets = {"SAL", "SAL1"};
+    hf.by_type[cryptonote::CONVERT].rct.allowed_rct_types.set(static_cast<size_t>(rct::RCTTypeSalviumOne));
+  }
+
   const hf_rules& rules_for_hf(uint8_t hf_version)
   {
     // Build a small cache of known HF rules. Extend as you add new forks.
@@ -815,6 +859,10 @@ namespace cryptonote::txrules
       hf_rules hf13 = m[12];
       apply_hf_13(hf13);
       m[13] = hf13;
+
+      hf_rules hf14 = m[13];
+      apply_hf_14(hf14);
+      m[14] = hf14;
 
       return m;
     }();
