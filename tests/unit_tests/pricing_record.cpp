@@ -470,7 +470,7 @@ TEST(pricing_record, an_empty_record_prices_no_conversion)
 }
 
 // F5/S6: the production oracle key type is DSA (the mainnet ORACLE_PUBLIC_KEY parses to
-// dsaEncryption; 2048-bit p with a 256-bit q), and an OpenSSL 1.1 producer signs DSA with
+// dsaEncryption: 2048-bit p with a 224-bit q), and an OpenSSL 1.1 producer signs DSA with
 // SHA-1 by default. The verifier used to try SHA-256 only, so every such record was rejected
 // and the chain silently degraded to empty records (conversions halted). The vectors below
 // were produced by /tmp/dsagolden.cpp, which links liboracle.a and signs the exact
@@ -478,29 +478,29 @@ TEST(pricing_record, an_empty_record_prices_no_conversion)
 // both key types and both digests without needing DSA key generation inside the test.
 TEST(pricing_record, verify_accepts_sha1_and_dsa_production_style_vectors)
 {
-  const char *const dsa_sha256_hex = "30440220790175d2b8789898cc901479c143013af6fd29e13b12b721cc7ff97a09e03d700220432d1a5ba49fb136494c01365ab884a6c97f08023f829fd547d754d0e9d6a4e0";
-  const char *const ec_sha1_hex = "304502204a1870cfada959cd01725068c97d8d9e216ff9f9fcd62dfbb07b5867dec308de022100902a9b078a3b05acd0bbcd3db30d84af0e1afffda082327ede8325a1de8aba25";
+  const char *const dsa_sha256_hex = "303c021c372eb134f27b02867866a1f414ebad415d9347ab4a95d72a03701209021c6e084ea71a2ba06a02d08bba04a0b4fec328a6999cda52d8d91ce8e5";
+  const char *const ec_sha1_hex = "304402202d7cf04ae3e92281895a201a9ecfa0d7b6b42d3d54579643e38caf5c9ad87e4a02206e4b1198581077b977768e78975ed4eec4c84985ba6a95b756bc1f1c378a5cb8";
 
   const std::string dsa_pubkey =
     "-----BEGIN PUBLIC KEY-----\n"
-    "MIIDRjCCAjkGByqGSM44BAEwggIsAoIBAQDLBH7O2VtPUJmovGK0x5x7Xw5+ItYN\n"
-    "Ylx2zDg6Dq3dYQZNTTv9cNE1h1Vfx2C1IbJIezQp0rR+P4MD4is0jBHs79v5ZFGi\n"
-    "MwH8zgo3QSefHoc6tndrtBLHLSKRQECJh9ztjtl0nApc7G6FeI+VFKt3pNu62Psn\n"
-    "GsJl8G/ev2LR0i5KM9mDTq1RV1VQDOohJHwmUqgjpU6MEW1BaYs7sQTCq+QAJ8N6\n"
-    "4rWn65MLpl2v3es4ECuCosy59wKV37u1701O4ktR+IyJaFnApabR3nidDSzykhL7\n"
-    "ZBBhvuuXxKG04pWetMHcrGx2AdO5ZrPicbRW3yZ0IBNAG0lt6KFlKC+vAiEAxtew\n"
-    "oKx6yKCAeQ6PGzTYFzCd9HRYuCB+czcldI/X6z0CggEAc3HkxslTMwE5Qx07+wBt\n"
-    "9JGPocKNPu9b4nmI3b8u3M5U20Kd+HVKJYv2vC21UWs+fB/QfZHG5azQWrdSGqqz\n"
-    "lvsJZaT7HfoiTt//DQmEnCSyR6YzDoD6KdpTCPUKhY62xqRU9iu8a9/CV8pB8Udx\n"
-    "7TCek1SikDKQCUQUNi7zk+Jx0UP/KEaEZzCq6mbkE/934yUPAC0itr0On9IRBKwM\n"
-    "d7a34aw1uALOXksmEwbTkd71GPKZX8jy/5GupcKQiFevDJ3D2lsE9zVoeS0vODO1\n"
-    "MVsXyNIV0y3Oc7mjcAehrTSAYTm6YOjEFt9hX3ko6MezmaE5nAvndHVWb2M/xmN9\n"
-    "pAOCAQUAAoIBAAyaerrLYzOkRHwlLUFBtetPDIl862u7d2VrqI8nHEZp+QQaAq8M\n"
-    "XXUpJFD17gCza62omOE+wLJ2msuXUu3wjzKRBV7ceyurOGC/5asKTy3WBWvSp5O9\n"
-    "QqeIdDzNq+l39oOOs7GWibGBBlvDPsRz5f7RqggkSQ78hroRHGpX3qcOtDnw6klC\n"
-    "Hl16cmvYbituTogZir+4wftra3K4QKHfQS2f0CPXP5FfvrAnUhenoQIrXOGf3XGP\n"
-    "eFOzv9sjAflRvM0PhLtzHK6vond1ZbO5B+yr1XGxqkyzXxNAoA2gxY8ScS8ro1wh\n"
-    "KgiQf6RNyfWKvU2qFwFgSyyVlNC6sa+/Nsw=\n"
+    "MIIDQzCCAjUGByqGSM44BAEwggIoAoIBAQDQeoC5zQbPb3DSD1wkzIfuLdKPPtBB\n"
+    "nTQr6QptLnQ8dy7rb1H+fULkkuEy0QoGMZb3jqpgrS7K66Ii5ffm47Mj0YVYnQKj\n"
+    "ajoz6jwkhvMukKvQ/sbu/ECg6mfBX+LfE8xw7FJnZy93mEjychlHELRxdSsmMNA6\n"
+    "3/PBrhRR0OcH6yxTTpltH7Z4D6DcYKiTY4QbmTc47pqxXtMXTKXXqHXNIK4qU+m0\n"
+    "biDV/wlanOiBdSUDNAKAVPz8WQk8GtYTIiwCF1QOIs0OljAjeeF5yxfzo0E4pLBs\n"
+    "CbjeFXhx+k/1v/mFquewXE/gTd9OThnZJrR+BGwVyaugm9T+dJvHkkgjAh0AkJnB\n"
+    "3Wc541nMxbFkarUoew2VRzUzDwkf3ZNHFQKCAQB0UO8RDckpPXML5pFk7hCbu1Tm\n"
+    "fBYU2/oOGJ2N1xSZCpDof6rsVBIksOIrCf3OkbKqbq21DPoKyMNae4Vh3ZVFj2Yl\n"
+    "J/xnqpdeAgayx26p+IJBf9qq1nO8iLmjwqn/cwhJOs2/d/UGL+6lANCEXf4N2aDa\n"
+    "XRuoVNEcwYuUuWWpy+oSC3f9OdhXMPhSZeLzuae7LDyImu5DCGJkQLOAsY8+6ib6\n"
+    "06ZbPIDDHIhBMoe6UoS37TcOQmBFJcq8wQw1fHI9f2r/pYMh5ahChm/KWN36vF6u\n"
+    "60GRAKNGyuUjTTehQr3+rnC0p6SUUK/rOUqHQUJBHGlBlmiBSj6feeA+JWd6A4IB\n"
+    "BgACggEBALywPuo+Z5XJcP7WjjaOKXFZXdTd3FauLzDWuk//oDsUDpbWWRDpFg56\n"
+    "AOK/jlpjZZAKx2h6NWzmBDiqfvFuksXMJ62VpDuJQHC9rU4guWugEp0rIgVbMCj+\n"
+    "93Ifdc/3JznvJVPYOBhGtXWUXruH3JbHKkfc8zwvEvXBzNY0ZkmrvhzwUL1UcLL8\n"
+    "xRB9U/2JJpenBZwnmiFRcKL7jNYxOZL/W8hXTiXP4QwwvDwAQ3KxGdYnWAh+K68E\n"
+    "X6gQIBfn0hxqicxdH0e0zGsyjY0uG/BGQ1SfwLx2wNhfY7k+nf5R8xo+MsP98eJ9\n"
+    "fz36QrvMO9rcwy+OztgdBnnKbdKb4TA=\n"
     "-----END PUBLIC KEY-----\n";
 
   oracle::pricing_record base;
@@ -518,8 +518,8 @@ TEST(pricing_record, verify_accepts_sha1_and_dsa_production_style_vectors)
   };
   const std::string fakechain_pubkey = config::FAKECHAIN_ORACLE_PUBLIC_KEY;
   const signature_vector vectors[] = {
-    {"DSA-2048/q-256 SHA-256", &dsa_pubkey, dsa_sha256_hex},
-    {"DSA-2048/q-256 SHA-1", &dsa_pubkey, "30450221008a610a08f3bba0169c79afbe43b1b7dd3b5c85b9352a46a40f7f66f3b7f68b4602204af5743ca4a27c60995eb32adc59ceab29e0b3a8d921cd826a8de0c931a75963"},
+    {"DSA-2048/q-224 SHA-256", &dsa_pubkey, dsa_sha256_hex},
+    {"DSA-2048/q-224 SHA-1", &dsa_pubkey, "303e021d008dce459f02a988091707acae6a7d69bb11811cbf85163aa3c5e1ea4a021d008dbf83af5c1ef68b29199b89c86591598ce7f68e021cdc0f637ffafb"},
     {"EC P-256 SHA-1", &fakechain_pubkey, ec_sha1_hex},
   };
 
