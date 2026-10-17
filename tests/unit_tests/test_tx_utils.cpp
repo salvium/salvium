@@ -32,6 +32,7 @@
 
 #include <limits>
 #include <vector>
+#include <cstring>
 
 #include "common/util.h"
 #include "cryptonote_basic/cryptonote_basic.h"
@@ -627,4 +628,77 @@ TEST(convert_tx, rejects_a_convert_when_the_block_record_lacks_a_price)
   const cryptonote::transaction tx = make_convert_tx("SAL", "SAL1", 32 * COIN, COIN);
   ASSERT_FALSE(cryptonote::verify_convert_tx(tx, pr, SUPPLY, 14, 124 * COIN, error));
   ASSERT_FALSE(error.empty());
+}
+
+namespace
+{
+  // A CONVERT protocol entry that pays 124 COIN of SAL1 for 32 COIN of burnt SAL, i.e.
+  // exactly what verify_convert_tx() derives from the oracle price in the convert_tx
+  // tests above.  The scalar fields are set to non-trivial values so that a swapped or
+  // dropped field is caught by the assertions below.
+  cryptonote::protocol_data_entry make_convert_protocol_entry()
+  {
+    cryptonote::protocol_data_entry entry{};
+    entry.type = static_cast<uint8_t>(cryptonote::transaction_type::CONVERT);
+    entry.is_carrot = true;
+    entry.source_asset = "SAL";
+    entry.destination_asset = "SAL1";
+    entry.amount_burnt = 32 * COIN;
+    entry.amount_minted = 124 * COIN;
+    entry.amount_slippage_limit = COIN;
+
+    entry.return_address = {};
+    entry.return_address.data[0] = 0x11;
+    entry.return_address.data[31] = 0xa1;
+    entry.return_pubkey = {};
+    entry.return_pubkey.data[0] = 0x22;
+    entry.return_pubkey.data[31] = 0xb2;
+    entry.return_view_tag = {};
+    entry.return_view_tag.bytes[0] = 0x33;
+    entry.return_view_tag.bytes[2] = 0x34;
+    entry.return_anchor_enc = {};
+    entry.return_anchor_enc.bytes[0] = 0x44;
+    entry.return_anchor_enc.bytes[15] = 0x45;
+    return entry;
+  }
+}
+
+TEST(convert_tx, protocol_tx_mints_the_converted_amount_in_the_destination_asset)
+{
+  // construct_protocol_tx() turns a CONVERT entry into the block's protocol mint, and the
+  // validator (Blockchain::validate_protocol_transaction) later compares that mint against
+  // the entry.  Pin the builder half of the contract here: amount_minted (never
+  // amount_burnt) is paid, in destination_asset, to return_address, and the remaining
+  // Carrot fields are carried over verbatim.
+  const size_t height = 1000;
+  const cryptonote::protocol_data_entry entry = make_convert_protocol_entry();
+  std::vector<cryptonote::protocol_data_entry> entries{entry};
+
+  cryptonote::transaction tx;
+  ASSERT_TRUE(cryptonote::construct_protocol_tx(height, tx, entries, 14 /* hf with tokens */));
+
+  ASSERT_EQ(static_cast<uint8_t>(cryptonote::transaction_type::PROTOCOL), static_cast<uint8_t>(tx.type));
+  ASSERT_EQ(unsigned(TRANSACTION_VERSION_ENABLE_TOKENS), unsigned(tx.version));
+  ASSERT_EQ(static_cast<int>(rct::RCTTypeNull), static_cast<int>(tx.rct_signatures.type));
+  ASSERT_EQ(0u, tx.amount_burnt); // the burn stays in the CONVERT tx
+
+  ASSERT_EQ(1u, tx.vin.size());
+  const cryptonote::txin_gen *gen = boost::get<cryptonote::txin_gen>(&tx.vin[0]);
+  ASSERT_NE(nullptr, gen);
+  ASSERT_EQ(static_cast<uint64_t>(height), static_cast<uint64_t>(gen->height));
+
+  ASSERT_EQ(1u, tx.vout.size());
+  // The plaintext amount of a protocol output is what the validator compares against
+  // calculate_conversion(), so it has to be amount_minted and never amount_burnt.
+  ASSERT_EQ(entry.amount_minted, tx.vout[0].amount);
+
+  const cryptonote::txout_to_carrot_v1 *out = boost::get<cryptonote::txout_to_carrot_v1>(&tx.vout[0].target);
+  ASSERT_NE(nullptr, out);
+  ASSERT_EQ(entry.destination_asset, out->asset_type);
+  ASSERT_EQ(0, std::memcmp(out->key.data, entry.return_address.data, sizeof(out->key.data)));
+  ASSERT_EQ(0, std::memcmp(out->view_tag.bytes, entry.return_view_tag.bytes, sizeof(out->view_tag.bytes)));
+  ASSERT_EQ(0, std::memcmp(out->encrypted_janus_anchor.bytes, entry.return_anchor_enc.bytes, sizeof(out->encrypted_janus_anchor.bytes)));
+  // The return (ephemeral) pubkey is carried by tx-extra; its exact encoding is covered by
+  // the tx_extra tests, so only require that the mint kept an extra to look the key up in.
+  ASSERT_FALSE(tx.extra.empty());
 }
