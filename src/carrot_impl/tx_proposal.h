@@ -88,6 +88,11 @@ struct CarrotPaymentProposalVerifiableSelfSendV1
     cryptonote::transaction_type tx_type;
     /// how much money tx burns
     rct::xmr_amount amount_burnt;
+    // C5: slippage the owner is willing to accept, in the asset being burnt
+    rct::xmr_amount amount_slippage_limit = 0;
+    // C5: destination asset of a CONVERT transaction - the asset that the block's protocol
+    // transaction mints.  Empty for every other transaction type.
+    std::string destination_asset_type;
 
     /// used if this is a CREATE_TOKEN transaction
     cryptonote::token_metadata_t token;

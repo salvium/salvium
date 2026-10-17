@@ -41,11 +41,46 @@
 
 namespace cryptonote
 {
-  /*
+  // C1a: declarations restored from the upstream comment block
   bool get_conversion_rate(const oracle::pricing_record& pr, const std::string& from_asset, const std::string& to_asset, uint64_t& rate);
   bool get_converted_amount(const uint64_t& conversion_rate, const uint64_t& source_amount, uint64_t& dest_amount);
-  bool calculate_conversion(const std::string& source_asset, const std::string& dest_asset, const uint64_t amount_burnt, const uint64_t amount_slippage_limit, uint64_t& amount_minted, uint64_t& amount_slippage, const std::map<std::string, uint64_t> circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version);
-  */
+  bool calculate_conversion(const std::string& source_asset, const std::string& dest_asset, const uint64_t amount_burnt, const uint64_t amount_slippage_limit, uint64_t& amount_minted, uint64_t& amount_slippage, const std::map<std::string, uint64_t> &circ_supply, const oracle::pricing_record& pr, const uint8_t hf_version);
+
+  /**
+   * C4: the consensus rule for CONVERT transactions.
+   *
+   * The conversion is recomputed from the pricing record that is committed in the
+   * block being validated, never from anything the transaction carries: otherwise a
+   * transaction could simply assert the amount it wants minted.
+   *
+   * @param declared_minted the amount the transaction's outputs declare as minted
+   *                        (in the long run this must be derived from the outputs)
+   * @return true only if the declared amount is exactly what the block's oracle
+   *         price implies and the conversion issues a non-zero amount
+   */
+  bool verify_convert_tx(const transaction& tx,
+                         const oracle::pricing_record& pr,
+                         const std::map<std::string, uint64_t>& circ_supply,
+                         const uint8_t hf_version,
+                         const uint64_t declared_minted,
+                         std::string& error);
+
+  /**
+   * C4 (burn side): the same rule without the minted-amount comparison.
+   *
+   * A Carrot output carries no cleartext amount - store_carrot_to_transaction_v1 writes
+   * tx_out{0, txout_to_carrot_v1{...}} and keeps the amount in ecdhInfo/outPk - so a
+   * verifier cannot read the minted amount off a conversion transaction. The minted
+   * amount is only readable where it is cleartext: in the protocol transaction that pays
+   * the conversion out. This overload therefore checks only what the transaction itself
+   * can establish (the burn is priceable under the record committed in this block and
+   * issues a non-zero amount); the minted-amount equality belongs to the protocol entry.
+   */
+  bool verify_convert_tx(const transaction& tx,
+                         const oracle::pricing_record& pr,
+                         const std::map<std::string, uint64_t>& circ_supply,
+                         const uint8_t hf_version,
+                         std::string& error);
   //---------------------------------------------------------------
   /**
    * Construct the protocol_tx

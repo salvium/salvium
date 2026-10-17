@@ -257,9 +257,13 @@
 #define HF_VERSION_REALIGN_RCT_INDEX            13
 
 #define HF_VERSION_REQUIRE_VIEW_TAGS            255
-#define HF_VERSION_ENABLE_CONVERT               255
-#define HF_VERSION_ENABLE_ORACLE                255
-#define HF_VERSION_SLIPPAGE_YIELD               255
+
+// The next hard fork: activates the oracle + convert gates. Scheduled on no network yet, so
+// scheduling it is a separate, explicit decision. Regtest rehearses it from height 1.
+#define HF_VERSION_ORACLE_CONVERT               14
+#define HF_VERSION_ENABLE_CONVERT               14
+#define HF_VERSION_ENABLE_ORACLE                14
+#define HF_VERSION_SLIPPAGE_YIELD               14
 
 #define TESTNET_VERSION                         19
 #define STAGENET_VERSION                        1
@@ -287,7 +291,6 @@
 
 #define DNS_BLOCKLIST_LIFETIME (86400 * 8)
 
-#define PRICING_RECORD_VALID_BLOCKS                     10
 #define PRICING_RECORD_VALID_TIME_DIFF_FROM_BLOCK       120  // seconds
 
 //The limit is enough for the mandatory transaction content with 16 outputs (547 bytes),
@@ -298,6 +301,16 @@
 // New constants are intended to go here
 namespace config
 {
+  // The first block height at which a block's pricing record has to be bound to that
+  // block: from there on the signed height must equal the block height.  Blocks below it
+  // are exempt, which is what keeps a chain that already contains blocks mined before the
+  // binding was enforced re-connectable (see B2); 0 binds every block that is subject to
+  // HF_VERSION_ENABLE_ORACLE.
+  // Network maintainers: if a network already has v14 blocks below the activation point of
+  // this rule, raise the value above their height instead of risking a rollback PANIC.
+  uint64_t const PRICING_RECORD_HEIGHT_BINDING_HEIGHT = 0;
+  // FAKECHAIN reuses the mainnet config_t (see get_config()), so it needs its own name.
+  uint64_t const FAKECHAIN_PRICING_RECORD_HEIGHT_BINDING_HEIGHT = 0;
   uint64_t const DEFAULT_FEE_ATOMIC_XMR_PER_KB = 500; // Just a placeholder!  Change me!
   uint8_t const FEE_CALCULATION_MAX_RETRIES = 10;
   uint64_t const DEFAULT_DUST_THRESHOLD = ((uint64_t)2000000000); // 2 * pow(10, 9)
@@ -374,6 +387,15 @@ namespace config
   const uint32_t MULTISIG_MAX_SIGNERS{16};
 
   std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.io:8443", "oracle.salvium.io:8443", "oracle.salvium.io:8443"}};
+
+  // regtest only: local oracle for the convert/oracle prototype. FAKECHAIN reuses the mainnet
+  // config_t, so without these, regtest would query the production oracle and this code path
+  // could never be exercised (or tested) at all.
+  std::array<std::string, 3> const FAKECHAIN_ORACLE_URLS = {{"127.0.0.1:8443", "127.0.0.1:8443", "127.0.0.1:8443"}};
+  std::string const FAKECHAIN_ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
+    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEXjXOBaIZOC8BcLp2iESoWmEB3qX8\n"
+    "Fk2FiWXItW/Gzj38l15NGWuA6UMWNm5JLA00Tb5daepEemjWJkhXTo+xQw==\n"
+    "-----END PUBLIC KEY-----\n";
   
   std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
     "MIIDRDCCAjYGByqGSM44BAEwggIpAoIBAQCZP7IJ5PcNvGbWiEqAioKF9wViVxEN\n"
@@ -403,6 +425,8 @@ namespace config
     */
   namespace testnet
   {
+    // See config::PRICING_RECORD_HEIGHT_BINDING_HEIGHT (0 = bind from the first v14 block).
+    uint64_t const PRICING_RECORD_HEIGHT_BINDING_HEIGHT = 0;
     uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 0x15beb318; // SaLvT
     uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0xd055eb318; // SaLvTi
     uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0xa59eb318; // SaLvTs
@@ -452,6 +476,8 @@ namespace config
 
   namespace stagenet
   {
+    // See config::PRICING_RECORD_HEIGHT_BINDING_HEIGHT (0 = bind from the first v14 block).
+    uint64_t const PRICING_RECORD_HEIGHT_BINDING_HEIGHT = 0;
     uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 0x149eb318; // SaLvS
     uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 0xf343eb318; // SaLvSi
     uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 0x2d47eb318; // SaLvSs
@@ -530,6 +556,7 @@ namespace cryptonote
     uint32_t const GENESIS_NONCE;
     std::array<std::string, 3> const ORACLE_URLS;
     std::string const ORACLE_PUBLIC_KEY;
+    uint64_t const PRICING_RECORD_HEIGHT_BINDING_HEIGHT;
     uint64_t const STAKE_LOCK_PERIOD;
     uint64_t TREASURY_SAL1_MINT_PERIOD;
     std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> const AUDIT_HARD_FORKS;
@@ -554,6 +581,7 @@ namespace cryptonote
       ::config::GENESIS_NONCE,
       ::config::ORACLE_URLS,
       ::config::ORACLE_PUBLIC_KEY,
+      ::config::PRICING_RECORD_HEIGHT_BINDING_HEIGHT,
       ::config::STAKE_LOCK_PERIOD,
       ::config::TREASURY_SAL1_MINT_PERIOD,
       ::config::AUDIT_HARD_FORKS,
@@ -576,6 +604,7 @@ namespace cryptonote
       ::config::testnet::GENESIS_NONCE,
       ::config::testnet::ORACLE_URLS,
       ::config::testnet::ORACLE_PUBLIC_KEY,
+      ::config::testnet::PRICING_RECORD_HEIGHT_BINDING_HEIGHT,
       ::config::testnet::STAKE_LOCK_PERIOD,
       ::config::testnet::TREASURY_SAL1_MINT_PERIOD,
       ::config::testnet::AUDIT_HARD_FORKS,
@@ -598,6 +627,7 @@ namespace cryptonote
       ::config::stagenet::GENESIS_NONCE,
       ::config::stagenet::ORACLE_URLS,
       ::config::stagenet::ORACLE_PUBLIC_KEY,
+      ::config::stagenet::PRICING_RECORD_HEIGHT_BINDING_HEIGHT,
       ::config::stagenet::STAKE_LOCK_PERIOD,
       ::config::stagenet::TREASURY_SAL1_MINT_PERIOD,
       ::config::stagenet::AUDIT_HARD_FORKS,

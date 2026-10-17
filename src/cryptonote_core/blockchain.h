@@ -267,17 +267,11 @@ namespace cryptonote
     /**
      * @brief gets the pricing record for the specified timestamp
      *
-     * @return false if method failed to obtain pricing record from oracle, otherwise true
+     * @return nothing: an unreachable oracle, or a reply whose signature does not verify, leaves
+     * the record empty - block production stays unblocked and conversions stay unpriced until the
+     * oracle is back.
      */
-    bool get_pricing_record(oracle::pricing_record &pr, std::map<std::string, uint64_t> &circ_supply, uint64_t timestamp);
-
-    /**
-     * @brief gets the latest pricing record that was in the last 10 block.
-     * If no pricing record found in the past 10 block, fails.
-     *
-     * @return false if method failed to obtain pricing, otherwise true
-     */
-    bool get_latest_acceptable_pr(oracle::pricing_record& pr) const;
+    void get_pricing_record(oracle::pricing_record &pr, std::map<std::string, uint64_t> &circ_supply, uint64_t timestamp, uint64_t request_height);
 
     /**
      * @brief search the blockchain for a transaction by hash

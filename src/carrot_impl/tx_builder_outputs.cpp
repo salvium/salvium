@@ -130,6 +130,7 @@ void make_pruned_transaction_from_proposal_v1(const CarrotTransactionProposalV1 
         tx_proposal.fee,
         cryptonote::transaction_type::TRANSFER,
         0, // tx_amount_burnt
+        0, // tx_amount_slippage_limit
         {}, // change_masks
         {}, // return_enote
         {0},

@@ -140,8 +140,10 @@ TEST(parse_and_validate_tx_extra, is_valid_tx_extra_parsed)
   cryptonote::transaction tx = AUTO_VAL_INIT(tx);
   cryptonote::account_base acc;
   acc.generate();
+  // 本地修复（FINDINGS #17）：construct_miner_tx 新增 miner_reward_tx_key 参数
+  crypto::public_key miner_reward_tx_key{};
   cryptonote::blobdata b = "dsdsdfsdfsf";
-  ASSERT_TRUE(cryptonote::construct_miner_tx(0, 0, 10000000000000, 1000, TEST_FEE, acc.get_keys().m_account_address, tx, cryptonote::network_type::FAKECHAIN, {}, b, 1));
+  ASSERT_TRUE(cryptonote::construct_miner_tx(0, 0, 10000000000000, 1000, TEST_FEE, acc.get_keys().m_account_address, miner_reward_tx_key, tx, cryptonote::network_type::FAKECHAIN, {}, b, 1));
   crypto::public_key tx_pub_key = cryptonote::get_tx_pub_key_from_extra(tx);
   ASSERT_NE(tx_pub_key, crypto::null_pkey);
 }
@@ -150,8 +152,9 @@ TEST(parse_and_validate_tx_extra, fails_on_big_extra_nonce)
   cryptonote::transaction tx = AUTO_VAL_INIT(tx);
   cryptonote::account_base acc;
   acc.generate();
+  crypto::public_key miner_reward_tx_key{};
   cryptonote::blobdata b(TX_EXTRA_NONCE_MAX_COUNT + 1, 0);
-  ASSERT_FALSE(cryptonote::construct_miner_tx(0, 0, 10000000000000, 1000, TEST_FEE, acc.get_keys().m_account_address, tx, cryptonote::network_type::FAKECHAIN, {}, b, 1));
+  ASSERT_FALSE(cryptonote::construct_miner_tx(0, 0, 10000000000000, 1000, TEST_FEE, acc.get_keys().m_account_address, miner_reward_tx_key, tx, cryptonote::network_type::FAKECHAIN, {}, b, 1));
 }
 TEST(parse_and_validate_tx_extra, fails_on_wrong_size_in_extra_nonce)
 {
@@ -356,4 +359,213 @@ TEST(remove_field_from_tx_extra, invalid_varint)
 
   ASSERT_FALSE(cryptonote::remove_field_from_tx_extra(extra, typeid(cryptonote::tx_extra_nonce)));
   ASSERT_EQ(sizeof(extra_arr), extra.size());
+}
+
+// ---------------------------------------------------------------------------
+// Regression tests for the conversion maths resurrected from the upstream
+// comment block in cryptonote_tx_utils.cpp, plus the three corrections applied
+// to it:
+//   F1 - the rate is taken from the moving-average price, not the spot price.
+//   F2 - a record without a price for the destination asset must be rejected:
+//        the accessor returns 0 for an unknown asset, so the upstream draft
+//        divided by zero here (this test crashes without the guard).
+//   F3 - the allowlist is closed and aligned with oracle::ASSET_TYPES, i.e.
+//        SAL<->SAL1; the upstream draft named "VSD", which does not exist.
+// ---------------------------------------------------------------------------
+namespace
+{
+  // spot and moving-average prices are passed separately so that the choice of
+  // price actually used by the conversion can be asserted.
+  oracle::pricing_record make_record(const uint64_t sal_spot, const uint64_t sal_ma,
+                                     const uint64_t sal1_spot, const uint64_t sal1_ma,
+                                     const bool with_sal1 = true)
+  {
+    oracle::pricing_record pr;
+    oracle::asset_data sal;
+    sal.asset_type = "SAL";
+    sal.spot_price = sal_spot;
+    sal.ma_price = sal_ma;
+    pr.assets.push_back(sal);
+    if (with_sal1)
+    {
+      oracle::asset_data sal1;
+      sal1.asset_type = "SAL1";
+      sal1.spot_price = sal1_spot;
+      sal1.ma_price = sal1_ma;
+      pr.assets.push_back(sal1);
+    }
+    return pr;
+  }
+
+  const std::map<std::string, uint64_t> SUPPLY = {{"SAL", 1000000 * COIN}, {"SAL1", 1000000 * COIN}};
+}
+
+TEST(conversion, rejects_identical_assets)
+{
+  uint64_t minted = 0, slippage = 0;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN);
+  ASSERT_FALSE(cryptonote::calculate_conversion("SAL", "SAL", 32 * COIN, COIN, minted, slippage, SUPPLY, pr, 14));
+}
+
+TEST(conversion, rejects_empty_dest_asset)
+{
+  uint64_t minted = 0, slippage = 0;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN);
+  ASSERT_FALSE(cryptonote::calculate_conversion("SAL", "", 32 * COIN, COIN, minted, slippage, SUPPLY, pr, 14));
+}
+
+TEST(conversion, rejects_assets_outside_the_closed_allowlist)
+{
+  uint64_t minted = 0, slippage = 0;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN);
+  // F3: the upstream guard only rejected SAL->!VSD and VSD->!SAL, so any other
+  // from_asset fell through into the price arithmetic instead of being denied.
+  ASSERT_FALSE(cryptonote::calculate_conversion("FOO", "SAL1", 32 * COIN, COIN, minted, slippage, SUPPLY, pr, 14));
+  ASSERT_FALSE(cryptonote::calculate_conversion("SAL", "FOO", 32 * COIN, COIN, minted, slippage, SUPPLY, pr, 14));
+  ASSERT_FALSE(cryptonote::calculate_conversion("BURN", "SAL", 32 * COIN, COIN, minted, slippage, SUPPLY, pr, 14));
+}
+
+TEST(conversion, rejects_a_record_without_a_dest_price)
+{
+  uint64_t minted = 0, slippage = 0;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN, /*with_sal1=*/false);
+  // F2: the accessor returns 0 for an absent asset, so without the missing-price
+  // guard this call divides by zero.
+  ASSERT_FALSE(cryptonote::calculate_conversion("SAL", "SAL1", 32 * COIN, COIN, minted, slippage, SUPPLY, pr, 14));
+}
+
+TEST(conversion, rejects_a_record_that_only_carries_spot_prices)
+{
+  uint64_t minted = 0, slippage = 0;
+  // fail-safe half of F1: if an oracle record carries spot prices but no moving
+  // average, conversions are refused rather than silently settled at the spot price.
+  const oracle::pricing_record pr = make_record(4 * COIN, 0, COIN, 0);
+  ASSERT_FALSE(cryptonote::calculate_conversion("SAL", "SAL1", 32 * COIN, COIN, minted, slippage, SUPPLY, pr, 14));
+}
+
+TEST(conversion, rejects_a_burn_destination)
+{
+  uint64_t minted = 0, slippage = 0;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN);
+  ASSERT_FALSE(cryptonote::calculate_conversion("SAL", "BURN", 32 * COIN, COIN, minted, slippage, SUPPLY, pr, 14));
+}
+
+TEST(conversion, sal_to_sal1_applies_rate_and_slippage)
+{
+  uint64_t minted = 0, slippage = 0;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN);
+  ASSERT_TRUE(cryptonote::calculate_conversion("SAL", "SAL1", 32 * COIN, COIN, minted, slippage, SUPPLY, pr, 14));
+  ASSERT_EQ(COIN, slippage);              // flat 1/32 of the burnt amount
+  ASSERT_EQ(124 * COIN, minted);          // (32 - 1) at a rate of 4
+  // the reverse direction is admitted by the allowlist
+  uint64_t rminted = 0, rslippage = 0;
+  ASSERT_TRUE(cryptonote::calculate_conversion("SAL1", "SAL", 32 * COIN, COIN, rminted, rslippage, SUPPLY, pr, 14));
+  ASSERT_EQ(31 * COIN / 4, rminted);      // (32 - 1) at a rate of 1/4, truncated
+}
+
+TEST(conversion, uses_the_moving_average_and_not_the_spot_price)
+{
+  uint64_t minted = 0, slippage = 0;
+  // spot says 8, the moving average says 2: the rate must follow the average.
+  const oracle::pricing_record pr = make_record(8 * COIN, 2 * COIN, COIN, COIN);
+  ASSERT_TRUE(cryptonote::calculate_conversion("SAL", "SAL1", 32 * COIN, COIN, minted, slippage, SUPPLY, pr, 14));
+  ASSERT_EQ(62 * COIN, minted);           // 31 * 2, not 31 * 8
+}
+
+TEST(conversion, slippage_over_limit_mints_nothing_but_reports_success)
+{
+  uint64_t minted = 0, slippage = 0;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN);
+  // Documented upstream behaviour (finding F6): the call succeeds with minted == 0,
+  // so a consensus caller MUST treat minted == 0 as a rejection, otherwise the burnt
+  // funds are destroyed with nothing minted in return.
+  ASSERT_TRUE(cryptonote::calculate_conversion("SAL", "SAL1", 32 * COIN, 0, minted, slippage, SUPPLY, pr, 14));
+  ASSERT_EQ(COIN, slippage);
+  ASSERT_EQ(0u, minted);
+}
+
+// ---------------------------------------------------------------------------
+// C4: consensus validation of CONVERT transactions.
+// The amount a conversion mints must be implied by the pricing record committed
+// in the block being validated - a transaction must not be able to assert it.
+// ---------------------------------------------------------------------------
+namespace
+{
+  cryptonote::transaction make_convert_tx(const std::string& from, const std::string& to,
+                                          const uint64_t burnt, const uint64_t slippage_limit)
+  {
+    cryptonote::transaction tx{};
+    tx.type = cryptonote::transaction_type::CONVERT;
+    tx.source_asset_type = from;
+    tx.destination_asset_type = to;
+    tx.amount_burnt = burnt;
+    tx.amount_slippage_limit = slippage_limit;
+    return tx;
+  }
+}
+
+TEST(convert_tx, rejects_a_transaction_that_is_not_a_convert)
+{
+  std::string error;
+  const cryptonote::transaction tx{};
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN);
+  ASSERT_FALSE(cryptonote::verify_convert_tx(tx, pr, SUPPLY, 14, 0, error));
+  ASSERT_FALSE(error.empty());
+}
+
+TEST(convert_tx, rejects_a_convert_without_asset_types)
+{
+  std::string error;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN);
+  ASSERT_FALSE(cryptonote::verify_convert_tx(make_convert_tx("", "SAL1", 32 * COIN, COIN), pr, SUPPLY, 14, 124 * COIN, error));
+  ASSERT_FALSE(cryptonote::verify_convert_tx(make_convert_tx("SAL", "", 32 * COIN, COIN), pr, SUPPLY, 14, 124 * COIN, error));
+}
+
+TEST(convert_tx, rejects_a_convert_with_no_burnt_amount)
+{
+  std::string error;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN);
+  ASSERT_FALSE(cryptonote::verify_convert_tx(make_convert_tx("SAL", "SAL1", 0, COIN), pr, SUPPLY, 14, 0, error));
+  ASSERT_FALSE(error.empty());
+}
+
+TEST(convert_tx, accepts_a_convert_that_matches_the_oracle_price)
+{
+  std::string error;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN);
+  const cryptonote::transaction tx = make_convert_tx("SAL", "SAL1", 32 * COIN, COIN);
+  // burnt 32, slippage 1, rate 4 => 124 minted
+  ASSERT_TRUE(cryptonote::verify_convert_tx(tx, pr, SUPPLY, 14, 124 * COIN, error)) << error;
+}
+
+TEST(convert_tx, rejects_a_tampered_minted_amount)
+{
+  std::string error;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN);
+  const cryptonote::transaction tx = make_convert_tx("SAL", "SAL1", 32 * COIN, COIN);
+  // the price implies 124; a wallet asking for more must be rejected
+  ASSERT_FALSE(cryptonote::verify_convert_tx(tx, pr, SUPPLY, 14, 248 * COIN, error));
+  ASSERT_FALSE(error.empty());
+  ASSERT_FALSE(cryptonote::verify_convert_tx(tx, pr, SUPPLY, 14, 125 * COIN, error));
+  ASSERT_FALSE(cryptonote::verify_convert_tx(tx, pr, SUPPLY, 14, 123 * COIN, error));
+}
+
+TEST(convert_tx, rejects_a_convert_that_would_issue_nothing)
+{
+  std::string error;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN);
+  // slippage limit 0 => calculate_conversion reports success with minted == 0;
+  // F6 says this must be refused rather than accepted as a burn for nothing.
+  const cryptonote::transaction tx = make_convert_tx("SAL", "SAL1", 32 * COIN, 0);
+  ASSERT_FALSE(cryptonote::verify_convert_tx(tx, pr, SUPPLY, 14, 0, error));
+  ASSERT_FALSE(error.empty());
+}
+
+TEST(convert_tx, rejects_a_convert_when_the_block_record_lacks_a_price)
+{
+  std::string error;
+  const oracle::pricing_record pr = make_record(4 * COIN, 4 * COIN, COIN, COIN, /*with_sal1=*/false);
+  const cryptonote::transaction tx = make_convert_tx("SAL", "SAL1", 32 * COIN, COIN);
+  ASSERT_FALSE(cryptonote::verify_convert_tx(tx, pr, SUPPLY, 14, 124 * COIN, error));
+  ASSERT_FALSE(error.empty());
 }

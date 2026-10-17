@@ -132,10 +132,26 @@ namespace oracle
     bool equal(const pricing_record& other) const noexcept;
     bool empty() const noexcept;
     bool verifySignature(const std::string& public_key) const;
-    bool valid(cryptonote::network_type nettype, uint32_t hf_version, uint64_t bl_timestamp, uint64_t last_bl_timestamp) const;
+    //! Sign this record with a PEM private key (SHA256, same message as verifySignature).
+    bool sign(const std::string& private_key);
+    //! The exact byte string that is signed/verified. Shared so the two sides cannot drift.
+    std::string build_signing_message() const;
+    //! Consensus validation of a record that is about to be attached to a block.
+    //! \param bl_height the height of the block that carries the record; from the network's
+    //!        binding height on, the signed height must equal it.
+    bool valid(cryptonote::network_type nettype, uint32_t hf_version, uint64_t bl_height, uint64_t bl_timestamp, uint64_t last_bl_timestamp) const;
+    //! The same validation with an explicit binding height: the activation point can be
+    //! pinned by tests, and a network whose legacy blocks predate the binding can be
+    //! re-validated against its own value without touching the consensus path.
+    bool valid_with_binding_height(cryptonote::network_type nettype, uint32_t hf_version, uint64_t binding_height, uint64_t bl_height, uint64_t bl_timestamp, uint64_t last_bl_timestamp) const;
+    //! First block height at which a record has to be bound to the block that carries it,
+    //! from the per-network configuration (0 = every block subject to HF_VERSION_ENABLE_ORACLE).
+    static uint64_t height_binding_height(cryptonote::network_type nettype);
 
     pricing_record& operator=(const pricing_record& orig) noexcept;
     uint64_t operator[](const std::string& asset_type) const;
+    // F1: moving-average price accessor (0 when the asset is absent).
+    uint64_t ma(const std::string& asset_type) const noexcept;
 
     BEGIN_SERIALIZE_OBJECT()
       VARINT_FIELD(pr_version)

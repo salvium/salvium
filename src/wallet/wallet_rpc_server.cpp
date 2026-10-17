@@ -1595,6 +1595,15 @@ namespace tools
       return false;
     }
 
+    // CONVERT: carry the permitted slippage (a percentage) to the destination entries.  The
+    // transaction builder turns it into an absolute limit once the burnt amount is known.
+    if (type == cryptonote::transaction_type::CONVERT)
+    {
+      const uint64_t slippage_pct = static_cast<uint64_t>(req.slippage_limit);
+      for (cryptonote::tx_destination_entry &de : dsts)
+        de.slippage_limit = slippage_pct;
+    }
+
     try
     {
       uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
@@ -1650,6 +1659,16 @@ namespace tools
     if (!validate_transfer(req.destinations, req.source_asset, req.dest_asset, type, req.payment_id, dsts, extra, true, er))
     {
       return false;
+    }
+
+    // CONVERT: carry the permitted slippage (a percentage) to the destination entries, exactly
+    // like on_transfer does.  A CONVERT whose source asset is not the native one also needs a
+    // separate fee (ROLLUP) transaction, so the split entry point is the one that can relay it.
+    if (type == cryptonote::transaction_type::CONVERT)
+    {
+      const uint64_t slippage_pct = static_cast<uint64_t>(req.slippage_limit);
+      for (cryptonote::tx_destination_entry &de : dsts)
+        de.slippage_limit = slippage_pct;
     }
 
     try
@@ -5054,6 +5073,7 @@ namespace tools
       { cryptonote::MAINNET, "mainnet" },
       { cryptonote::TESTNET, "testnet" },
       { cryptonote::STAGENET, "stagenet" },
+      { cryptonote::FAKECHAIN, "fakechain" },
     };
     if (!req.any_net_type && !m_wallet) return not_open(er);
     for (const auto &net_type: net_types)
@@ -5312,9 +5332,10 @@ public:
     {
       const bool testnet = tools::wallet2::has_testnet_option(vm);
       const bool stagenet = tools::wallet2::has_stagenet_option(vm);
-      if (testnet && stagenet)
+      const bool regtest = tools::wallet2::has_regtest_option(vm);
+      if ((testnet ? 1 : 0) + (stagenet ? 1 : 0) + (regtest ? 1 : 0) > 1)
       {
-        MERROR(tools::wallet_rpc_server::tr("Can't specify more than one of --testnet and --stagenet"));
+        MERROR(tools::wallet_rpc_server::tr("Can't specify more than one of --testnet, --stagenet and --regtest"));
         return false;
       }
 

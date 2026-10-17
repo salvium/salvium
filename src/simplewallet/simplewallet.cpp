@@ -4443,12 +4443,13 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
 
   const bool testnet = tools::wallet2::has_testnet_option(vm);
   const bool stagenet = tools::wallet2::has_stagenet_option(vm);
-  if (testnet && stagenet)
+  const bool regtest = tools::wallet2::has_regtest_option(vm);
+  if ((testnet ? 1 : 0) + (stagenet ? 1 : 0) + (regtest ? 1 : 0) > 1)
   {
-    fail_msg_writer() << tr("Can't specify more than one of --testnet and --stagenet");
+    fail_msg_writer() << tr("Can't specify more than one of --testnet, --stagenet and --regtest");
     return false;
   }
-  const network_type nettype = testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
+  const network_type nettype = regtest ? FAKECHAIN : testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
 
   epee::wipeable_string multisig_keys;
   epee::wipeable_string password;
@@ -7064,7 +7065,8 @@ void simple_wallet::check_for_inactivity_lock(bool user)
         tools::msg_writer() << tr("Filename: ") << m_wallet->get_wallet_file();
         tools::msg_writer() << tr("Network type: ") << (
           m_wallet->nettype() == cryptonote::TESTNET ? tr("Testnet") :
-          m_wallet->nettype() == cryptonote::STAGENET ? tr("Stagenet") : tr("Mainnet")
+          m_wallet->nettype() == cryptonote::STAGENET ? tr("Stagenet") :
+          m_wallet->nettype() == cryptonote::FAKECHAIN ? tr("Regtest") : tr("Mainnet")
         );
       }
       try
@@ -7114,6 +7116,16 @@ bool simple_wallet::transfer_main(
   if (!try_connect_to_daemon())
     return false;
   std::vector<std::string> local_args = args_;
+  // C5 fix: the CONVERT form appends "<slippage_limit>" as a trailing positional
+  // argument; the <address> <amount> pair walk below cannot consume a lone
+  // trailing argument, so consume it here.  Slippage 0 pushes nothing, so the
+  // legacy path is unchanged.
+  double convert_slippage_limit = 0.0;
+  if (transfer_type == Convert && local_args.size() >= 3)
+  {
+    try { convert_slippage_limit = std::stod(local_args.back()); local_args.pop_back(); }
+    catch (...) { convert_slippage_limit = 0.0; }
+  }
 
   std::set<uint32_t> subaddr_indices;
   if (local_args.size() > 0 && local_args[0].substr(0, 6) == "index=")
@@ -7291,6 +7303,11 @@ bool simple_wallet::transfer_main(
     }
     de.addr = info.address;
     de.asset_type = dest_asset;
+    // C5: the convert command's fourth parameter is the permitted slippage, as a
+    // percentage; carry it to the destination entry, which the builder turns into an
+    // absolute limit once the burnt amount is known.
+    if (transfer_type == Convert)
+      de.slippage_limit = static_cast<uint64_t>(convert_slippage_limit);
     de.is_subaddress = info.is_subaddress;
     de.is_integrated = info.has_payment_id;
 
@@ -8894,6 +8911,9 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
     local_args.push_back(std::to_string(slippage_limit));
   }
   
+    // C5 fix: transfer_main() reads the destination address from local_args[0];
+    // a conversion is a self-transfer, so supply the wallet own address here.
+    local_args.insert(local_args.begin(), m_wallet->get_address_as_str());
   transfer_main(Convert, source_asset, dest_asset, local_args, false);
   return true;  
 }
@@ -11848,7 +11868,8 @@ bool simple_wallet::wallet_info(const std::vector<std::string> &args)
   message_writer() << tr("Type: ") << type;
   message_writer() << tr("Network type: ") << (
     m_wallet->nettype() == cryptonote::TESTNET ? tr("Testnet") :
-    m_wallet->nettype() == cryptonote::STAGENET ? tr("Stagenet") : tr("Mainnet"));
+    m_wallet->nettype() == cryptonote::STAGENET ? tr("Stagenet") :
+    m_wallet->nettype() == cryptonote::FAKECHAIN ? tr("Regtest") : tr("Mainnet"));
   return true;
 }
 //----------------------------------------------------------------------------------------------------

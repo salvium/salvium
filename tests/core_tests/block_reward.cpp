@@ -40,7 +40,9 @@ namespace
     const account_public_address& miner_address, std::vector<size_t>& block_weights, size_t target_tx_weight,
     size_t target_block_weight, uint64_t fee = 0)
   {
-    if (!construct_miner_tx(height, misc_utils::median(block_weights), already_generated_coins, target_block_weight, fee, miner_address, miner_tx))
+  // 本地修复（FINDINGS #17 同类）：construct_miner_tx 新增 miner_reward_tx_key 参数
+  crypto::public_key miner_reward_tx_key{};
+    if (!construct_miner_tx(height, misc_utils::median(block_weights), already_generated_coins, target_block_weight, fee, miner_address, miner_reward_tx_key, miner_tx))
       return false;
 
     size_t current_weight = get_transaction_weight(miner_tx);

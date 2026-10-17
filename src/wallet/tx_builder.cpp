@@ -577,10 +577,28 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
     wallet2::unique_index_container subtract_fee_from_outputs,
-    const std::uint64_t top_block_index)
+    const std::uint64_t top_block_index,
+    const std::string &input_asset_type)
 {
     // Make sure all destinations have the SAME asset_type
     std::string asset_type = dsts[0].asset_type;
+    // C5 fix: CONVERT spends the SOURCE asset and pays the DESTINATION asset;
+    // for every other tx type tx_rules guarantees src == dst.
+    const std::string input_asset_type_eff = input_asset_type.empty() ? asset_type : input_asset_type;
+    // C5: for a CONVERT the destinations say how much of the SOURCE asset the owner wants to
+    // convert, and which asset should be minted in exchange.  Keep both; the payment
+    // proposals below only drive input selection and are rewritten before they are used.
+    uint64_t convert_requested_amount = 0;
+    std::string convert_destination_asset;
+    if (tx_type == cryptonote::transaction_type::CONVERT)
+    {
+      for (const cryptonote::tx_destination_entry &de : dsts)
+        convert_requested_amount += de.amount;
+      if (!dsts.empty())
+        convert_destination_asset = dsts[0].asset_type;
+    }
+    // C5: percentage of slippage the convert command was given (0 = none given)
+    const uint64_t convert_slippage_limit_pct = dsts.empty() ? 0 : dsts.front().slippage_limit;
     if (dsts.size() > 1) {
       for (size_t i=0; i<dsts.size(); ++i) {
         CHECK_AND_ASSERT_THROW_MES(dsts[i].asset_type == asset_type, "Mixed asset_types in transaction outputs is forbidden");
@@ -588,7 +606,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     }
   
     wallet2::transfer_container unused_transfers;
-    w.get_transfers(unused_transfers, asset_type);
+    w.get_transfers(unused_transfers, input_asset_type_eff);
 
     std::vector<carrot::CarrotTransactionProposalV1> tx_proposals;
     tx_proposals.reserve(dsts.size() / (carrot::CARROT_MAX_TX_OUTPUTS - 1) + 1);
@@ -633,7 +651,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
             top_block_index,
             /*allow_carrot_external_inputs_in_normal_transfers=*/true,
             /*allow_pre_carrot_inputs_in_normal_transfers=*/true,
-            asset_type,
+            input_asset_type_eff,
             selected_transfer_indices);
 
         // make proposal
@@ -659,7 +677,57 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
           // Scan the transfer_container instead of all of the transfers in the wallet
           selected_transfer_indices_sorted.push_back(w.get_transfer_details_from_container(ki, unused_transfers));
         }
-        tx_proposal.sources = get_sources(unused_transfers, selected_transfer_indices_sorted, asset_type, w);
+        tx_proposal.sources = get_sources(unused_transfers, selected_transfer_indices_sorted, input_asset_type_eff, w);
+
+        // C5: a CONVERT burns the requested amount of the SOURCE asset.  The destination asset
+        // is minted by the block's protocol transaction (see Blockchain::check_block) precisely
+        // because a Carrot output amount is encrypted and could not be checked here; so this
+        // transaction must NOT create a destination-asset output.  All it returns is the
+        // unconverted change, in the source asset, and the burnt amount is what the consensus
+        // turns into a mint at the oracle price.
+        if (tx_type == cryptonote::transaction_type::CONVERT) {
+          uint64_t convert_input_sum = 0;
+          for (const auto& source : tx_proposal.sources)
+            convert_input_sum += source.amount;
+          // The wallet pays the fee of a transaction whose source asset is not the native one
+          // with a separate ROLLUP transaction: create_transactions_2 accumulates total_fee only
+          // when source_asset != "SAL1", and the consensus mirrors that rule by calling
+          // verRctSemanticsSimple() with need_rollup = (source_asset_type != "SAL1"), which
+          // leaves the fee out of the balance equation.  Only a native-source convert may
+          // therefore pay its own fee out of the converted amount.
+          const bool convert_fee_in_rollup = (input_asset_type_eff != "SAL1");
+          CHECK_AND_ASSERT_THROW_MES(convert_fee_in_rollup || convert_input_sum > tx_proposal.fee,
+              "CONVERT transaction has nothing left to burn after the fee");
+          const uint64_t available = convert_fee_in_rollup ? convert_input_sum
+                                                           : (convert_input_sum - tx_proposal.fee);
+          const uint64_t burnt = (convert_requested_amount < available) ? convert_requested_amount : available;
+          const uint64_t change = available - burnt;
+          tx_proposal.destination_asset_type = convert_destination_asset;
+          // A self-convert is addressed to ourselves, so the builder describes every output as a
+          // self-send: the payment we made to ourselves plus the change output the fee carver
+          // added.  Keep both (they carry distinct randomness, so their one-time addresses
+          // differ), re-point them at the SOURCE asset and split the leftover over them: the
+          // destination asset is minted by the block's protocol transaction, where the amount is
+          // in clear, so no destination-asset output may be created here.
+          auto &normals = tx_proposal.normal_payment_proposals;
+          auto &selfsends = tx_proposal.selfsend_payment_proposals;
+          CHECK_AND_ASSERT_THROW_MES(normals.empty(),
+              "CONVERT: only a self-convert is supported (destination must be our own address)");
+          CHECK_AND_ASSERT_THROW_MES(selfsends.size() >= 2,
+              "CONVERT: expected a self-send payment and a change output");
+          selfsends.resize(2);
+          selfsends.at(0).proposal.amount = change / 2;
+          selfsends.at(1).proposal.amount = change - change / 2;
+          selfsends.at(0).proposal.asset_type = input_asset_type_eff;
+          selfsends.at(1).proposal.asset_type = input_asset_type_eff;
+          tx_proposal.amount_burnt = burnt;
+          // The consensus rule compares the slippage against an absolute amount, while the
+          // convert command takes a percentage; with no percentage given, accept exactly
+          // the protocol's own slippage (amount_burnt >> 5).
+          tx_proposal.amount_slippage_limit = (convert_slippage_limit_pct == 0)
+              ? (burnt >> 5)
+              : (burnt / 100) * convert_slippage_limit_pct;
+        }
 
         // update `unused_transfers` for next proposal by removing selected transfers
         tools::for_all_in_vector_erase_no_preserve_order_if(unused_transfers,
@@ -684,7 +752,8 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const cryptonote::transaction_type tx_type,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
-    const wallet2::unique_index_container &subtract_fee_from_outputs)
+    const wallet2::unique_index_container &subtract_fee_from_outputs,
+    const std::string &input_asset_type)
 {
     const bool use_per_byte_fee = w.use_fork_rules(HF_VERSION_PER_BYTE_FEE, 0);
     CHECK_AND_ASSERT_THROW_MES(use_per_byte_fee,
@@ -715,7 +784,8 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         subaddr_account,
         subaddr_indices,
         subtract_fee_from_outputs,
-        top_block_index);
+        top_block_index,
+            input_asset_type);
 }
 //-------------------------------------------------------------------------------------------------------------------
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep(
@@ -1250,11 +1320,19 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
                                                                         tx_proposal.fee,
                                                                         tx_proposal.tx_type,
                                                                         tx_proposal.amount_burnt,
+                                                                        tx_proposal.amount_slippage_limit,
                                                                         change_masks,
                                                                         tx_proposal.token,
                                                                         return_enote_out,
                                                                         encrypted_payment_id,
                                                                         const_cast<wallet2&>(w).get_current_hard_fork());
+
+    // C5: the prefix must name the asset that the block's protocol transaction will mint.
+    // store_carrot_to_transaction_v1 only sees the enote asset (the change comes back in the
+    // SOURCE asset), so a CONVERT's destination has to be corrected here, before signing.
+    if (tx_proposal.tx_type == cryptonote::transaction_type::CONVERT &&
+        !tx_proposal.destination_asset_type.empty())
+      tx.destination_asset_type = tx_proposal.destination_asset_type;
 
     // store the binding tag
     tx.rollup_binding_tag = tx_proposal.rollup_binding_tag;

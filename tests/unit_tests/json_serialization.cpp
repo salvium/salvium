@@ -21,7 +21,11 @@ namespace test
     make_miner_transaction(cryptonote::account_public_address const& to)
     {
         cryptonote::transaction tx{};
-        if (!cryptonote::construct_miner_tx(0, 0, 5000, 500, 500, to, tx))
+        // 本地修复（FINDINGS #17）：Salvium 在 construct_miner_tx 里插入了
+        // crypto::public_key& miner_reward_tx_key 参数，但本测试文件未同步更新，
+        // 导致 unit_tests 无法编译（too few arguments ... expected at least 8, have 7）。
+        crypto::public_key miner_reward_tx_key{};
+        if (!cryptonote::construct_miner_tx(0, 0, 5000, 500, 500, to, miner_reward_tx_key, tx))
             throw std::runtime_error{"miner transaction construction error"};
 
         crypto::hash id{0};

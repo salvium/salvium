@@ -250,6 +250,18 @@ bool test_generator::construct_block(cryptonote::block& blk, uint64_t height, co
   blk.timestamp = timestamp;
   blk.prev_id = prev_id;
 
+  // 每个区块都必须带一个与当前硬分叉匹配的 protocol_tx：创世块要求 version==1 且
+  // vin/vout 皆空；其余区块要求恰好一个 txin_gen 输入、version 与 HF 匹配
+  // （见 Blockchain::prevalidate_protocol_transaction，blockchain.cpp:1404-1443）。
+  // 生成器此前从不设置该字段，导致每个生成的区块都被 tx rules 拒绝。
+  blk.protocol_tx.set_null();
+  blk.protocol_tx.type = cryptonote::transaction_type::PROTOCOL;
+  if (height > 0)
+  {
+    blk.protocol_tx.version = TRANSACTION_VERSION_ENABLE_TOKENS;
+    blk.protocol_tx.vin.push_back(txin_gen{height});
+  }
+
   blk.tx_hashes.reserve(tx_list.size());
   BOOST_FOREACH(const transaction &tx, tx_list)
   {
@@ -273,7 +285,9 @@ bool test_generator::construct_block(cryptonote::block& blk, uint64_t height, co
   size_t target_block_weight = txs_weight + get_transaction_weight(blk.miner_tx);
   while (true)
   {
-    if (!construct_miner_tx(height, misc_utils::median(block_weights), already_generated_coins, target_block_weight, total_fee, miner_acc.get_keys().m_account_address, blk.miner_tx, network_type::FAKECHAIN, {}, blobdata(), 10, hf_ver ? hf_ver.get() : 1))
+  // 本地修复（FINDINGS #17 同类）：construct_miner_tx 新增 miner_reward_tx_key 参数
+  crypto::public_key miner_reward_tx_key{};
+    if (!construct_miner_tx(height, misc_utils::median(block_weights), already_generated_coins, target_block_weight, total_fee, miner_acc.get_keys().m_account_address, miner_reward_tx_key, blk.miner_tx, network_type::FAKECHAIN, {}, blobdata(), 10, hf_ver ? hf_ver.get() : 1))
       return false;
 
     size_t actual_block_weight = txs_weight + get_transaction_weight(blk.miner_tx);
@@ -376,7 +390,9 @@ bool test_generator::construct_block_manually(block& blk, const block& prev_bloc
   {
     size_t current_block_weight = txs_weight + get_transaction_weight(blk.miner_tx);
     // TODO: This will work, until size of constructed block is less then CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE
-    if (!construct_miner_tx(height, misc_utils::median(block_weights), already_generated_coins, current_block_weight, fees, miner_acc.get_keys().m_account_address, blk.miner_tx, cryptonote::network_type::FAKECHAIN, {}, blobdata(), max_outs, hf_version))
+  // 本地修复（FINDINGS #17 同类）：construct_miner_tx 新增 miner_reward_tx_key 参数
+  crypto::public_key miner_reward_tx_key{};
+    if (!construct_miner_tx(height, misc_utils::median(block_weights), already_generated_coins, current_block_weight, fees, miner_acc.get_keys().m_account_address, miner_reward_tx_key, blk.miner_tx, cryptonote::network_type::FAKECHAIN, {}, blobdata(), max_outs, hf_version))
       return false;
   }
 
@@ -461,11 +477,14 @@ bool init_output_indices(map_output_idx_t& outs, std::map<uint64_t, std::vector<
                 const tx_out &out = tx.vout[j];
 
                 output_index oi(out.target, out.amount, boost::get<txin_gen>(*blk.miner_tx.vin.begin()).height, i, j, &blk, vtx[i]);
-                oi.set_rct(tx.version == 2);
+                oi.set_rct(tx.version == 2 && tx.rct_signatures.type != rct::RCTTypeNull);
                 oi.unlock_time = tx.unlock_time;
                 oi.is_coin_base = i == 0;
 
-                if (2 == out.target.which()) { // out_to_key
+                // Salvium blocks carry txout_to_tagged_key (which() == 3) as well as
+                // txout_to_key (which() == 2). The generator only handled the former, so every
+                // coinbase output was skipped and get_balance() always returned 0.
+                if (2 == out.target.which() || 3 == out.target.which()) {
                     outs[out.amount].push_back(oi);
                     size_t tx_global_idx = outs[out.amount].size() - 1;
                     outs[out.amount][tx_global_idx].idx = tx_global_idx;
@@ -492,7 +511,13 @@ bool init_spent_output_indices(map_output_idx_t& outs, map_output_t& outs_mine, 
             // construct key image for this output
             crypto::key_image img;
             keypair in_ephemeral;
-            crypto::public_key out_key = boost::get<txout_to_key>(oi.out).key;
+            crypto::public_key out_key;
+            if (oi.out.type() == typeid(txout_to_key))
+              out_key = boost::get<txout_to_key>(oi.out).key;
+            else if (oi.out.type() == typeid(txout_to_tagged_key))
+              out_key = boost::get<txout_to_tagged_key>(oi.out).key;
+            else
+              continue;   // not a key output
             std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
             subaddresses[from.get_keys().m_account_address.m_spend_public_key] = {0,0};
             cryptonote::origin_data od{3, crypto::null_pkey, 0};
@@ -546,8 +571,14 @@ bool fill_output_entries(std::vector<output_index>& out_indices, size_t sender_o
     if (append)
     {
       rct::key comm = oi.commitment();
-      const txout_to_key& otk = boost::get<txout_to_key>(oi.out);
-      output_entries.push_back(tx_source_entry::output_entry(oi.idx, rct::ctkey({rct::pk2rct(otk.key), comm})));
+      crypto::public_key out_key;
+      if (oi.out.type() == typeid(txout_to_key))
+        out_key = boost::get<txout_to_key>(oi.out).key;
+      else if (oi.out.type() == typeid(txout_to_tagged_key))
+        out_key = boost::get<txout_to_tagged_key>(oi.out).key;
+      else
+        continue;   // not a key output - cannot build a source entry for it
+      output_entries.push_back(tx_source_entry::output_entry(oi.idx, rct::ctkey({rct::pk2rct(out_key), comm})));
     }
   }
 

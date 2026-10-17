@@ -77,7 +77,9 @@ bool test_genesis_tx()
 
   //Prepare genesis_tx
   cryptonote::transaction tx_genesis;
-  cryptonote::construct_miner_tx(0, 0, 0, 10, 0, miner_acc1.get_keys().m_account_address, tx_genesis);
+  // 本地修复（FINDINGS #17 同类）：construct_miner_tx 新增 miner_reward_tx_key 参数
+  crypto::public_key miner_reward_tx_key{};
+  cryptonote::construct_miner_tx(0, 0, 0, 10, 0, miner_acc1.get_keys().m_account_address, miner_reward_tx_key, tx_genesis);
   std::cout << "Object:" << std::endl;
   std::cout << obj_to_json_str(tx_genesis) << std::endl << std::endl;
 
@@ -114,17 +116,19 @@ bool test_transaction_generation_and_ring_signature()
   account_base rv_acc2;
   rv_acc2.generate();
   transaction tx_mine_1;
-  construct_miner_tx(0, 0, 0, 10, 0, miner_acc1.get_keys().m_account_address, tx_mine_1);
+    // 本地修复（FINDINGS #17 同类）：construct_miner_tx 新增 miner_reward_tx_key 参数
+  crypto::public_key miner_reward_tx_key{};
+construct_miner_tx(0, 0, 0, 10, 0, miner_acc1.get_keys().m_account_address, miner_reward_tx_key, tx_mine_1);
   transaction tx_mine_2;
-  construct_miner_tx(0, 0, 0, 0, 0, miner_acc2.get_keys().m_account_address, tx_mine_2);
+  construct_miner_tx(0, 0, 0, 0, 0, miner_acc2.get_keys().m_account_address, miner_reward_tx_key, tx_mine_2);
   transaction tx_mine_3;
-  construct_miner_tx(0, 0, 0, 0, 0, miner_acc3.get_keys().m_account_address, tx_mine_3);
+  construct_miner_tx(0, 0, 0, 0, 0, miner_acc3.get_keys().m_account_address, miner_reward_tx_key, tx_mine_3);
   transaction tx_mine_4;
-  construct_miner_tx(0, 0, 0, 0, 0, miner_acc4.get_keys().m_account_address, tx_mine_4);
+  construct_miner_tx(0, 0, 0, 0, 0, miner_acc4.get_keys().m_account_address, miner_reward_tx_key, tx_mine_4);
   transaction tx_mine_5;
-  construct_miner_tx(0, 0, 0, 0, 0, miner_acc5.get_keys().m_account_address, tx_mine_5);
+  construct_miner_tx(0, 0, 0, 0, 0, miner_acc5.get_keys().m_account_address, miner_reward_tx_key, tx_mine_5);
   transaction tx_mine_6;
-  construct_miner_tx(0, 0, 0, 0, 0, miner_acc6.get_keys().m_account_address, tx_mine_6);
+  construct_miner_tx(0, 0, 0, 0, 0, miner_acc6.get_keys().m_account_address, miner_reward_tx_key, tx_mine_6);
 
   //fill inputs entry
   std::vector<tx_source_entry> sources;
@@ -192,7 +196,9 @@ bool test_block_creation()
   bool r = get_account_address_from_str(info, MAINNET, "0099be99c70ef10fd534c43c88e9d13d1c8853213df7e362afbec0e4ee6fec4948d0c190b58f4b356cd7feaf8d9d0a76e7c7e5a9a0a497a6b1faf7a765882dd08ac2");
   CHECK_AND_ASSERT_MES(r, false, "failed to import");
   block b;
-  r = construct_miner_tx(90, epee::misc_utils::median(szs), 3553616528562147, 33094, 10000000, info.address, b.miner_tx, cryptonote::network_type::FAKECHAIN, {}, blobdata(), 11);
+  // 本地修复（FINDINGS #17 同类）：construct_miner_tx 新增 miner_reward_tx_key 参数
+  crypto::public_key miner_reward_tx_key{};
+  r = construct_miner_tx(90, epee::misc_utils::median(szs), 3553616528562147, 33094, 10000000, info.address, miner_reward_tx_key, b.miner_tx, cryptonote::network_type::FAKECHAIN, {}, blobdata(), 11);
   return r;
 }
 
