@@ -1621,7 +1621,10 @@ namespace tools
       if (ptx_vector.size() != 1)
       {
         er.code = WALLET_RPC_ERROR_CODE_TX_TOO_LARGE;
-        er.message = "Transaction would be too large.  try /transfer_split.";
+        if (type == cryptonote::transaction_type::CONVERT)
+          er.message = "This conversion needs more than one transaction (an extra fee transaction, or a transaction split).  try /transfer_split.";
+        else
+          er.message = "Transaction would be too large.  try /transfer_split.";
         return false;
       }
 

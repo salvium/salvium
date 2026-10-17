@@ -7526,6 +7526,7 @@ bool simple_wallet::transfer_main(
               dust_not_in_fee += ptx_vector[n].dust;
           } else if (ptx_vector[n].tx.type == cryptonote::transaction_type::AUDIT ||
                      ptx_vector[n].tx.type == cryptonote::transaction_type::BURN ||
+                     ptx_vector[n].tx.type == cryptonote::transaction_type::CONVERT ||
                      ptx_vector[n].tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
                      ptx_vector[n].tx.type == cryptonote::transaction_type::STAKE) {
             total_sent += ptx_vector[n].tx.amount_burnt;
