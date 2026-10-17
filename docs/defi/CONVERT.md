@@ -96,7 +96,12 @@ purpose (it cannot know which record the block will carry), and the block check 
 
 - `simplewallet`: `convert <amount> <source_asset> <destination_asset> [slippage]`, gated on
   `HF_VERSION_ENABLE_CONVERT` (`src/simplewallet/simplewallet.cpp:8834`); price info is gated on
-  `HF_VERSION_ENABLE_ORACLE` (`:9244`).
+  `HF_VERSION_ENABLE_ORACLE` (`:9244`). `slippage` is a percentage in `[0, 90]` and must be the
+  whole argument (a trailing `%` or any other suffix is rejected). Values below the 3.125%
+  protocol fee are raised to it, and the CLI says so; above it they have no effect, because the
+  fee - not the percentage - decides the mint. A conversion always names **exactly one**
+  destination: the wallet and the RPC reject a multi-destination CONVERT before any amount is
+  computed, since each destination would otherwise burn the same source balance again.
 - `wallet_rpc_server`: `transfer` accepts `source_asset`, `dest_asset`, `tx_type`,
   `slippage_limit`. This is the supported programmatic path; there is no separate `convert`
   convenience method (see follow-ups in [PR_NOTES.md](PR_NOTES.md)).

@@ -593,6 +593,12 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     std::string convert_destination_asset;
     if (tx_type == cryptonote::transaction_type::CONVERT)
     {
+      // C5: a conversion is a whole-balance operation and therefore names exactly one
+      // destination.  With more than one, each payment proposal below would carry its own
+      // burn of the same source balance.
+      std::string convert_shape_error;
+      if (!cryptonote::check_convert_destinations(dsts, input_asset_type_eff, convert_shape_error))
+        throw std::runtime_error(convert_shape_error);
       for (const cryptonote::tx_destination_entry &de : dsts)
         convert_requested_amount += de.amount;
       if (!dsts.empty())

@@ -512,6 +512,37 @@ TEST(conversion, percent_limit_is_floored_to_the_protocol_fee)
   ASSERT_EQ(1u, cryptonote::convert_slippage_limit_from_percent(32, 1));
 }
 
+TEST(conversion, convert_requires_exactly_one_destination)
+{
+  cryptonote::tx_destination_entry de;
+  de.amount = 100 * COIN;
+  de.asset_type = "SAL1";
+  std::string error;
+
+  ASSERT_TRUE(cryptonote::check_convert_destinations({de}, "SAL", error)) << error;
+
+  // Two destinations would make the builder burn the source balance once per destination.
+  ASSERT_FALSE(cryptonote::check_convert_destinations({de, de}, "SAL", error));
+  ASSERT_EQ("CONVERT requires exactly one destination", error);
+
+  // No destination at all cannot be built either.
+  std::vector<cryptonote::tx_destination_entry> none;
+  ASSERT_FALSE(cryptonote::check_convert_destinations(none, "SAL", error));
+  ASSERT_EQ("CONVERT requires exactly one destination", error);
+
+  // Nothing requested means nothing to mint.
+  cryptonote::tx_destination_entry zero = de;
+  zero.amount = 0;
+  ASSERT_FALSE(cryptonote::check_convert_destinations({zero}, "SAL", error));
+  ASSERT_EQ("CONVERT destination amount must be greater than zero", error);
+
+  // Converting an asset into itself is a transfer, not a conversion.
+  cryptonote::tx_destination_entry same = de;
+  same.asset_type = "SAL";
+  ASSERT_FALSE(cryptonote::check_convert_destinations({same}, "SAL", error));
+  ASSERT_EQ("CONVERT destination asset must differ from the source asset", error);
+}
+
 // ---------------------------------------------------------------------------
 // C4: consensus validation of CONVERT transactions.
 // The amount a conversion mints must be implied by the pricing record committed

@@ -52,6 +52,8 @@
 #include <boost/regex.hpp>
 #include <boost/range/adaptor/transformed.hpp>
 #include <boost/filesystem.hpp>
+#include <cmath>
+
 #include "include_base_utils.h"
 #include "console_handler.h"
 #include "common/i18n.h"
@@ -7123,8 +7125,17 @@ bool simple_wallet::transfer_main(
   double convert_slippage_limit = 0.0;
   if (transfer_type == Convert && local_args.size() >= 3)
   {
-    try { convert_slippage_limit = std::stod(local_args.back()); local_args.pop_back(); }
-    catch (...) { convert_slippage_limit = 0.0; }
+    // C5: convert() appends the slippage percentage as a decimal.  Consume it only when the
+    // whole token is a finite number; a half-parsed token must not silently turn into "no
+    // preference", which would widen the limit the user asked for.
+    const std::string slippage_arg = local_args.back();
+    size_t slippage_consumed = 0;
+    try { convert_slippage_limit = std::stod(slippage_arg, &slippage_consumed); }
+    catch (...) { slippage_consumed = 0; }
+    if (slippage_consumed == slippage_arg.size() && std::isfinite(convert_slippage_limit))
+      local_args.pop_back();
+    else
+      convert_slippage_limit = 0.0;
   }
 
   std::set<uint32_t> subaddr_indices;
@@ -7307,7 +7318,12 @@ bool simple_wallet::transfer_main(
     // percentage; carry it to the destination entry, which the builder turns into an
     // absolute limit once the burnt amount is known.
     if (transfer_type == Convert)
-      de.slippage_limit = static_cast<uint64_t>(convert_slippage_limit);
+    {
+      // Round up: a request for 3.2% must not be silently downgraded to 3%, which the builder
+      // would then raise to the 3.125% fee anyway.
+      de.slippage_limit = (std::isfinite(convert_slippage_limit) && convert_slippage_limit > 0.0)
+        ? static_cast<uint64_t>(std::ceil(convert_slippage_limit)) : 0;
+    }
     de.is_subaddress = info.is_subaddress;
     de.is_integrated = info.has_payment_id;
 
@@ -8853,11 +8869,20 @@ bool simple_wallet::convert(const std::vector<std::string> &args_)
     // Expect to be able to parse the last arg as a double
     try
     {
-      slippage_limit = std::stod(strLastArg);
-      if (slippage_limit < 0.0 or slippage_limit > 90.0) {
-        fail_msg_writer() << tr("invalid slippage_limit value : expected 0.0-90.0, got ") << slippage_limit;
+      size_t slippage_consumed = 0;
+      slippage_limit = std::stod(strLastArg, &slippage_consumed);
+      // C5: require the WHOLE token to be the number.  std::stod parses a prefix ("3%" -> 3)
+      // and returns NaN for tokens it cannot classify, and NaN passes every comparison below.
+      if (slippage_consumed != strLastArg.size() or not std::isfinite(slippage_limit) or slippage_limit < 0.0 or slippage_limit > 90.0) {
+        fail_msg_writer() << tr("invalid slippage_limit value : expected a percentage 0.0-90.0, got ") << strLastArg;
         PRINT_USAGE(USAGE_CONVERT);
         return true;
+      }
+      // The protocol always retains 1/32 (3.125%) of the burnt amount, so a smaller limit can
+      // never be mined.  Say that the fee floor is used instead of pretending the stricter
+      // limit is honoured.
+      if (slippage_limit > 0.0 and slippage_limit < 3.125) {
+        message_writer(console_color_yellow, true) << tr("slippage limit ") << strLastArg << tr("% is below the 3.125% protocol fee; the conversion will use 3.125%");
       }
       
       // Update the last arg value

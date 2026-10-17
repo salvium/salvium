@@ -231,6 +231,41 @@ namespace cryptonote
     END_SERIALIZE()
   };
 
+  /**
+   * C5: the shape of a CONVERT request.
+   *
+   * A conversion burns the whole spendable balance of the source asset and mints the
+   * proceeds into one destination output, so the request must name exactly one
+   * destination.  Allowing more would make the transaction builder burn the same balance
+   * once per destination: each payment proposal is capped by the source balance, but every
+   * proposal carries its own burn, so N destinations burn N times.  Rejecting the shape
+   * here keeps the wallet and the RPC on the same rule before any amount is computed.
+   *
+   * @param dsts the requested destinations
+   * @param source_asset the asset that is burnt
+   * @param error receives the reason when the shape is rejected
+   * @return true when the request can be built
+   */
+  inline bool check_convert_destinations(const std::vector<tx_destination_entry> &dsts, const std::string &source_asset, std::string &error)
+  {
+    if (dsts.size() != 1)
+    {
+      error = "CONVERT requires exactly one destination";
+      return false;
+    }
+    if (dsts[0].amount == 0)
+    {
+      error = "CONVERT destination amount must be greater than zero";
+      return false;
+    }
+    if (dsts[0].asset_type == source_asset)
+    {
+      error = "CONVERT destination asset must differ from the source asset";
+      return false;
+    }
+    return true;
+  }
+
   //---------------------------------------------------------------
 
   struct tx_block_template_backlog_entry
