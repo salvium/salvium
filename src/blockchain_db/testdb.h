@@ -175,6 +175,9 @@ public:
                           ) override { }
   
   virtual std::map<std::string, cryptonote::token_metadata_t> get_tokens() const override { return {}; }
+  virtual bool get_curve_state(const std::string& asset_type, cryptonote::curve_state_t& state) const override { return false; }
+  virtual std::map<std::string, cryptonote::curve_state_t> get_curves() const override { return {}; }
+  virtual bool get_curve_tx_info(const crypto::hash& tx_hash, cryptonote::curve_tx_info& info) const override { return false; }
   virtual bool is_tx_paid_for(const cryptonote::transaction& tx) const override { return true; }
   virtual int get_token_tx_info(const uint64_t height, std::vector<token_tx_info_carrot>& tti_container) const override { return 0; }
   virtual cryptonote::block get_block_from_height(const uint64_t& height) const override { return cryptonote::block(); }

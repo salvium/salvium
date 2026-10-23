@@ -238,6 +238,9 @@ namespace
  *
  * rollup_tx_info   rollup_tag   {serialised rollup_tx_data_t struct}
  *
+ * curves           asset type id {reserve, sold, launch_height}            (CURVE)
+ * curve_txs        txn hash      {curve_tx_info: outcome + replaced state}  (CURVE)
+ *
  * output_records   output ID    {canonical output metadata}
  * output_amount_refs amount      [{amount output index, output id}...]
  * output_type_refs asset_type    [{asset type output index, output id}...]
@@ -327,6 +330,8 @@ const char* const LMDB_TOKENS = "tokens";
 const char* const LMDB_RCT_COUNT_INFO = "rct_count_info";
 
 const char* const LMDB_ROLLUP_TX_INFO = "rollup_tx_info";
+const char* const LMDB_CURVES = "curves";
+const char* const LMDB_CURVE_TXS = "curve_txs";
 
 const char* const LMDB_OUTPUT_RECORDS = "output_records";
 const char* const LMDB_OUTPUT_AMOUNT_REFS = "output_amount_refs";
@@ -1414,6 +1419,8 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   CURSOR(token_txs)
   CURSOR(tokens)
   CURSOR(rollup_tx_info)
+  CURSOR(curves)
+  CURSOR(curve_txs)
 
   MDB_val_set(val_tx_id, tx_id);
   MDB_val_set(val_h, tx_hash);
@@ -1519,7 +1526,8 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       tx.type == cryptonote::transaction_type::AUDIT ||
       tx.type == cryptonote::transaction_type::TRANSFER ||
       tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
-      tx.type == cryptonote::transaction_type::ROLLUP) 
+      tx.type == cryptonote::transaction_type::ROLLUP ||
+      tx.type == cryptonote::transaction_type::CURVE)
   {
     bool ignore_amount_burnt = (tx.type == cryptonote::transaction_type::TRANSFER);
     uint64_t amount_burnt = (ignore_amount_burnt) ? 0 : tx.amount_burnt;
@@ -1683,6 +1691,10 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to update token table: ", result).c_str()));
   }
+
+  // CURVE: launch a curve, or price a BUY/SELL against the curve and record the outcome
+  if (tx.version >= TRANSACTION_VERSION_ENABLE_TOKENS && tx.type == cryptonote::transaction_type::CURVE)
+    apply_curve_tx(tx, tx_hash);
 
   // Is there yield_tx data to add?
   if (tx.version >= TRANSACTION_VERSION_CARROT && tx.type == cryptonote::transaction_type::STAKE)
@@ -1853,6 +1865,8 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
   CURSOR(token_txs)
   CURSOR(tokens)
   CURSOR(rollup_tx_info)
+  CURSOR(curves)
+  CURSOR(curve_txs)
 
   MDB_val_set(val_h, tx_hash);
 
@@ -1942,7 +1956,8 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
       tx.type == cryptonote::transaction_type::AUDIT ||
       tx.type == cryptonote::transaction_type::TRANSFER ||
       tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
-      tx.type == cryptonote::transaction_type::ROLLUP) 
+      tx.type == cryptonote::transaction_type::ROLLUP ||
+      tx.type == cryptonote::transaction_type::CURVE)
     {
       bool ignore_amount_burnt = (tx.type == cryptonote::transaction_type::TRANSFER);
       uint64_t amount_burnt = (ignore_amount_burnt) ? 0 : tx.amount_burnt;
@@ -2129,6 +2144,10 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
     }
   }
 
+
+  // CURVE: restore the curve state this transaction replaced
+  if (tx.version >= TRANSACTION_VERSION_ENABLE_TOKENS && tx.type == cryptonote::transaction_type::CURVE)
+    undo_curve_tx(tx, tx_hash);
 
   // Is there token_tx data to remove?
   if (tx.version >= TRANSACTION_VERSION_ENABLE_TOKENS && tx.type == cryptonote::transaction_type::CREATE_TOKEN)
@@ -3163,7 +3182,7 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
   // set up lmdb environment
   if ((result = mdb_env_create(&m_env)))
     throw0(DB_ERROR(lmdb_error("Failed to create lmdb environment: ", result).c_str()));
-  if ((result = mdb_env_set_maxdbs(m_env, 40)))
+  if ((result = mdb_env_set_maxdbs(m_env, 48)))
     throw0(DB_ERROR(lmdb_error("Failed to set max number of dbs: ", result).c_str()));
 
   int threads = tools::get_max_concurrency();
@@ -3269,6 +3288,9 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
 
   lmdb_db_open(txn, LMDB_ROLLUP_TX_INFO, MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_rollup_tx_info, "Failed to open db handle for m_rollup_tx_info");
 
+  lmdb_db_open(txn, LMDB_CURVES, MDB_CREATE, m_curves, "Failed to open db handle for m_curves");
+  lmdb_db_open(txn, LMDB_CURVE_TXS, MDB_CREATE, m_curve_txs, "Failed to open db handle for m_curve_txs");
+
   lmdb_db_open(txn, LMDB_OUTPUT_RECORDS, MDB_INTEGERKEY | MDB_CREATE, m_output_records, "Failed to open db handle for m_output_records");
   lmdb_db_open(txn, LMDB_OUTPUT_AMOUNT_REFS, MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_output_amount_refs, "Failed to open db handle for m_output_amount_refs");
   lmdb_db_open(txn, LMDB_OUTPUT_TYPE_REFS, MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE, m_output_type_refs, "Failed to open db handle for m_output_type_refs");
@@ -3305,6 +3327,9 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
   mdb_set_compare(txn, m_tokens, compare_uint64);
 
   mdb_set_dupsort(txn, m_rollup_tx_info, compare_uint64);
+
+  mdb_set_compare(txn, m_curves, compare_uint64);
+  mdb_set_compare(txn, m_curve_txs, compare_hash32);
 
   mdb_set_dupsort(txn, m_output_amount_refs, compare_uint64);
   mdb_set_compare(txn, m_output_type_refs, compare_uint32);
@@ -3516,6 +3541,10 @@ void BlockchainLMDB::reset()
     throw0(DB_ERROR(lmdb_error("Failed to drop m_rct_count_info: ", result).c_str()));
   if (auto result = mdb_drop(txn, m_rollup_tx_info, 0))
     throw0(DB_ERROR(lmdb_error("Failed to drop m_rollup_tx_info: ", result).c_str()));
+  if (auto result = mdb_drop(txn, m_curves, 0))
+    throw0(DB_ERROR(lmdb_error("Failed to drop m_curves: ", result).c_str()));
+  if (auto result = mdb_drop(txn, m_curve_txs, 0))
+    throw0(DB_ERROR(lmdb_error("Failed to drop m_curve_txs: ", result).c_str()));
   if (auto result = mdb_drop(txn, m_output_records, 0))
     throw0(DB_ERROR(lmdb_error("Failed to drop m_output_records: ", result).c_str()));
   if (auto result = mdb_drop(txn, m_output_amount_refs, 0))
@@ -4958,6 +4987,259 @@ std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
   return circulating_supply;
 }
 
+namespace
+{
+  // On-disk layout of a curve state (fixed size, native endianness like the other tables)
+  struct mdb_curve_state
+  {
+    uint64_t reserve;
+    uint64_t sold;
+    uint64_t launch_height;
+  };
+
+  cryptonote::curve_state_t from_mdb(const mdb_curve_state& m)
+  {
+    cryptonote::curve_state_t s;
+    s.reserve = m.reserve;
+    s.sold = m.sold;
+    s.launch_height = m.launch_height;
+    return s;
+  }
+
+  mdb_curve_state to_mdb(const cryptonote::curve_state_t& s)
+  {
+    return mdb_curve_state{s.reserve, s.sold, s.launch_height};
+  }
+}
+
+void BlockchainLMDB::apply_curve_tx(const cryptonote::transaction& tx, const crypto::hash& tx_hash)
+{
+  // called from add_transaction_data(), inside the write transaction with its cursors open
+  mdb_txn_cursors *m_cursors = &m_wcursors;
+  const uint64_t m_height = height();
+  const cryptonote::curve_op op = cryptonote::get_curve_op(tx);
+  if (op == cryptonote::curve_op::INVALID)
+    throw0(DB_ERROR("CURVE transaction with an invalid asset pair reached the database"));
+
+  const std::string asset_type = cryptonote::get_curve_asset_type(tx);
+  MDB_val_copy<uint64_t> asset_key((uint64_t)cryptonote::asset_id_from_type(asset_type));
+
+  curve_tx_info info{};
+  info.asset_type_id = cryptonote::asset_id_from_type(asset_type);
+  info.op = static_cast<uint8_t>(op);
+
+  MDB_val v;
+  int result = mdb_cursor_get(m_cur_curves, &asset_key, &v, MDB_SET);
+  if (result && result != MDB_NOTFOUND)
+    throw0(DB_ERROR(lmdb_error("Failed to read curve state: ", result).c_str()));
+  const bool exists = (result == 0);
+
+  if (op == cryptonote::curve_op::LAUNCH)
+  {
+    if (exists)
+      throw0(DB_ERROR("CURVE launch for a curve that already exists"));
+
+    // The token itself is registered exactly like CREATE_TOKEN registers it
+    const std::string token_blob = write_token_metadata(tx.token_metadata);
+    MDB_val_sized(token, token_blob);
+    MDB_val_copy<uint64_t> token_key((uint64_t)info.asset_type_id);
+    result = mdb_cursor_put(m_cur_tokens, &token_key, &token, MDB_NOOVERWRITE);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to add CURVE token to db transaction: ", result).c_str()));
+
+    cryptonote::curve_state_t state;
+    state.launch_height = m_height;
+    mdb_curve_state ms = to_mdb(state);
+    MDB_val_set(val_state, ms);
+    result = mdb_cursor_put(m_cur_curves, &asset_key, &val_state, MDB_NOOVERWRITE);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to add curve to db transaction: ", result).c_str()));
+    info.filled = 1;
+  }
+  else
+  {
+    if (!exists)
+      throw0(DB_ERROR("CURVE trade for a curve that does not exist"));
+    mdb_curve_state prev_ms;
+    memcpy(&prev_ms, v.mv_data, sizeof(prev_ms));
+    const cryptonote::curve_state_t prev = from_mdb(prev_ms);
+
+    cryptonote::curve_quote_t quote;
+    if (!cryptonote::curve_quote_tx(tx, prev, quote))
+      throw0(DB_ERROR("Failed to price CURVE transaction"));
+
+    info.prev_reserve = prev.reserve;
+    info.prev_sold = prev.sold;
+    info.prev_launch_height = prev.launch_height;
+    info.amount_out = quote.amount_out;
+    info.filled = quote.filled ? 1 : 0;
+
+    mdb_curve_state ms = to_mdb(quote.new_state);
+    MDB_val_set(val_state, ms);
+    result = mdb_cursor_put(m_cur_curves, &asset_key, &val_state, 0);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to update curve state: ", result).c_str()));
+
+    // A SELL burns tokens: the generic burn tally above skips token sources, so the token's
+    // circulating tally is reduced here (it is raised again by any refund mint).
+    if (op == cryptonote::curve_op::SELL)
+    {
+      MDB_val_copy<uint64_t> token_idx((uint64_t)info.asset_type_id);
+      boost::multiprecision::int128_t token_tally = 0;
+      result = read_circulating_supply_data(m_cur_circ_supply_tally, token_idx, token_tally);
+      if (result)
+        throw0(DB_ERROR(lmdb_error("Failed to get token tally for CURVE sell: ", result).c_str()));
+      if (token_tally < tx.amount_burnt)
+        throw0(DB_ERROR("CURVE sell burns more tokens than are in circulation"));
+      write_circulating_supply_data(m_cur_circ_supply_tally, token_idx, token_tally - tx.amount_burnt);
+    }
+  }
+
+  MDB_val_set(val_hash, tx_hash);
+  MDB_val_set(val_info, info);
+  result = mdb_cursor_put(m_cur_curve_txs, &val_hash, &val_info, MDB_NOOVERWRITE);
+  if (result)
+    throw0(DB_ERROR(lmdb_error("Failed to add curve_tx to db transaction: ", result).c_str()));
+}
+
+void BlockchainLMDB::undo_curve_tx(const cryptonote::transaction& tx, const crypto::hash& tx_hash)
+{
+  // called from remove_transaction_data(), inside the write transaction with its cursors open
+  mdb_txn_cursors *m_cursors = &m_wcursors;
+  MDB_val_set(val_hash, tx_hash);
+  MDB_val v;
+  int result = mdb_cursor_get(m_cur_curve_txs, &val_hash, &v, MDB_SET);
+  if (result == MDB_NOTFOUND)
+    throw1(DB_ERROR("Failed to locate curve_tx for removal from db transaction"));
+  if (result)
+    throw1(DB_ERROR(lmdb_error("Failed to locate curve_tx for removal: ", result).c_str()));
+  curve_tx_info info;
+  memcpy(&info, v.mv_data, sizeof(info));
+
+  MDB_val_copy<uint64_t> asset_key(info.asset_type_id);
+  MDB_val cv;
+  result = mdb_cursor_get(m_cur_curves, &asset_key, &cv, MDB_SET);
+  if (result)
+    throw1(DB_ERROR(lmdb_error("Failed to locate curve for removal: ", result).c_str()));
+
+  if (info.op == static_cast<uint8_t>(cryptonote::curve_op::LAUNCH))
+  {
+    result = mdb_cursor_del(m_cur_curves, 0);
+    if (result)
+      throw1(DB_ERROR(lmdb_error("Failed to remove curve: ", result).c_str()));
+
+    MDB_val_copy<uint64_t> token_key(info.asset_type_id);
+    MDB_val tv;
+    result = mdb_cursor_get(m_cur_tokens, &token_key, &tv, MDB_SET);
+    if (result)
+      throw1(DB_ERROR(lmdb_error("Failed to locate CURVE token for removal: ", result).c_str()));
+    result = mdb_cursor_del(m_cur_tokens, 0);
+    if (result)
+      throw1(DB_ERROR(lmdb_error("Failed to remove CURVE token: ", result).c_str()));
+  }
+  else
+  {
+    mdb_curve_state prev{info.prev_reserve, info.prev_sold, info.prev_launch_height};
+    MDB_val_set(val_state, prev);
+    result = mdb_cursor_put(m_cur_curves, &asset_key, &val_state, 0);
+    if (result)
+      throw1(DB_ERROR(lmdb_error("Failed to restore curve state: ", result).c_str()));
+
+    if (info.op == static_cast<uint8_t>(cryptonote::curve_op::SELL))
+    {
+      MDB_val_copy<uint64_t> token_idx(info.asset_type_id);
+      boost::multiprecision::int128_t token_tally = 0;
+      result = read_circulating_supply_data(m_cur_circ_supply_tally, token_idx, token_tally);
+      if (result)
+        throw1(DB_ERROR(lmdb_error("Failed to get token tally when undoing CURVE sell: ", result).c_str()));
+      write_circulating_supply_data(m_cur_circ_supply_tally, token_idx, token_tally + tx.amount_burnt);
+    }
+  }
+
+  result = mdb_cursor_get(m_cur_curve_txs, &val_hash, &v, MDB_SET);
+  if (result)
+    throw1(DB_ERROR(lmdb_error("Failed to relocate curve_tx for removal: ", result).c_str()));
+  result = mdb_cursor_del(m_cur_curve_txs, 0);
+  if (result)
+    throw1(DB_ERROR(lmdb_error("Failed to remove curve_tx: ", result).c_str()));
+}
+
+bool BlockchainLMDB::get_curve_state(const std::string& asset_type, cryptonote::curve_state_t& state) const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  TXN_PREFIX_RDONLY();
+  RCURSOR(curves)
+
+  MDB_val_copy<uint64_t> asset_key((uint64_t)cryptonote::asset_id_from_type(asset_type));
+  MDB_val v;
+  int result = mdb_cursor_get(m_cur_curves, &asset_key, &v, MDB_SET);
+  bool found = false;
+  if (result == 0)
+  {
+    mdb_curve_state ms;
+    memcpy(&ms, v.mv_data, sizeof(ms));
+    state = from_mdb(ms);
+    found = true;
+  }
+  else if (result != MDB_NOTFOUND)
+    throw0(DB_ERROR(lmdb_error("Failed to read curve state: ", result).c_str()));
+
+  TXN_POSTFIX_RDONLY();
+  return found;
+}
+
+std::map<std::string, cryptonote::curve_state_t> BlockchainLMDB::get_curves() const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  TXN_PREFIX_RDONLY();
+  RCURSOR(curves)
+
+  std::map<std::string, cryptonote::curve_state_t> curves;
+  MDB_val k, v;
+  MDB_cursor_op op = MDB_FIRST;
+  while (1)
+  {
+    int result = mdb_cursor_get(m_cur_curves, &k, &v, op);
+    op = MDB_NEXT;
+    if (result == MDB_NOTFOUND)
+      break;
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to enumerate curves: ", result).c_str()));
+    const uint64_t asset_type_id = *(const uint64_t*)k.mv_data;
+    mdb_curve_state ms;
+    memcpy(&ms, v.mv_data, sizeof(ms));
+    curves[cryptonote::asset_type_from_id(asset_type_id)] = from_mdb(ms);
+  }
+
+  TXN_POSTFIX_RDONLY();
+  return curves;
+}
+
+bool BlockchainLMDB::get_curve_tx_info(const crypto::hash& tx_hash, curve_tx_info& info) const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  TXN_PREFIX_RDONLY();
+  RCURSOR(curve_txs)
+
+  MDB_val_set(val_hash, tx_hash);
+  MDB_val v;
+  int result = mdb_cursor_get(m_cur_curve_txs, &val_hash, &v, MDB_SET);
+  bool found = false;
+  if (result == 0)
+  {
+    memcpy(&info, v.mv_data, sizeof(info));
+    found = true;
+  }
+  else if (result != MDB_NOTFOUND)
+    throw0(DB_ERROR(lmdb_error("Failed to read curve_tx: ", result).c_str()));
+
+  TXN_POSTFIX_RDONLY();
+  return found;
+}
+
 std::map<std::string, cryptonote::token_metadata_t> BlockchainLMDB::get_tokens() const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
@@ -5019,8 +5301,8 @@ bool BlockchainLMDB::is_tx_paid_for(const cryptonote::transaction& tx) const
   TXN_PREFIX_RDONLY();
   int result;
 
-  // Is it a TRANSFER?
-  if (tx.type != cryptonote::transaction_type::TRANSFER)
+  // Is it a TRANSFER (or a CURVE SELL, which also spends a token)?
+  if (tx.type != cryptonote::transaction_type::TRANSFER && tx.type != cryptonote::transaction_type::CURVE)
     return true;
   // Is is a TOKEN?
   if (!cryptonote::is_asset_type_token(tx.source_asset_type))
