@@ -94,6 +94,12 @@
 
 #define CREATE_TOKEN_LOCK_PERIOD                        10
 
+// CURVE bonding-curve parameters (atomic units). Must match utils/curve_model.py.
+#define CURVE_TOKEN_SUPPLY                              ((uint64_t)10000000000000000ull) // 100M tokens sold by the curve
+#define CURVE_VIRTUAL_TOKENS                            ((uint64_t)730000000000000ull)   // 7.3M virtual tokens
+#define CURVE_VIRTUAL_SAL                               ((uint64_t)1000000000000ull)     // 10k virtual SAL1
+#define CURVE_FEE_DIVISOR                               100                              // 1% fee, burned
+
 // HF11 block reward split
 #define BLOCK_REWARD_TREASURY_PCT                       25  // to treasury, 21600-block unlock
 #define BLOCK_REWARD_STAKER_PCT                         20  // to stakers via yield
@@ -260,6 +266,10 @@
 #define HF_VERSION_ENABLE_CONVERT               255
 #define HF_VERSION_ENABLE_ORACLE                255
 #define HF_VERSION_SLIPPAGE_YIELD               255
+
+// Native bonding-curve tokens (CURVE tx type, docs/defi/CURVE.md). Scheduled on no network yet;
+// regtest rehearses it from height 1.
+#define HF_VERSION_ENABLE_CURVE                 14
 
 #define TESTNET_VERSION                         19
 #define STAGENET_VERSION                        1
