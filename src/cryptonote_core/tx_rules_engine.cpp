@@ -6,6 +6,7 @@
 
 #include "carrot_core/config.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "cryptonote_basic/curve.h"
 #include "cryptonote_config.h"
 #include "ringct/rctTypes.h"
 #include "ringct/rctSigs.h"
@@ -91,6 +92,77 @@ namespace cryptonote::txrules
       return false;
     }
 
+    return true;
+  }
+
+  // CURVE (docs/defi/CURVE.md). The op is implied by the asset pair. Every output of the
+  // user tx is change in the SOURCE asset: whatever the curve pays out is minted by the
+  // block's protocol transaction, where amounts are in clear.
+  static bool check_curve_semantics(const cryptonote::transaction& tx,
+                                    const validation_env& env,
+                                    std::string* why)
+  {
+    const cryptonote::curve_op op = cryptonote::get_curve_op(tx);
+    if (op == cryptonote::curve_op::INVALID)
+    {
+      if (why) *why = "CURVE asset pair must be SAL1/SAL1 (launch), SAL1/token (buy) or token/SAL1 (sell)";
+      return false;
+    }
+
+    for (const auto& out : tx.vout)
+    {
+      std::string out_asset;
+      if (!cryptonote::get_output_asset_type(out, out_asset) || out_asset != tx.source_asset_type)
+      {
+        if (why) *why = "CURVE outputs must all be change in the source asset";
+        return false;
+      }
+    }
+
+    if (op == cryptonote::curve_op::LAUNCH)
+    {
+      const std::string& ticker = tx.token_metadata.asset_type;
+      if (ticker.size() >= 3 && ticker.substr(0, 3) == "SAL")
+      {
+        if (why) *why = "CURVE launch ticker must not begin with SAL";
+        return false;
+      }
+      if (!cryptonote::is_valid_custom_asset_type("sal" + ticker))
+      {
+        if (why) *why = "CURVE launch ticker is not a valid asset type";
+        return false;
+      }
+      if (tx.token_metadata.token.type() != typeid(cryptonote::sal_token_t))
+      {
+        if (why) *why = "CURVE launch metadata type must be sal_token_t";
+        return false;
+      }
+      const cryptonote::sal_token_t token = boost::get<cryptonote::sal_token_t>(tx.token_metadata.token);
+      if (token.supply != CURVE_TOKEN_SUPPLY / COIN)
+      {
+        if (why) *why = "CURVE launch supply must equal CURVE_TOKEN_SUPPLY";
+        return false;
+      }
+      if (tx.amount_burnt != cryptonote::get_token_creation_price(ticker))
+      {
+        if (why) *why = "CURVE launch amount_burnt does not match token creation price";
+        return false;
+      }
+      return true;
+    }
+
+    // BUY / SELL: the traded token must have a curve launched in an earlier block
+    if (tx.amount_burnt == 0)
+    {
+      if (why) *why = "CURVE trade must burn a non-zero amount";
+      return false;
+    }
+    const std::string asset = cryptonote::get_curve_asset_type(tx);
+    if (!env.token_state.curve_exists || !env.token_state.curve_exists(env.token_state.self, asset))
+    {
+      if (why) *why = "CURVE trade references a token without a launched curve";
+      return false;
+    }
     return true;
   }
 
@@ -500,6 +572,35 @@ namespace cryptonote::txrules
     return r;
   }
   
+  static tx_type_rules make_curve_rules(uint8_t txver)
+  {
+    tx_type_rules r;
+    r.tx_versions = {txver, txver};
+    r.vin_count   = {1, carrot::CARROT_MAX_TX_INPUTS};
+    r.vout_count  = {1, carrot::CARROT_MAX_TX_OUTPUTS};
+
+    r.variants.inputs  = bits_inputs({input_kind::to_key});
+    r.variants.outputs = bits_outputs({output_kind::to_carrot_v1});
+
+    // LAUNCH is SAL1 -> SAL1, BUY/SELL swap SAL1 and a token. check_curve_semantics pins the
+    // exact pair and requires every output to be source-asset change.
+    r.assets.src_eq_dst                = req::MAY;
+    r.assets.inputs_match_source       = req::MUST;
+    r.assets.outputs_match_destination = req::MAY;
+    r.assets.outputs_multi_asset       = req::MUST_NOT;
+    r.assets.allowed_assets            = {"SAL1"};
+    r.assets.allow_any_known_token     = true;
+    r.assets.asset_predicate           = &asset_pred_height_valid;
+
+    r.burning.amount_burnt_positive = req::MUST;
+
+    r.rct.coinbase_must_be_null = false;
+    r.rct.allowed_rct_types.reset();
+
+    r.extra_check = &check_curve_semantics;
+    return r;
+  }
+
   static void restrict_type_to_sal1(tx_type_rules& tr)
   {
     tr.assets.allowed_assets = {"SAL1"};
@@ -543,7 +644,9 @@ namespace cryptonote::txrules
     
     // ROLLUP: not permitted until HF 11
     hf.by_type.erase(cryptonote::ROLLUP);
-    
+
+    hf.by_type.erase(cryptonote::CURVE);
+
     return hf;
   }
 
@@ -761,6 +864,13 @@ namespace cryptonote::txrules
     // The poisoned reference check is enforced via check_tx_inputs_consensus().
   }
   
+  static void apply_hf_14(hf_rules& hf)
+  {
+    hf.hf_version = 14;
+    hf.by_type[cryptonote::CURVE] = make_curve_rules(TRANSACTION_VERSION_ENABLE_TOKENS);
+    hf.by_type[cryptonote::CURVE].rct.allowed_rct_types.set(static_cast<size_t>(rct::RCTTypeSalviumOne));
+  }
+
   const hf_rules& rules_for_hf(uint8_t hf_version)
   {
     // Build a small cache of known HF rules. Extend as you add new forks.
@@ -815,6 +925,10 @@ namespace cryptonote::txrules
       hf_rules hf13 = m[12];
       apply_hf_13(hf13);
       m[13] = hf13;
+
+      hf_rules hf14 = m[13];
+      apply_hf_14(hf14);
+      m[14] = hf14;
 
       return m;
     }();
@@ -888,6 +1002,42 @@ namespace cryptonote::txrules
     return true;
   }
 
+  static bool apply_curve_consensus_effects(const cryptonote::transaction& tx,
+                                            const validation_env& env,
+                                            std::string* why)
+  {
+    if (cryptonote::get_curve_op(tx) != cryptonote::curve_op::LAUNCH)
+      return true;
+
+    const std::string ticker = tx.token_metadata.asset_type;
+    const std::string asset_type = "sal" + ticker;
+
+    if (!env.token_state.asset_exists)
+    {
+      if (why) *why = "CURVE launch consensus requires token_state.asset_exists";
+      return false;
+    }
+    if (env.token_state.asset_exists(env.token_state.self, asset_type) ||
+        (env.token_state.ticker_exists && env.token_state.ticker_exists(env.token_state.self, ticker)))
+    {
+      if (why) *why = "CURVE launch ticker already exists";
+      return false;
+    }
+    if (env.block_overlay)
+    {
+      if (env.block_overlay->created_asset_types.count(asset_type) != 0 ||
+          env.block_overlay->created_tickers.count(ticker) != 0)
+      {
+        if (why) *why = "CURVE launch ticker created twice in candidate block";
+        return false;
+      }
+      env.block_overlay->created_asset_types.insert(asset_type);
+      env.block_overlay->created_tickers.insert(ticker);
+      env.block_overlay->launched_curves.insert(asset_type);
+    }
+    return true;
+  }
+
   static bool apply_tx_consensus_effects(const cryptonote::transaction& tx,
                                          const tx_context& txctx,
                                          const validation_env& env,
@@ -897,6 +1047,9 @@ namespace cryptonote::txrules
     {
       case cryptonote::CREATE_TOKEN:
         return apply_create_token_consensus_effects(tx, env, why);
+
+      case cryptonote::CURVE:
+        return apply_curve_consensus_effects(tx, env, why);
 
       default:
         return true;

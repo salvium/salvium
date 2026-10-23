@@ -56,6 +56,7 @@ namespace cryptonote
     AUDIT = 8,
     CREATE_TOKEN = 9,
     ROLLUP = 10,
-    MAX = 10
+    CURVE = 11,
+    MAX = 11
   };
 }

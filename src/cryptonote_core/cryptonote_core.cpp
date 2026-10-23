@@ -678,7 +678,9 @@ namespace cryptonote
       MERROR("Failed to parse block rate notify spec: " << e.what());
     }
 
-    const std::pair<uint8_t, uint64_t> regtest_hard_forks[3] = {std::make_pair(1, 0), std::make_pair(mainnet_hard_forks[num_mainnet_hard_forks-1].version, 1), std::make_pair(0, 0)};
+    // regtest rehearses the newest hard fork (CURVE) from height 1. Mainnet's table has no entry
+    // for it, so mainnet is unaffected by the HF_VERSION_ENABLE_CURVE gates.
+    const std::pair<uint8_t, uint64_t> regtest_hard_forks[3] = {std::make_pair(1, 0), std::make_pair(HF_VERSION_ENABLE_CURVE, 1), std::make_pair(0, 0)};
     const cryptonote::test_options regtest_test_options = {
       regtest_hard_forks,
       0
@@ -968,6 +970,7 @@ namespace cryptonote
           if (!rct::verRctSemanticsSimple(rv,
                                           tx_info[n].tx->type == cryptonote::transaction_type::BURN ? tx_info[n].tx->amount_burnt :
                                           tx_info[n].tx->type == cryptonote::transaction_type::CONVERT ? tx_info[n].tx->amount_burnt :
+                                          tx_info[n].tx->type == cryptonote::transaction_type::CURVE ? tx_info[n].tx->amount_burnt :
                                           tx_info[n].tx->type == cryptonote::transaction_type::STAKE ? tx_info[n].tx->amount_burnt :
                                           tx_info[n].tx->type == cryptonote::transaction_type::AUDIT ? tx_info[n].tx->amount_burnt :
                                           0,
@@ -1043,6 +1046,7 @@ namespace cryptonote
         if (!rct::verRctSemanticsSimple(tx_info[n].tx->rct_signatures,
                                         tx_info[n].tx->type == cryptonote::transaction_type::BURN ? tx_info[n].tx->amount_burnt :
                                         tx_info[n].tx->type == cryptonote::transaction_type::CONVERT ? tx_info[n].tx->amount_burnt :
+                                        tx_info[n].tx->type == cryptonote::transaction_type::CURVE ? tx_info[n].tx->amount_burnt :
                                         tx_info[n].tx->type == cryptonote::transaction_type::STAKE ? tx_info[n].tx->amount_burnt :
                                         tx_info[n].tx->type == cryptonote::transaction_type::AUDIT ? tx_info[n].tx->amount_burnt :
                                         tx_info[n].tx->type == cryptonote::transaction_type::CREATE_TOKEN ? tx_info[n].tx->amount_burnt :

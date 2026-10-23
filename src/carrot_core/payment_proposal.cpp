@@ -652,7 +652,8 @@ void get_output_proposal_internal_v1(const CarrotPaymentProposalSelfSendV1 &prop
     output_enote_out.amount                       = proposal.amount;
 
     // 10. construct the stake return enote
-    if (tx_type == cryptonote::transaction_type::STAKE || tx_type == cryptonote::transaction_type::CREATE_TOKEN) {
+    if (tx_type == cryptonote::transaction_type::STAKE || tx_type == cryptonote::transaction_type::CREATE_TOKEN ||
+        tx_type == cryptonote::transaction_type::CURVE) {
         // make k_return
         crypto::secret_key k_return;
         s_view_balance_dev.make_internal_return_privkey(input_context, output_enote_out.enote.onetime_address, k_return);

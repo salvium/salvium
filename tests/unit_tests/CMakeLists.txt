@@ -86,6 +86,7 @@ set(unit_tests_sources
   output_distribution.cpp
   parse_amount.cpp
   pricing_record.cpp
+  curve_math.cpp
   pruning.cpp
   random.cpp
   rolling_median.cpp

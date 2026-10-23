@@ -3192,6 +3192,86 @@ namespace cryptonote
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
+  namespace
+  {
+    curve_entry make_curve_entry(const std::string& asset_type, const cryptonote::curve_state_t& state)
+    {
+      curve_entry e;
+      e.asset_type = asset_type;
+      e.reserve = state.reserve;
+      e.sold = state.sold;
+      e.launch_height = state.launch_height;
+      e.spot_price = cryptonote::curve_spot_price(state);
+      e.tokens_remaining = state.sold <= CURVE_TOKEN_SUPPLY ? CURVE_TOKEN_SUPPLY - state.sold : 0;
+      return e;
+    }
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_get_curve_info(const COMMAND_RPC_GET_CURVE_INFO::request& req, COMMAND_RPC_GET_CURVE_INFO::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
+  {
+    PERF_TIMER(on_get_curve_info);
+    cryptonote::curve_state_t state;
+    if (!m_core.get_blockchain_storage().get_db().get_curve_state(req.asset_type, state)) {
+      res.status = "Curve not found";
+      return true;
+    }
+    res.curve = make_curve_entry(req.asset_type, state);
+    res.virtual_sal = CURVE_VIRTUAL_SAL;
+    res.virtual_tokens = CURVE_VIRTUAL_TOKENS;
+    res.token_supply = CURVE_TOKEN_SUPPLY;
+    res.fee_divisor = CURVE_FEE_DIVISOR;
+    res.quote_buy_filled = res.quote_sell_filled = false;
+    res.quote_buy_out = res.quote_sell_out = 0;
+    if (req.quote_buy) {
+      const cryptonote::curve_quote_t q = cryptonote::curve_quote_buy(state, req.quote_buy, 0);
+      res.quote_buy_filled = q.filled;
+      res.quote_buy_out = q.amount_out;
+    }
+    if (req.quote_sell) {
+      const cryptonote::curve_quote_t q = cryptonote::curve_quote_sell(state, req.quote_sell, 0);
+      res.quote_sell_filled = q.filled;
+      res.quote_sell_out = q.amount_out;
+    }
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_get_curves(const COMMAND_RPC_GET_CURVES::request& req, COMMAND_RPC_GET_CURVES::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
+  {
+    PERF_TIMER(on_get_curves);
+    for (const auto& c : m_core.get_blockchain_storage().get_db().get_curves())
+      res.curves.push_back(make_curve_entry(c.first, c.second));
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_get_curve_tx(const COMMAND_RPC_GET_CURVE_TX::request& req, COMMAND_RPC_GET_CURVE_TX::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
+  {
+    PERF_TIMER(on_get_curve_tx);
+    crypto::hash tx_hash;
+    if (!epee::string_tools::hex_to_pod(req.tx_hash, tx_hash)) {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Invalid tx_hash";
+      return false;
+    }
+    cryptonote::curve_tx_info info;
+    if (!m_core.get_blockchain_storage().get_db().get_curve_tx_info(tx_hash, info)) {
+      res.status = "CURVE transaction not found";
+      return true;
+    }
+    res.asset_type = cryptonote::asset_type_from_id(info.asset_type_id);
+    switch (static_cast<cryptonote::curve_op>(info.op)) {
+      case cryptonote::curve_op::LAUNCH: res.op = "launch"; break;
+      case cryptonote::curve_op::BUY:    res.op = "buy"; break;
+      case cryptonote::curve_op::SELL:   res.op = "sell"; break;
+      default:                           res.op = "invalid"; break;
+    }
+    res.filled = info.filled != 0;
+    res.amount_out = info.amount_out;
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::on_get_yield_info(const COMMAND_RPC_GET_YIELD_INFO::request& req, COMMAND_RPC_GET_YIELD_INFO::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)
   {
     CHECK_CORE_READY();
