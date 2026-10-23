@@ -52,6 +52,8 @@ namespace cryptonote::txrules
 
     bool (*asset_exists)(const void* self, const std::string& asset_type) = nullptr;
     bool (*ticker_exists)(const void* self, const std::string& ticker) = nullptr;
+    // CURVE: true if a bonding curve exists for this token asset type (sal<TICKER>)
+    bool (*curve_exists)(const void* self, const std::string& asset_type) = nullptr;
   };
 
   // Per-candidate-block overlay. This lets the TX Rules system validate
@@ -61,6 +63,7 @@ namespace cryptonote::txrules
   {
     std::unordered_set<std::string> created_asset_types;
     std::unordered_set<std::string> created_tickers;
+    std::unordered_set<std::string> launched_curves;
   };
 
   // ---------- Validation environment ----------

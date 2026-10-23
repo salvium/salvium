@@ -278,7 +278,7 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
         INSERT_INTO_JSON_OBJECT(dest, return_address_change_mask, tx.return_address_change_mask);
       } else {
         if ((tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
-             tx.type == cryptonote::transaction_type::CONVERT) &&
+             tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::CURVE) &&
             (tx.version >= TRANSACTION_VERSION_CARROT)) {
           INSERT_INTO_JSON_OBJECT(dest, protocol_tx_data, tx.protocol_tx_data);
         } else {
@@ -293,6 +293,12 @@ void toJsonValue(rapidjson::Writer<epee::byte_stream>& dest, const cryptonote::t
     if (tx.version >= TRANSACTION_VERSION_ENABLE_TOKENS) {
       if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
         INSERT_INTO_JSON_OBJECT(dest, token_metadata, tx.token_metadata);          
+      } else if (tx.type == cryptonote::transaction_type::CURVE) {
+        if (tx.source_asset_type == tx.destination_asset_type) {
+          INSERT_INTO_JSON_OBJECT(dest, token_metadata, tx.token_metadata);
+        } else if (tx.source_asset_type != "SAL1") {
+          INSERT_INTO_JSON_OBJECT(dest, rollup_binding_tag, tx.rollup_binding_tag);
+        }
       } else if (tx.type == cryptonote::transaction_type::TRANSFER) {
         INSERT_INTO_JSON_OBJECT(dest, rollup_binding_tag, tx.rollup_binding_tag);          
       } else if (tx.type == cryptonote::transaction_type::ROLLUP) {
@@ -337,7 +343,7 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
         GET_FROM_JSON_OBJECT(val, tx.return_address_change_mask, return_address_change_mask);
       } else {
         if ((tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
-             tx.type == cryptonote::transaction_type::CONVERT) &&
+             tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::CURVE) &&
             (tx.version >= TRANSACTION_VERSION_CARROT)) {
           GET_FROM_JSON_OBJECT(val, tx.protocol_tx_data, protocol_tx_data);
         } else {
@@ -352,6 +358,12 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::transaction& tx)
     if (tx.version >= TRANSACTION_VERSION_ENABLE_TOKENS) {
       if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
         GET_FROM_JSON_OBJECT(val, tx.token_metadata, token_metadata);          
+      } else if (tx.type == cryptonote::transaction_type::CURVE) {
+        if (tx.source_asset_type == tx.destination_asset_type) {
+          GET_FROM_JSON_OBJECT(val, tx.token_metadata, token_metadata);
+        } else if (tx.source_asset_type != "SAL1") {
+          GET_FROM_JSON_OBJECT(val, tx.rollup_binding_tag, rollup_binding_tag);
+        }
       } else if (tx.type == cryptonote::transaction_type::TRANSFER) {
         GET_FROM_JSON_OBJECT(val, tx.rollup_binding_tag, rollup_binding_tag);          
       } else if (tx.type == cryptonote::transaction_type::ROLLUP) {

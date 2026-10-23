@@ -360,7 +360,7 @@ namespace cryptonote
             FIELD(return_address_change_mask)
           } else {
             if ((type == cryptonote::transaction_type::STAKE || type == cryptonote::transaction_type::CREATE_TOKEN ||
-                 type == cryptonote::transaction_type::CONVERT) &&
+                 type == cryptonote::transaction_type::CONVERT || type == cryptonote::transaction_type::CURVE) &&
                 (version >= TRANSACTION_VERSION_CARROT)) {
               FIELD(protocol_tx_data)
             } else {
@@ -378,6 +378,14 @@ namespace cryptonote
       }
       if (type == cryptonote::transaction_type::CREATE_TOKEN) {
         FIELD(token_metadata)
+      } else if (type == cryptonote::transaction_type::CURVE) {
+        // CURVE LAUNCH (SAL1 -> SAL1) carries the token metadata; a SELL spends a token, so its
+        // fee is paid by a ROLLUP tx and it carries the binding tag, like a token TRANSFER.
+        if (source_asset_type == destination_asset_type) {
+          FIELD(token_metadata)
+        } else if (source_asset_type != "SAL1") {
+          FIELD(rollup_binding_tag)
+        }
       } else if (type == cryptonote::transaction_type::TRANSFER) {
         FIELD(rollup_binding_tag)
       } else if (type == cryptonote::transaction_type::ROLLUP) {

@@ -242,7 +242,8 @@ namespace boost
           a & x.return_address_list;
           a & x.return_address_change_mask;
         } else {
-          if ((x.type == cryptonote::transaction_type::STAKE || x.type == cryptonote::transaction_type::CREATE_TOKEN) &&
+          if ((x.type == cryptonote::transaction_type::STAKE || x.type == cryptonote::transaction_type::CREATE_TOKEN ||
+               x.type == cryptonote::transaction_type::CONVERT || x.type == cryptonote::transaction_type::CURVE) &&
               (x.version >= TRANSACTION_VERSION_CARROT)) {
             a & x.protocol_tx_data;
           } else {
@@ -258,6 +259,11 @@ namespace boost
     if (x.version >= TRANSACTION_VERSION_ENABLE_TOKENS) {
       if (x.type == cryptonote::transaction_type::CREATE_TOKEN) {
         a & x.token_metadata;
+      } else if (x.type == cryptonote::transaction_type::CURVE) {
+        if (x.source_asset_type == x.destination_asset_type)
+          a & x.token_metadata;
+        else if (x.source_asset_type != "SAL1")
+          a & x.rollup_binding_tag;
       } else if (x.type == cryptonote::transaction_type::TRANSFER) {
         a & x.rollup_binding_tag;
       } else if (x.type == cryptonote::transaction_type::ROLLUP) {
@@ -283,7 +289,8 @@ namespace boost
           a & x.return_address_list;
           a & x.return_address_change_mask;
         } else {
-          if ((x.type == cryptonote::transaction_type::STAKE || x.type == cryptonote::transaction_type::CREATE_TOKEN) &&
+          if ((x.type == cryptonote::transaction_type::STAKE || x.type == cryptonote::transaction_type::CREATE_TOKEN ||
+               x.type == cryptonote::transaction_type::CONVERT || x.type == cryptonote::transaction_type::CURVE) &&
               (x.version >= TRANSACTION_VERSION_CARROT)) {
             a & x.protocol_tx_data;
           } else {
@@ -298,6 +305,11 @@ namespace boost
       if (x.version >= TRANSACTION_VERSION_ENABLE_TOKENS) {
         if (x.type == cryptonote::transaction_type::CREATE_TOKEN) {
           a & x.token_metadata;
+        } else if (x.type == cryptonote::transaction_type::CURVE) {
+          if (x.source_asset_type == x.destination_asset_type)
+            a & x.token_metadata;
+          else if (x.source_asset_type != "SAL1")
+            a & x.rollup_binding_tag;
         } else if (x.type == cryptonote::transaction_type::TRANSFER) {
           a & x.rollup_binding_tag;
         } else if (x.type == cryptonote::transaction_type::ROLLUP) {

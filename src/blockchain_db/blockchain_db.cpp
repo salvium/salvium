@@ -332,9 +332,24 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
 
   std::map<std::string, int64_t> slippage_counts;
   uint64_t audit_total = 0, token_total = 0, yield_total = 0;
+
+  // CURVE payouts are the last outputs of the protocol tx (one per BUY/SELL in the block). They
+  // are the exact counterpart of what the trades burnt, priced by the curve - not slippage - so
+  // they are left out of the staking slippage tally below.
+  size_t curve_payouts = 0;
+  if (blk.major_version >= HF_VERSION_ENABLE_CURVE) {
+    for (const auto& tx : txs) {
+      const cryptonote::curve_op op = cryptonote::get_curve_op(tx.first);
+      if (op == cryptonote::curve_op::BUY || op == cryptonote::curve_op::SELL)
+        ++curve_payouts;
+    }
+  }
+
   if (blk.protocol_tx.version >= 2)
   {
     num_rct_outs += blk.protocol_tx.vout.size();
+    const size_t first_curve_payout = blk.protocol_tx.vout.size() >= curve_payouts ? blk.protocol_tx.vout.size() - curve_payouts : 0;
+    size_t vout_idx = 0;
 
     // count the current block's rct outs by asset type
     for (auto& vout: blk.protocol_tx.vout) {
@@ -350,6 +365,8 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
       num_rct_outs_by_asset_type.add(asset_type_id, 1);
       
       // Update the amount tallies by DEDUCTING the minted amount
+      if (vout_idx++ >= first_curve_payout)
+        continue;
       if (slippage_counts.count(asset_type) == 0)
         slippage_counts[asset_type] = 0;
       slippage_counts[asset_type] -= vout.amount;
