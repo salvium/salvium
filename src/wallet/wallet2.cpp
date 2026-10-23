@@ -11243,12 +11243,18 @@ std::vector<wallet2::pending_tx> wallet2::curve_trade(const std::string& token_a
 
   // A trade burns `amount` of the source asset, returns the change in the source asset, and lets
   // the block's protocol tx pay the destination asset (see make_carrot_transaction_proposals_wallet2_transfer).
+  // The trade is addressed to the trading account's own Carrot address, so its change and the
+  // protocol payout (which follows the return enote of this self-send) land in that account.
+  const std::string account_address = get_subaddress_as_str({{subaddr_account, 0}, carrot::AddressDeriveType::Carrot, false});
+  cryptonote::address_parse_info account_info;
+  THROW_WALLET_EXCEPTION_IF(!cryptonote::get_account_address_from_str(account_info, m_nettype, account_address),
+      error::wallet_internal_error, tr("Failed to parse the account address"));
   std::vector<cryptonote::tx_destination_entry> dsts(1);
-  dsts[0].addr = m_account.get_keys().m_carrot_account_address;
-  dsts[0].original = get_subaddress_as_str({{subaddr_account, 0}, carrot::AddressDeriveType::Carrot, false});
+  dsts[0].addr = account_info.address;
+  dsts[0].original = account_address;
   dsts[0].amount = amount;
   dsts[0].asset_type = dest_asset;
-  dsts[0].is_subaddress = false;
+  dsts[0].is_subaddress = account_info.is_subaddress;
   dsts[0].is_integrated = false;
   dsts[0].is_change = false;
   dsts[0].is_return = false;
