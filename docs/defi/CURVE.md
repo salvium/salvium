@@ -54,7 +54,7 @@ so the block, not the mempool, has to decide whether a trade fills.
 
 Constant product with virtual reserves, in integer arithmetic (`boost::multiprecision::uint128_t`):
 
-    Y0 = CURVE_TOKEN_SUPPLY + CURVE_VIRTUAL_TOKENS
+    Y0 = CURVE_SALE_SUPPLY + CURVE_VIRTUAL_TOKENS
     K0 = CURVE_VIRTUAL_SAL * Y0
     x  = CURVE_VIRTUAL_SAL + reserve        (SAL1 side)
     y  = Y0 - sold                          (token side)
@@ -64,7 +64,7 @@ Buy (`amount_burnt` SAL1):
     fee        = ceil(amount_burnt / 100)          -- burned, never enters the reserve
     net        = amount_burnt - fee
     tokens_out = y - ceil(K0 / (x + net))
-    reserve   += net ; sold += tokens_out          -- refund if sold would exceed CURVE_TOKEN_SUPPLY
+    reserve   += net ; sold += tokens_out          -- a buy that reaches CURVE_SALE_SUPPLY graduates (below)
 
 Sell (`amount_burnt` tokens):
 
@@ -79,13 +79,55 @@ Proposed parameters (`src/cryptonote_config.h`, all atomic units, `COIN = 1e8`):
 
 | constant | value | effect |
 |---|---|---|
-| `CURVE_TOKEN_SUPPLY` | `100,000,000 * COIN` | real tokens sold by the curve (fits the CREATE_TOKEN supply limit) |
-| `CURVE_VIRTUAL_TOKENS` | `7,300,000 * COIN` | keeps the price finite at sell-out |
-| `CURVE_VIRTUAL_SAL` | `10,000 * COIN` | sets the starting price (≈ 0.000093 SAL1 per token) |
+| `CURVE_TOKEN_SUPPLY` | `100,000,000 * COIN` | total supply of every curve token (fits the CREATE_TOKEN supply limit) |
+| `CURVE_SALE_SUPPLY` | `80,000,000 * COIN` | tokens sold by the curve before graduation |
+| `CURVE_POOL_SUPPLY` | `20,000,000 * COIN` | tokens that seed the pool at graduation |
+| `CURVE_VIRTUAL_TOKENS` | `26,666,666.66666667 * COIN` (80M / 3) | makes the curve's final price equal the pool's starting price |
+| `CURVE_VIRTUAL_SAL` | `10,000 * COIN` | sets the starting price (≈ 0.0000938 SAL1 per token) |
 | `CURVE_FEE_DIVISOR` | `100` | 1% fee on both sides |
 
-With these values, 1,000 SAL1 buys about 9.7% of the supply, and selling out the curve takes
-about 150k SAL1. The values are an open question for reviewers.
+With these values the curve raises 30,000 SAL1, its price rises 16x (from 0.0000938 to
+0.0015 SAL1) and the market cap at graduation is 150,000 SAL1. The values are an open question
+for reviewers.
+
+## Graduation
+
+When a curve has sold `CURVE_SALE_SUPPLY` tokens it **graduates**: its whole reserve and
+`CURVE_POOL_SUPPLY` tokens become a constant-product pool owned by nobody. There are no LP tokens
+and no withdrawal, so the liquidity is locked forever. Graduation happens exactly once, inside the
+trade that crosses the threshold, and is irreversible except by `pop_block`.
+
+    pool_sal    = reserve                  (30,000 SAL1)
+    pool_tokens = CURVE_POOL_SUPPLY        (20,000,000 tokens)
+
+**No price jump.** The curve's final price is `x_end / VT` with `x_end = K0 / VT`, and the pool
+starts at `reserve / CURVE_POOL_SUPPLY`. Choosing `VT = CURVE_SALE_SUPPLY / 3` (with
+`CURVE_POOL_SUPPLY = CURVE_SALE_SUPPLY / 4`) makes both equal to 0.0015 SAL1 (unit test
+`graduation_has_no_price_jump`, within 1 atomic unit).
+
+**Crossing buy.** A buy whose net SAL1 would take more than the remaining curve tokens is split:
+
+    need       = ceil(K0 / VT) - x            -- the smallest net that buys every remaining token
+    tokens_out = remaining                    -- the rest of the curve
+    graduate()
+    tokens_out += pool_buy(net - need)        -- the remainder is swapped in the new pool
+
+Both legs are one trade with one payout and one slippage check (`min_out` applies to the total).
+
+**Pool phase.** Same CURVE BUY/SELL transactions, priced against the pool:
+
+    buy:  eff = in - ceil(in / 100) ; out = y - ceil(x*y / (x + eff)) ; x += in  ; y -= out
+    sell: gross = x - ceil(x*y / (y + in)) ; paid = gross - ceil(gross / 100) ; x -= paid ; y += in
+
+The 1% fee stays in the pool, so `k = x*y` never decreases and the pool deepens with every swap.
+Rounding favours the pool.
+
+**Supply.** Tokens held by users are `sold` on the curve and `CURVE_TOKEN_SUPPLY - pool_tokens`
+after graduation; `CURVE_TOKEN_SUPPLY` is never exceeded.
+
+**Activation.** Graduation changes CURVE parameters and state that are not yet live on any
+network, so it ships under the same `HF_VERSION_ENABLE_CURVE`. If CURVE were activated without it,
+graduation would need its own hard fork.
 
 The executable specification is [`utils/curve_model.py`](../../utils/curve_model.py):
 
@@ -103,7 +145,10 @@ The executable specification is [`utils/curve_model.py`](../../utils/curve_model
 4. **Deterministic mint:** each mint is a pure function of the curve state at that point in the
    block and of the tx fields. The template and validation iterate CURVE txs in the same
    (block) order, and the state is applied sequentially.
-5. **Token supply cap:** `sold <= CURVE_TOKEN_SUPPLY`. Tokens exist only as curve output.
+5. **Token supply cap:** `sold <= CURVE_SALE_SUPPLY` on the curve and
+   `pool_tokens <= CURVE_TOKEN_SUPPLY` in the pool. Tokens exist only as CURVE output.
+6. **Pool never shrinks:** in the pool phase `k = pool_sal * pool_tokens` never decreases, and a
+   graduated curve always has `reserve == 0`, `sold == CURVE_SALE_SUPPLY` and a non-empty pool.
 
 ## Transaction shape
 
@@ -121,9 +166,10 @@ fee payment is on chain.
 
 Two new LMDB tables:
 
-- `curves`, keyed by `asset_id_from_type("sal" + ticker)`: `{reserve, sold, launch_height}`.
-- `curve_txs`, keyed by tx hash: the outcome of each CURVE tx (`op`, `filled`, `amount_out`)
-  plus the curve state it replaced.
+- `curves`, keyed by `asset_id_from_type("sal" + ticker)`:
+  `{phase, reserve, sold, pool_sal, pool_tokens, launch_height, graduation_height}`.
+- `curve_txs`, keyed by tx hash: the outcome of each CURVE tx (`op`, `filled`, `amount_out`,
+  `graduated`) plus the full curve state it replaced, so undoing a graduation is exact.
 
 `add_transaction` applies each CURVE tx in block order: it creates the curve for a LAUNCH, and
 prices a BUY/SELL against the stored state. `remove_transaction` restores the replaced state from
@@ -147,8 +193,10 @@ a SELL also lowers the token tally, because the generic burn path skips token so
   `curve_sell {ticker, amount, min_out?}`.
 - daemon RPC:
   - `get_curve_info {asset_type, quote_buy?, quote_sell?}` returns `{curve, parameters, quotes}`;
+    `curve` includes `phase` (`curve` | `pool`), `pool_sal`, `pool_tokens`, `graduation_height`
+    and `circulating`;
   - `get_curves` lists all curves;
-  - `get_curve_tx {tx_hash}` returns `{op, filled, amount_out}`.
+  - `get_curve_tx {tx_hash}` returns `{op, filled, amount_out, graduated}`.
 
   Front-ends need only these calls to show charts, quotes and trade results.
 - Wallet implementation: a launch is built exactly like CREATE_TOKEN and re-typed to CURVE before
@@ -159,8 +207,8 @@ a SELL also lowers the token tally, because the generic burn path skips token so
 
 | Layer | How to run | What it pins |
 |---|---|---|
-| Executable spec | `python3 utils/curve_model.py --selftest` | solvency, no-free-money, round-trip loss, monotonic price, supply cap |
-| Unit tests | `unit_tests --gtest_filter='curve_math.*'` (8 tests) | C++ is bit-identical to the spec (`--vectors`), fee rounding, slippage refunds, random walks |
+| Executable spec | `python3 utils/curve_model.py --selftest` | solvency, no-free-money, round-trip loss, monotonic price, supply cap, price continuity at graduation, non-decreasing `k` |
+| Unit tests | `unit_tests --gtest_filter='curve_math.*'` (9 tests) | C++ is bit-identical to the spec (`--vectors`, incl. crossing buys and pool swaps), fee rounding, slippage refunds, no price jump, random walks through graduation |
 | Regtest end-to-end | `utils/curve_regtest.py` (instructions in the file header) | launch, buy, sell (with its ROLLUP fee tx), slippage refund, daemon quotes, and a reorg: `pop_blocks` restores the exact pre-sell curve state and re-mining reproduces it |
 
 Every on-chain amount in the regtest run is compared with the Python model: tokens out of the buy,
@@ -180,7 +228,5 @@ re-derivation used by the template, and the regtest run exercises both paths.
 
 ## Out of scope / future work
 
-- "Graduation" to an AMM or DEX when a curve sells out. Today the curve simply stops selling at
-  `CURVE_TOKEN_SUPPLY`, and selling back stays possible.
 - Creator rewards or a fee share. The fee is burned so that no treasury key is needed.
 - Configurable curve parameters per launch.

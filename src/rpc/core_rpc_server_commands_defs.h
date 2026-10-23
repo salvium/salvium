@@ -1527,7 +1527,12 @@ namespace cryptonote
     uint64_t sold;
     uint64_t launch_height;
     uint64_t spot_price;          // SAL1 atomic units per whole token
-    uint64_t tokens_remaining;
+    uint64_t tokens_remaining;    // curve phase: tokens left before graduation
+    std::string phase;            // "curve" | "pool"
+    uint64_t pool_sal;            // pool phase: SAL1 locked in the pool
+    uint64_t pool_tokens;         // pool phase: tokens in the pool
+    uint64_t graduation_height;   // 0 while on the curve
+    uint64_t circulating;         // tokens held by users
 
     BEGIN_KV_SERIALIZE_MAP()
       KV_SERIALIZE(asset_type)
@@ -1536,6 +1541,11 @@ namespace cryptonote
       KV_SERIALIZE(launch_height)
       KV_SERIALIZE(spot_price)
       KV_SERIALIZE(tokens_remaining)
+      KV_SERIALIZE(phase)
+      KV_SERIALIZE(pool_sal)
+      KV_SERIALIZE(pool_tokens)
+      KV_SERIALIZE(graduation_height)
+      KV_SERIALIZE(circulating)
     END_KV_SERIALIZE_MAP()
   };
 
@@ -1562,6 +1572,8 @@ namespace cryptonote
       uint64_t virtual_sal;
       uint64_t virtual_tokens;
       uint64_t token_supply;
+      uint64_t sale_supply;
+      uint64_t pool_supply;
       uint64_t fee_divisor;
       bool quote_buy_filled;
       uint64_t quote_buy_out;
@@ -1574,6 +1586,8 @@ namespace cryptonote
         KV_SERIALIZE(virtual_sal)
         KV_SERIALIZE(virtual_tokens)
         KV_SERIALIZE(token_supply)
+        KV_SERIALIZE(sale_supply)
+        KV_SERIALIZE(pool_supply)
         KV_SERIALIZE(fee_divisor)
         KV_SERIALIZE(quote_buy_filled)
         KV_SERIALIZE(quote_buy_out)
@@ -1625,6 +1639,7 @@ namespace cryptonote
       std::string op;              // launch | buy | sell
       bool filled;                 // false = refunded
       uint64_t amount_out;
+      bool graduated;              // this trade sold out the curve and created its pool
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(status)
@@ -1632,6 +1647,7 @@ namespace cryptonote
         KV_SERIALIZE(op)
         KV_SERIALIZE(filled)
         KV_SERIALIZE(amount_out)
+        KV_SERIALIZE(graduated)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<response_t> response;

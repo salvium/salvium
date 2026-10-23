@@ -3202,7 +3202,12 @@ namespace cryptonote
       e.sold = state.sold;
       e.launch_height = state.launch_height;
       e.spot_price = cryptonote::curve_spot_price(state);
-      e.tokens_remaining = state.sold <= CURVE_TOKEN_SUPPLY ? CURVE_TOKEN_SUPPLY - state.sold : 0;
+      e.tokens_remaining = state.sold <= CURVE_SALE_SUPPLY ? CURVE_SALE_SUPPLY - state.sold : 0;
+      e.phase = state.phase == cryptonote::CURVE_PHASE_POOL ? "pool" : "curve";
+      e.pool_sal = state.pool_sal;
+      e.pool_tokens = state.pool_tokens;
+      e.graduation_height = state.graduation_height;
+      e.circulating = cryptonote::curve_circulating(state);
       return e;
     }
   }
@@ -3219,6 +3224,8 @@ namespace cryptonote
     res.virtual_sal = CURVE_VIRTUAL_SAL;
     res.virtual_tokens = CURVE_VIRTUAL_TOKENS;
     res.token_supply = CURVE_TOKEN_SUPPLY;
+    res.sale_supply = CURVE_SALE_SUPPLY;
+    res.pool_supply = CURVE_POOL_SUPPLY;
     res.fee_divisor = CURVE_FEE_DIVISOR;
     res.quote_buy_filled = res.quote_sell_filled = false;
     res.quote_buy_out = res.quote_sell_out = 0;
@@ -3268,6 +3275,7 @@ namespace cryptonote
     }
     res.filled = info.filled != 0;
     res.amount_out = info.amount_out;
+    res.graduated = info.graduated != 0;
     res.status = CORE_RPC_STATUS_OK;
     return true;
   }

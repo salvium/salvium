@@ -296,6 +296,12 @@ typedef struct curve_tx_info {
   uint64_t amount_out;     // tokens (BUY) or SAL1 (SELL) minted; 0 for LAUNCH and refunds
   uint8_t op;              // cryptonote::curve_op
   uint8_t filled;          // 0 = refunded
+  // graduation: the rest of the replaced state, and whether this trade graduated the curve
+  uint8_t prev_phase;
+  uint8_t graduated;
+  uint64_t prev_pool_sal;
+  uint64_t prev_pool_tokens;
+  uint64_t prev_graduation_height;
 } curve_tx_info;
 #pragma pack(pop)
 

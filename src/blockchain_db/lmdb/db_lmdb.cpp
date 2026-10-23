@@ -4990,25 +4990,35 @@ std::map<std::string,uint64_t> BlockchainLMDB::get_circulating_supply() const
 namespace
 {
   // On-disk layout of a curve state (fixed size, native endianness like the other tables)
+#pragma pack(push, 1)
   struct mdb_curve_state
   {
     uint64_t reserve;
     uint64_t sold;
     uint64_t launch_height;
+    uint64_t pool_sal;
+    uint64_t pool_tokens;
+    uint64_t graduation_height;
+    uint8_t phase;
   };
+#pragma pack(pop)
 
   cryptonote::curve_state_t from_mdb(const mdb_curve_state& m)
   {
     cryptonote::curve_state_t s;
+    s.phase = m.phase;
     s.reserve = m.reserve;
     s.sold = m.sold;
+    s.pool_sal = m.pool_sal;
+    s.pool_tokens = m.pool_tokens;
     s.launch_height = m.launch_height;
+    s.graduation_height = m.graduation_height;
     return s;
   }
 
   mdb_curve_state to_mdb(const cryptonote::curve_state_t& s)
   {
-    return mdb_curve_state{s.reserve, s.sold, s.launch_height};
+    return mdb_curve_state{s.reserve, s.sold, s.launch_height, s.pool_sal, s.pool_tokens, s.graduation_height, s.phase};
   }
 }
 
@@ -5071,10 +5081,20 @@ void BlockchainLMDB::apply_curve_tx(const cryptonote::transaction& tx, const cry
     info.prev_reserve = prev.reserve;
     info.prev_sold = prev.sold;
     info.prev_launch_height = prev.launch_height;
+    info.prev_phase = prev.phase;
+    info.prev_pool_sal = prev.pool_sal;
+    info.prev_pool_tokens = prev.pool_tokens;
+    info.prev_graduation_height = prev.graduation_height;
     info.amount_out = quote.amount_out;
     info.filled = quote.filled ? 1 : 0;
 
-    mdb_curve_state ms = to_mdb(quote.new_state);
+    cryptonote::curve_state_t next = quote.new_state;
+    if (prev.phase == cryptonote::CURVE_PHASE_CURVE && next.phase == cryptonote::CURVE_PHASE_POOL)
+    {
+      next.graduation_height = m_height;   // this trade graduated the curve
+      info.graduated = 1;
+    }
+    mdb_curve_state ms = to_mdb(next);
     MDB_val_set(val_state, ms);
     result = mdb_cursor_put(m_cur_curves, &asset_key, &val_state, 0);
     if (result)
@@ -5139,7 +5159,8 @@ void BlockchainLMDB::undo_curve_tx(const cryptonote::transaction& tx, const cryp
   }
   else
   {
-    mdb_curve_state prev{info.prev_reserve, info.prev_sold, info.prev_launch_height};
+    mdb_curve_state prev{info.prev_reserve, info.prev_sold, info.prev_launch_height, info.prev_pool_sal,
+                         info.prev_pool_tokens, info.prev_graduation_height, info.prev_phase};
     MDB_val_set(val_state, prev);
     result = mdb_cursor_put(m_cur_curves, &asset_key, &val_state, 0);
     if (result)

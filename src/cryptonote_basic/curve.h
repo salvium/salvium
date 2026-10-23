@@ -60,22 +60,35 @@ namespace cryptonote
   // The token traded by a BUY/SELL (sal<TICKER>), or created by a LAUNCH.
   std::string get_curve_asset_type(const transaction_prefix& tx);
 
-  // Per-curve consensus state, stored in the `curves` table keyed by asset id.
+  enum : uint8_t { CURVE_PHASE_CURVE = 0, CURVE_PHASE_POOL = 1 };
+
+  // Per-token consensus state, stored in the `curves` table keyed by asset id. A token starts on
+  // its bonding curve and graduates, once and for good, to a pool with locked liquidity.
   struct curve_state_t
   {
-    uint64_t reserve = 0;        // SAL1 held by the curve (net of fees)
-    uint64_t sold = 0;           // tokens in circulation through this curve
+    uint8_t phase = CURVE_PHASE_CURVE;
+    uint64_t reserve = 0;        // curve phase: SAL1 held by the curve (net of fees)
+    uint64_t sold = 0;           // tokens sold by the curve (CURVE_SALE_SUPPLY once graduated)
+    uint64_t pool_sal = 0;       // pool phase: SAL1 in the pool
+    uint64_t pool_tokens = 0;    // pool phase: tokens in the pool
     uint64_t launch_height = 0;
+    uint64_t graduation_height = 0;
 
     BEGIN_SERIALIZE_OBJECT()
+      FIELD(phase)
       VARINT_FIELD(reserve)
       VARINT_FIELD(sold)
+      VARINT_FIELD(pool_sal)
+      VARINT_FIELD(pool_tokens)
       VARINT_FIELD(launch_height)
+      VARINT_FIELD(graduation_height)
     END_SERIALIZE()
 
     bool operator==(const curve_state_t& o) const
     {
-      return reserve == o.reserve && sold == o.sold && launch_height == o.launch_height;
+      return phase == o.phase && reserve == o.reserve && sold == o.sold && pool_sal == o.pool_sal &&
+             pool_tokens == o.pool_tokens && launch_height == o.launch_height &&
+             graduation_height == o.graduation_height;
     }
   };
 
@@ -107,6 +120,10 @@ namespace cryptonote
   // Spot price in SAL1 atomic units per whole token (COIN atomic units). Display only.
   uint64_t curve_spot_price(const curve_state_t& state);
 
-  // Invariant check used by consensus and tests: reserve covers selling everything back.
+  // Tokens held by users: minted by the curve, or bought from the pool, net of burns.
+  uint64_t curve_circulating(const curve_state_t& state);
+
+  // Invariant check used by consensus and tests: the curve reserve covers selling everything
+  // back, the supply cap holds, and a pool always keeps both reserves positive.
   bool curve_state_is_solvent(const curve_state_t& state);
 }

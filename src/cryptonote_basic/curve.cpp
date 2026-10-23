@@ -42,7 +42,7 @@ namespace cryptonote
   {
     using u128 = boost::multiprecision::uint128_t;
 
-    const u128 Y0 = u128(CURVE_TOKEN_SUPPLY) + u128(CURVE_VIRTUAL_TOKENS);
+    const u128 Y0 = u128(CURVE_SALE_SUPPLY) + u128(CURVE_VIRTUAL_TOKENS);
     const u128 K0 = u128(CURVE_VIRTUAL_SAL) * Y0;
 
     u128 ceil_div(const u128& a, const u128& b)
@@ -60,6 +60,139 @@ namespace cryptonote
       q.amount_out = 0;
       q.new_state = state;
       return q;
+    }
+
+    curve_quote_t fill(const curve_state_t& state, uint64_t out)
+    {
+      curve_quote_t q;
+      q.filled = true;
+      q.amount_out = out;
+      q.new_state = state;
+      return q;
+    }
+
+    // A sold-out curve becomes its pool: the whole reserve plus CURVE_POOL_SUPPLY tokens.
+    curve_state_t graduate(const curve_state_t& s)
+    {
+      curve_state_t p = s;
+      p.phase = CURVE_PHASE_POOL;
+      p.pool_sal = s.reserve;
+      p.pool_tokens = CURVE_POOL_SUPPLY;
+      p.reserve = 0;
+      p.sold = CURVE_SALE_SUPPLY;
+      return p;
+    }
+
+    // ---- pool phase: constant product, the 1% fee stays in the pool --------------------------
+    bool pool_buy(const curve_state_t& s, uint64_t sal_in, uint64_t& out, curve_state_t& ns)
+    {
+      if (sal_in == 0)
+        return false;
+      const uint64_t eff = sal_in - curve_fee(sal_in);
+      if (eff == 0)
+        return false;
+      const u128 x = s.pool_sal, y = s.pool_tokens;
+      if (u128(sal_in) > u128(std::numeric_limits<uint64_t>::max()) - x)
+        return false;
+      const u128 o = y - ceil_div(x * y, x + u128(eff));
+      if (o == 0 || o >= y)
+        return false;
+      out = o.convert_to<uint64_t>();
+      ns = s;
+      ns.pool_sal = s.pool_sal + sal_in;
+      ns.pool_tokens = s.pool_tokens - out;
+      return true;
+    }
+
+    bool pool_sell(const curve_state_t& s, uint64_t tokens_in, uint64_t& paid, curve_state_t& ns)
+    {
+      if (tokens_in == 0)
+        return false;
+      const u128 x = s.pool_sal, y = s.pool_tokens;
+      if (u128(tokens_in) > u128(std::numeric_limits<uint64_t>::max()) - y)
+        return false;
+      const u128 nx = ceil_div(x * y, y + u128(tokens_in));
+      if (nx >= x)
+        return false;
+      const uint64_t gross = (x - nx).convert_to<uint64_t>();
+      const uint64_t fee = curve_fee(gross);
+      if (fee >= gross)
+        return false;
+      paid = gross - fee;
+      ns = s;
+      ns.pool_sal = s.pool_sal - paid;
+      ns.pool_tokens = s.pool_tokens + tokens_in;
+      return true;
+    }
+
+    // ---- curve phase -------------------------------------------------------------------------
+    bool curve_buy(const curve_state_t& s, uint64_t sal_burnt, uint64_t& out, curve_state_t& ns)
+    {
+      const uint64_t fee = curve_fee(sal_burnt);
+      const uint64_t net = sal_burnt - fee;
+      if (net == 0 || s.sold > CURVE_SALE_SUPPLY)
+        return false;
+      if (net > std::numeric_limits<uint64_t>::max() - s.reserve)
+        return false;
+      const u128 x = x_of(s), y = y_of(s);
+      const uint64_t remaining = CURVE_SALE_SUPPLY - s.sold;
+      const u128 o = y - ceil_div(K0, x + u128(net));
+      if (o == 0 || o > y)
+        return false;
+      if (o < u128(remaining))
+      {
+        out = o.convert_to<uint64_t>();
+        ns = s;
+        ns.reserve = s.reserve + net;
+        ns.sold = s.sold + out;
+        return true;
+      }
+      // Crosses graduation: buy every remaining curve token with the smallest sufficient net,
+      // graduate, and swap the rest of the burn in the new pool within the same trade.
+      const u128 need128 = ceil_div(K0, y - u128(remaining)) - x;
+      if (need128 == 0 || need128 > u128(net))
+        return false;   // unreachable by construction
+      const uint64_t need = need128.convert_to<uint64_t>();
+      curve_state_t filled = s;
+      filled.reserve = s.reserve + need;
+      filled.sold = CURVE_SALE_SUPPLY;
+      const curve_state_t pool = graduate(filled);
+      const uint64_t rest = net - need;
+      uint64_t pool_out = 0;
+      curve_state_t after = pool;
+      if (rest > 0 && !pool_buy(pool, rest, pool_out, after))
+      {
+        // dust too small to buy anything: it stays in the pool
+        after = pool;
+        after.pool_sal = pool.pool_sal + rest;
+        pool_out = 0;
+      }
+      out = remaining + pool_out;
+      ns = after;
+      return true;
+    }
+
+    bool curve_sell(const curve_state_t& s, uint64_t tokens_burnt, uint64_t& paid, curve_state_t& ns)
+    {
+      if (tokens_burnt == 0 || tokens_burnt > s.sold)
+        return false;
+      const uint64_t new_sold = s.sold - tokens_burnt;
+      const u128 nx = ceil_div(K0, Y0 - u128(new_sold));
+      const u128 x = x_of(s);
+      if (nx >= x)
+        return false;
+      const u128 gross128 = x - nx;
+      if (gross128 > u128(s.reserve))
+        return false;   // unreachable by construction
+      const uint64_t gross = gross128.convert_to<uint64_t>();
+      const uint64_t fee = curve_fee(gross);
+      if (fee >= gross)
+        return false;
+      paid = gross - fee;
+      ns = s;
+      ns.reserve = s.reserve - gross;
+      ns.sold = new_sold;
+      return true;
     }
   }
 
@@ -101,68 +234,28 @@ namespace cryptonote
 
   curve_quote_t curve_quote_buy(const curve_state_t& state, uint64_t sal_burnt, uint64_t min_out)
   {
-    if (sal_burnt == 0 || state.sold > CURVE_TOKEN_SUPPLY)
+    if (sal_burnt == 0)
       return refund(state);
-
-    const uint64_t fee = curve_fee(sal_burnt);
-    const uint64_t net = sal_burnt - fee;
-    if (net == 0)
+    uint64_t out = 0;
+    curve_state_t ns;
+    const bool ok = state.phase == CURVE_PHASE_POOL ? pool_buy(state, sal_burnt, out, ns)
+                                                    : curve_buy(state, sal_burnt, out, ns);
+    if (!ok || out < min_out)
       return refund(state);
-
-    // reserve + net must stay within uint64 (it is bounded by MONEY_SUPPLY in practice)
-    if (net > std::numeric_limits<uint64_t>::max() - state.reserve)
-      return refund(state);
-
-    const u128 new_x = x_of(state) + u128(net);
-    const u128 new_y = ceil_div(K0, new_x);           // ceil: fewer tokens out
-    const u128 y = y_of(state);
-    if (new_y >= y)
-      return refund(state);
-
-    const u128 out = y - new_y;
-    if (u128(state.sold) + out > u128(CURVE_TOKEN_SUPPLY))
-      return refund(state);                            // would sell past the real supply
-    if (out < u128(min_out))
-      return refund(state);                            // slippage limit not met
-
-    curve_quote_t q;
-    q.filled = true;
-    q.amount_out = out.convert_to<uint64_t>();
-    q.new_state = state;
-    q.new_state.reserve = state.reserve + net;
-    q.new_state.sold = state.sold + q.amount_out;
-    return q;
+    return fill(ns, out);
   }
 
   curve_quote_t curve_quote_sell(const curve_state_t& state, uint64_t tokens_burnt, uint64_t min_out)
   {
-    if (tokens_burnt == 0 || tokens_burnt > state.sold)
+    if (tokens_burnt == 0)
       return refund(state);
-
-    const uint64_t new_sold = state.sold - tokens_burnt;
-    const u128 new_x = ceil_div(K0, Y0 - u128(new_sold)); // ceil: less SAL1 out
-    const u128 x = x_of(state);
-    if (new_x >= x)
+    uint64_t paid = 0;
+    curve_state_t ns;
+    const bool ok = state.phase == CURVE_PHASE_POOL ? pool_sell(state, tokens_burnt, paid, ns)
+                                                    : curve_sell(state, tokens_burnt, paid, ns);
+    if (!ok || paid < min_out)
       return refund(state);
-
-    const u128 gross128 = x - new_x;
-    if (gross128 > u128(state.reserve))
-      return refund(state);                              // unreachable by construction
-    const uint64_t gross = gross128.convert_to<uint64_t>();
-    const uint64_t fee = curve_fee(gross);
-    if (fee >= gross)
-      return refund(state);
-    const uint64_t paid = gross - fee;
-    if (paid < min_out)
-      return refund(state);                              // slippage limit not met
-
-    curve_quote_t q;
-    q.filled = true;
-    q.amount_out = paid;
-    q.new_state = state;
-    q.new_state.reserve = state.reserve - gross;
-    q.new_state.sold = new_sold;
-    return q;
+    return fill(ns, paid);
   }
 
   bool curve_quote_tx(const transaction_prefix& tx, const curve_state_t& state, curve_quote_t& quote)
@@ -196,13 +289,27 @@ namespace cryptonote
 
   uint64_t curve_spot_price(const curve_state_t& state)
   {
-    const u128 p = x_of(state) * u128(COIN) / y_of(state);
+    u128 p;
+    if (state.phase == CURVE_PHASE_POOL)
+      p = state.pool_tokens ? u128(state.pool_sal) * u128(COIN) / u128(state.pool_tokens) : u128(0);
+    else
+      p = x_of(state) * u128(COIN) / y_of(state);
     return p > u128(std::numeric_limits<uint64_t>::max()) ? std::numeric_limits<uint64_t>::max() : p.convert_to<uint64_t>();
+  }
+
+  uint64_t curve_circulating(const curve_state_t& state)
+  {
+    if (state.phase == CURVE_PHASE_POOL)
+      return state.pool_tokens <= CURVE_TOKEN_SUPPLY ? CURVE_TOKEN_SUPPLY - state.pool_tokens : 0;
+    return state.sold;
   }
 
   bool curve_state_is_solvent(const curve_state_t& state)
   {
-    if (state.sold > CURVE_TOKEN_SUPPLY)
+    if (state.phase == CURVE_PHASE_POOL)
+      return state.sold == CURVE_SALE_SUPPLY && state.reserve == 0 &&
+             state.pool_sal > 0 && state.pool_tokens > 0 && state.pool_tokens <= CURVE_TOKEN_SUPPLY;
+    if (state.phase != CURVE_PHASE_CURVE || state.sold > CURVE_SALE_SUPPLY)
       return false;
     return x_of(state) * y_of(state) >= K0;
   }

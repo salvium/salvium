@@ -95,10 +95,16 @@
 #define CREATE_TOKEN_LOCK_PERIOD                        10
 
 // CURVE bonding-curve parameters (atomic units). Must match utils/curve_model.py.
-#define CURVE_TOKEN_SUPPLY                              ((uint64_t)10000000000000000ull) // 100M tokens sold by the curve
-#define CURVE_VIRTUAL_TOKENS                            ((uint64_t)730000000000000ull)   // 7.3M virtual tokens
+// The curve sells CURVE_SALE_SUPPLY tokens; then it graduates: its whole SAL1 reserve and the
+// remaining CURVE_POOL_SUPPLY tokens become a constant-product pool with locked liquidity.
+// CURVE_VIRTUAL_TOKENS = ceil(SALE * POOL / (SALE - POOL)) makes the final curve price equal to
+// the starting pool price, so graduation causes no price jump.
+#define CURVE_TOKEN_SUPPLY                              ((uint64_t)10000000000000000ull) // 100M tokens in total
+#define CURVE_SALE_SUPPLY                               ((uint64_t)8000000000000000ull)  // 80M sold by the curve
+#define CURVE_POOL_SUPPLY                               (CURVE_TOKEN_SUPPLY - CURVE_SALE_SUPPLY) // 20M seed the pool
+#define CURVE_VIRTUAL_TOKENS                            ((uint64_t)2666666666666667ull)  // ~26.67M virtual tokens
 #define CURVE_VIRTUAL_SAL                               ((uint64_t)1000000000000ull)     // 10k virtual SAL1
-#define CURVE_FEE_DIVISOR                               100                              // 1% fee, burned
+#define CURVE_FEE_DIVISOR                               100                              // 1%: burned on the curve, kept by the pool
 
 // HF11 block reward split
 #define BLOCK_REWARD_TREASURY_PCT                       25  // to treasury, 21600-block unlock
