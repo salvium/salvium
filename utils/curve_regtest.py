@@ -73,7 +73,9 @@ def main():
         w("open_wallet", filename="curve_test", password="")
     except RuntimeError:
         w("create_wallet", filename="curve_test", password="", language="English")
-    addr = w("get_address", account_index=0)["address"]
+    r = w("get_address", account_index=0)
+    # on a fresh chain the wallet may default to its CryptoNote address; mining needs Carrot
+    addr = r.get("addresses", [{}])[0].get("address_carrot") or r["address"]
 
     def mine(n):
         d("generateblocks", amount_of_blocks=n, wallet_address=addr)
