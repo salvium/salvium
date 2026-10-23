@@ -263,6 +263,25 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_pre_car
     };
 }
 //-------------------------------------------------------------------------------------------------------------------
+// A return output (the protocol payout of a STAKE, CREATE_TOKEN, CURVE, ...) belongs to the account
+// that made the origin tx: scanning that tx's change recorded the change's address spend pubkey in
+// the return output map, so look its subaddress index up instead of assuming account 0.
+static carrot::subaddress_index_extended return_output_subaddr_index(
+    const carrot::carrot_and_legacy_account &account,
+    const crypto::public_key &return_onetime_address)
+{
+    const auto &return_map = account.get_return_output_map_ref();
+    const auto return_it = return_map.find(return_onetime_address);
+    if (return_it != return_map.cend())
+    {
+        const auto &subaddress_map = account.get_subaddress_map_ref();
+        const auto subaddr_it = subaddress_map.find(return_it->second.K_spend_pubkey);
+        if (subaddr_it != subaddress_map.cend())
+            return {subaddr_it->second.index, carrot::AddressDeriveType::Carrot, true};
+    }
+    return {{0, 0}, carrot::AddressDeriveType::Carrot, true};
+}
+//-------------------------------------------------------------------------------------------------------------------
 static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_coinbase_enote(
     const carrot::CarrotCoinbaseEnoteV1 &enote,
     const mx25519_pubkey &s_sender_receiver_unctx,
@@ -312,14 +331,15 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         res.address_spend_pubkey = address_spend_pubkey;
         res.return_address = enote.onetime_address;
         res.is_return = true;
+        res.subaddr_index = return_output_subaddr_index(account, enote.onetime_address);
     } else {
         // we received a coinbase enote
         res.address_spend_pubkey = main_address_spend_pubkey;
         res.is_return = false;
+        res.subaddr_index = carrot::subaddress_index_extended{{0, 0}};
     }
 
     res.payment_id = crypto::null_hash;
-    res.subaddr_index = carrot::subaddress_index_extended{{0, 0}};
     res.amount = enote.amount;
     res.asset_type = enote.asset_type;
     res.amount_blinding_factor = rct::I;
@@ -435,7 +455,7 @@ static std::optional<enote_view_incoming_scan_info_t> view_incoming_scan_carrot_
         memcpy(&res.payment_id, &payment_id, sizeof(carrot::payment_id_t));
         res.subaddr_index = subaddr_index;
     } else {
-        res.subaddr_index = {{0, 0}, carrot::AddressDeriveType::Carrot, true};
+        res.subaddr_index = return_output_subaddr_index(account, res.return_address);
     }
 
     res.amount_blinding_factor = rct::sk2rct(amount_blinding_factor_sk);
