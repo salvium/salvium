@@ -234,6 +234,9 @@ namespace
   const char* USAGE_STAKE("stake <amount>");
   const char* USAGE_AUDIT("audit [index=<N1>[,<N2>,...] | index=all]");
   const char* USAGE_CREATE_TOKEN("create_token [index=<N1>[,<N2>,...]] <ticker> <supply> [name=<name>|metadata=<metadata>|file=<metadata_file>]");
+  const char* USAGE_CURVE_LAUNCH("curve_launch <ticker> [name=<name>] [url=<url>]");
+  const char* USAGE_CURVE_BUY("curve_buy <ticker> <SAL1_amount> [min_tokens]");
+  const char* USAGE_CURVE_SELL("curve_sell <ticker> <token_amount> [min_SAL1]");
   const char* USAGE_PRICE_INFO("price_info");
   const char* USAGE_SUPPLY_INFO("supply_info");
   const char* USAGE_GET_TOKENS("get_tokens [<asset_type_filter>]");
@@ -3609,6 +3612,18 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::create_token, this, _1),
                            tr(USAGE_CREATE_TOKEN),
                            tr("Create a new private token with the specified parameters. The circulating supply of the newly created token is sent to your wallet address 10 blocks later."));
+  m_cmd_binder.set_handler("curve_launch",
+                           boost::bind(&simple_wallet::curve_launch, this, _1),
+                           tr(USAGE_CURVE_LAUNCH),
+                           tr("Launch a bonding-curve token (CURVE). Burns the token creation price in SAL1; the supply is sold by the curve."));
+  m_cmd_binder.set_handler("curve_buy",
+                           boost::bind(&simple_wallet::curve_buy, this, _1),
+                           tr(USAGE_CURVE_BUY),
+                           tr("Buy tokens from a curve by burning SAL1. If fewer than <min_tokens> would be received, the SAL1 is refunded."));
+  m_cmd_binder.set_handler("curve_sell",
+                           boost::bind(&simple_wallet::curve_sell, this, _1),
+                           tr(USAGE_CURVE_SELL),
+                           tr("Sell tokens back to their curve for SAL1. If less than <min_SAL1> would be received, the tokens are refunded."));
   m_cmd_binder.set_handler("get_tokens",
                            boost::bind(&simple_wallet::get_tokens, this, _1),
                            tr(USAGE_GET_TOKENS),
@@ -9165,6 +9180,119 @@ bool simple_wallet::create_token(const std::vector<std::string> &args_)
   }
 
   return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::confirm_and_send_curve_txs(std::vector<tools::wallet2::pending_tx>& ptx_vector, const std::string& what)
+{
+  if (ptx_vector.empty())
+  {
+    fail_msg_writer() << tr("No transaction was created");
+    return true;
+  }
+  uint64_t total_fee = 0, total_burnt = 0;
+  for (const auto& ptx : ptx_vector)
+  {
+    total_fee += ptx.fee;
+    total_burnt += ptx.tx.amount_burnt;
+  }
+  std::ostringstream prompt;
+  prompt << boost::format(tr("%s. Burning %s, network fee %s SAL1. Is this okay?")) % what % print_money(total_burnt) % print_money(total_fee);
+  std::string accepted = input_line(prompt.str(), true);
+  if (std::cin.eof())
+    return true;
+  if (!command_line::is_yes(accepted))
+  {
+    fail_msg_writer() << tr("transaction cancelled.");
+    return true;
+  }
+  commit_or_save(ptx_vector, m_do_not_relay);
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::curve_launch(const std::vector<std::string> &args_)
+{
+  if (m_wallet->get_current_hard_fork() < HF_VERSION_ENABLE_CURVE) {
+    fail_msg_writer() << tr("curve_launch is not available until hard fork ") << HF_VERSION_ENABLE_CURVE;
+    return true;
+  }
+  CHECK_IF_BACKGROUND_SYNCING("cannot launch curves while background syncing");
+  if (!try_connect_to_daemon())
+    return true;
+  if (args_.empty() || args_.size() > 3) {
+    PRINT_USAGE(USAGE_CURVE_LAUNCH);
+    return true;
+  }
+  std::string ticker = args_[0];
+  std::transform(ticker.begin(), ticker.end(), ticker.begin(), ::toupper);
+  std::string name, url;
+  for (size_t i = 1; i < args_.size(); ++i) {
+    if (args_[i].rfind("name=", 0) == 0) name = args_[i].substr(5);
+    else if (args_[i].rfind("url=", 0) == 0) url = args_[i].substr(4);
+    else { PRINT_USAGE(USAGE_CURVE_LAUNCH); return true; }
+  }
+
+  SCOPED_WALLET_UNLOCK_ON_BAD_PASSWORD(return false;);
+  try
+  {
+    auto ptx_vector = m_wallet->curve_launch(ticker, name, url, m_current_subaddress_account, {});
+    return confirm_and_send_curve_txs(ptx_vector, (boost::format(tr("Launching curve token 'sal%s'")) % ticker).str());
+  }
+  catch (const std::exception& e)
+  {
+    handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
+  }
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::curve_trade(const std::vector<std::string> &args_, bool is_buy)
+{
+  if (m_wallet->get_current_hard_fork() < HF_VERSION_ENABLE_CURVE) {
+    fail_msg_writer() << tr("curve trading is not available until hard fork ") << HF_VERSION_ENABLE_CURVE;
+    return true;
+  }
+  CHECK_IF_BACKGROUND_SYNCING("cannot trade while background syncing");
+  if (!try_connect_to_daemon())
+    return true;
+  if (args_.size() < 2 || args_.size() > 3) {
+    PRINT_USAGE(is_buy ? USAGE_CURVE_BUY : USAGE_CURVE_SELL);
+    return true;
+  }
+  std::string ticker = args_[0];
+  std::transform(ticker.begin(), ticker.end(), ticker.begin(), ::toupper);
+  uint64_t amount = 0, min_out = 0;
+  if (!cryptonote::parse_amount(amount, args_[1]) || amount == 0) {
+    fail_msg_writer() << tr("amount is wrong: ") << args_[1];
+    return true;
+  }
+  if (args_.size() == 3 && !cryptonote::parse_amount(min_out, args_[2])) {
+    fail_msg_writer() << tr("minimum is wrong: ") << args_[2];
+    return true;
+  }
+
+  SCOPED_WALLET_UNLOCK_ON_BAD_PASSWORD(return false;);
+  try
+  {
+    auto ptx_vector = m_wallet->curve_trade("sal" + ticker, is_buy, amount, min_out, m_wallet->get_default_priority(), m_current_subaddress_account, {});
+    const std::string what = is_buy
+      ? (boost::format(tr("Buying sal%s with %s SAL1")) % ticker % print_money(amount)).str()
+      : (boost::format(tr("Selling %s sal%s")) % print_money(amount) % ticker).str();
+    return confirm_and_send_curve_txs(ptx_vector, what);
+  }
+  catch (const std::exception& e)
+  {
+    handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
+  }
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::curve_buy(const std::vector<std::string> &args_)
+{
+  return curve_trade(args_, true);
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::curve_sell(const std::vector<std::string> &args_)
+{
+  return curve_trade(args_, false);
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::get_tokens(const std::vector<std::string> &args_) {

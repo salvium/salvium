@@ -1342,6 +1342,11 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         !tx_proposal.destination_asset_type.empty())
       tx.destination_asset_type = tx_proposal.destination_asset_type;
 
+    // CURVE: re-type the prefix (built as CREATE_TOKEN for a launch, CONVERT for a trade) before
+    // anything is signed, so the signatures and the rollup binding cover the final type.
+    if (tx_proposal.final_tx_type == cryptonote::transaction_type::CURVE)
+      tx.type = cryptonote::transaction_type::CURVE;
+
     // store the binding tag
     tx.rollup_binding_tag = tx_proposal.rollup_binding_tag;
 

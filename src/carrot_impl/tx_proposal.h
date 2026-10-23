@@ -97,6 +97,10 @@ struct CarrotPaymentProposalVerifiableSelfSendV1
     /// used if this is a CREATE_TOKEN transaction
     cryptonote::token_metadata_t token;
 
+    /// CURVE: the proposal is built as a CREATE_TOKEN (launch) or CONVERT (buy/sell) - the same
+    /// burn / return-enote shape - and the prefix is re-typed to this value before signing.
+    cryptonote::transaction_type final_tx_type = cryptonote::transaction_type::UNSET;
+
     /// This field is truly "extra". It should contain only tx.extra fields that aren't present in a
     /// normal Carrot transaction, i.e. NOT ephemeral pubkeys nor encrypted PIDs
     std::vector<std::uint8_t> extra;

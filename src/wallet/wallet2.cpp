@@ -2895,12 +2895,14 @@ void wallet2::process_new_scanned_transaction(
       THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.type != cryptonote::transaction_type::AUDIT &&
                                 td_origin.m_tx.type != cryptonote::transaction_type::STAKE &&
                                 td_origin.m_tx.type != cryptonote::transaction_type::CREATE_TOKEN &&
-                                td_origin.m_tx.type != cryptonote::transaction_type::CONVERT,
+                                td_origin.m_tx.type != cryptonote::transaction_type::CONVERT &&
+                                td_origin.m_tx.type != cryptonote::transaction_type::CURVE,
                                 error::wallet_internal_error,
                                 "incorrect TX type for protocol_tx origin in m_transfers");
 
       if (td_origin.m_tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
-          td_origin.m_tx.type == cryptonote::transaction_type::CONVERT) {
+          td_origin.m_tx.type == cryptonote::transaction_type::CONVERT ||
+          td_origin.m_tx.type == cryptonote::transaction_type::CURVE) {
 
         // CREATE_TOKEN and CONVERT payouts mint a NEW asset, so there are no locked
         // coins to release (only STAKE/AUDIT lock coins in the first place).
@@ -11153,72 +11155,11 @@ std::vector<wallet2::pending_tx> wallet2::create_token(const cryptonote::token_m
   return ptx_vector;
 }
 
-// Another implementation of transaction creation that is hopefully better
-// While there is anything left to pay, it goes through random outputs and tries
-// to fill the next destination/amount. If it fully fills it, it will use the
-// remainder to try to fill the next one as well.
-// The tx size if roughly estimated as a linear function of only inputs, and a
-// new tx will be created when that size goes above a given fraction of the
-// max tx size. At that point, more outputs may be added if the fee cannot be
-// satisfied.
-// If the next output in the next tx would go to the same destination (ie, we
-// cut off at a tx boundary in the middle of paying a given destination), the
-// fee will be carved out of the current input if possible, to avoid having to
-// add another output just for the fee and getting change.
-// This system allows for sending (almost) the entire balance, since it does
-// not generate spurious change in all txes, thus decreasing the instantaneous
-// usable balance.
-std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type tx_type, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, const unique_index_container& subtract_fee_from_outputs)
+//----------------------------------------------------------------------------------------------------
+std::vector<wallet2::pending_tx> wallet2::finalize_carrot_proposals_with_rollup(std::vector<carrot::CarrotTransactionProposalV1> tx_proposals, const std::string& source_asset, const carrot::rollup_binding_tag_t& rollup_binding_tag, uint32_t subaddr_account, const std::set<uint32_t>& subaddr_indices)
 {
-  //ensure device is let in NONE mode in any case
-  hw::device &hwdev = m_account.get_device();
-  boost::unique_lock<hw::device> hwdev_lock (hwdev);
-  hw::reset_mode rst(hwdev);  
-
-  // Sanity check correct CN/Carrot address is being used
-  const uint8_t hf_version = get_current_hard_fork();
-  for (const auto &entry: dsts) {
-    THROW_WALLET_EXCEPTION_IF(entry.addr.m_is_carrot && hf_version < HF_VERSION_CARROT, error::wallet_internal_error, "Carrot address supplied, but Carrot not yet active");
-    THROW_WALLET_EXCEPTION_IF(!entry.addr.m_is_carrot && hf_version >= HF_VERSION_CARROT, error::wallet_internal_error, "CryptoNote address supplied, but Carrot is now active");
-  }
-  if (hf_version >= HF_VERSION_CARROT)
-  {
-    /* 
-    switch (tx_type) {
-      case transaction_type::BURN:
-      case transaction_type::CREATE_TOKEN:
-      case transaction_type::STAKE:
-        THROW_WALLET_EXCEPTION_IF(source_asset != "SAL1", error::wallet_internal_error, "STAKE TX must specify 'SAL1' source asset type");
-      case transaction_type::TRANSFER:
-        THROW_WALLET_EXCEPTION_IF(source_asset != dest_asset, error::wallet_internal_error, "Transfer TX must specify identical source and destination asset types");
-        break;
-      case transaction_type::CONVERT:
-        THROW_WALLET_EXCEPTION_IF(source_asset == dest_asset, error::wallet_internal_error, "Conversion TX must specify different source and destination asset types");
-        // Get the pricing record
-        //b = get_pricing_record(pricing_record, current_height);
-        //THROW_WALLET_EXCEPTION_IF(!b, error::wallet_internal_error, "Failed to get pricing record");
-        // Get the circulating supply data
-        //THROW_WALLET_EXCEPTION_IF(!get_circulating_supply(circ_amounts), error::wallet_internal_error, "Failed to get circulating supply");
-        break;
-      default:
-        // THROW_WALLET_EXCEPTION(error::wallet_internal_error, "Invalid tx type specified: " + std::to_string(static_cast<uint64_t>(tx_type)));
-        break;
-    }
-    */
-
-    // Is this a BURN TX?
-    if (hf_version >= HF_VERSION_ENABLE_TOKENS && tx_type == cryptonote::transaction_type::BURN) {
-      THROW_WALLET_EXCEPTION_IF(source_asset != "SAL" && source_asset != "SAL1", error::wallet_internal_error, "Only SAL/SAL1 may be burnt");
-      THROW_WALLET_EXCEPTION_IF(dsts.size() != 1, error::wallet_internal_error, "Only 1 destination permitted for BURN");
-      dsts[0].asset_type = source_asset;
-    }
-    
-    // Create a binding tag
-    carrot::rollup_binding_tag_t rollup_binding_tag = crypto::rand<carrot::rollup_binding_tag_t>();
-    
+    uint32_t priority = get_default_priority();
     uint64_t total_fee = 0;
-    auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts, priority, extra, tx_type, subaddr_account, subaddr_indices, subtract_fee_from_outputs,
-        source_asset);
     if (source_asset != "SAL1")
     {
       // We are creating a TOKEN TRANSFER
@@ -11287,6 +11228,154 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
     }
 
     return ptx_vector;
+}
+//----------------------------------------------------------------------------------------------------
+std::vector<wallet2::pending_tx> wallet2::curve_launch(const std::string& ticker, const std::string& name, const std::string& url, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
+{
+  const uint8_t hf_version = get_current_hard_fork();
+  THROW_WALLET_EXCEPTION_IF(hf_version < HF_VERSION_ENABLE_CURVE, error::wallet_internal_error, tr("CURVE is not available until hard fork ") + std::to_string(HF_VERSION_ENABLE_CURVE));
+  THROW_WALLET_EXCEPTION_IF(ticker.size() != 4, error::wallet_internal_error, tr("Ticker must be exactly 4 characters"));
+  THROW_WALLET_EXCEPTION_IF(ticker.substr(0, 3) == "SAL", error::wallet_internal_error, tr("Ticker must not begin with SAL"));
+  THROW_WALLET_EXCEPTION_IF(!cryptonote::is_valid_custom_asset_type("sal" + ticker), error::wallet_internal_error, tr("Invalid ticker"));
+
+  cryptonote::sal_token_t sal_token{1, CURVE_TOKEN_SUPPLY / COIN, 0, name, url, crypto::hash{}};
+  cryptonote::token_metadata_t token{1, ticker, sal_token};
+
+  //ensure device is let in NONE mode in any case
+  hw::device &hwdev = m_account.get_device();
+  boost::unique_lock<hw::device> hwdev_lock (hwdev);
+  hw::reset_mode rst(hwdev);
+
+  cryptonote::tx_destination_entry de;
+  de.addr = m_account.get_keys().m_carrot_account_address;
+  de.amount = cryptonote::get_token_creation_price(ticker);
+  de.asset_type = "SAL1";
+  de.is_subaddress = false;
+  de.is_integrated = false;
+  de.is_change = false;
+  de.is_return = false;
+
+  const uint32_t priority = adjust_priority(get_default_priority());
+  // A launch has the exact shape of a CREATE_TOKEN (burn the creation price, one change output,
+  // token metadata); only the prefix type differs, and it is set just before signing.
+  auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_createtoken(*this, token, de, priority, subaddr_account, subaddr_indices);
+  std::vector<pending_tx> ptx_vector;
+  ptx_vector.reserve(tx_proposals.size());
+  for (auto &tx_proposal : tx_proposals)
+  {
+    tx_proposal.final_tx_type = cryptonote::transaction_type::CURVE;
+    ptx_vector.push_back(tools::wallet::finalize_all_proofs_from_transfer_details_as_pending_tx(tx_proposal, *this));
+  }
+  return ptx_vector;
+}
+//----------------------------------------------------------------------------------------------------
+std::vector<wallet2::pending_tx> wallet2::curve_trade(const std::string& token_asset_type, bool is_buy, uint64_t amount, uint64_t min_out, uint32_t priority, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
+{
+  const uint8_t hf_version = get_current_hard_fork();
+  THROW_WALLET_EXCEPTION_IF(hf_version < HF_VERSION_ENABLE_CURVE, error::wallet_internal_error, tr("CURVE is not available until hard fork ") + std::to_string(HF_VERSION_ENABLE_CURVE));
+  THROW_WALLET_EXCEPTION_IF(!cryptonote::is_asset_type_token(token_asset_type), error::wallet_internal_error, tr("Not a token asset type: ") + token_asset_type);
+  THROW_WALLET_EXCEPTION_IF(amount == 0, error::zero_amount);
+
+  //ensure device is let in NONE mode in any case
+  hw::device &hwdev = m_account.get_device();
+  boost::unique_lock<hw::device> hwdev_lock (hwdev);
+  hw::reset_mode rst(hwdev);
+
+  const std::string source_asset = is_buy ? "SAL1" : token_asset_type;
+  const std::string dest_asset = is_buy ? token_asset_type : "SAL1";
+
+  // A trade has the exact shape of a self-CONVERT: burn `amount` of the source asset, return the
+  // change in the source asset, and let the block's protocol tx pay the destination asset.
+  std::vector<cryptonote::tx_destination_entry> dsts(1);
+  dsts[0].addr = m_account.get_keys().m_carrot_account_address;
+  dsts[0].original = get_subaddress_as_str({{subaddr_account, 0}, carrot::AddressDeriveType::Carrot, false});
+  dsts[0].amount = amount;
+  dsts[0].asset_type = dest_asset;
+  dsts[0].is_subaddress = false;
+  dsts[0].is_integrated = false;
+  dsts[0].is_change = false;
+  dsts[0].is_return = false;
+
+  priority = adjust_priority(priority);
+  carrot::rollup_binding_tag_t rollup_binding_tag = crypto::rand<carrot::rollup_binding_tag_t>();
+  auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts, priority, {}, cryptonote::transaction_type::CONVERT, subaddr_account, subaddr_indices, {},
+      source_asset);
+  THROW_WALLET_EXCEPTION_IF(tx_proposals.size() != 1, error::wallet_internal_error, tr("CURVE trade must fit in a single transaction"));
+  for (auto &tx_proposal : tx_proposals)
+  {
+    tx_proposal.final_tx_type = cryptonote::transaction_type::CURVE;
+    tx_proposal.amount_slippage_limit = min_out;   // CURVE: absolute minimum out, not a percentage
+    tx_proposal.destination_asset_type = dest_asset;
+  }
+  return finalize_carrot_proposals_with_rollup(std::move(tx_proposals), source_asset, rollup_binding_tag, subaddr_account, subaddr_indices);
+}
+
+// Another implementation of transaction creation that is hopefully better
+// While there is anything left to pay, it goes through random outputs and tries
+// to fill the next destination/amount. If it fully fills it, it will use the
+// remainder to try to fill the next one as well.
+// The tx size if roughly estimated as a linear function of only inputs, and a
+// new tx will be created when that size goes above a given fraction of the
+// max tx size. At that point, more outputs may be added if the fee cannot be
+// satisfied.
+// If the next output in the next tx would go to the same destination (ie, we
+// cut off at a tx boundary in the middle of paying a given destination), the
+// fee will be carved out of the current input if possible, to avoid having to
+// add another output just for the fee and getting change.
+// This system allows for sending (almost) the entire balance, since it does
+// not generate spurious change in all txes, thus decreasing the instantaneous
+// usable balance.
+std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type tx_type, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, const unique_index_container& subtract_fee_from_outputs)
+{
+  //ensure device is let in NONE mode in any case
+  hw::device &hwdev = m_account.get_device();
+  boost::unique_lock<hw::device> hwdev_lock (hwdev);
+  hw::reset_mode rst(hwdev);  
+
+  // Sanity check correct CN/Carrot address is being used
+  const uint8_t hf_version = get_current_hard_fork();
+  for (const auto &entry: dsts) {
+    THROW_WALLET_EXCEPTION_IF(entry.addr.m_is_carrot && hf_version < HF_VERSION_CARROT, error::wallet_internal_error, "Carrot address supplied, but Carrot not yet active");
+    THROW_WALLET_EXCEPTION_IF(!entry.addr.m_is_carrot && hf_version >= HF_VERSION_CARROT, error::wallet_internal_error, "CryptoNote address supplied, but Carrot is now active");
+  }
+  if (hf_version >= HF_VERSION_CARROT)
+  {
+    /* 
+    switch (tx_type) {
+      case transaction_type::BURN:
+      case transaction_type::CREATE_TOKEN:
+      case transaction_type::STAKE:
+        THROW_WALLET_EXCEPTION_IF(source_asset != "SAL1", error::wallet_internal_error, "STAKE TX must specify 'SAL1' source asset type");
+      case transaction_type::TRANSFER:
+        THROW_WALLET_EXCEPTION_IF(source_asset != dest_asset, error::wallet_internal_error, "Transfer TX must specify identical source and destination asset types");
+        break;
+      case transaction_type::CONVERT:
+        THROW_WALLET_EXCEPTION_IF(source_asset == dest_asset, error::wallet_internal_error, "Conversion TX must specify different source and destination asset types");
+        // Get the pricing record
+        //b = get_pricing_record(pricing_record, current_height);
+        //THROW_WALLET_EXCEPTION_IF(!b, error::wallet_internal_error, "Failed to get pricing record");
+        // Get the circulating supply data
+        //THROW_WALLET_EXCEPTION_IF(!get_circulating_supply(circ_amounts), error::wallet_internal_error, "Failed to get circulating supply");
+        break;
+      default:
+        // THROW_WALLET_EXCEPTION(error::wallet_internal_error, "Invalid tx type specified: " + std::to_string(static_cast<uint64_t>(tx_type)));
+        break;
+    }
+    */
+
+    // Is this a BURN TX?
+    if (hf_version >= HF_VERSION_ENABLE_TOKENS && tx_type == cryptonote::transaction_type::BURN) {
+      THROW_WALLET_EXCEPTION_IF(source_asset != "SAL" && source_asset != "SAL1", error::wallet_internal_error, "Only SAL/SAL1 may be burnt");
+      THROW_WALLET_EXCEPTION_IF(dsts.size() != 1, error::wallet_internal_error, "Only 1 destination permitted for BURN");
+      dsts[0].asset_type = source_asset;
+    }
+    
+    // Create a binding tag
+    carrot::rollup_binding_tag_t rollup_binding_tag = crypto::rand<carrot::rollup_binding_tag_t>();
+    
+    auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_transfer(*this, dsts, priority, extra, tx_type, subaddr_account, subaddr_indices, subtract_fee_from_outputs,
+        source_asset);
+    return finalize_carrot_proposals_with_rollup(std::move(tx_proposals), source_asset, rollup_binding_tag, subaddr_account, subaddr_indices);
   }
 
   auto original_dsts = dsts;
@@ -12093,6 +12182,8 @@ bool wallet2::sanity_check(const std::vector<wallet2::pending_tx> &ptx_vector, c
       if (ptx.tx.type == cryptonote::transaction_type::BURN)
         received += ptx.tx.amount_burnt;
       else if (ptx.tx.type == cryptonote::transaction_type::CONVERT)
+        received += ptx.tx.amount_burnt;
+      else if (ptx.tx.type == cryptonote::transaction_type::CURVE)
         received += ptx.tx.amount_burnt;
       else if (ptx.tx.type == cryptonote::transaction_type::STAKE)
         received += ptx.tx.amount_burnt;
