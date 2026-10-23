@@ -90,6 +90,9 @@ typedef struct mdb_txn_cursors
   
   MDB_cursor *m_txc_rollup_tx_info;
 
+  MDB_cursor *m_txc_curves;
+  MDB_cursor *m_txc_curve_txs;
+
   MDB_cursor *m_txc_output_records;
   MDB_cursor *m_txc_output_amount_refs;
   MDB_cursor *m_txc_output_type_refs;
@@ -131,6 +134,8 @@ typedef struct mdb_txn_cursors
 #define m_cur_rct_count_info m_cursors->m_txc_rct_count_info
 
 #define m_cur_rollup_tx_info m_cursors->m_txc_rollup_tx_info
+#define m_cur_curves m_cursors->m_txc_curves
+#define m_cur_curve_txs m_cursors->m_txc_curve_txs
 
 #define m_cur_output_records	    m_cursors->m_txc_output_records
 #define m_cur_output_amount_refs	m_cursors->m_txc_output_amount_refs
@@ -173,6 +178,9 @@ typedef struct mdb_rflags
   bool m_rf_rct_count_info;
 
   bool m_rf_rollup_tx_info;
+
+  bool m_rf_curves;
+  bool m_rf_curve_txs;
   
   bool m_rf_output_records;
   bool m_rf_output_amount_refs;
@@ -319,6 +327,10 @@ public:
   virtual std::map<std::string, uint64_t> get_circulating_supply() const;
 
   virtual std::map<std::string, cryptonote::token_metadata_t> get_tokens() const;
+
+  virtual bool get_curve_state(const std::string& asset_type, cryptonote::curve_state_t& state) const;
+  virtual std::map<std::string, cryptonote::curve_state_t> get_curves() const;
+  virtual bool get_curve_tx_info(const crypto::hash& tx_hash, curve_tx_info& info) const;
   
   virtual bool is_tx_paid_for(const cryptonote::transaction& tx) const;
   
@@ -561,6 +573,10 @@ private:
   virtual int get_token_tx_info(const uint64_t height, std::vector<token_tx_info_carrot>& tti_container) const;
 
 private:
+  // CURVE: apply / undo the curve-state effect of a CURVE transaction (cursors must be open)
+  void apply_curve_tx(const cryptonote::transaction& tx, const crypto::hash& tx_hash);
+  void undo_curve_tx(const cryptonote::transaction& tx, const crypto::hash& tx_hash);
+
   MDB_env* m_env;
 
   MDB_dbi m_blocks;
@@ -609,6 +625,9 @@ private:
   MDB_dbi m_rct_count_info;
 
   MDB_dbi m_rollup_tx_info;
+
+  MDB_dbi m_curves;
+  MDB_dbi m_curve_txs;
 
   MDB_dbi m_output_records;
   MDB_dbi m_output_amount_refs;
