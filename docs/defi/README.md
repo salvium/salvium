@@ -11,6 +11,7 @@ implemented on branch `defi-convert-oracle` (based on tag `v1.1.3c`, commit `9ae
 | [ACTIVATION.md](ACTIVATION.md) | hard fork scheduling patch, rollout order, rollback caveats |
 | [TESTING.md](TESTING.md) | unit tests, mutation checks, regtest end-to-end and negative tests, known baseline failures |
 | [PR_NOTES.md](PR_NOTES.md) | PR description: summary, evidence, risk, review guide, follow-ups |
+| [CURVE.md](CURVE.md) | **proposal (HF15)**: native bonding-curve tokens - design, math, invariants, testing |
 
 ## Where the code lives
 
