@@ -85,7 +85,8 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
     wallet2::unique_index_container subtract_fee_from_outputs,
-    const std::uint64_t top_block_index);
+    const std::uint64_t top_block_index,
+    const std::string &input_asset_type = "");
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_transfer(
     wallet2 &w,
     const std::vector<cryptonote::tx_destination_entry> &dsts,
@@ -94,7 +95,8 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const cryptonote::transaction_type tx_type,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
-    const wallet2::unique_index_container &subtract_fee_from_outputs);
+    const wallet2::unique_index_container &subtract_fee_from_outputs,
+    const std::string &input_asset_type = "");
 
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep(
     wallet2 &w,

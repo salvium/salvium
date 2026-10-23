@@ -89,6 +89,9 @@ namespace tools
         MAP_JON_RPC_WE("frozen",             on_frozen,             wallet_rpc::COMMAND_RPC_FROZEN)
         MAP_JON_RPC_WE("audit",              on_audit,              wallet_rpc::COMMAND_RPC_AUDIT)
         MAP_JON_RPC_WE("create_token",       on_create_token,       wallet_rpc::COMMAND_RPC_CREATE_TOKEN)
+        MAP_JON_RPC_WE("curve_launch",       on_curve_launch,       wallet_rpc::COMMAND_RPC_CURVE_LAUNCH)
+        MAP_JON_RPC_WE("curve_buy",          on_curve_buy,          wallet_rpc::COMMAND_RPC_CURVE_TRADE)
+        MAP_JON_RPC_WE("curve_sell",         on_curve_sell,         wallet_rpc::COMMAND_RPC_CURVE_TRADE)
         MAP_JON_RPC_WE("get_tokens",         on_get_tokens,         wallet_rpc::COMMAND_RPC_GET_TOKENS)
         MAP_JON_RPC_WE("return_payment",     on_return_payment,     wallet_rpc::COMMAND_RPC_RETURN_PAYMENT)
         MAP_JON_RPC_WE("transfer",           on_transfer,           wallet_rpc::COMMAND_RPC_TRANSFER)
@@ -192,6 +195,10 @@ namespace tools
       bool on_frozen(const wallet_rpc::COMMAND_RPC_FROZEN::request& req, wallet_rpc::COMMAND_RPC_FROZEN::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_audit(const wallet_rpc::COMMAND_RPC_AUDIT::request& req, wallet_rpc::COMMAND_RPC_AUDIT::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_create_token(const wallet_rpc::COMMAND_RPC_CREATE_TOKEN::request& req, wallet_rpc::COMMAND_RPC_CREATE_TOKEN::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
+      bool on_curve_launch(const wallet_rpc::COMMAND_RPC_CURVE_LAUNCH::request& req, wallet_rpc::COMMAND_RPC_CURVE_LAUNCH::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
+      bool on_curve_buy(const wallet_rpc::COMMAND_RPC_CURVE_TRADE::request& req, wallet_rpc::COMMAND_RPC_CURVE_TRADE::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
+      bool on_curve_sell(const wallet_rpc::COMMAND_RPC_CURVE_TRADE::request& req, wallet_rpc::COMMAND_RPC_CURVE_TRADE::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
+      bool curve_trade(bool is_buy, const wallet_rpc::COMMAND_RPC_CURVE_TRADE::request& req, wallet_rpc::COMMAND_RPC_CURVE_TRADE::response& res, epee::json_rpc::error& er);
       bool on_get_tokens(const wallet_rpc::COMMAND_RPC_GET_TOKENS::request& req, wallet_rpc::COMMAND_RPC_GET_TOKENS::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_return_payment(const wallet_rpc::COMMAND_RPC_RETURN_PAYMENT::request& req, wallet_rpc::COMMAND_RPC_RETURN_PAYMENT::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_transfer(const wallet_rpc::COMMAND_RPC_TRANSFER::request& req, wallet_rpc::COMMAND_RPC_TRANSFER::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);

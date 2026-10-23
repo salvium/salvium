@@ -236,7 +236,8 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
                        tx.type == cryptonote::transaction_type::STAKE ||
                        tx.type == cryptonote::transaction_type::BURN ||
                        tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
-                       tx.type == cryptonote::transaction_type::ROLLUP
+                       tx.type == cryptonote::transaction_type::ROLLUP ||
+                       tx.type == cryptonote::transaction_type::CURVE
                        ) ? tx_amount_burnt : 0;
     tx.return_address_change_mask.assign(change_masks.begin(), change_masks.end());
     tx.vin.reserve(nins);
@@ -291,8 +292,9 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
         }
     }
 
-    // store the return pubkey for stake txs
-    if (tx_type == cryptonote::transaction_type::STAKE || tx_type == cryptonote::transaction_type::CREATE_TOKEN)
+    // store the return pubkey for stake txs (and for the payout of a CURVE trade)
+    if (tx_type == cryptonote::transaction_type::STAKE || tx_type == cryptonote::transaction_type::CREATE_TOKEN ||
+        tx_type == cryptonote::transaction_type::CURVE)
     {
         tx.protocol_tx_data.version = 1;
         memcpy(tx.protocol_tx_data.return_address.data, return_enote.enote.onetime_address.data, sizeof(crypto::public_key));

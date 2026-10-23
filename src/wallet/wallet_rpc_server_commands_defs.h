@@ -47,7 +47,7 @@
 // advance which version they will stop working with
 // Don't go over 32767 for any of these
 #define WALLET_RPC_VERSION_MAJOR 1
-#define WALLET_RPC_VERSION_MINOR 28
+#define WALLET_RPC_VERSION_MINOR 29
 #define MAKE_WALLET_RPC_VERSION(major,minor) (((major)<<16)|(minor))
 #define WALLET_RPC_VERSION MAKE_WALLET_RPC_VERSION(WALLET_RPC_VERSION_MAJOR, WALLET_RPC_VERSION_MINOR)
 namespace tools
@@ -2968,6 +2968,77 @@ namespace wallet_rpc
         KV_SERIALIZE_OPT(hash, (std::string)"")
         KV_SERIALIZE_OPT(size, (uint64_t)0)
         KV_SERIALIZE_OPT(token_metadata_hex, (std::string)"")
+        KV_SERIALIZE_OPT(get_tx_keys, false)
+        KV_SERIALIZE_OPT(do_not_relay, false)
+        KV_SERIALIZE_OPT(get_tx_hex, false)
+        KV_SERIALIZE_OPT(get_tx_metadata, false)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    typedef split_transfer_response response_t;
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  // CURVE (docs/defi/CURVE.md): launch a bonding-curve token
+  struct COMMAND_RPC_CURVE_LAUNCH
+  {
+    struct request_t
+    {
+      std::string ticker;
+      std::string name;
+      std::string url;
+      uint32_t account_index;
+      std::set<uint32_t> subaddr_indices;
+
+      bool get_tx_keys;
+      bool do_not_relay;
+      bool get_tx_hex;
+      bool get_tx_metadata;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(ticker)
+        KV_SERIALIZE_OPT(name, (std::string)"")
+        KV_SERIALIZE_OPT(url, (std::string)"")
+        KV_SERIALIZE_OPT(account_index, (uint32_t)0)
+        KV_SERIALIZE(subaddr_indices)
+        KV_SERIALIZE_OPT(get_tx_keys, false)
+        KV_SERIALIZE_OPT(do_not_relay, false)
+        KV_SERIALIZE_OPT(get_tx_hex, false)
+        KV_SERIALIZE_OPT(get_tx_metadata, false)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    typedef split_transfer_response response_t;
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  // CURVE: buy (burn `amount` SAL1) or sell (burn `amount` tokens). `min_out` is the slippage
+  // floor: tokens for a buy, SAL1 for a sell. Below it the block refunds the burnt amount.
+  struct COMMAND_RPC_CURVE_TRADE
+  {
+    struct request_t
+    {
+      std::string ticker;
+      uint64_t amount;
+      uint64_t min_out;
+      uint32_t priority;
+      uint32_t account_index;
+      std::set<uint32_t> subaddr_indices;
+
+      bool get_tx_keys;
+      bool do_not_relay;
+      bool get_tx_hex;
+      bool get_tx_metadata;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(ticker)
+        KV_SERIALIZE(amount)
+        KV_SERIALIZE_OPT(min_out, (uint64_t)0)
+        KV_SERIALIZE_OPT(priority, (uint32_t)0)
+        KV_SERIALIZE_OPT(account_index, (uint32_t)0)
+        KV_SERIALIZE(subaddr_indices)
         KV_SERIALIZE_OPT(get_tx_keys, false)
         KV_SERIALIZE_OPT(do_not_relay, false)
         KV_SERIALIZE_OPT(get_tx_hex, false)

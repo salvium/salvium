@@ -88,9 +88,17 @@ struct CarrotPaymentProposalVerifiableSelfSendV1
     cryptonote::transaction_type tx_type;
     /// how much money tx burns
     rct::xmr_amount amount_burnt;
+    /// CURVE trade: minimum the trader accepts (tokens for a buy, SAL1 for a sell)
+    rct::xmr_amount amount_slippage_limit = 0;
+    /// CURVE trade: the asset the block's protocol transaction pays out
+    std::string destination_asset_type;
 
     /// used if this is a CREATE_TOKEN transaction
     cryptonote::token_metadata_t token;
+
+    /// CURVE launch: the proposal is built as a CREATE_TOKEN (same burn, metadata and return
+    /// enote) and the prefix is re-typed to this value before signing.
+    cryptonote::transaction_type final_tx_type = cryptonote::transaction_type::UNSET;
 
     /// This field is truly "extra". It should contain only tx.extra fields that aren't present in a
     /// normal Carrot transaction, i.e. NOT ephemeral pubkeys nor encrypted PIDs

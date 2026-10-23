@@ -577,10 +577,22 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
     wallet2::unique_index_container subtract_fee_from_outputs,
-    const std::uint64_t top_block_index)
+    const std::uint64_t top_block_index,
+    const std::string &input_asset_type)
 {
     // Make sure all destinations have the SAME asset_type
     std::string asset_type = dsts[0].asset_type;
+    // A CURVE trade spends the SOURCE asset and is paid in the DESTINATION asset by the block's
+    // protocol tx; for every other tx type the inputs are in the destinations' asset.
+    const std::string input_asset_type_eff = input_asset_type.empty() ? asset_type : input_asset_type;
+    uint64_t curve_requested_amount = 0;
+    if (tx_type == cryptonote::transaction_type::CURVE)
+    {
+      CHECK_AND_ASSERT_THROW_MES(dsts.size() == 1, "CURVE trade requires exactly one destination");
+      CHECK_AND_ASSERT_THROW_MES(dsts[0].amount > 0, "CURVE trade amount must be greater than zero");
+      CHECK_AND_ASSERT_THROW_MES(asset_type != input_asset_type_eff, "CURVE trade source and destination assets must differ");
+      curve_requested_amount = dsts[0].amount;
+    }
     if (dsts.size() > 1) {
       for (size_t i=0; i<dsts.size(); ++i) {
         CHECK_AND_ASSERT_THROW_MES(dsts[i].asset_type == asset_type, "Mixed asset_types in transaction outputs is forbidden");
@@ -588,7 +600,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     }
   
     wallet2::transfer_container unused_transfers;
-    w.get_transfers(unused_transfers, asset_type);
+    w.get_transfers(unused_transfers, input_asset_type_eff);
 
     std::vector<carrot::CarrotTransactionProposalV1> tx_proposals;
     tx_proposals.reserve(dsts.size() / (carrot::CARROT_MAX_TX_OUTPUTS - 1) + 1);
@@ -633,7 +645,7 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
             top_block_index,
             /*allow_carrot_external_inputs_in_normal_transfers=*/true,
             /*allow_pre_carrot_inputs_in_normal_transfers=*/true,
-            asset_type,
+            input_asset_type_eff,
             selected_transfer_indices);
 
         // make proposal
@@ -659,7 +671,35 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
           // Scan the transfer_container instead of all of the transfers in the wallet
           selected_transfer_indices_sorted.push_back(w.get_transfer_details_from_container(ki, unused_transfers));
         }
-        tx_proposal.sources = get_sources(unused_transfers, selected_transfer_indices_sorted, asset_type, w);
+        tx_proposal.sources = get_sources(unused_transfers, selected_transfer_indices_sorted, input_asset_type_eff, w);
+
+        // CURVE trade: burn the requested amount of the SOURCE asset. The destination asset is
+        // paid by the block's protocol tx (where amounts are in clear), so this tx must not
+        // create a destination-asset output: both self-send outputs become change in the
+        // source asset. A token-source trade (a sell) pays its fee with a ROLLUP tx, so the fee
+        // is not taken out of the inputs here.
+        if (tx_type == cryptonote::transaction_type::CURVE) {
+          uint64_t input_sum = 0;
+          for (const auto& source : tx_proposal.sources)
+            input_sum += source.amount;
+          const bool fee_in_rollup = (input_asset_type_eff != "SAL1");
+          CHECK_AND_ASSERT_THROW_MES(fee_in_rollup || input_sum > tx_proposal.fee,
+              "CURVE trade has nothing left to burn after the fee");
+          const uint64_t available = fee_in_rollup ? input_sum : (input_sum - tx_proposal.fee);
+          const uint64_t burnt = (curve_requested_amount < available) ? curve_requested_amount : available;
+          const uint64_t change = available - burnt;
+          auto &normals = tx_proposal.normal_payment_proposals;
+          auto &selfsends = tx_proposal.selfsend_payment_proposals;
+          CHECK_AND_ASSERT_THROW_MES(normals.empty(), "CURVE trade must be addressed to our own wallet");
+          CHECK_AND_ASSERT_THROW_MES(selfsends.size() >= 2, "CURVE trade: expected a self-send payment and a change output");
+          selfsends.resize(2);
+          selfsends.at(0).proposal.amount = change / 2;
+          selfsends.at(1).proposal.amount = change - change / 2;
+          selfsends.at(0).proposal.asset_type = input_asset_type_eff;
+          selfsends.at(1).proposal.asset_type = input_asset_type_eff;
+          tx_proposal.amount_burnt = burnt;
+          tx_proposal.destination_asset_type = asset_type;
+        }
 
         // update `unused_transfers` for next proposal by removing selected transfers
         tools::for_all_in_vector_erase_no_preserve_order_if(unused_transfers,
@@ -684,7 +724,8 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
     const cryptonote::transaction_type tx_type,
     const std::uint32_t subaddr_account,
     const std::set<uint32_t> &subaddr_indices,
-    const wallet2::unique_index_container &subtract_fee_from_outputs)
+    const wallet2::unique_index_container &subtract_fee_from_outputs,
+    const std::string &input_asset_type)
 {
     const bool use_per_byte_fee = w.use_fork_rules(HF_VERSION_PER_BYTE_FEE, 0);
     CHECK_AND_ASSERT_THROW_MES(use_per_byte_fee,
@@ -715,7 +756,8 @@ std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposa
         subaddr_account,
         subaddr_indices,
         subtract_fee_from_outputs,
-        top_block_index);
+        top_block_index,
+        input_asset_type);
 }
 //-------------------------------------------------------------------------------------------------------------------
 std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_proposals_wallet2_sweep(
@@ -1255,6 +1297,21 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
                                                                         return_enote_out,
                                                                         encrypted_payment_id,
                                                                         const_cast<wallet2&>(w).get_current_hard_fork());
+
+    // CURVE: the prefix must name the asset the block's protocol transaction pays out. The
+    // enotes of a trade are change in the SOURCE asset, so store_carrot_to_transaction_v1 cannot
+    // know it; it is set here, before signing.
+    if (tx_proposal.tx_type == cryptonote::transaction_type::CURVE &&
+        !tx_proposal.destination_asset_type.empty())
+    {
+      tx.destination_asset_type = tx_proposal.destination_asset_type;
+      tx.amount_slippage_limit = tx_proposal.amount_slippage_limit;
+    }
+
+    // CURVE: a launch is built as a CREATE_TOKEN (same burn, metadata and return enote); re-type
+    // the prefix before anything is signed, so the signatures cover the final type.
+    if (tx_proposal.final_tx_type == cryptonote::transaction_type::CURVE)
+      tx.type = cryptonote::transaction_type::CURVE;
 
     // store the binding tag
     tx.rollup_binding_tag = tx_proposal.rollup_binding_tag;

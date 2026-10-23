@@ -195,6 +195,11 @@ namespace cryptonote
     bool convert(const std::vector<std::string> &args);
     bool audit(const std::vector<std::string> &args);
     bool create_token(const std::vector<std::string> &args);
+    bool curve_launch(const std::vector<std::string> &args);
+    bool curve_buy(const std::vector<std::string> &args);
+    bool curve_sell(const std::vector<std::string> &args);
+    bool curve_trade(const std::vector<std::string> &args, bool is_buy);
+    bool confirm_and_send_curve_txs(std::vector<tools::wallet2::pending_tx>& ptx_vector, const std::string& what);
     bool get_tokens(const std::vector<std::string> &args);
     bool token_info(const std::vector<std::string> &args);
     bool stake(const std::vector<std::string> &args);
