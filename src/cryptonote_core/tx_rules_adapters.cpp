@@ -2,6 +2,7 @@
 
 #include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "cryptonote_basic/curve.h"
 
 namespace cryptonote
 {
@@ -22,6 +23,13 @@ namespace
     const std::string asset_type = "sal" + ticker;
     return db_asset_exists(self, asset_type);
   }
+
+  static bool db_curve_exists(const void* self, const std::string& asset_type)
+  {
+    const auto* db = static_cast<const BlockchainDB*>(self);
+    cryptonote::curve_state_t state;
+    return db->get_curve_state(asset_type, state);
+  }
 }
 
 token_state_view make_db_token_state_view(const BlockchainDB& db)
@@ -30,6 +38,7 @@ token_state_view make_db_token_state_view(const BlockchainDB& db)
   view.self = &db;
   view.asset_exists = &db_asset_exists;
   view.ticker_exists = &db_ticker_exists;
+  view.curve_exists = &db_curve_exists;
   return view;
 }
 
