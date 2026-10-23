@@ -40,6 +40,7 @@
 #include "crypto/hash.h"
 #include "cryptonote_basic/blobdatatype.h"
 #include "cryptonote_basic/cryptonote_basic.h"
+#include "cryptonote_basic/curve.h"
 #include "cryptonote_basic/difficulty.h"
 #include "cryptonote_basic/hardfork.h"
 #include "cryptonote_protocol/enums.h"
@@ -282,6 +283,27 @@ typedef struct token_tx_info_carrot {
   carrot::encrypted_janus_anchor_t return_anchor_enc;
   uint32_t asset_type_id;
 } token_tx_info_carrot;
+
+// CURVE: per-transaction journal entry (table `curve_txs`, keyed by tx hash). It records the
+// outcome of a BUY/SELL (or the creation of a curve by a LAUNCH) together with the curve state
+// it replaced, so pop_block can restore the previous state exactly.
+#pragma pack(push, 1)
+typedef struct curve_tx_info {
+  uint64_t asset_type_id;
+  uint64_t prev_reserve;
+  uint64_t prev_sold;
+  uint64_t prev_launch_height;
+  uint64_t amount_out;     // tokens (BUY) or SAL1 (SELL) minted; 0 for LAUNCH and refunds
+  uint8_t op;              // cryptonote::curve_op
+  uint8_t filled;          // 0 = refunded
+  // graduation: the rest of the replaced state, and whether this trade graduated the curve
+  uint8_t prev_phase;
+  uint8_t graduated;
+  uint64_t prev_pool_sal;
+  uint64_t prev_pool_tokens;
+  uint64_t prev_graduation_height;
+} curve_tx_info;
+#pragma pack(pop)
 
 #define DBF_SAFE       1
 #define DBF_FAST       2
@@ -1284,6 +1306,25 @@ public:
    * @return the current token values
    */
   virtual std::map<std::string, cryptonote::token_metadata_t> get_tokens() const = 0;
+
+  /**
+   * @brief CURVE: fetch the bonding-curve state of a token (asset type "sal<TICKER>")
+   *
+   * @return true if a curve was launched for this token
+   */
+  virtual bool get_curve_state(const std::string& asset_type, cryptonote::curve_state_t& state) const = 0;
+
+  /**
+   * @brief CURVE: fetch every launched curve, keyed by asset type
+   */
+  virtual std::map<std::string, cryptonote::curve_state_t> get_curves() const = 0;
+
+  /**
+   * @brief CURVE: fetch the recorded outcome of a CURVE transaction
+   *
+   * @return true if the transaction is a CURVE transaction in the chain
+   */
+  virtual bool get_curve_tx_info(const crypto::hash& tx_hash, curve_tx_info& info) const = 0;
 
   /**
    * @brief determine if a TX has been paid for

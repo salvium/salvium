@@ -91,7 +91,7 @@ namespace cryptonote
 // advance which version they will stop working with
 // Don't go over 32767 for any of these
 #define CORE_RPC_VERSION_MAJOR 3
-#define CORE_RPC_VERSION_MINOR 13
+#define CORE_RPC_VERSION_MINOR 14
 #define MAKE_CORE_RPC_VERSION(major,minor) (((major)<<16)|(minor))
 #define CORE_RPC_VERSION MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR)
 
@@ -1514,6 +1514,140 @@ namespace cryptonote
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(status)
         KV_SERIALIZE(tokens)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  // CURVE (docs/defi/CURVE.md): bonding-curve state, optional quotes, and trade outcomes.
+  struct curve_entry
+  {
+    std::string asset_type;
+    uint64_t reserve;
+    uint64_t sold;
+    uint64_t launch_height;
+    uint64_t spot_price;          // SAL1 atomic units per whole token
+    uint64_t tokens_remaining;    // curve phase: tokens left before graduation
+    std::string phase;            // "curve" | "pool"
+    uint64_t pool_sal;            // pool phase: SAL1 locked in the pool
+    uint64_t pool_tokens;         // pool phase: tokens in the pool
+    uint64_t graduation_height;   // 0 while on the curve
+    uint64_t circulating;         // tokens held by users
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(asset_type)
+      KV_SERIALIZE(reserve)
+      KV_SERIALIZE(sold)
+      KV_SERIALIZE(launch_height)
+      KV_SERIALIZE(spot_price)
+      KV_SERIALIZE(tokens_remaining)
+      KV_SERIALIZE(phase)
+      KV_SERIALIZE(pool_sal)
+      KV_SERIALIZE(pool_tokens)
+      KV_SERIALIZE(graduation_height)
+      KV_SERIALIZE(circulating)
+    END_KV_SERIALIZE_MAP()
+  };
+
+  struct COMMAND_RPC_GET_CURVE_INFO
+  {
+    struct request_t
+    {
+      std::string asset_type;      // sal<TICKER>
+      uint64_t quote_buy;          // optional: SAL1 to burn, returns tokens out
+      uint64_t quote_sell;         // optional: tokens to burn, returns SAL1 out
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(asset_type)
+        KV_SERIALIZE_OPT(quote_buy, (uint64_t)0)
+        KV_SERIALIZE_OPT(quote_sell, (uint64_t)0)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    struct response_t
+    {
+      std::string status;
+      curve_entry curve;
+      uint64_t virtual_sal;
+      uint64_t virtual_tokens;
+      uint64_t token_supply;
+      uint64_t sale_supply;
+      uint64_t pool_supply;
+      uint64_t fee_divisor;
+      bool quote_buy_filled;
+      uint64_t quote_buy_out;
+      bool quote_sell_filled;
+      uint64_t quote_sell_out;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(status)
+        KV_SERIALIZE(curve)
+        KV_SERIALIZE(virtual_sal)
+        KV_SERIALIZE(virtual_tokens)
+        KV_SERIALIZE(token_supply)
+        KV_SERIALIZE(sale_supply)
+        KV_SERIALIZE(pool_supply)
+        KV_SERIALIZE(fee_divisor)
+        KV_SERIALIZE(quote_buy_filled)
+        KV_SERIALIZE(quote_buy_out)
+        KV_SERIALIZE(quote_sell_filled)
+        KV_SERIALIZE(quote_sell_out)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  struct COMMAND_RPC_GET_CURVES
+  {
+    struct request_t
+    {
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    struct response_t
+    {
+      std::string status;
+      std::vector<curve_entry> curves;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(status)
+        KV_SERIALIZE(curves)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  struct COMMAND_RPC_GET_CURVE_TX
+  {
+    struct request_t
+    {
+      std::string tx_hash;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(tx_hash)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    struct response_t
+    {
+      std::string status;
+      std::string asset_type;
+      std::string op;              // launch | buy | sell
+      bool filled;                 // false = refunded
+      uint64_t amount_out;
+      bool graduated;              // this trade sold out the curve and created its pool
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(status)
+        KV_SERIALIZE(asset_type)
+        KV_SERIALIZE(op)
+        KV_SERIALIZE(filled)
+        KV_SERIALIZE(amount_out)
+        KV_SERIALIZE(graduated)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<response_t> response;

@@ -364,8 +364,9 @@ namespace cryptonote
           // Build the proposal
           carrot::CarrotCoinbaseEnoteV1 e;
           e.onetime_address = entry.return_address;
-          // amount_minted for CREATE_TOKEN, amount_burnt for STAKE/AUDIT
-          e.amount = (entry.type == cryptonote::transaction_type::CREATE_TOKEN) ? entry.amount_minted : entry.amount_burnt;
+          // amount_minted for CREATE_TOKEN and CURVE, amount_burnt for STAKE/AUDIT
+          e.amount = (entry.type == cryptonote::transaction_type::CREATE_TOKEN ||
+                      entry.type == cryptonote::transaction_type::CURVE) ? entry.amount_minted : entry.amount_burnt;
           e.asset_type = entry.destination_asset;
           e.view_tag = entry.return_view_tag;
           e.anchor_enc = entry.return_anchor_enc;
@@ -634,6 +635,7 @@ namespace cryptonote
       case HF_VERSION_ENABLE_TOKENS:
       case HF_VERSION_REJECT_CLEARTEXT_AMOUNTS:
       case HF_VERSION_REJECT_POISONED_REFS:
+      case HF_VERSION_ENABLE_CURVE:
         // SRCG: subtract 20% that will be rewarded to staking users
         CHECK_AND_ASSERT_MES(tx.amount_burnt == 0, false, "while creating outs: amount_burnt is nonzero");
         tx.amount_burnt = amount / 5;

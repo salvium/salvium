@@ -1689,7 +1689,7 @@ namespace cryptonote
   //---------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------
   //TODO: investigate whether boolean return is appropriate
-  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, std::vector<std::pair<protocol_tx_data_t, token_metadata_t>> &create_token_entries, uint8_t version)
+  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, std::vector<std::pair<protocol_tx_data_t, token_metadata_t>> &create_token_entries, std::vector<cryptonote::transaction> &curve_txs, uint8_t version)
   {
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
@@ -1875,6 +1875,31 @@ namespace cryptonote
 
         tokens.insert(tx.token_metadata.asset_type);
         create_token_entries.push_back(std::make_pair(tx.protocol_tx_data, tx.token_metadata));
+      }
+
+      // CURVE (docs/defi/CURVE.md): a LAUNCH registers a ticker, so it competes with
+      // CREATE_TOKEN for the same ticker set; a BUY/SELL is always mineable, because a trade
+      // the curve cannot fill when this block is built is refunded by the protocol tx.
+      if (tx.type == transaction_type::CURVE)
+      {
+        if (version < HF_VERSION_ENABLE_CURVE) {
+          LOG_PRINT_L2("  is a CURVE transaction before they are permitted - cannot be mined");
+          continue;
+        }
+        const cryptonote::curve_op op = cryptonote::get_curve_op(tx);
+        if (op == cryptonote::curve_op::INVALID) {
+          LOG_PRINT_L2("  is a CURVE transaction with an invalid asset pair - cannot be mined");
+          continue;
+        }
+        if (op == cryptonote::curve_op::LAUNCH) {
+          if (tokens.find(tx.token_metadata.asset_type) != tokens.end()) {
+            LOG_PRINT_L2("  is a CURVE launch with a ticker already in the block template - cannot be mined");
+            continue;
+          }
+          tokens.insert(tx.token_metadata.asset_type);
+        } else {
+          curve_txs.push_back(tx);
+        }
       }
 
       bl.tx_hashes.push_back(sorted_it->second);

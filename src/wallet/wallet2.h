@@ -1313,6 +1313,21 @@ private:
      */
     std::vector<wallet2::pending_tx> create_token(const cryptonote::token_metadata_t& token, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices);
 
+    /**
+     * CURVE (docs/defi/CURVE.md): launch a bonding-curve token. Burns the token creation price in SAL1.
+     */
+    std::vector<wallet2::pending_tx> curve_launch(const std::string& ticker, const std::string& name, const std::string& url, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices);
+
+    /**
+     * CURVE: buy (burn `amount` SAL1) or sell (burn `amount` of sal<TICKER>) on a curve.
+     * `min_out` is the minimum the trader accepts (tokens for a buy, SAL1 for a sell); below it
+     * the block refunds the burnt amount.
+     */
+    std::vector<wallet2::pending_tx> curve_trade(const std::string& token_asset_type, bool is_buy, uint64_t amount, uint64_t min_out, uint32_t priority, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices);
+
+    // Signs Carrot proposals and, when they spend a token, adds the ROLLUP tx that pays their fees.
+    std::vector<wallet2::pending_tx> finalize_carrot_proposals_with_rollup(std::vector<carrot::CarrotTransactionProposalV1> tx_proposals, const std::string& source_asset, const carrot::rollup_binding_tag_t& rollup_binding_tag, uint32_t subaddr_account, const std::set<uint32_t>& subaddr_indices);
+
     std::vector<wallet2::pending_tx> create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const std::string& source_asset, const std::string& dest_asset, const cryptonote::transaction_type tx_type, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, const unique_index_container& subtract_fee_from_outputs = {});     // pass subaddr_indices by value on purpose
     std::vector<wallet2::pending_tx> create_transactions_all(uint64_t below, cryptonote::transaction_type tx_type, const std::string& asset_type, const cryptonote::account_public_address &address, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices);
     std::vector<wallet2::pending_tx> create_transactions_single(const crypto::key_image &ki, const cryptonote::account_public_address &address, const cryptonote::transaction_type tx_type, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra);

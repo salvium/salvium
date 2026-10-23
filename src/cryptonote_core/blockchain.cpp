@@ -42,6 +42,7 @@
 #include "include_base_utils.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "cryptonote_basic/curve.h"
 
 #include "tx_pool.h"
 #include "blockchain.h"
@@ -1624,7 +1625,8 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   case HF_VERSION_ENABLE_TOKENS:
   case HF_VERSION_REJECT_CLEARTEXT_AMOUNTS:
   case HF_VERSION_REJECT_POISONED_REFS:
-    // HF11-13: block reward split is 60% miner + 25% treasury + 15% staker (amount_burnt)
+  case HF_VERSION_ENABLE_CURVE:
+    // HF11-14: block reward split is 60% miner + 25% treasury + 15% staker (amount_burnt)
     if (already_generated_coins != 0) {
 
       // Validate treasury share: one output must equal block_reward * 25 / 100
@@ -1753,10 +1755,79 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   // if nothing is created by this TX - check no money is included
   if (b.protocol_tx.vin.size() != 1) { MERROR("coinbase protocol transaction in the block has no inputs"); return false; }
 
+  // CURVE payouts are appended to the protocol tx of the block carrying the trades; they do
+  // not wait for the staking lock period, so they are validated here for every block.
+  size_t curve_count = 0;
+  if (hf_version >= HF_VERSION_ENABLE_CURVE) {
+    for (const auto& tx_pair : txs) {
+      const cryptonote::curve_op op = cryptonote::get_curve_op(tx_pair.first);
+      if (op == cryptonote::curve_op::BUY || op == cryptonote::curve_op::SELL)
+        ++curve_count;
+    }
+  }
+
+  // CURVE: re-run every BUY/SELL of this block, in block order, against a scratch copy of the
+  // curve states, and require each payout (the trade output or the refund of the burnt amount)
+  // to be exactly the corresponding output at the tail of the protocol transaction.
+  if (hf_version >= HF_VERSION_ENABLE_CURVE && curve_count > 0) {
+    std::map<std::string, cryptonote::curve_state_t> scratch;
+    const size_t curve_output_idx_start = b.protocol_tx.vout.size() - curve_count;
+    size_t curve_idx = 0;
+    for (const auto& tx_pair : txs) {
+      const transaction& tx = tx_pair.first;
+      const cryptonote::curve_op op = cryptonote::get_curve_op(tx);
+      if (op != cryptonote::curve_op::BUY && op != cryptonote::curve_op::SELL)
+        continue;
+
+      const size_t out_idx = curve_output_idx_start + curve_idx;
+      curve_idx++;
+
+      const std::string asset = cryptonote::get_curve_asset_type(tx);
+      auto it = scratch.find(asset);
+      if (it == scratch.end()) {
+        cryptonote::curve_state_t state;
+        if (!get_db().get_curve_state(asset, state)) { MERROR("CURVE trade for an unknown curve"); return false; }
+        it = scratch.emplace(asset, state).first;
+      }
+      cryptonote::curve_quote_t quote;
+      if (!cryptonote::curve_quote_tx(tx, it->second, quote)) { MERROR("CURVE trade could not be priced"); return false; }
+      it->second = quote.new_state;
+      if (!cryptonote::curve_state_is_solvent(it->second)) { MERROR("CURVE trade would leave the curve insolvent"); return false; }
+
+      uint64_t expected_amount = 0;
+      std::string expected_asset;
+      cryptonote::curve_payout(tx, quote, expected_amount, expected_asset);
+
+      crypto::public_key out_key;
+      cryptonote::get_output_public_key(b.protocol_tx.vout[out_idx], out_key);
+      if (out_key != tx.protocol_tx_data.return_address) { MERROR("Incorrect CURVE output key detected in protocol_tx"); return false; }
+
+      if (b.protocol_tx.vout.size() > 1) {
+        const auto additional_pubkeys = cryptonote::get_additional_tx_pub_keys_from_extra(b.protocol_tx.extra);
+        if (additional_pubkeys.size() <= out_idx) { MERROR("Missing CURVE return pubkey detected in protocol_tx"); return false; }
+        if (additional_pubkeys[out_idx] != tx.protocol_tx_data.return_pubkey) { MERROR("Incorrect CURVE return pubkey detected in protocol_tx"); return false; }
+      } else {
+        const auto main_pubkey = cryptonote::get_tx_pub_key_from_extra(b.protocol_tx.extra);
+        if (main_pubkey != tx.protocol_tx_data.return_pubkey) { MERROR("Incorrect CURVE return pubkey detected in protocol_tx"); return false; }
+      }
+
+      if (b.protocol_tx.vout[out_idx].amount != expected_amount) { MERROR("Incorrect CURVE output amount detected in protocol_tx"); return false; }
+
+      std::string out_asset_type;
+      cryptonote::get_output_asset_type(b.protocol_tx.vout[out_idx], out_asset_type);
+      if (out_asset_type != expected_asset) { MERROR("Incorrect CURVE output asset_type detected in protocol_tx"); return false; }
+
+      if (b.protocol_tx.vout[out_idx].target.type() != typeid(cryptonote::txout_to_carrot_v1)) { MERROR("CURVE output in protocol_tx is not a Carrot output"); return false; }
+      const auto& carrot_out = boost::get<cryptonote::txout_to_carrot_v1>(b.protocol_tx.vout[out_idx].target);
+      if (carrot_out.view_tag != tx.protocol_tx_data.return_view_tag) { MERROR("Incorrect CURVE view tag detected in protocol_tx"); return false; }
+      if (carrot_out.encrypted_janus_anchor != tx.protocol_tx_data.return_anchor_enc) { MERROR("Incorrect CURVE anchor detected in protocol_tx"); return false; }
+    }
+  }
+
   // Can we have matured STAKE transactions yet?
   uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   if (height <= stake_lock_period) {
-    if (b.protocol_tx.vout.size() != 0) { MERROR("protocol transaction in the block has outputs"); return false; }
+    if (b.protocol_tx.vout.size() != curve_count) { MERROR("protocol transaction in the block has outputs"); return false; }
     return true;
   }
 
@@ -1846,7 +1917,7 @@ bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, 
   }
 
   // Check we have the correct number of entries
-  if (b.protocol_tx.vout.size() != yield_payouts.size() + audit_payouts.size() + carrot_yield_payouts.size() + create_token_count) { MERROR("Invalid number of outputs in protocol_tx - aborting"); return false; }
+  if (b.protocol_tx.vout.size() != yield_payouts.size() + audit_payouts.size() + carrot_yield_payouts.size() + create_token_count + curve_count) { MERROR("Invalid number of outputs in protocol_tx - aborting"); return false; }
 
   if (hf_version >= HF_VERSION_CARROT) {
 
@@ -2305,7 +2376,8 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   size_t txs_weight;
   uint64_t fee;
   std::vector<std::pair<protocol_tx_data_t, token_metadata_t>> create_token_entries;
-  if (!m_tx_pool.fill_block_template(b, median_weight, already_generated_coins, txs_weight, fee, expected_reward, create_token_entries, b.major_version))
+  std::vector<cryptonote::transaction> curve_txs;
+  if (!m_tx_pool.fill_block_template(b, median_weight, already_generated_coins, txs_weight, fee, expected_reward, create_token_entries, curve_txs, b.major_version))
   {
     return false;
   }
@@ -2480,6 +2552,42 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   }
 
   // Time to construct the protocol_tx
+  // CURVE: price every BUY/SELL in block order against a scratch copy of the curve states.
+  // validate_protocol_transaction() repeats exactly this walk, so the n-th CURVE trade of the
+  // block is paid by the n-th CURVE output, which comes last in the protocol transaction.
+  if (b.major_version >= HF_VERSION_ENABLE_CURVE)
+  {
+    std::map<std::string, cryptonote::curve_state_t> scratch;
+    for (const auto& curve_tx : curve_txs)
+    {
+      const std::string asset = cryptonote::get_curve_asset_type(curve_tx);
+      auto it = scratch.find(asset);
+      if (it == scratch.end())
+      {
+        cryptonote::curve_state_t state;
+        CHECK_AND_ASSERT_MES(m_db->get_curve_state(asset, state), false, "CURVE trade for an unknown curve in block template");
+        it = scratch.emplace(asset, state).first;
+      }
+      cryptonote::curve_quote_t quote;
+      CHECK_AND_ASSERT_MES(cryptonote::curve_quote_tx(curve_tx, it->second, quote), false, "Failed to price CURVE trade in block template");
+      it->second = quote.new_state;
+
+      cryptonote::protocol_data_entry entry;
+      entry.type = cryptonote::transaction_type::CURVE;
+      entry.amount_burnt = curve_tx.amount_burnt;
+      cryptonote::curve_payout(curve_tx, quote, entry.amount_minted, entry.destination_asset);
+      entry.amount_slippage_limit = curve_tx.amount_slippage_limit;
+      entry.source_asset = curve_tx.source_asset_type;
+      entry.return_address = curve_tx.protocol_tx_data.return_address;
+      entry.return_pubkey = curve_tx.protocol_tx_data.return_pubkey;
+      entry.return_view_tag = curve_tx.protocol_tx_data.return_view_tag;
+      entry.return_anchor_enc = curve_tx.protocol_tx_data.return_anchor_enc;
+      entry.origin_height = height;
+      entry.is_carrot = true;
+      protocol_entries.push_back(entry);
+    }
+  }
+
   ok = construct_protocol_tx(height, b.protocol_tx, protocol_entries, b.major_version);
   CHECK_AND_ASSERT_MES(ok, false, "Failed to construct protocol tx");
 
@@ -4147,7 +4255,7 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
 
   if (hf_version >= HF_VERSION_CARROT) {
     // from v10, force the new SalviumOne RCT data
-    if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::CREATE_TOKEN || tx.type == cryptonote::transaction_type::ROLLUP) {
+    if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::CREATE_TOKEN || tx.type == cryptonote::transaction_type::ROLLUP || tx.type == cryptonote::transaction_type::CURVE) {
       if (tx.rct_signatures.type != rct::RCTTypeSalviumOne) {
         MERROR_VER("SalviumOne data required after v" + std::to_string(HF_VERSION_CARROT));
         tvc.m_invalid_output = true;
@@ -4249,6 +4357,28 @@ bool Blockchain::check_tx_asset_types(const transaction& tx, tx_verification_con
     } else if (tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::CONVERT) {
       MERROR_VER("AUDIT and CONVERT transaction types are not allowed in this hardfork version:" << std::to_string(HF_VERSION_REJECT_CLEARTEXT_AMOUNTS));
       return false;
+    } else if (tx.type == cryptonote::transaction_type::CURVE) {
+      if (hf_version < HF_VERSION_ENABLE_CURVE) {
+        MERROR_VER("CURVE transaction type is not allowed in this hardfork version:" << std::to_string(hf_version));
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+      const cryptonote::curve_op op = cryptonote::get_curve_op(tx);
+      if (op == cryptonote::curve_op::INVALID) {
+        MERROR_VER("Invalid source/dest asset type for CURVE - provided source asset: " << tx.source_asset_type << ", and destination asset: " << tx.destination_asset_type);
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+      if (op != cryptonote::curve_op::LAUNCH && !mapTokens.count(cryptonote::get_curve_asset_type(tx))) {
+        MERROR_VER("CURVE trade for unknown token " << cryptonote::get_curve_asset_type(tx));
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+      if (tx.amount_burnt == 0) {
+        MERROR_VER("CURVE transaction has no burnt amount");
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
     } else {
       MERROR_VER("Unknown transaction type: " << tx.type << ".");
       tvc.m_verifivation_failed = true;
@@ -4369,6 +4499,15 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
   if (hf_version == HF_VERSION_CARROT) {
     if (tx.version != TRANSACTION_VERSION_CARROT) {
       MERROR("TX version " + std::to_string(tx.version) + " is not supported, expected " + std::to_string(TRANSACTION_VERSION_CARROT));
+      tvc.m_version_mismatch = true;
+      return false;
+    }
+  }
+
+  // Make sure CURVE TXs are disabled until we are ready - belt and braces!
+  if (hf_version < HF_VERSION_ENABLE_CURVE) {
+    if (tx.type == cryptonote::transaction_type::CURVE) {
+      MERROR("CURVE TXs are not permitted prior to v" + std::to_string(HF_VERSION_ENABLE_CURVE));
       tvc.m_version_mismatch = true;
       return false;
     }
@@ -5521,13 +5660,13 @@ bool Blockchain::get_ybi_entry(const uint64_t height, cryptonote::yield_block_in
 //------------------------------------------------------------------
 bool Blockchain::is_tx_paid_for(const cryptonote::transaction& tx)
 {
-  // Is it a TRANSFER?
-  if (tx.type != cryptonote::transaction_type::TRANSFER)
+  // Is it a TRANSFER (or a CURVE SELL, which also spends a token)?
+  if (tx.type != cryptonote::transaction_type::TRANSFER && tx.type != cryptonote::transaction_type::CURVE)
     return true;
   // Is is a TOKEN?
   if (!cryptonote::is_asset_type_token(tx.source_asset_type))
     return true;
-  // Has the TRANSFER TOKEN been paid for?
+  // Has the TRANSFER TOKEN / CURVE SELL been paid for?
   return m_db->is_tx_paid_for(tx);
 }
 //------------------------------------------------------------------

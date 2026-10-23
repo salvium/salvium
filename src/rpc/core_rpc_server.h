@@ -177,6 +177,9 @@ namespace cryptonote
         MAP_JON_RPC_WE("get_yield_info",         on_get_yield_info,             COMMAND_RPC_GET_YIELD_INFO)
         MAP_JON_RPC_WE("get_tokens",             on_get_tokens,                 COMMAND_RPC_GET_TOKENS)
         MAP_JON_RPC_WE("get_token_info",         on_get_token_info,             COMMAND_RPC_GET_TOKEN_INFO)
+        MAP_JON_RPC_WE("get_curve_info",         on_get_curve_info,             COMMAND_RPC_GET_CURVE_INFO)
+        MAP_JON_RPC_WE("get_curves",             on_get_curves,                 COMMAND_RPC_GET_CURVES)
+        MAP_JON_RPC_WE("get_curve_tx",           on_get_curve_tx,               COMMAND_RPC_GET_CURVE_TX)
         MAP_JON_RPC_WE("get_fee_estimate",       on_get_base_fee_estimate,      COMMAND_RPC_GET_BASE_FEE_ESTIMATE)
         MAP_JON_RPC_WE_IF("get_alternate_chains",on_get_alternate_chains,       COMMAND_RPC_GET_ALTERNATE_CHAINS, !m_restricted)
         MAP_JON_RPC_WE_IF("relay_tx",            on_relay_tx,                   COMMAND_RPC_RELAY_TX, !m_restricted)
@@ -258,6 +261,9 @@ namespace cryptonote
     bool on_get_yield_info(const COMMAND_RPC_GET_YIELD_INFO::request& req, COMMAND_RPC_GET_YIELD_INFO::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx = NULL);
     bool on_get_tokens(const COMMAND_RPC_GET_TOKENS::request& req, COMMAND_RPC_GET_TOKENS::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx = NULL);
     bool on_get_token_info(const COMMAND_RPC_GET_TOKEN_INFO::request& req, COMMAND_RPC_GET_TOKEN_INFO::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx = NULL);
+    bool on_get_curve_info(const COMMAND_RPC_GET_CURVE_INFO::request& req, COMMAND_RPC_GET_CURVE_INFO::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx = NULL);
+    bool on_get_curves(const COMMAND_RPC_GET_CURVES::request& req, COMMAND_RPC_GET_CURVES::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx = NULL);
+    bool on_get_curve_tx(const COMMAND_RPC_GET_CURVE_TX::request& req, COMMAND_RPC_GET_CURVE_TX::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx = NULL);
     bool on_get_base_fee_estimate(const COMMAND_RPC_GET_BASE_FEE_ESTIMATE::request& req, COMMAND_RPC_GET_BASE_FEE_ESTIMATE::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx = NULL);
     bool on_get_alternate_chains(const COMMAND_RPC_GET_ALTERNATE_CHAINS::request& req, COMMAND_RPC_GET_ALTERNATE_CHAINS::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx = NULL);
     bool on_relay_tx(const COMMAND_RPC_RELAY_TX::request& req, COMMAND_RPC_RELAY_TX::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx = NULL);
