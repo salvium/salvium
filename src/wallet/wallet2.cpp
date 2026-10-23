@@ -767,6 +767,15 @@ std::string strjoin(const std::vector<size_t> &V, const char *sep)
   return ss.str();
 }
 
+// Transactions whose payout is minted by the protocol tx of the SAME block (CREATE_TOKEN, CURVE
+// trades). They are scanned and processed before the protocol tx, so the return outputs they
+// register are known when the protocol tx is scanned. Scan and process order must agree.
+static bool tx_paid_by_same_block_protocol_tx(const cryptonote::transaction &tx)
+{
+  return tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
+         tx.type == cryptonote::transaction_type::CURVE;
+}
+//----------------------------------------------------------------------------------------------------
 static bool emplace_or_replace(std::unordered_multimap<crypto::hash, tools::wallet2::pool_payment_details> &container,
   const crypto::hash &key, const tools::wallet2::pool_payment_details &pd)
 {
@@ -2887,7 +2896,7 @@ void wallet2::process_new_scanned_transaction(
       if (td_origin.m_tx.type == cryptonote::transaction_type::CREATE_TOKEN ||
           td_origin.m_tx.type == cryptonote::transaction_type::CURVE) {
 
-        THROW_WALLET_EXCEPTION_IF(td_origin.m_tx.type != cryptonote::transaction_type::CREATE_TOKEN, error::wallet_internal_error, "can't happen");
+        // CREATE_TOKEN and CURVE payouts mint a new asset: there are no locked coins to release.
         
       } else {
         
@@ -3240,7 +3249,7 @@ void wallet2::process_new_blockchain_entry(const cryptonote::block& b,
     for (size_t idx = 0; idx < b.tx_hashes.size(); ++idx)
     {
       const cryptonote::transaction &tx = parsed_block.txes.at(idx);
-      if (tx.type != cryptonote::transaction_type::CREATE_TOKEN)
+      if (!tx_paid_by_same_block_protocol_tx(tx))
         continue;
       size_t n_outs_in_tx = tx.vout.size();
       process_new_scanned_transaction(b.tx_hashes[idx],
@@ -3315,7 +3324,7 @@ void wallet2::process_new_blockchain_entry(const cryptonote::block& b,
     for (size_t idx = 0; idx < b.tx_hashes.size(); ++idx)
     {
       const cryptonote::transaction &tx = parsed_block.txes.at(idx);
-      if (tx.type == cryptonote::transaction_type::CREATE_TOKEN)
+      if (tx_paid_by_same_block_protocol_tx(tx))
         continue;
       n_outs_in_tx = tx.vout.size();
       process_new_scanned_transaction(b.tx_hashes[idx],
@@ -3616,7 +3625,7 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
       const bool skip_scan_for_this_block = should_skip_block(par_blk.block, height);
       for (const cryptonote::transaction &tx : par_blk.txes)
       {
-        if (tx.type == cryptonote::transaction_type::CREATE_TOKEN) {
+        if (tx_paid_by_same_block_protocol_tx(tx)) {
           if (!skip_scan_for_this_block)
             tx_scan_job(std::cref(tx), tx_output_idx);
           tx_output_idx += tx.vout.size();
@@ -3630,7 +3639,7 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
       tx_output_idx += par_blk.block.protocol_tx.vout.size();
       for (const cryptonote::transaction &tx : par_blk.txes)
       {
-        if (tx.type != cryptonote::transaction_type::CREATE_TOKEN) {
+        if (!tx_paid_by_same_block_protocol_tx(tx)) {
           if (!skip_scan_for_this_block)
             tpool.submit(&scan_blocks_waiter, std::bind(tx_scan_job, std::cref(tx), tx_output_idx));
           tx_output_idx += tx.vout.size();
